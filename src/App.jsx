@@ -2165,7 +2165,7 @@ export default function App({ user }) {
   const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot);
 
   return (
-    <div className={"app-root" + (focusMode ? " rt-focus-active" : "")} style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
+    <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2330,51 +2330,39 @@ export default function App({ user }) {
           transition: opacity 280ms ease 200ms;
         }
         /* Curtain + flash overlay — positioned absolutely within .rt-today-v4 so they
-        /* Focus mode dim — REWRITE.
-           Strategy: render two FIXED overlays inline (in JSX) when focusMode is on:
-           - sidebar overlay: covers exact sidebar bounds at z-index 51 (above sidebar's 50)
-           - main overlay: covers .r-main bounds at z-index 51 too
-           Then use opacity-based dim INSIDE .r-main for non-top tasks/band/composer/calendar.
-           Top task escapes via z-index 60. Toggle row escapes via z-index 60.
-           No more curtain animation — just opacity fade-in via animation. */
+        /* Focus mode curtain — single overlay at app-root, above sidebar (50).
+           Doesn't cover sidebar by design (curtain stops at sidebar edge on desktop).
+           Main area dims via opacity on [data-focus-dim] elements + non-top tasks. */
         .rt-today-v4 { position: relative; }
-        .rt-overlay-sidebar {
+        .rt-curtain {
           position: fixed;
-          top: 14px; left: 14px; bottom: 14px;
-          width: 240px;
-          border-radius: 14px;
-          background: rgba(28,50,36,0.62);
+          top: 0;
+          right: 0;
+          left: 0;
+          height: 0;
+          background: linear-gradient(180deg, rgba(28,50,36,0.78) 0%, rgba(28,50,36,0.60) 60%, rgba(28,50,36,0.0) 100%);
           pointer-events: none;
-          z-index: 51;
-          opacity: 0;
-          animation: rt-overlay-in 600ms ease forwards;
+          z-index: 30;
+          transition: height 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
         }
-        .rt-overlay-main {
-          position: fixed;
-          top: 14px;
-          right: 14px;
-          bottom: 14px;
-          left: calc(14px + 240px + 14px);
-          background: linear-gradient(180deg, rgba(28,50,36,0.78) 0%, rgba(28,50,36,0.55) 60%, rgba(28,50,36,0.30) 100%);
-          pointer-events: none;
-          z-index: 51;
-          opacity: 0;
-          animation: rt-overlay-in 600ms ease forwards;
+        @media (min-width: 768px) {
+          .rt-curtain {
+            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
+          }
         }
-        @media (max-width: 767px) {
-          .rt-overlay-sidebar { display: none; }
-          .rt-overlay-main { top: 0; left: 0; right: 0; bottom: 0; }
-        }
-        @keyframes rt-overlay-in {
-          to { opacity: 1; }
-        }
+        .rt-curtain.is-on { height: 100vh; }
         .rt-flash {
           position: fixed;
           top: 0; right: 0; bottom: 0;
           left: 0;
           background: rgba(255, 245, 200, 0);
           pointer-events: none;
-          z-index: 56;
+          z-index: 31;
+        }
+        @media (min-width: 768px) {
+          .rt-flash {
+            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
+          }
         }
         .rt-flash.is-firing {
           animation: rt-flash-anim 450ms ease-out 400ms;
@@ -2384,16 +2372,7 @@ export default function App({ user }) {
           25%  { background: rgba(255, 245, 200, 0.35); }
           100% { background: rgba(255, 245, 200, 0); }
         }
-        /* Top task floats above the main overlay */
-        .rt-focus-active .rt-row.rt-focus-top {
-          position: relative;
-          z-index: 60 !important;
-        }
-        /* Toggle row (containing Ranked by Rai + Focus button) also floats above the overlay */
-        .rt-focus-active .rt-toggle-row {
-          position: relative;
-          z-index: 60;
-        }
+        .rt-today-v4.rt-focus-on { z-index: 40; }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
@@ -2516,11 +2495,8 @@ export default function App({ user }) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      {/* Focus mode overlays — two fixed-position elements with KNOWN bounds.
-          Sidebar overlay covers the sidebar exactly. Main overlay covers .r-main exactly.
-          Both at z-index 51 (above sidebar's 50). Top task and toggle escape via z-index 60. */}
-      {focusMode && <div className="rt-overlay-sidebar" />}
-      {focusMode && <div className="rt-overlay-main" />}
+      {/* Focus mode curtain — single overlay at app-root, above sidebar (50). */}
+      <div className={"rt-curtain" + (focusMode ? " is-on" : "")} />
       {focusFlash && <div className="rt-flash is-firing" />}
 
       {/* Fireworks */}
@@ -3284,7 +3260,7 @@ export default function App({ user }) {
 
               {/* TASKS COLUMN */}
               <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
-                  <div className="rt-toggle-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
                       <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
