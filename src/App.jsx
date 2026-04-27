@@ -2165,7 +2165,7 @@ export default function App({ user }) {
   const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot);
 
   return (
-    <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
+    <div className={"app-root" + (focusMode ? " rt-focus-active" : "")} style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2330,8 +2330,11 @@ export default function App({ user }) {
           transition: opacity 280ms ease 200ms;
         }
         /* Curtain + flash overlay — positioned absolutely within .rt-today-v4 so they
-        /* Curtain + flash overlay — spans the FULL viewport including the sidebar.
-           Z-index 55 sits above the sidebar (50). Top task uses z-index 60 to float above. */
+        /* Focus mode dimming strategy:
+           - Inside .r-main: opacity dim on [data-focus-dim] elements + non-top tasks
+             (works because they share .r-main's stacking context)
+           - Sidebar: separate overlay at root level, z-index 55 (above sidebar's 50)
+           - Top task gets purple ring inside .r-main */
         .rt-today-v4 { position: relative; }
         .rt-curtain {
           position: fixed;
@@ -2361,9 +2364,9 @@ export default function App({ user }) {
           25%  { background: rgba(255, 245, 200, 0.35); }
           100% { background: rgba(255, 245, 200, 0); }
         }
-        /* When focus is on, lift the today wrapper above the curtain so the top task can paint over.
-           The toggle row (Ranked by Rai + Focus button) also needs to clear the curtain. */
-        .rt-today-v4.rt-focus-on { z-index: 60; }
+        /* Lift .r-main above the curtain when focus is on, so toggle/top task stay bright.
+           The curtain still covers the sidebar (z-index 50). */
+        .rt-focus-active .r-main { z-index: 70 !important; }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
@@ -2485,6 +2488,11 @@ export default function App({ user }) {
         .btn-ghost-red:hover { background: #F5DDD8 !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
+
+      {/* Focus mode curtain — mounted at app-root so it sits above the sidebar (z-index 50).
+          Inside .r-main it would be trapped in that subtree's stacking context. */}
+      <div className={"rt-curtain" + (focusMode ? " is-on" : "")} />
+      {focusFlash && <div className="rt-flash is-firing" />}
 
       {/* Fireworks */}
       {confetti && (
@@ -3046,9 +3054,6 @@ export default function App({ user }) {
                 setFocusMode(false);
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
-              {/* Focus mode curtain — always mounted so the height transition fires when class toggles */}
-              <div className={"rt-curtain" + (focusMode ? " is-on" : "")} />
-              {focusFlash && <div className="rt-flash is-firing" />}
               {/* STATUS BAND */}
               <div className="rt-band" data-focus-dim style={{ gridArea: "band", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
