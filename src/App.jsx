@@ -2330,8 +2330,8 @@ export default function App({ user }) {
           transition: opacity 280ms ease 200ms;
         }
         /* Curtain + flash overlay — positioned absolutely within .rt-today-v4 so they
-           share the same stacking context as the task list. Won't paint over the sidebar
-           because .r-main (which contains us) is already offset past the sidebar. */
+        /* Curtain + flash overlay — spans the FULL viewport including the sidebar.
+           Z-index 55 sits above the sidebar (50). Top task uses z-index 60 to float above. */
         .rt-today-v4 { position: relative; }
         .rt-curtain {
           position: fixed;
@@ -2341,13 +2341,8 @@ export default function App({ user }) {
           height: 0;
           background: linear-gradient(180deg, rgba(28,50,36,0.78) 0%, rgba(28,50,36,0.60) 60%, rgba(28,50,36,0.0) 100%);
           pointer-events: none;
-          z-index: 30;
+          z-index: 55;
           transition: height 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
-        }
-        @media (min-width: 768px) {
-          .rt-curtain {
-            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
-          }
         }
         .rt-curtain.is-on { height: 100vh; }
         .rt-flash {
@@ -2356,12 +2351,7 @@ export default function App({ user }) {
           left: 0;
           background: rgba(255, 245, 200, 0);
           pointer-events: none;
-          z-index: 31;
-        }
-        @media (min-width: 768px) {
-          .rt-flash {
-            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
-          }
+          z-index: 56;
         }
         .rt-flash.is-firing {
           animation: rt-flash-anim 450ms ease-out 400ms;
@@ -2371,9 +2361,9 @@ export default function App({ user }) {
           25%  { background: rgba(255, 245, 200, 0.35); }
           100% { background: rgba(255, 245, 200, 0); }
         }
-        /* When focus is on, the body needs to allow our top task to escape its stacking context.
-           We do this by giving the today wrapper a high z-index when focus is on. */
-        .rt-today-v4.rt-focus-on { z-index: 40; }
+        /* When focus is on, lift the today wrapper above the curtain so the top task can paint over.
+           The toggle row (Ranked by Rai + Focus button) also needs to clear the curtain. */
+        .rt-today-v4.rt-focus-on { z-index: 60; }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
