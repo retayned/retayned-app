@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiSuggestions as suggestionsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, buildRaiContext } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, buildRaiContext } from "./lib/db";
 
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
@@ -66,147 +66,6 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">{paths[name]}</svg>);
 };
 
-// ─── FocusPane — right-column card shown when a task is selected ──────────
-const FocusPane = ({ task, client, retHistory, whyText, whyNowText, patternText, confidence, draftText, contextData, C, Icon, Spark, ClientAvatar, ScoreChip, retColor, onComplete, onLog }) => {
-  if (!task || !client) return null;
-  const isRai = task.ai === true;
-  const delta = (() => {
-    const h = client.name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-    return (h % 11) - 5;
-  })();
-  const clientColor = retColor(client.ret || 60);
-
-  return (
-    <aside style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 16, boxShadow: C.shadowMd, padding: 20 }}>
-      {/* Client header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-        <ClientAvatar client={client} size={44} />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{client.name}</div>
-          <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
-            {client.industry || "Client"}{client.revenue ? " · $" + (client.revenue / 1000).toFixed(1) + "k MRR" : ""}
-          </div>
-        </div>
-        <ScoreChip score={client.ret} delta={delta} size="lg" />
-      </div>
-
-      {/* Retention sparkline */}
-      <div style={{ padding: "12px 14px", background: C.primaryGhost, border: "1px solid " + C.borderLight, borderRadius: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-          <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>Retention · 90 days</span>
-          <span style={{ fontSize: 11, color: C.textMuted }}>Renews in 4d</span>
-        </div>
-        <Spark data={retHistory} color={clientColor} width={300} height={36} />
-      </div>
-
-      {/* Task headline */}
-      <div style={{ marginTop: 18 }}>
-        {isRai ? (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, color: C.btn, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
-            <Icon name="sparkles" size={11} /> Assigned by Rai
-          </span>
-        ) : (
-          <span style={{ fontSize: 10.5, color: C.primary, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>
-            {task.recurring ? "Recurring Task" : "One-Time Task"}
-          </span>
-        )}
-        <h3 style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.35, margin: "8px 0 0", letterSpacing: -0.2, color: C.text }}>{task.text}</h3>
-      </div>
-
-      {/* Context block — user tasks only */}
-      {!isRai && contextData && (
-        <div style={{ marginTop: 14, padding: 14, background: C.bg, border: "1px solid " + C.borderSoft, borderRadius: 10 }}>
-          <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Context</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-              <span style={{ color: C.textSec }}>Cadence</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: C.retGood, fontWeight: 500 }}>
-                <span style={{ display: "inline-flex", gap: 2 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: 3, background: C.retGood }}></span>
-                  <span style={{ width: 5, height: 5, borderRadius: 3, background: C.retGood }}></span>
-                  <span style={{ width: 5, height: 5, borderRadius: 3, background: C.retGood }}></span>
-                </span>
-                {contextData.cadence}
-              </span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-              <span style={{ color: C.textSec }}>Last task</span>
-              <span style={{ color: C.text, fontWeight: 500 }}>{contextData.lastTask}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-              <span style={{ color: C.textSec }}>Upcoming</span>
-              <span style={{ color: C.text, fontWeight: 500 }}>{contextData.upcoming}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Why Rai flagged this — Rai tasks only */}
-      {isRai && whyText && (
-        <div style={{ marginTop: 14, padding: 14, background: C.btnLight, borderRadius: 10, border: "1px solid #DCCEF2" }}>
-          <div style={{ fontSize: 10.5, color: C.btn, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>Why</div>
-          <div style={{ fontSize: 13, lineHeight: 1.55, color: C.text }}>{whyText}</div>
-          {confidence && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(91,33,182,0.15)" }}>
-              <span style={{ fontSize: 10.5, color: C.textMuted }}>Rai confidence</span>
-              <div style={{ flex: 1, height: 4, background: "rgba(91,33,182,0.15)", borderRadius: 2, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${confidence * 100}%`, background: C.btn, borderRadius: 2 }} />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: C.btn, fontVariantNumeric: "tabular-nums" }}>{Math.round(confidence * 100)}%</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Why now + Pattern — Rai tasks only */}
-      {isRai && (whyNowText || patternText) && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-          {whyNowText && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: C.bg, border: "1px solid " + C.borderSoft, borderRadius: 8, fontSize: 12 }}>
-              <span style={{ display: "inline-flex", flexShrink: 0, color: C.textSec }}><Icon name="clock" size={11} /></span>
-              <span style={{ color: C.textMuted, fontWeight: 500, minWidth: 62 }}>Why now</span>
-              <span style={{ color: C.text, flex: 1 }}>{whyNowText}</span>
-            </div>
-          )}
-          {patternText && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: C.bg, border: "1px solid " + C.borderSoft, borderRadius: 8, fontSize: 12 }}>
-              <span style={{ display: "inline-flex", flexShrink: 0, color: C.textSec }}><Icon name="trendUp" size={11} /></span>
-              <span style={{ color: C.textMuted, fontWeight: 500, minWidth: 62 }}>Pattern</span>
-              <span style={{ color: C.text, flex: 1 }}>{patternText}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Suggested talking points — Rai tasks only (no send) */}
-      {isRai && draftText && (
-        <div style={{ marginTop: 12, padding: 14, background: "#fff", border: "1px dashed " + C.ink300, borderRadius: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>Suggested talking points</span>
-            <div style={{ display: "inline-flex", gap: 2, padding: 2, background: C.primaryGhost, border: "1px solid " + C.borderSoft, borderRadius: 6 }}>
-              <button style={{ padding: "3px 8px", fontSize: 10.5, fontWeight: 500, border: "none", background: "transparent", color: C.textMuted, borderRadius: 4, cursor: "pointer", fontFamily: "inherit" }}>Softer</button>
-              <button style={{ padding: "3px 8px", fontSize: 10.5, fontWeight: 500, border: "none", background: "#fff", color: C.text, borderRadius: 4, cursor: "pointer", fontFamily: "inherit", boxShadow: C.shadowSm }}>Neutral</button>
-              <button style={{ padding: "3px 8px", fontSize: 10.5, fontWeight: 500, border: "none", background: "transparent", color: C.textMuted, borderRadius: 4, cursor: "pointer", fontFamily: "inherit" }}>Firmer</button>
-            </div>
-          </div>
-          <div style={{ fontSize: 13, lineHeight: 1.6, color: C.textSec, fontFamily: "Georgia, serif", fontStyle: "italic" }}>{draftText}</div>
-        </div>
-      )}
-
-      {/* Actions — stacked Log Touchpoint + Mark Complete */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
-        <button onClick={onLog} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 14px", background: C.card, color: C.btn, borderRadius: 8, fontSize: 13, fontWeight: 600, border: "1.5px solid " + C.btn, cursor: "pointer", fontFamily: "inherit", boxShadow: C.shadowSm }}>
-          <Icon name="phone" size={14} />
-          Log Touchpoint
-        </button>
-        <button onClick={onComplete} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 14px", background: C.btn, color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)" }}>
-          <Icon name="check" size={14} color="#fff" />
-          Mark Complete
-        </button>
-      </div>
-    </aside>
-  );
-};
 
 const ScoreRing = ({ score, size = 44, strokeWidth = 3.5 }) => {
   const r = (size - strokeWidth) / 2;
@@ -962,12 +821,11 @@ export default function App({ user }) {
     if (!user) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, suggestionRes, hcRes, tpRes, hcCountsRes, convoListRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
       rolodexDb.list(uid),
-      suggestionsDb.listPending(uid),
       hcDb.listPending(uid),
       touchpointsDb.listToday(uid),
       (typeof hcDb.countCompletedByClient === "function")
@@ -1037,7 +895,6 @@ export default function App({ user }) {
           client: t.client_name || "",
           done: reset ? false : t.is_done,
           completed_at: reset ? null : t.completed_at,
-          ai: t.is_ai_generated,
           alert: t.is_alert,
           recurring: t.is_recurring,
           sort_order: t.sort_order,
@@ -1071,9 +928,6 @@ export default function App({ user }) {
       work: r.notes,
     })));
 
-    // Map rai_suggestions into the aiTasks format
-    // (suggestions stay in their own table, tasks are separate)
-    
     // Load retro answers from rolodex entries
     if (rolodexRes.data) {
       const answers = {};
@@ -1183,7 +1037,7 @@ export default function App({ user }) {
         });
       }, 720);
     }
-    const countable = updated.filter(t => !t.ai);
+    const countable = updated;
     const doneNow = countable.filter(t => t.done).length;
     if (doneNow === countable.length && countable.length > 0) {
       setConfetti(true);
@@ -1194,43 +1048,6 @@ export default function App({ user }) {
     // Persist
     await tasksDb.toggle(id, newDone);
   };
-  const dismissAi = async (id) => {
-    setTasks(tasks.filter(t => t.id !== id));
-    await tasksDb.delete(id);
-  };
-  const promoteAi = (id) => {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
-    const promoted = { ...task, ai: false, recurring: false, alert: task.alert || false };
-    const promotedPS = getProfileSortScore(promoted.client);
-    const withoutTask = tasks.filter(t => t.id !== id);
-    // Try to insert next to same client first
-    let insertAfterIdx = -1;
-    if (promoted.client) {
-      for (let i = withoutTask.length - 1; i >= 0; i--) {
-        if (!withoutTask[i].ai && withoutTask[i].client === promoted.client) {
-          insertAfterIdx = i;
-          break;
-        }
-      }
-    }
-    // Fall back to Profile Score ordering
-    if (insertAfterIdx === -1) {
-      for (let i = withoutTask.length - 1; i >= 0; i--) {
-        if (!withoutTask[i].ai && getProfileSortScore(withoutTask[i].client) >= promotedPS) {
-          insertAfterIdx = i;
-          break;
-        }
-      }
-    }
-    if (insertAfterIdx === -1) {
-      const firstTask = withoutTask.findIndex(t => !t.ai);
-      insertAfterIdx = firstTask >= 0 ? firstTask - 1 : -1;
-    }
-    const newTasks = [...withoutTask];
-    newTasks.splice(insertAfterIdx + 1, 0, promoted);
-    setTasks(newTasks);
-  };
   const addTask = async () => {
     if (!newTask.trim()) return;
     const clientObj = clients.find(c => c.name === newTaskClient);
@@ -1240,16 +1057,15 @@ export default function App({ user }) {
       client_id: clientObj?.id || null,
       is_recurring: newTaskRecurring,
     });
-    const task = { id: created?.id || "u" + Date.now(), text: newTask.trim(), client: newTaskClient || null, done: false, ai: false, recurring: newTaskRecurring };
+    const task = { id: created?.id || "u" + Date.now(), text: newTask.trim(), client: newTaskClient || null, done: false, recurring: newTaskRecurring };
     const taskPS = getProfileSortScore(task.client);
     const newTasks = [...tasks];
-    const allTasksFilter = (t => !t.ai);
-    
+
     // Try to insert next to same client first
     let insertIdx = -1;
     if (task.client) {
       for (let i = newTasks.length - 1; i >= 0; i--) {
-        if (allTasksFilter(newTasks[i]) && newTasks[i].client === task.client) {
+        if (newTasks[i].client === task.client) {
           insertIdx = i;
           break;
         }
@@ -1258,32 +1074,26 @@ export default function App({ user }) {
     // Fall back to Profile Score ordering
     if (insertIdx === -1) {
       for (let i = newTasks.length - 1; i >= 0; i--) {
-        if (allTasksFilter(newTasks[i]) && getProfileSortScore(newTasks[i].client) >= taskPS) {
+        if (getProfileSortScore(newTasks[i].client) >= taskPS) {
           insertIdx = i;
           break;
         }
       }
     }
-    
+
     if (insertIdx >= 0) {
       newTasks.splice(insertIdx + 1, 0, task);
     } else {
-      const firstTaskIdx = newTasks.findIndex(allTasksFilter);
-      if (firstTaskIdx >= 0) {
-        newTasks.splice(firstTaskIdx, 0, task);
-      } else {
-        newTasks.push(task);
-      }
+      newTasks.unshift(task);
     }
-    
+
     setTasks(newTasks);
     setNewTask(""); setNewTaskClient(""); setNewTaskRecurring(false); setShowClientPicker(false);
   };
 
-  const recurringTasks = tasks.filter(t => t.recurring && !t.ai);
-  const todayTasks = tasks.filter(t => !t.recurring && !t.ai);
-  const aiTasks = tasks.filter(t => t.ai);
-  const countableTasks = tasks.filter(t => !t.ai);
+  const recurringTasks = tasks.filter(t => t.recurring);
+  const todayTasks = tasks.filter(t => !t.recurring);
+  const countableTasks = tasks;
 
   // Priority grouping by client retention
   const getClientRet = (clientName) => {
@@ -2997,21 +2807,9 @@ export default function App({ user }) {
             );
           };
 
-          // Task kind inference (rai / mine / system)
-          const taskKind = (t) => {
-            if (t.ai) return "rai";
-            if (t.alert) return "system";
-            return "mine";
-          };
-          const typeLabel = (t) => {
-            if (t.alert) return "Signal";
-            if (t.recurring) return "Cadence";
-            return "Task";
-          };
-
           // ─── STATUS BAND ─────────────────────────────────────────────────
-          const totalVisible = visibleTasks.filter(t => !t.ai).length;
-          const doneCount = completedTasks.filter(t => !t.ai).length;
+          const totalVisible = visibleTasks.length;
+          const doneCount = completedTasks.length;
           const remaining = totalVisible - doneCount;
           const pct = totalVisible ? doneCount / totalVisible : 0;
 
@@ -3437,12 +3235,9 @@ export default function App({ user }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {renderTasks.map(t => {
                       const client = clients.find(c => c.name === t.client);
-                      const kind = taskKind(t);
                       const isDone = !!t.done;
                       const isJustDone = !!justCompletedIds[t.id];
                       const isManual = rankMode === "manual";
-                      const isRaiMode = rankMode === "rai";
-                      const isRaisPick = isRaiMode && !!t.raiPriority && !isDone;
                       const isDragging = draggingTaskId === t.id;
                       const isDragOver = dragOverTaskId === t.id && draggingTaskId !== t.id;
                       // Focus target: first NON-done task in renderTasks. In focus mode it gets highlighted; others dim.
@@ -3548,47 +3343,29 @@ export default function App({ user }) {
                           </div>
 
                           {/* Right slot: Rai's pick badge in Rai mode for raiPriority tasks, otherwise standard tag */}
-                          {isRaisPick ? (
-                            <div className="rt-row-tag" style={{
-                              display: "inline-flex", alignItems: "center", gap: 4,
-                              padding: "3px 9px",
-                              background: C.btnLight,
-                              color: C.btn,
-                              border: "none",
-                              borderRadius: 999,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              flexShrink: 0,
-                              whiteSpace: "nowrap",
-                            }}>
-                              <Icon name="sparkles" size={10} color={C.btn} />
-                              <span className="rt-row-tag-label">Rai's pick</span>
-                            </div>
-                          ) : (
-                            <div className="rt-row-tag" style={{
-                              display: "inline-flex", alignItems: "center", gap: 4,
-                              padding: "3px 9px",
-                              background: kind === "rai" ? C.btnLight : "transparent",
-                              color: kind === "rai" ? C.btn : C.ink500,
-                              border: kind === "rai" ? "none" : "1px solid " + C.ink300,
-                              borderRadius: 999,
-                              fontSize: 11,
-                              fontWeight: kind === "rai" ? 600 : 400,
-                              flexShrink: 0,
-                              whiteSpace: "nowrap",
-                            }}>
-                              <Icon
-                                name={kind === "rai" ? "sparkles" : (t.recurring ? "clock" : "today")}
-                                size={10}
-                                color={kind === "rai" ? C.btn : C.ink500}
-                              />
-                              <span className="rt-row-tag-label">
-                                {kind === "rai" ? "Assigned by Rai" : (t.recurring ? "Recurring" : "Today")}
-                              </span>
-                            </div>
-                          )}
+                          <div className="rt-row-tag" style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "3px 9px",
+                            background: "transparent",
+                            color: C.ink500,
+                            border: "1px solid " + C.ink300,
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 400,
+                            flexShrink: 0,
+                            whiteSpace: "nowrap",
+                          }}>
+                            <Icon
+                              name={t.recurring ? "clock" : "today"}
+                              size={10}
+                              color={C.ink500}
+                            />
+                            <span className="rt-row-tag-label">
+                              {t.recurring ? "Recurring" : "Today"}
+                            </span>
+                          </div>
 
-                          <button onClick={(e) => { e.stopPropagation(); if (t.ai) { dismissAi(t.id); } else { setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); } }}
+                          <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                             className="rt-dismiss"
                             style={{ width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0.3, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
                             aria-label="dismiss">
