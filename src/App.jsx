@@ -2037,6 +2037,7 @@ export default function App({ user }) {
         }
         .r-rai-chat {
           background:
+            radial-gradient(ellipse 90% 60% at 50% 0%, rgba(91,33,182,0.13), transparent 78%),
             radial-gradient(ellipse 70% 35% at 50% 0%, rgba(91,33,182,0.10), transparent 75%),
             ${C.bg};
         }
@@ -3239,7 +3240,10 @@ export default function App({ user }) {
                   ═══════════════════════════════════════════════════════════════ */}
                   {observation && !obsDismissing && (() => {
                     const obs = observation;
-                    const archetype = obs.card_name || "Observation";
+                    const rawName = obs.card_name || "Observation";
+                    // Safety net: ensure archetype always reads as "The X" — Rai sometimes
+                    // drops the article. The "The" gives every card a consistent voice.
+                    const archetype = /^the\s/i.test(rawName) ? rawName : `The ${rawName}`;
                     // Resolve client names from clients_named UUIDs
                     const namedClients = (obs.clients_named || [])
                       .map(id => clients.find(c => c.id === id))
