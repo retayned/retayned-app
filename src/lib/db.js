@@ -680,8 +680,48 @@ export const touchpoints = {
 
 
 // ============================================================
-// HELPER: Build Rai context for API call
+// OBSERVATIONS — Observer card persistence
 // ============================================================
+
+export const observations = {
+  // Get the most recent active observation (status not in 'dropped' or 'expired')
+  getCurrent: async (userId) => {
+    const { data, error } = await supabase
+      .from('observations')
+      .select('*')
+      .eq('user_id', userId)
+      .not('status', 'in', '(dropped,expired)')
+      .order('fired_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return { data, error };
+  },
+
+  // Update the status as the operator interacts with the card
+  // Valid statuses: 'unread' | 'flipped' | 'unpacked' | 'dropped' | 'expired'
+  updateStatus: async (observationId, status) => {
+    const { data, error } = await supabase
+      .from('observations')
+      .update({ status, status_changed_at: new Date().toISOString() })
+      .eq('id', observationId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Get prior observations for the Mirrors archive page
+  listAll: async (userId, limit = 50) => {
+    const { data, error } = await supabase
+      .from('observations')
+      .select('*')
+      .eq('user_id', userId)
+      .order('fired_at', { ascending: false })
+      .limit(limit);
+    return { data: data || [], error };
+  },
+};
+
+
 
 export const buildRaiContext = async (userId, clientId = null) => {
   // Gather all relevant data for Rai's context window
