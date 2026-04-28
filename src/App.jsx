@@ -2037,7 +2037,6 @@ export default function App({ user }) {
         }
         .r-rai-chat {
           background:
-            radial-gradient(ellipse 90% 60% at 50% 0%, rgba(91,33,182,0.13), transparent 78%),
             radial-gradient(ellipse 70% 35% at 50% 0%, rgba(91,33,182,0.10), transparent 75%),
             ${C.bg};
         }
@@ -2076,7 +2075,9 @@ export default function App({ user }) {
           .r-main:has(.r-rai-page) {
             padding: 0 !important;
             overflow: hidden;
-            height: calc(100vh - var(--page-gap) * 2);
+            top: 0 !important;
+            bottom: 0 !important;
+            height: 100vh;
             min-height: 0 !important;
           }
           .r-log-label { display: inline !important; }
