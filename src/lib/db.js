@@ -124,9 +124,9 @@ export const clients = {
   },
 
   // Hard delete — permanently removes client and cascades to all related
-  // tables (tasks, touchpoints, health_checks, rai_suggestions,
-  // rai_conversations, rai_knowledge) via ON DELETE CASCADE.
-  // This is the GDPR/CCPA "right to erasure" path. Not reversible.
+  // tables (tasks, touchpoints, health_checks, rai_conversations) via
+  // ON DELETE CASCADE. This is the GDPR/CCPA "right to erasure" path.
+  // Not reversible.
   hardDelete: async (clientId) => {
     const { error } = await supabase
       .from('clients')
@@ -447,60 +447,6 @@ export const referrals = {
 
 
 // ============================================================
-// RAI SUGGESTIONS (from daily sweep)
-// ============================================================
-
-export const raiSuggestions = {
-  listPending: async (userId) => {
-    const { data, error } = await supabase
-      .from('rai_suggestions')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .order('is_alert', { ascending: false })
-      .order('created_at', { ascending: false });
-    return { data: data || [], error };
-  },
-
-  promote: async (suggestionId, userId) => {
-    // Get the suggestion
-    const { data: suggestion } = await supabase
-      .from('rai_suggestions')
-      .select('*')
-      .eq('id', suggestionId)
-      .single();
-
-    if (!suggestion) return { error: 'Not found' };
-
-    // Create a task from it
-    const { data: task, error: taskError } = await tasks.create(userId, {
-      client_id: suggestion.client_id,
-      client_name: suggestion.client_name,
-      text: suggestion.text,
-      is_ai_generated: true,
-      is_alert: suggestion.is_alert
-    });
-
-    // Mark suggestion as promoted
-    const { error: updateError } = await supabase
-      .from('rai_suggestions')
-      .update({ status: 'promoted' })
-      .eq('id', suggestionId);
-
-    return { data: task, error: taskError || updateError };
-  },
-
-  dismiss: async (suggestionId) => {
-    const { error } = await supabase
-      .from('rai_suggestions')
-      .update({ status: 'dismissed' })
-      .eq('id', suggestionId);
-    return { error };
-  }
-};
-
-
-// ============================================================
 // RAI CONVERSATIONS
 // ============================================================
 
@@ -647,42 +593,6 @@ export const raiConversations = {
 
 
 // ============================================================
-// RAI KNOWLEDGE BASE (pgvector RAG)
-// ============================================================
-
-export const raiKnowledge = {
-  // Store an embedding
-  store: async (userId, clientId, content, embedding, sourceType, sourceId) => {
-    const { data, error } = await supabase
-      .from('rai_knowledge')
-      .insert({
-        user_id: userId,
-        client_id: clientId,
-        content,
-        embedding,
-        source_type: sourceType,
-        source_id: sourceId
-      })
-      .select()
-      .single();
-    return { data, error };
-  },
-
-  // Search by similarity
-  search: async (userId, queryEmbedding, limit = 5, clientId = null) => {
-    // Uses Supabase RPC for vector similarity search
-    const { data, error } = await supabase.rpc('match_knowledge', {
-      query_embedding: queryEmbedding,
-      match_count: limit,
-      filter_user_id: userId,
-      filter_client_id: clientId
-    });
-    return { data: data || [], error };
-  }
-};
-
-
-// ============================================================
 // REALTIME SUBSCRIPTIONS
 // ============================================================
 
@@ -695,19 +605,6 @@ export const realtime = {
         event: '*',
         schema: 'public',
         table: 'tasks',
-        filter: `user_id=eq.${userId}`
-      }, callback)
-      .subscribe();
-  },
-
-  // Subscribe to new Rai suggestions
-  onNewSuggestion: (userId, callback) => {
-    return supabase
-      .channel('suggestions-changes')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'rai_suggestions',
         filter: `user_id=eq.${userId}`
       }, callback)
       .subscribe();
