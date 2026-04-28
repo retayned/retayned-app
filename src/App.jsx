@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, buildRaiContext } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, observations as observationsDb, buildRaiContext } from "./lib/db";
 
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
@@ -816,6 +816,11 @@ export default function App({ user }) {
   const [streak, setStreak] = useState(0);
   const [showStreakModal, setShowStreakModal] = useState(false);
 
+  // ─── Observer card state ──
+  const [observation, setObservation] = useState(null);
+  const [obsFlipped, setObsFlipped] = useState(false);
+  const [obsDismissing, setObsDismissing] = useState(false);
+
   // ═══ FETCH ALL DATA ON MOUNT ═══
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -845,6 +850,20 @@ export default function App({ user }) {
       }
     } catch (e) {
       console.warn("Cadence data failed to load:", e);
+    }
+
+    // Observer card — loaded separately. If table doesn't exist or is empty, no card shows.
+    try {
+      if (typeof observationsDb?.getCurrent === "function") {
+        const obsRes = await observationsDb.getCurrent(uid);
+        if (obsRes?.data) {
+          setObservation(obsRes.data);
+          // Restore flipped state if operator already flipped this card
+          setObsFlipped(obsRes.data.status === "flipped");
+        }
+      }
+    } catch (e) {
+      console.warn("Observer card failed to load:", e);
     }
 
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
@@ -3210,6 +3229,302 @@ export default function App({ user }) {
                       </div>
                     </div>
                   )}
+
+                  {/* ═══════════════════════════════════════════════════════════════
+                      OBSERVER CARD
+                      Sits between toggle row and task list. Front shows the law and
+                      the data; back shows Rai's reading and the question.
+                      Flip animation: 3D rotateY transition between two faces.
+                      Hidden if no observation exists or it's been dropped/expired.
+                  ═══════════════════════════════════════════════════════════════ */}
+                  {observation && !obsDismissing && (() => {
+                    const obs = observation;
+                    const archetype = obs.card_name || "Observation";
+                    // Resolve client names from clients_named UUIDs
+                    const namedClients = (obs.clients_named || [])
+                      .map(id => clients.find(c => c.id === id))
+                      .filter(Boolean);
+                    // Days since pulled — for the "PULLED FRIDAY · N DAYS AGO" tag
+                    const firedAt = new Date(obs.fired_at);
+                    const daysAgo = Math.floor((Date.now() - firedAt.getTime()) / (1000*60*60*24));
+                    const firedDay = firedAt.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+                    const firedMonthDay = firedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).replace(' ', ' · ').toUpperCase();
+
+                    // ─── Action handlers ───
+                    const handleFlip = async () => {
+                      setObsFlipped(true);
+                      try { await observationsDb.updateStatus(obs.id, "flipped"); } catch (e) { /* non-blocking */ }
+                    };
+                    const handleFlipBack = async () => {
+                      setObsFlipped(false);
+                      try { await observationsDb.updateStatus(obs.id, "unread"); } catch (e) { /* non-blocking */ }
+                    };
+                    const handleDrop = async () => {
+                      setObsDismissing(true);
+                      // Animate out, then clear from state
+                      setTimeout(() => setObservation(null), 280);
+                      try { await observationsDb.updateStatus(obs.id, "dropped"); } catch (e) { /* non-blocking */ }
+                    };
+                    const handleUnpack = async () => {
+                      // Mark as unpacked, then navigate to Rai chat with seeded context
+                      try { await observationsDb.updateStatus(obs.id, "unpacked"); } catch (e) { /* non-blocking */ }
+                      const clientNamesStr = namedClients.length > 0
+                        ? namedClients.map(c => c.name).join(" and ")
+                        : "this pattern";
+                      const seededMessage = (
+                        `You turned over ${archetype}. ${obs.back_reading}\n\n` +
+                        `Where do you want to start — ${namedClients.length > 0 ? clientNamesStr + ", " : ""}or the pattern as a whole?`
+                      );
+                      setAiMessages([{ role: "ai", text: seededMessage }]);
+                      setPage("coach");
+                    };
+
+                    return (
+                      <div
+                        className="observer-wrap"
+                        style={{
+                          marginBottom: 18,
+                          opacity: obsDismissing ? 0 : 1,
+                          transform: obsDismissing ? "scale(0.97)" : "scale(1)",
+                          transition: "opacity 280ms ease, transform 280ms ease",
+                        }}
+                      >
+                        <div
+                          className="observer-card"
+                          style={{
+                            background: C.deepCream,
+                            borderRadius: 12,
+                            padding: "26px 28px",
+                            display: "flex",
+                            gap: 28,
+                            alignItems: "stretch",
+                            position: "relative",
+                            transition: "background 240ms ease",
+                          }}
+                        >
+                          {/* ─── × close button — top-right, always visible ─── */}
+                          <button
+                            onClick={handleDrop}
+                            aria-label="Drop this observation"
+                            style={{
+                              position: "absolute",
+                              top: 12,
+                              right: 14,
+                              background: "transparent",
+                              border: "none",
+                              color: C.textMuted,
+                              fontSize: 18,
+                              lineHeight: 1,
+                              padding: 6,
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              zIndex: 3,
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = C.text}
+                            onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+                          >×</button>
+
+                          {/* ═══ FRONT FACE ═══ */}
+                          {!obsFlipped && (
+                          <div style={{ display: "flex", gap: 28, alignItems: "stretch", width: "100%" }}>
+                            {/* Deck stack — front (dark green face) */}
+                            <div style={{ position: "relative", width: 130, minWidth: 130, height: 220, flexShrink: 0 }}>
+                              {/* Stack back layer 1 */}
+                              <div style={{
+                                position: "absolute", top: 8, left: -10, width: 116, height: 200,
+                                borderRadius: 10, background: "#DDD6C2", transform: "rotate(-3deg)",
+                              }} />
+                              {/* Stack back layer 2 */}
+                              <div style={{
+                                position: "absolute", top: 4, left: -4, width: 116, height: 200,
+                                borderRadius: 10, background: "#E8E2D2", transform: "rotate(-1.5deg)",
+                              }} />
+                              {/* Front face */}
+                              <div style={{
+                                position: "absolute", top: 0, left: 0, width: 116, height: 200,
+                                borderRadius: 10, background: C.primaryDeep, padding: "16px 14px",
+                                display: "flex", flexDirection: "column",
+                                boxShadow: "0 4px 12px rgba(31,48,38,0.12)",
+                              }}>
+                                <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: "#8FA697", letterSpacing: "0.15em", lineHeight: 1.5, marginBottom: 10, fontWeight: 500 }}>
+                                  OBSERVATION ·<br/>{String(obs.observation_number || "").padStart(3, "0")}
+                                </div>
+                                <div style={{ fontFamily: "ui-serif, Georgia, serif", fontStyle: "italic", fontSize: 17, color: "#FAFAF7", lineHeight: 1.05, fontWeight: 400, marginBottom: 12 }}>
+                                  {archetype}
+                                </div>
+                                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  <div style={{ width: 40, height: 40, border: "1px solid rgba(250,250,247,0.32)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                                      <circle cx="12" cy="12" r="2.2" fill="#FAFAF7"/>
+                                      <g stroke="#FAFAF7" strokeWidth="1.4" strokeLinecap="round" opacity="0.85">
+                                        <line x1="12" y1="3.5" x2="12" y2="6.5"/>
+                                        <line x1="12" y1="17.5" x2="12" y2="20.5"/>
+                                        <line x1="3.5" y1="12" x2="6.5" y2="12"/>
+                                        <line x1="17.5" y1="12" x2="20.5" y2="12"/>
+                                        <line x1="6" y1="6" x2="8" y2="8"/>
+                                        <line x1="16" y1="16" x2="18" y2="18"/>
+                                        <line x1="6" y1="18" x2="8" y2="16"/>
+                                        <line x1="16" y1="8" x2="18" y2="6"/>
+                                      </g>
+                                    </svg>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: "#8FA697", letterSpacing: "0.15em", fontWeight: 500 }}>
+                                  <span>RAI</span><span>{firedMonthDay}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Body */}
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, padding: "4px 0", justifyContent: "center" }}>
+                              <div style={{ fontSize: 10.5, fontWeight: 500, color: C.btn, letterSpacing: "0.14em", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+                                ✻&nbsp;&nbsp;{firedDay} YOU PULLED · {archetype.toUpperCase()}
+                              </div>
+                              <div style={{ fontFamily: "ui-serif, Georgia, serif", fontSize: 21, fontWeight: 400, color: C.text, lineHeight: 1.22, marginBottom: 10, letterSpacing: "-0.005em", maxWidth: 560 }}>
+                                {obs.front_headline}
+                              </div>
+                              <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.55, marginBottom: 18, maxWidth: 540 }}>
+                                {obs.front_body}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                                <button
+                                  onClick={handleFlip}
+                                  style={{
+                                    background: C.primaryDeep, color: "#FAFAF7", border: "none",
+                                    borderRadius: 999, padding: "9px 20px",
+                                    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                                  }}
+                                >
+                                  Flip it over
+                                </button>
+                                <button
+                                  onClick={handleDrop}
+                                  style={{
+                                    background: "none", border: "none", color: C.textMuted,
+                                    fontSize: 13, cursor: "pointer", padding: "9px 4px",
+                                    fontStyle: "italic", fontFamily: "inherit",
+                                  }}
+                                >
+                                  Drop it
+                                </button>
+                                {daysAgo > 0 && (
+                                  <span style={{
+                                    marginLeft: "auto",
+                                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                    fontSize: 9.5, color: C.textMuted,
+                                    letterSpacing: "0.14em", fontWeight: 500,
+                                  }}>
+                                    PULLED {firedDay} · {daysAgo} DAY{daysAgo === 1 ? "" : "S"} AGO
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          )}
+
+                          {/* ═══ BACK FACE ═══ */}
+                          {obsFlipped && (
+                          <div style={{ display: "flex", gap: 28, alignItems: "stretch", width: "100%" }}>
+                            {/* Deck stack — back (cream face) */}
+                            <div style={{ position: "relative", width: 130, minWidth: 130, height: 220, flexShrink: 0 }}>
+                              <div style={{
+                                position: "absolute", top: 8, left: -10, width: 116, height: 200,
+                                borderRadius: 10, background: "#DDD6C2", transform: "rotate(-3deg)",
+                              }} />
+                              <div style={{
+                                position: "absolute", top: 4, left: -4, width: 116, height: 200,
+                                borderRadius: 10, background: "#E8E2D2", transform: "rotate(-1.5deg)",
+                              }} />
+                              <div style={{
+                                position: "absolute", top: 0, left: 0, width: 116, height: 200,
+                                borderRadius: 10, background: C.bg,
+                                border: "1px solid #C9C2AE",
+                                padding: "16px 14px",
+                                display: "flex", flexDirection: "column",
+                              }}>
+                                <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: C.textMuted, letterSpacing: "0.15em", lineHeight: 1.5, marginBottom: 10, fontWeight: 500 }}>
+                                  RAI'S READING ·<br/>OBS · {String(obs.observation_number || "").padStart(3, "0")}
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+                                  <div style={{ width: 40, height: 40, border: "1px solid rgba(31,48,38,0.3)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+                                      <circle cx="12" cy="12" r="2.2" fill={C.primaryDeep}/>
+                                      <g stroke={C.primaryDeep} strokeWidth="1.4" strokeLinecap="round" opacity="0.85">
+                                        <line x1="12" y1="3.5" x2="12" y2="6.5"/>
+                                        <line x1="12" y1="17.5" x2="12" y2="20.5"/>
+                                        <line x1="3.5" y1="12" x2="6.5" y2="12"/>
+                                        <line x1="17.5" y1="12" x2="20.5" y2="12"/>
+                                        <line x1="6" y1="6" x2="8" y2="8"/>
+                                        <line x1="16" y1="16" x2="18" y2="18"/>
+                                        <line x1="6" y1="18" x2="8" y2="16"/>
+                                        <line x1="16" y1="8" x2="18" y2="6"/>
+                                      </g>
+                                    </svg>
+                                  </div>
+                                </div>
+                                <div style={{ flex: 1, fontFamily: "ui-serif, Georgia, serif", fontStyle: "italic", fontSize: 17, color: C.text, lineHeight: 1.05, fontWeight: 400, textAlign: "center" }}>
+                                  {archetype}
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: C.textMuted, letterSpacing: "0.15em", fontWeight: 500 }}>
+                                  <span>RAI</span><span>{firedMonthDay}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Body */}
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, padding: "4px 0", justifyContent: "center" }}>
+                              <div style={{ fontSize: 10.5, fontWeight: 500, color: C.btn, letterSpacing: "0.14em", marginBottom: 18, display: "flex", alignItems: "center", gap: 6 }}>
+                                ✻&nbsp;&nbsp;RAI'S READING
+                              </div>
+                              <div style={{ fontFamily: "ui-serif, Georgia, serif", fontSize: 21, fontWeight: 400, color: C.text, lineHeight: 1.4, marginBottom: 14, letterSpacing: "-0.005em", maxWidth: 540, fontStyle: "italic" }}>
+                                {obs.back_reading}
+                              </div>
+                              <div style={{ fontFamily: "ui-serif, Georgia, serif", fontSize: 16, fontWeight: 400, color: C.textSec, lineHeight: 1.5, marginBottom: 28, maxWidth: 500 }}>
+                                {obs.back_question}
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                                <button
+                                  onClick={handleUnpack}
+                                  style={{
+                                    background: C.btn, color: "#FAFAF7", border: "none",
+                                    borderRadius: 999, padding: "13px 28px",
+                                    fontSize: 14.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
+                                  onMouseLeave={e => e.currentTarget.style.background = C.btn}
+                                >
+                                  Unpack with Rai
+                                </button>
+                                <button
+                                  onClick={handleDrop}
+                                  style={{
+                                    background: "none", border: "none", color: C.textMuted,
+                                    fontSize: 13, cursor: "pointer", padding: "13px 8px",
+                                    fontStyle: "italic", fontFamily: "inherit",
+                                  }}
+                                >
+                                  Drop it
+                                </button>
+                                <button
+                                  onClick={handleFlipBack}
+                                  style={{
+                                    background: "none", border: "none", color: C.textMuted,
+                                    fontSize: 13, cursor: "pointer", padding: "13px 0",
+                                    marginLeft: "auto", fontFamily: "inherit",
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.color = C.text}
+                                  onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+                                >
+                                  Turn back over
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {openTasks.length === 0 && completedTasks.length === 0 && (
                     <div style={{ textAlign: "center", padding: "60px 20px", background: C.primaryGhost || C.primarySoft, border: "1px dashed " + C.border, borderRadius: 14 }}>
