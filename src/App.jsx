@@ -2193,26 +2193,28 @@ export default function App({ user }) {
           border-color: transparent !important;
           box-shadow:
             0 0 0 1px rgba(255,255,255,0.6),
-            0 6px 24px rgba(0,0,0,0.35),
-            0 16px 48px rgba(0,0,0,0.30),
+            0 6px 24px rgba(0,0,0,0.45),
+            0 16px 48px rgba(0,0,0,0.40),
             0 0 80px rgba(255,255,255,0.18) !important;
           transform: scale(1.025);
           transition: transform 320ms ease 500ms, box-shadow 320ms ease 500ms, background 280ms ease 500ms;
           position: relative;
-          z-index: 65;
         }
         .rt-focus-on .rt-row.rt-focus-top * {
           color: #1E261F !important;
+          opacity: 1 !important;
         }
         .rt-focus-on .rt-row:not(.rt-focus-top) {
-          opacity: 0.18 !important;
+          opacity: 0.12 !important;
           pointer-events: none !important;
           transition: opacity 280ms ease 200ms;
         }
-        /* Toolbar (toggle row with Ranked by Rai + Focus button) stays bright and clickable above the curtain */
+        /* Toolbar (Ranked by Rai + Focus button) stays bright above the dim */
         .rt-focus-on .rt-toolbar {
           position: relative;
-          z-index: 65;
+        }
+        .rt-focus-on .rt-toolbar * {
+          opacity: 1 !important;
         }
         /* Curtain — z-index 60 to cover the sidebar (which is fixed at z-index 50). */
         .rt-today-v4 { position: relative; }
@@ -2223,20 +2225,19 @@ export default function App({ user }) {
           left: 0;
           bottom: 0;
           opacity: 0;
-          background:
-            radial-gradient(ellipse 60% 35% at 50% 38%, rgba(28,50,36,0.78) 0%, rgba(15,28,20,0.96) 60%, rgba(10,20,14,0.98) 100%);
+          background: rgba(10,20,14,1);
           pointer-events: none;
-          z-index: 60;
+          z-index: 49;
           transition: opacity 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
         }
         .rt-curtain.is-on { opacity: 1; }
-        /* Lightning flash — sits above curtain so it lights up the whole screen */
+        /* Lightning flash — sits ABOVE everything when firing */
         .rt-flash {
           position: fixed;
           top: 0; right: 0; bottom: 0; left: 0;
           background: rgba(255, 255, 255, 0);
           pointer-events: none;
-          z-index: 62;
+          z-index: 100;
         }
         .rt-flash.is-firing {
           animation: rt-flash-anim 380ms ease-out;
@@ -2246,7 +2247,24 @@ export default function App({ user }) {
           8%   { background: rgba(255, 255, 255, 0.85); }
           100% { background: rgba(255, 255, 255, 0); }
         }
-        .rt-today-v4.rt-focus-on { /* no z-index — let curtain cover, individual children rise */ }
+        /* Focus mode: change .r-main background to dark green directly (not via overlay).
+           Avoids stacking context issues since .r-main is position:fixed and its children
+           with z-index can't escape its stacking context. With this approach, the cream
+           background simply changes color, dimmed children fade to dark, and the white
+           focused task pops naturally without needing to escape any stacking. */
+        body:has(.rt-focus-on) .r-main {
+          background: radial-gradient(ellipse 70% 45% at 50% 38%, rgba(28,50,36,1) 0%, rgba(15,28,20,1) 60%, rgba(10,20,14,1) 100%) !important;
+          transition: background 600ms ease;
+        }
+        body:has(.rt-focus-on) .r-desk {
+          background: rgba(10,20,14,0.95) !important;
+          transition: background 600ms ease;
+        }
+        body:has(.rt-focus-on) .r-desk * {
+          opacity: 0.18;
+          transition: opacity 280ms ease 200ms;
+        }
+        .rt-today-v4.rt-focus-on { /* no z-index — let darkened bg show through dimmed children */ }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
