@@ -1731,8 +1731,8 @@ export default function App({ user }) {
         .rt-row:hover .rt-dismiss { opacity: 1 !important; }
         /* ASMR completion — done state styling */
         .rt-row.is-done {
-          background: ${C.primaryGhost} !important;
-          border-color: #DBE8DF !important;
+          background: ${C.bg} !important;
+          border-color: ${C.borderLight} !important;
           transition: background 320ms ease, border-color 320ms ease;
         }
         .rt-row .rt-check {
@@ -1744,9 +1744,9 @@ export default function App({ user }) {
           transition: opacity 220ms ease 60ms, transform 320ms cubic-bezier(.34,1.56,.64,1) 60ms;
         }
         .rt-row.is-done .rt-check {
-          background: ${C.success} !important;
-          border-color: ${C.success} !important;
-          transform: scale(1.08);
+          background: #C4C4BC !important;
+          border-color: #C4C4BC !important;
+          transform: scale(1);
         }
         .rt-row.is-done .rt-check svg { opacity: 1; transform: scale(1); }
         .rt-row .rt-task-title {
@@ -1759,11 +1759,11 @@ export default function App({ user }) {
           height: 1.5px; width: 0; background: currentColor;
           transition: width 360ms cubic-bezier(.6, 0, .4, 1);
         }
-        .rt-row.is-done .rt-task-title { color: ${C.textSec}; }
+        .rt-row.is-done .rt-task-title { color: ${C.textMuted}; }
         .rt-row.is-done .rt-task-title::after { width: 100%; }
-        .rt-row.is-done .rt-row-meta { opacity: 0.6; transition: opacity 320ms ease; }
-        .rt-row.is-done .rt-task-avatar { opacity: 0.45; filter: grayscale(0.4); transition: opacity 320ms ease, filter 320ms ease; }
-        .rt-row.is-done .rt-row-tag { opacity: 0.5; transition: opacity 320ms ease; }
+        .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
+        .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
+        .rt-row.is-done .rt-row-tag { opacity: 0.45; transition: opacity 320ms ease; }
         .rt-row.is-done .rt-dismiss { opacity: 0.4 !important; }
         @keyframes rt-glow-pulse {
           0% { box-shadow: 0 0 0 0 rgba(45,134,89,0); transform: scale(1); }
@@ -1773,7 +1773,11 @@ export default function App({ user }) {
         .rt-row.is-just-done {
           animation: rt-glow-pulse 700ms ease-out;
         }
-        .rt-row.is-just-done .rt-check { transform: scale(1.18); }
+        .rt-row.is-just-done .rt-check {
+          background: ${C.success} !important;
+          border-color: ${C.success} !important;
+          transform: scale(1.18);
+        }
         .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover { background: rgba(91,33,182,0.06); }
@@ -2895,7 +2899,7 @@ export default function App({ user }) {
                           {/* ─── ILLUSTRATION — top-right inside card ─── */}
                           <div style={{
                             position: "absolute",
-                            right: 24,
+                            right: 0,
                             top: 28,
                             width: 200,
                             height: 165,
@@ -3010,7 +3014,6 @@ export default function App({ user }) {
                             letterSpacing: "-0.005em",
                             color: C.text,
                             margin: "0 0 12px",
-                            maxWidth: 620,
                           }}>
                             {obs.front_headline}
                           </h3>
@@ -3021,7 +3024,6 @@ export default function App({ user }) {
                             lineHeight: 1.55,
                             color: C.textSec,
                             margin: "0 0 22px",
-                            maxWidth: 640,
                           }}>
                             {obs.front_body}
                           </p>
