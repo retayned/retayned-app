@@ -2246,7 +2246,7 @@ export default function App({ user }) {
           8%   { background: rgba(255, 255, 255, 0.85); }
           100% { background: rgba(255, 255, 255, 0); }
         }
-        .rt-today-v4.rt-focus-on { z-index: 65; }
+        .rt-today-v4.rt-focus-on { /* no z-index — let curtain cover, individual children rise */ }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
