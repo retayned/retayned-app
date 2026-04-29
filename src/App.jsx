@@ -516,6 +516,11 @@ export default function App({ user }) {
     if (!vv) return;
     const update = () => {
       document.documentElement.style.setProperty("--app-h", `${vv.height}px`);
+      // Track visual viewport offset within the layout viewport. When the user
+      // pinch-zooms, the visible area scrolls inside the page; without this offset,
+      // fixed elements (like the bottom nav) stay anchored to the layout viewport
+      // and visually drift away from the actual bottom of the screen.
+      document.documentElement.style.setProperty("--vv-offset-top", `${vv.offsetTop}px`);
       // Keyboard is considered open when the visual viewport is meaningfully shorter
       // than the layout viewport. 100px threshold catches most mobile keyboards while
       // avoiding false positives on URL-bar collapse (which is typically ~60-80px).
@@ -1880,6 +1885,11 @@ export default function App({ user }) {
           .rt-row-tag { padding: 0 !important; border: none !important; background: transparent !important; }
           .rt-row-tag-label { display: none !important; }
         }
+        /* Focus button bolt watermark — sized proportional to viewport */
+        .rt-focus-bolt { font-size: 60px; }
+        @media (max-width: 900px) {
+          .rt-focus-bolt { font-size: 32px; }
+        }
         /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
         @media (min-width: 1440px) {
           .rt-today-v4 {
@@ -1915,8 +1925,14 @@ export default function App({ user }) {
           .rt-mob-strip { display: block !important; }
           .rc-sort-cadence { display: none !important; }
           .rc-sort-renewal { display: none !important; }
-          .rt-mob-cal-trigger { display: inline-flex !important; }
-          .rt-mob-cal-sheet { display: block !important; }
+          .rt-mob-cal-trigger { display: none !important; }
+          .rt-mob-cal-trigger-band { display: inline-flex !important; }
+          .rt-mob-cal-sheet { display: none !important; }
+          .rt-mob-cal-sheet-band { display: block !important; }
+          .rt-band-sub-done { display: none !important; }
+          .rt-band-sub-events { display: none !important; }
+          .rt-band-sub-sep { display: none !important; }
+          .rt-band-sub-mobile-only { display: inline !important; }
           .rt-today-v4 {
             grid-template-areas: "band" "composer" "tasks" !important;
           }
@@ -2404,15 +2420,68 @@ export default function App({ user }) {
                     {greeting}{firstName ? ", " + firstName : ""}.
                   </h1>
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{remaining}</b> tasks</span>
-                    <span style={{ color: C.border }}>·</span>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{doneCount}</b> done</span>
-                    <span style={{ color: C.border }}>·</span>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>3</b> events</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{remaining}</b> tasks<span className="rt-band-sub-mobile-only" style={{ display: "none" }}> remaining</span></span>
+                    <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
+                    <span className="rt-band-sub-done"><b style={{ color: C.text, fontWeight: 700 }}>{doneCount}</b> done</span>
+                    <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
+                    <span className="rt-band-sub-events"><b style={{ color: C.text, fontWeight: 700 }}>3</b> events</span>
                     <span className="rt-band-sub-pct" style={{ display: "none", marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999 }}>
                       {Math.round(pct * 100)}%
                     </span>
                   </div>
+                  {/* Mobile-only calendar trigger — shown right under the greeting/counts */}
+                  <button
+                    className="rt-mob-cal-trigger-band"
+                    onClick={() => setTodayStripOpen(!todayStripOpen)}
+                    style={{
+                      display: "none",
+                      alignItems: "center",
+                      gap: 5,
+                      marginTop: 8,
+                      padding: 0,
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color: C.textSec,
+                      fontSize: 13.5,
+                      fontWeight: 500,
+                      fontFamily: "inherit"
+                    }}
+                  >
+                    <Icon name="calendar" size={14} color={C.textSec} />
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>3</b> events today</span>
+                    <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textSec} />
+                  </button>
+
+                  {/* Mobile calendar dropdown — drops down right under the band trigger */}
+                  {todayStripOpen && (
+                    <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: 7, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <Icon name="calendar" size={13} color={C.primary} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>From Google Calendar</div>
+                            <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
+                          </div>
+                        </div>
+                        <button style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 12px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Connect</button>
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        {[
+                          { time: "2:30pm", title: "Backyard Discovery sync" },
+                          { time: "4:00pm", title: "Motley Fool review" },
+                          { time: "5:30pm", title: "Internal — weekly planning" },
+                        ].map((e, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid " + C.borderLight }}>
+                            <span style={{ fontSize: 11.5, color: C.textMuted, fontVariantNumeric: "tabular-nums", fontWeight: 500, width: 48, flexShrink: 0 }}>{e.time}</span>
+                            <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="rt-band-sub-bar" style={{ display: "none", height: 3, background: C.borderLight, borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${pct * 100}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
                   </div>
@@ -2490,9 +2559,8 @@ export default function App({ user }) {
                       <Icon name="clock" size={12} color={C.textMuted} />
                       <span style={{ fontWeight: newTaskRecurring ? 600 : 500 }}>Recurring</span>
                     </button>
-                    <button onClick={submitComposer} disabled={!newTask.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 12px", height: 28, background: C.btn, color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: newTask.trim() ? "pointer" : "default", opacity: newTask.trim() ? 1 : 0.4, fontFamily: "inherit", marginLeft: "auto", flexShrink: 0 }}>
-                      Add
-                      <span style={{ background: "rgba(255,255,255,0.2)", padding: "1px 5px", borderRadius: 3, fontSize: 10.5, fontFamily: "monospace", fontWeight: 600 }}>↵</span>
+                    <button onClick={submitComposer} disabled={!newTask.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 14px", height: 28, background: C.btn, color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: newTask.trim() ? "pointer" : "default", opacity: newTask.trim() ? 1 : 0.4, fontFamily: "inherit", marginLeft: "auto", flexShrink: 0 }}>
+                      Add Task
                     </button>
                   </div>
                 </div>
@@ -2671,12 +2739,11 @@ export default function App({ user }) {
                           }}
                         >
                           {/* Background bolt watermark — V4 fill style, offset +15% right of center */}
-                          <span aria-hidden="true" style={{
+                          <span aria-hidden="true" className="rt-focus-bolt" style={{
                             position: "absolute",
                             top: "50%",
                             left: "65%",
                             transform: "translate(-50%, -50%)",
-                            fontSize: 60,
                             color: focusMode ? "rgba(251,181,64,0.18)" : "rgba(251,181,64,0.10)",
                             zIndex: 1,
                             pointerEvents: "none",
@@ -2688,7 +2755,7 @@ export default function App({ user }) {
                         </button>
                       )}
                     </div>
-                    {/* Mobile-only calendar trigger */}
+                    {/* Mobile-only calendar trigger (LEGACY — hidden, replaced by band-level trigger above) */}
                     <button
                       className="rt-mob-cal-trigger"
                       onClick={() => setTodayStripOpen(!todayStripOpen)}
@@ -2899,7 +2966,7 @@ export default function App({ user }) {
                           {/* ─── ILLUSTRATION — top-right inside card ─── */}
                           <div style={{
                             position: "absolute",
-                            right: 48,
+                            right: 36,
                             top: 28,
                             width: 200,
                             height: 165,
@@ -3230,40 +3297,30 @@ export default function App({ user }) {
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </button>
 
-                          {client
-                            ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={28} /></div>
-                            : <div className="rt-task-avatar" style={{ width: 28, height: 28, borderRadius: 14, background: C.borderSoft, flexShrink: 0 }} />}
-
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               <span className="rt-task-title">{t.text}</span>
                             </div>
-                            <div className="rt-row-meta" style={{ fontSize: 11.5, color: C.ink500, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {client ? client.name : ""}
+                            <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: C.ink500, marginTop: 2, minWidth: 0 }}>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : ""}</span>
+                              {t.recurring && (
+                                <span className="rt-row-tag" style={{
+                                  display: "inline-flex", alignItems: "center", gap: 4,
+                                  padding: "2px 8px",
+                                  background: "transparent",
+                                  color: C.ink500,
+                                  border: "1px solid " + C.ink300,
+                                  borderRadius: 999,
+                                  fontSize: 10.5,
+                                  fontWeight: 400,
+                                  flexShrink: 0,
+                                  whiteSpace: "nowrap",
+                                }}>
+                                  <Icon name="clock" size={9} color={C.ink500} />
+                                  <span className="rt-row-tag-label">Recurring</span>
+                                </span>
+                              )}
                             </div>
-                          </div>
-
-                          {/* Right slot: Rai's pick badge in Rai mode for raiPriority tasks, otherwise standard tag */}
-                          <div className="rt-row-tag" style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "3px 9px",
-                            background: "transparent",
-                            color: C.ink500,
-                            border: "1px solid " + C.ink300,
-                            borderRadius: 999,
-                            fontSize: 11,
-                            fontWeight: 400,
-                            flexShrink: 0,
-                            whiteSpace: "nowrap",
-                          }}>
-                            <Icon
-                              name={t.recurring ? "clock" : "today"}
-                              size={10}
-                              color={C.ink500}
-                            />
-                            <span className="rt-row-tag-label">
-                              {t.recurring ? "Recurring" : "Today"}
-                            </span>
                           </div>
 
                           <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
@@ -3685,7 +3742,6 @@ export default function App({ user }) {
                     <button onClick={() => { setShowImport(!showImport); setShowAddClient(false); }} style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Import Clients</button>
                   )}
                   <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-                    <Icon name="plus" size={14} color="#fff" />
                     <span style={{ whiteSpace: "nowrap" }}>Add client</span>
                   </button>
                 </div>
@@ -7145,15 +7201,15 @@ export default function App({ user }) {
 
 
       {/* MOBILE BOTTOM NAV — hidden when keyboard is up so inputs aren't covered */}
-      <div className="r-mob-bot" style={{ position: "fixed", top: "calc(var(--app-h, 100vh) - 82px)", left: 12, right: 12, background: C.surfaceWarm, borderRadius: 18, boxShadow: "0 2px 6px rgba(10,10,10,0.04), 0 4px 14px rgba(10,10,10,0.07)", justifyContent: "space-around", padding: "10px 6px 12px", zIndex: 40, display: keyboardOpen ? "none" : undefined }}>
+      <div className="r-mob-bot" style={{ position: "fixed", top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 82px)", left: 12, right: 12, background: C.surfaceWarm, borderRadius: 18, boxShadow: "0 2px 6px rgba(10,10,10,0.04), 0 4px 14px rgba(10,10,10,0.07)", justifyContent: "space-around", padding: "10px 6px 12px", zIndex: 40, display: keyboardOpen ? "none" : undefined }}>
         {(tier === "enterprise" ? mobileNavEnterprise : mobileNavCore).map(n => {
           const dot = hasDot(n.id);
           const active = page === n.id || (n.id === "more" && showMore);
           return (
-            <div key={n.id} onClick={() => n.id === "more" ? setShowMore(!showMore) : goTo(n.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", padding: "5px 10px", borderRadius: 10, background: active ? C.bg : "transparent", position: "relative" }}>
-              <Icon name={n.icon} size={20} color={active ? C.text : C.ink500} />
+            <div key={n.id} onClick={() => n.id === "more" ? setShowMore(!showMore) : goTo(n.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", padding: "5px 10px", borderRadius: 10, background: active ? C.deepCream : "transparent", boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", position: "relative" }}>
+              <Icon name={n.icon} size={20} color={active ? C.primary : C.ink500} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.text : C.ink500 }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.bg : C.surfaceWarm) }} />}
+              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.deepCream : C.surfaceWarm) }} />}
             </div>
           );
         })}
@@ -7161,7 +7217,7 @@ export default function App({ user }) {
       {showMore && (
         <>
           <div onClick={() => setShowMore(false)} style={{ position: "fixed", inset: 0, zIndex: 45 }} />
-          <div style={{ position: "fixed", top: "calc(var(--app-h, 100vh) - 94px)", right: 20, transform: "translateY(-100%)", background: C.card, borderRadius: "12px 12px 12px 12px", border: "1px solid " + C.border, boxShadow: "0 -4px 24px rgba(0,0,0,0.08)", zIndex: 46, overflow: "hidden", minWidth: 180, animation: "fadeIn 0.15s ease" }}>
+          <div style={{ position: "fixed", top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 94px)", right: 20, transform: "translateY(-100%)", background: C.card, borderRadius: "12px 12px 12px 12px", border: "1px solid " + C.border, boxShadow: "0 -4px 24px rgba(0,0,0,0.08)", zIndex: 46, overflow: "hidden", minWidth: 180, animation: "fadeIn 0.15s ease" }}>
             {(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore).map((m, i, arr) => (
               <div key={m.id} onClick={() => goTo(m.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", cursor: "pointer", borderBottom: "1px solid " + C.borderLight, background: page === m.id ? C.bg : "transparent" }}>
                 <span style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={m.icon} size={18} color={page === m.id ? C.text : C.textMuted} /></span><span style={{ fontSize: 13, fontWeight: page === m.id ? 700 : 500, color: page === m.id ? C.text : C.text, flex: 1 }}>{m.label}</span>
