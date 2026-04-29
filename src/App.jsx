@@ -2182,56 +2182,49 @@ export default function App({ user }) {
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover { background: rgba(91,33,182,0.06); }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
-        /* Focus mode — dim everything marked data-focus-dim, highlight the top task */
-        .rt-focus-on [data-focus-dim] {
-          opacity: 0.18 !important;
-          pointer-events: none !important;
-          transition: opacity 280ms ease 200ms;
-        }
-        .rt-focus-on .rt-row.rt-focus-top {
-          background: #FFFFFF !important;
-          border-color: transparent !important;
-          box-shadow:
-            0 0 0 1px rgba(255,255,255,0.6),
-            0 6px 24px rgba(0,0,0,0.45),
-            0 16px 48px rgba(0,0,0,0.40),
-            0 0 80px rgba(255,255,255,0.18) !important;
-          transform: scale(1.025);
-          transition: transform 320ms ease 500ms, box-shadow 320ms ease 500ms, background 280ms ease 500ms;
-          position: relative;
-        }
-        .rt-focus-on .rt-row.rt-focus-top * {
-          color: #1E261F !important;
-          opacity: 1 !important;
-        }
-        .rt-focus-on .rt-row:not(.rt-focus-top) {
-          opacity: 0.12 !important;
-          pointer-events: none !important;
-          transition: opacity 280ms ease 200ms;
-        }
-        /* Toolbar (Ranked by Rai + Focus button) stays bright above the dim */
-        .rt-focus-on .rt-toolbar {
-          position: relative;
-        }
-        .rt-focus-on .rt-toolbar * {
-          opacity: 1 !important;
-        }
-        /* Curtain — z-index 60 to cover the sidebar (which is fixed at z-index 50). */
-        .rt-today-v4 { position: relative; }
-        .rt-curtain {
-          position: fixed;
-          top: 0;
-          right: 0;
-          left: 0;
-          bottom: 0;
-          opacity: 0;
-          background: rgba(10,20,14,1);
+        /* ═══════════════════════════════════════════════════════════════
+           FOCUS MODE
+           Page stays cream. Everything dims to 0.06 opacity except:
+             - .rt-toolbar (the toggle row with Ranked by Rai + Focus button)
+             - .rt-row.rt-focus-top (the highlighted top task)
+        ═══════════════════════════════════════════════════════════════ */
+
+        /* Dim sidebar contents */
+        body:has(.rt-focus-on) .r-desk > *,
+        body:has(.rt-focus-on) .r-mob-top > *,
+        body:has(.rt-focus-on) .r-mob-bot > * {
+          opacity: 0.06 !important;
+          transition: opacity 280ms ease;
           pointer-events: none;
-          z-index: 49;
-          transition: opacity 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
         }
-        .rt-curtain.is-on { opacity: 1; }
-        /* Lightning flash — sits ABOVE everything when firing */
+
+        /* Dim every direct child of the today grid except the tasks column */
+        .rt-focus-on > *:not(.rt-tasks-col) {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
+
+        /* Inside tasks col: dim every row except the focus-top one */
+        .rt-focus-on .rt-row:not(.rt-focus-top) {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
+
+        /* Toolbar stays bright (no rule = default opacity 1, default styling) */
+
+        /* Focused task gets stronger shadow + slight scale to pop against the dimmed surroundings */
+        .rt-focus-on .rt-row.rt-focus-top {
+          transform: scale(1.015);
+          box-shadow:
+            0 0 0 1px rgba(91,33,182,0.35),
+            0 8px 28px rgba(91,33,182,0.18),
+            0 24px 64px rgba(0,0,0,0.10) !important;
+          transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
+        }
+
+        /* Lightning flash — single white burst when toggling focus on */
         .rt-flash {
           position: fixed;
           top: 0; right: 0; bottom: 0; left: 0;
@@ -2247,77 +2240,10 @@ export default function App({ user }) {
           8%   { background: rgba(255, 255, 255, 0.85); }
           100% { background: rgba(255, 255, 255, 0); }
         }
-        /* ═══ FOCUS MODE — clean simple approach ═══
-           Strategy: change main bg to dark, dim everything inside main, then
-           explicitly un-dim the toolbar and focused task. No curtain, no z-index.
-        */
 
-        /* Sidebar fades to dark when focus is on (uses :has support — modern browsers only) */
-        body:has(.rt-focus-on) .r-desk {
-          background: #0F1C14 !important;
-          transition: background 600ms ease;
-        }
-        body:has(.rt-focus-on) .r-desk > * {
-          opacity: 0.05 !important;
-          transition: opacity 280ms ease;
-        }
+        /* Curtain element exists in JSX — keep a no-op rule so it renders nothing */
+        .rt-curtain { display: none; }
 
-        /* Main bg goes dark green */
-        body:has(.rt-focus-on) .r-main {
-          background: radial-gradient(ellipse 70% 45% at 50% 35%, #1F3026 0%, #0F1C14 70%, #0A140E 100%) !important;
-          transition: background 600ms ease;
-        }
-
-        /* Inside .rt-focus-on: dim the direct grid areas (band, composer, calendar, focus rail) */
-        .rt-focus-on .rt-band,
-        .rt-focus-on .rt-composer,
-        .rt-focus-on .rt-cal-col,
-        .rt-focus-on .rt-rai-col,
-        .rt-focus-on .rt-focus-col,
-        .rt-focus-on .observer-wrap {
-          opacity: 0.08 !important;
-          pointer-events: none !important;
-          transition: opacity 280ms ease;
-        }
-
-        /* Dim non-focused task rows */
-        .rt-focus-on .rt-row:not(.rt-focus-top) {
-          opacity: 0.08 !important;
-          pointer-events: none !important;
-          transition: opacity 280ms ease;
-        }
-
-        /* Toolbar stays bright (no opacity change) — give it a light backdrop pill
-           so its dark text is readable against the dark green focus background */
-        .rt-focus-on .rt-toolbar {
-          background: rgba(255, 255, 255, 0.95) !important;
-          border-radius: 999px !important;
-          padding: 6px 8px !important;
-          margin-bottom: 12px !important;
-          width: fit-content !important;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
-        }
-        .rt-focus-on .rt-toolbar * {
-          color: #1E261F !important;
-        }
-
-        /* Focused task: pure white, dark text, strong shadow */
-        .rt-focus-on .rt-row.rt-focus-top {
-          background: #FFFFFF !important;
-          border-color: transparent !important;
-          box-shadow:
-            0 0 0 1px rgba(255,255,255,0.3),
-            0 8px 32px rgba(0,0,0,0.45),
-            0 24px 64px rgba(0,0,0,0.45),
-            0 0 100px rgba(255,255,255,0.15) !important;
-          transform: scale(1.025);
-          transition: transform 320ms ease 200ms, box-shadow 320ms ease 200ms;
-        }
-        .rt-focus-on .rt-row.rt-focus-top * {
-          color: #1E261F !important;
-        }
-
-        .rt-today-v4.rt-focus-on { /* nothing — stacking handled by opacity, not z-index */ }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
