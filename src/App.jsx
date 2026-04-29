@@ -2184,22 +2184,12 @@ export default function App({ user }) {
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
         /* ═══════════════════════════════════════════════════════════════
            FOCUS MODE
-           Page goes dark green. Everything dims to 0.06 opacity except:
+           Page stays cream. Everything dims to 0.06 opacity except:
              - .rt-toolbar (the toggle row with Ranked by Rai + Focus button)
              - .rt-row.rt-focus-top (the highlighted top task)
         ═══════════════════════════════════════════════════════════════ */
 
-        /* Main area background turns dark green */
-        body:has(.rt-focus-on) .r-main {
-          background: radial-gradient(ellipse 70% 50% at 50% 35%, #1F3026 0%, #0F1C14 65%, #0A140E 100%) !important;
-          transition: background 600ms ease;
-        }
-
-        /* Sidebar background also goes dark, contents fade */
-        body:has(.rt-focus-on) .r-desk {
-          background: #0F1C14 !important;
-          transition: background 600ms ease;
-        }
+        /* Dim sidebar contents */
         body:has(.rt-focus-on) .r-desk > *,
         body:has(.rt-focus-on) .r-mob-top > *,
         body:has(.rt-focus-on) .r-mob-bot > * {
@@ -2222,33 +2212,16 @@ export default function App({ user }) {
           transition: opacity 280ms ease;
         }
 
-        /* Toolbar stays bright — gets a white pill so dark text reads against the dark green page */
-        .rt-focus-on .rt-toolbar {
-          background: rgba(255, 255, 255, 0.97) !important;
-          border-radius: 999px !important;
-          padding: 6px 8px !important;
-          margin-bottom: 14px !important;
-          width: fit-content !important;
-          box-shadow: 0 6px 20px rgba(0,0,0,0.30) !important;
-        }
-        .rt-focus-on .rt-toolbar * {
-          color: #1E261F !important;
-        }
+        /* Toolbar stays bright (no rule = default opacity 1, default styling) */
 
-        /* Focused task: white background, dark text, strong shadow + glow */
+        /* Focused task gets a purple ring + soft shadow + slight scale to pop */
         .rt-focus-on .rt-row.rt-focus-top {
-          background: #FFFFFF !important;
-          border-color: transparent !important;
+          transform: scale(1.015);
           box-shadow:
-            0 0 0 1px rgba(255,255,255,0.4),
-            0 8px 32px rgba(0,0,0,0.5),
-            0 24px 64px rgba(0,0,0,0.45),
-            0 0 100px rgba(255,255,255,0.18) !important;
-          transform: scale(1.02);
+            0 0 0 1px rgba(91,33,182,0.35),
+            0 8px 28px rgba(91,33,182,0.18),
+            0 24px 64px rgba(0,0,0,0.10) !important;
           transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
-        }
-        .rt-focus-on .rt-row.rt-focus-top * {
-          color: #1E261F !important;
         }
 
         /* Lightning flash — single white burst when toggling focus on */
