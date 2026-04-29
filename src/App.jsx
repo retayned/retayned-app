@@ -478,7 +478,7 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
               fontSize: 12,
               color: C.textSec,
               lineHeight: 1.5,
-              fontFamily: "Georgia, serif",
+              fontFamily: "'Newsreader', Georgia, serif",
               fontStyle: "italic",
               display: "-webkit-box",
               WebkitLineClamp: 3,
@@ -1643,7 +1643,7 @@ export default function App({ user }) {
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..600&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: ${C.bg}; overscroll-behavior: none; }
         input, textarea, select { font-size: 16px !important; }
@@ -2161,7 +2161,7 @@ export default function App({ user }) {
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "Georgia, serif", fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Newsreader', Georgia, serif", fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -3074,10 +3074,11 @@ export default function App({ user }) {
 
                           {/* ─── HEADLINE ─── */}
                           <h3 style={{
-                            fontFamily: "Georgia, 'Source Serif Pro', serif",
-                            fontWeight: 400,
-                            fontSize: 24,
-                            lineHeight: 1.25,
+                            fontFamily: "'Newsreader', Georgia, serif",
+                            fontWeight: 500,
+                            fontStyle: "italic",
+                            fontSize: 25,
+                            lineHeight: 1.22,
                             letterSpacing: "-0.005em",
                             color: C.text,
                             margin: "0 0 12px",
@@ -3296,6 +3297,10 @@ export default function App({ user }) {
                             }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </button>
+
+                          {client
+                            ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={28} /></div>
+                            : <div className="rt-task-avatar" style={{ width: 28, height: 28, borderRadius: 14, background: C.borderSoft, flexShrink: 0 }} />}
 
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
