@@ -923,6 +923,10 @@ export default function App({ user }) {
   // ─── Observer card state ──
   const [observation, setObservation] = useState(null);
   const [obsDismissing, setObsDismissing] = useState(false);
+  // True once on first view per observation per day. Drives the soft purple pulse
+  // that signals "this is today's observation." Set when observation arrives if it
+  // hasn't been seen today (localStorage keyed by obs id), then never again.
+  const [obsPulse, setObsPulse] = useState(false);
 
   // ─── Daybook state ── (right-rail notepad on Today page)
   const [daybookEntry, setDaybookEntry] = useState("");
@@ -968,6 +972,17 @@ export default function App({ user }) {
         const obsRes = await observationsDb.getCurrent(uid);
         if (obsRes?.data) {
           setObservation(obsRes.data);
+          // Pulse animation — first view per observation, per day.
+          // Key includes today's date so the pulse repeats daily for the same obs id.
+          try {
+            const today = new Date().toISOString().slice(0, 10);
+            const seenKey = `obs-seen-${obsRes.data.id}-${today}`;
+            if (!localStorage.getItem(seenKey)) {
+              localStorage.setItem(seenKey, "1");
+              setObsPulse(true);
+              setTimeout(() => setObsPulse(false), 1600);
+            }
+          } catch {}
         }
       }
     } catch (e) {
@@ -1783,6 +1798,17 @@ export default function App({ user }) {
           border-color: ${C.success} !important;
           transform: scale(1.18);
         }
+        /* Observer card "this is today's" reveal pulse — purple glow that fades in and out once.
+           Triggered the first time per observation per day (see obsPulse state). Lives on the
+           outer wrapper so the glow isn't clipped by the inner card's overflow:hidden. */
+        @keyframes rt-obs-pulse {
+          0%   { box-shadow: 0 0 0 0 rgba(91,33,182,0); }
+          25%  { box-shadow: 0 0 0 8px rgba(91,33,182,0.16); }
+          100% { box-shadow: 0 0 0 0 rgba(91,33,182,0); }
+        }
+        .rt-obs-pulse {
+          animation: rt-obs-pulse 1500ms cubic-bezier(.4, 0, .2, 1) 200ms;
+        }
         .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover { background: rgba(91,33,182,0.06); }
@@ -1881,9 +1907,6 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* Mobile: tag collapses to icon */
-          .rt-row-tag { padding: 0 !important; border: none !important; background: transparent !important; }
-          .rt-row-tag-label { display: none !important; }
         }
         /* Focus button bolt watermark — sized proportional to viewport */
         .rt-focus-bolt { font-size: 60px; }
@@ -2946,11 +2969,13 @@ export default function App({ user }) {
 
                     return (
                       <div
+                        className={obsPulse ? "rt-obs-pulse" : ""}
                         style={{
                           marginBottom: 24,
                           opacity: obsDismissing ? 0 : 1,
                           transform: obsDismissing ? "scale(0.97)" : "scale(1)",
                           transition: "opacity 280ms ease, transform 280ms ease",
+                          borderRadius: 14,
                         }}
                       >
                         <div style={{
@@ -3309,19 +3334,11 @@ export default function App({ user }) {
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : ""}</span>
                               {t.recurring && (
                                 <span className="rt-row-tag" style={{
-                                  display: "inline-flex", alignItems: "center", gap: 4,
-                                  padding: "2px 8px",
-                                  background: "transparent",
+                                  display: "inline-flex", alignItems: "center",
                                   color: C.ink500,
-                                  border: "1px solid " + C.ink300,
-                                  borderRadius: 999,
-                                  fontSize: 10.5,
-                                  fontWeight: 400,
                                   flexShrink: 0,
-                                  whiteSpace: "nowrap",
-                                }}>
-                                  <Icon name="clock" size={9} color={C.ink500} />
-                                  <span className="rt-row-tag-label">Recurring</span>
+                                }} title="Recurring">
+                                  <Icon name="clock" size={11} color={C.ink500} />
                                 </span>
                               )}
                             </div>
