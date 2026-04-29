@@ -722,6 +722,89 @@ export const observations = {
 };
 
 
+// ============================================================
+// DAYBOOK — right-rail notepad on Today page
+// One entry per user per day. Upsert by (user_id, entry_date).
+// ============================================================
+
+const _isoDate = (d) => {
+  const x = d ? new Date(d) : new Date();
+  // Local YYYY-MM-DD (not UTC) — entry_date is a calendar day in the user's timezone
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, '0');
+  const day = String(x.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const daybook = {
+  // Get a specific day's entry (defaults to today). Returns null if no entry.
+  get: async (userId, date) => {
+    const isoDate = _isoDate(date);
+    const { data, error } = await supabase
+      .from('daybook_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('entry_date', isoDate)
+      .maybeSingle();
+    return { data, error };
+  },
+
+  // Get today + yesterday in one shot (for the right-rail widget which shows both).
+  getTodayAndYesterday: async (userId) => {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    const todayISO = _isoDate(today);
+    const yesterdayISO = _isoDate(yesterday);
+
+    const { data, error } = await supabase
+      .from('daybook_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .in('entry_date', [todayISO, yesterdayISO]);
+
+    if (error) return { data: { today: null, yesterday: null }, error };
+
+    const todayRow = (data || []).find(r => r.entry_date === todayISO) || null;
+    const yesterdayRow = (data || []).find(r => r.entry_date === yesterdayISO) || null;
+    return { data: { today: todayRow, yesterday: yesterdayRow }, error: null };
+  },
+
+  // Save the current day's entry (upsert). Caller debounces.
+  save: async (userId, body, date) => {
+    const isoDate = _isoDate(date);
+    const { data, error } = await supabase
+      .from('daybook_entries')
+      .upsert(
+        { user_id: userId, entry_date: isoDate, body: body },
+        { onConflict: 'user_id,entry_date' }
+      )
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // List recent entries for the journal page
+  listRecent: async (userId, limit = 30) => {
+    const { data, error } = await supabase
+      .from('daybook_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .order('entry_date', { ascending: false })
+      .limit(limit);
+    return { data: data || [], error };
+  },
+
+  // Count total entries (footer label)
+  count: async (userId) => {
+    const { count, error } = await supabase
+      .from('daybook_entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+    return { count: count || 0, error };
+  },
+};
+
 
 export const buildRaiContext = async (userId, clientId = null) => {
   // Gather all relevant data for Rai's context window
