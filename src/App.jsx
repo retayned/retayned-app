@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, buildRaiContext } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb } from "./lib/db";
 
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
@@ -253,14 +253,6 @@ function retColor(v) {
   if (v >= 30) return "#D17A1B";      // Warn / At Risk (retWarn)
   return "#B4341F";                    // Critical (retCrit)
 }
-function retBucket(v) {
-  if (v >= 80) return "Thriving";
-  if (v >= 65) return "Healthy";
-  if (v >= 45) return "Watch";
-  if (v >= 30) return "At Risk";
-  return "Critical";
-}
-function velColor(v) { return v === "fast" ? C.success : v === "normal" ? C.primaryLight : v === "slowing" ? C.warning : C.danger; }
 
 // Minimal markdown renderer for Rai's chat responses.
 // Handles: **bold**, numbered lists, bulleted lists, paragraphs separated by blank lines.
@@ -392,6 +384,116 @@ const coachDemos = {
 
 const Dot = () => <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, flexShrink: 0 }} />;
 
+// ─── Daybook (right-rail notepad) ──────────────────────────────────────
+// Defined at top level so component identity is stable across App re-renders.
+// Without this, the textarea would remount on every keystroke and lose focus.
+// All state is owned by App and passed in as props.
+const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
+  const today = new Date();
+  const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
+  const monthName = today.toLocaleDateString("en-US", { month: "long" });
+  const dateLine = `${dayName} · ${monthName} ${today.getDate()}`;
+  return (
+    <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
+      <div style={{
+        background: C.card,
+        border: "1px solid " + C.borderLight,
+        borderRadius: 14,
+        overflow: "hidden",
+        boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
+        display: "flex",
+        flexDirection: "column",
+      }}>
+        {/* Masthead — beige to white gradient */}
+        <div style={{
+          padding: "16px 18px 14px",
+          background: `linear-gradient(180deg, ${C.deepCream} 0%, ${C.card} 100%)`,
+          borderBottom: "1px solid " + C.borderLight,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
+              Notes
+            </div>
+            {saveStatus === "saved" && (
+              <div style={{
+                fontSize: 10.5, color: C.success,
+                display: "inline-flex", alignItems: "center", gap: 5,
+                fontWeight: 500,
+              }}>
+                <span style={{ width: 5, height: 5, borderRadius: 999, background: C.success }} />
+                Saved
+              </div>
+            )}
+            {saveStatus === "saving" && (
+              <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 500 }}>
+                Saving…
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 500 }}>
+            {dateLine}
+          </div>
+        </div>
+
+        {/* Today's entry — editable textarea */}
+        <div style={{ padding: "14px 18px 16px" }}>
+          <textarea
+            value={entry}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="What's on your mind today?"
+            style={{
+              width: "100%",
+              minHeight: 140,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              fontSize: 13.5,
+              lineHeight: 1.6,
+              color: C.text,
+              fontFamily: "inherit",
+              resize: "vertical",
+              padding: 0,
+            }}
+          />
+        </div>
+
+        {/* Yesterday peek */}
+        {yesterday && yesterday.body && (
+          <div style={{
+            padding: "12px 18px 14px",
+            borderTop: "1px dashed " + C.border,
+            background: C.surfaceWarm,
+          }}>
+            <div style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: C.textMuted,
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+              marginBottom: 6,
+            }}>
+              Yesterday
+            </div>
+            <div style={{
+              fontSize: 12,
+              color: C.textSec,
+              lineHeight: 1.5,
+              fontFamily: "Georgia, serif",
+              fontStyle: "italic",
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}>
+              "{yesterday.body}"
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function App({ user }) {
   const [tier, setTier] = useState("core");  // "core" | "enterprise"
   const [page, setPage] = useState("today");
@@ -438,8 +540,6 @@ export default function App({ user }) {
   const [overviewEditData, setOverviewEditData] = useState({});
   const [editingProfile, setEditingProfile] = useState(false);
   const [editScores, setEditScores] = useState({});
-  const [retroOpen, setRetroOpen] = useState(null);
-  const [retroStep, setRetroStep] = useState(0);
   // ═══ DATA LOADING ═══
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
@@ -795,7 +895,6 @@ export default function App({ user }) {
   const [newTaskClient, setNewTaskClient] = useState("");
   const [newTaskRecurring, setNewTaskRecurring] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
-  const [taskClientSearch, setTaskClientSearch] = useState("");
   const [showTouchpoint, setShowTouchpoint] = useState(false);
   const [tpClient, setTpClient] = useState(null);
   const [tpChannel, setTpChannel] = useState(null);
@@ -1089,88 +1188,11 @@ export default function App({ user }) {
     // Persist
     await tasksDb.toggle(id, newDone);
   };
-  const addTask = async () => {
-    if (!newTask.trim()) return;
-    const clientObj = clients.find(c => c.name === newTaskClient);
-    const { data: created } = await tasksDb.create(user.id, {
-      text: newTask.trim(),
-      client_name: newTaskClient || "",
-      client_id: clientObj?.id || null,
-      is_recurring: newTaskRecurring,
-    });
-    const task = { id: created?.id || "u" + Date.now(), text: newTask.trim(), client: newTaskClient || null, done: false, recurring: newTaskRecurring };
-    const taskPS = getProfileSortScore(task.client);
-    const newTasks = [...tasks];
-
-    // Try to insert next to same client first
-    let insertIdx = -1;
-    if (task.client) {
-      for (let i = newTasks.length - 1; i >= 0; i--) {
-        if (newTasks[i].client === task.client) {
-          insertIdx = i;
-          break;
-        }
-      }
-    }
-    // Fall back to Profile Score ordering
-    if (insertIdx === -1) {
-      for (let i = newTasks.length - 1; i >= 0; i--) {
-        if (getProfileSortScore(newTasks[i].client) >= taskPS) {
-          insertIdx = i;
-          break;
-        }
-      }
-    }
-
-    if (insertIdx >= 0) {
-      newTasks.splice(insertIdx + 1, 0, task);
-    } else {
-      newTasks.unshift(task);
-    }
-
-    setTasks(newTasks);
-    setNewTask(""); setNewTaskClient(""); setNewTaskRecurring(false); setShowClientPicker(false);
-  };
 
   const recurringTasks = tasks.filter(t => t.recurring);
   const todayTasks = tasks.filter(t => !t.recurring);
   const countableTasks = tasks;
 
-  // Priority grouping by client retention
-  const getClientRet = (clientName) => {
-    if (!clientName || clientName === "All Clients") return 100;
-    const c = clients.find(x => x.name === clientName);
-    return c ? c.ret : 50;
-  };
-  const getClientPriority = (clientName) => {
-    if (!clientName || clientName === "All Clients") return 0;
-    const c = clients.find(x => x.name === clientName);
-    if (!c) return 0;
-    // Profile Score drives priority (invisible sort layer)
-    const ps = calcProfileScore(c.ret || 50, c, clients);
-    const boost = calcNewClientBoost(c.ret || 50, clients.reduce((a, x) => a + (x.revenue || 0), 0) > 0 ? (c.revenue || 0) / clients.reduce((a, x) => a + (x.revenue || 0), 0) : 0, c.daysOld != null ? c.daysOld : 999);
-    const finalPS = Math.min(99, ps + boost);
-    // Higher profile score = higher priority (invert for sort)
-    return finalPS / 100;
-  };
-  const getTier = (clientName) => {
-    if (!clientName || clientName === "All Clients") return 4;
-    const c = clients.find(x => x.name === clientName);
-    if (!c) return 4;
-    const ret = c.ret || 50;
-    if (ret >= 70) return 1; // green
-    if (ret >= 45) return 2; // yellow — watch
-    return 3; // red — at risk
-  };
-  const tierLabel = (tier) => [, "Green", "Watch", "At Risk", "All Clients"][tier];
-  const tierColor = (tier) => [, C.success, C.warning, C.danger, C.primary][tier];
-  const sortByTierThenDone = (arr) => {
-    return [...arr].sort((a, b) => {
-      const ta = getTier(a.client);
-      const tb = getTier(b.client);
-      return ta - tb;
-    });
-  };
   const tasksDone = countableTasks.filter(t => t.done).length;
   const tasksTotal = countableTasks.length;
 
@@ -1196,17 +1218,6 @@ export default function App({ user }) {
     return Math.min(99, ps + boost + raiBoost);
   };
 
-  const getSortedTasks = () => {
-    return [...countableTasks].sort((a, b) => {
-      const psA = getProfileSortScore(a.client, a.raiPriority);
-      const psB = getProfileSortScore(b.client, b.raiPriority);
-      if (psA !== psB) return psB - psA; // highest profile score first
-      if (a.alert !== b.alert) return a.alert ? -1 : 1;
-      if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
-      return 0;
-    });
-  };
-
 
   // Health Checks
   const [hcOpen, setHcOpen] = useState(null);
@@ -1226,7 +1237,6 @@ export default function App({ user }) {
   const [refTotalRevenue, setRefTotalRevenue] = useState("");
   const [refEditing, setRefEditing] = useState(null);
   const [refEditData, setRefEditData] = useState({});
-  const [refSearch, setRefSearch] = useState("");
   // Referrals v2 — ask-next queue interaction state
   const [askActiveId, setAskActiveId] = useState(null);
   const [askTone, setAskTone] = useState("neutral"); // softer | neutral | firmer
@@ -1260,7 +1270,6 @@ export default function App({ user }) {
 
   // Coach
   const [aiInput, setAiInput] = useState("");
-  const [aiClientSearch, setAiClientSearch] = useState("");
   const [aiMessages, setAiMessages] = useState([]);
   const [aiTyping, setAiTyping] = useState(false);
   // Attachments staged for next send. Shape: { id, name, type (image|document), media_type, data (base64), size }
@@ -1599,96 +1608,6 @@ export default function App({ user }) {
   // ═══ PANEL COMPONENTS ═══
   const PanelCard = ({ children, style }) => <div style={{ background: "#FAFAF8", borderRadius: 14, border: "1px solid #E8ECE6", padding: "14px", marginBottom: 24, ...style }}>{children}</div>;
   
-  const PortfolioPanel = () => {
-    const avgScore = clients.length > 0 ? Math.round(clients.reduce((a, c) => a + (c.ret || 0), 0) / clients.length) : 0;
-    const thriving = clients.filter(c => (c.ret || 0) >= 80).length;
-    const healthy = clients.filter(c => (c.ret || 0) >= 65 && (c.ret || 0) < 80).length;
-    const watch = clients.filter(c => (c.ret || 0) >= 45 && (c.ret || 0) < 65).length;
-    const atRisk = clients.filter(c => (c.ret || 0) < 45).length;
-    const total = clients.length || 1;
-    return (
-      <div className="r-today-panel" style={{ flexShrink: 0 }}>
-        <PanelCard style={{ padding: "16px" }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Portfolio Snapshot</div>
-          <div style={{ display: "flex", gap: 14, alignItems: "stretch" }}>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <ScoreRing score={avgScore} size={56} strokeWidth={4} />
-            </div>
-            <div style={{ flex: 1 }}>
-              {[
-                { l: "Clients", v: clients.length },
-                { l: "Monthly Revenue", v: (() => { const mrr = clients.reduce((a, c) => a + (c.revenue || 0), 0); return mrr >= 10000 ? "$" + (mrr / 1000).toFixed(1) + "k" : "$" + mrr.toLocaleString(); })() },
-              ].map((r, i, arr) => (
-                <div key={i} style={{ padding: "10px 0", borderBottom: i < arr.length - 1 ? "1px solid #E8ECE6" : "none", display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, color: C.textMuted }}>{r.l}</span>
-                  <span style={{ fontSize: 14, fontWeight: 800 }}>{r.v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          {clients.length > 0 && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #E8ECE6" }}>
-              <div style={{ display: "flex", justifyContent: "space-around", marginBottom: 6, textAlign: "center" }}>
-                {[{ l: "Thriving", v: thriving, c: C.primary }, { l: "Healthy", v: healthy, c: "#558B68" }, { l: "Watch", v: watch, c: C.warning }, { l: "At Risk", v: atRisk, c: C.danger }].map((s, si) => (
-                  <div key={si}><div style={{ fontSize: 15, fontWeight: 900, color: s.c }}>{s.v}</div><div style={{ fontSize: 8, fontWeight: 600, color: C.textMuted }}>{s.l}</div></div>
-                ))}
-              </div>
-              <div style={{ height: 6, borderRadius: 3, display: "flex", overflow: "hidden" }}>
-                {thriving > 0 && <div style={{ width: (thriving / total * 100) + "%", background: C.primary }} />}
-                {healthy > 0 && <div style={{ width: (healthy / total * 100) + "%", background: "#558B68" }} />}
-                {watch > 0 && <div style={{ width: (watch / total * 100) + "%", background: C.warning }} />}
-                {atRisk > 0 && <div style={{ width: (atRisk / total * 100) + "%", background: C.danger }} />}
-              </div>
-            </div>
-          )}
-        </PanelCard>
-        <PanelCard>
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Book History</div>
-          <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: C.text, letterSpacing: "-0.01em" }}>{(() => { const ltv = clients.reduce((a, c) => a + getAdjustedLTV(c), 0); return ltv >= 1000000 ? "$" + (ltv / 1000000).toFixed(1) + "M" : "$" + Math.round(ltv / 1000) + "k"; })()}</div>
-              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>Lifetime Value</div>
-            </div>
-            <div style={{ width: 1, background: "#E8ECE6" }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 20, fontWeight: 900, color: C.text, letterSpacing: "-0.01em" }}>{(() => { const mo = clients.length > 0 ? Math.round(clients.reduce((a, c) => a + (c.months || 0), 0) / clients.length) : 0; return mo >= 12 ? (mo / 12).toFixed(1) + " yr" : mo + " mo"; })()}</div>
-              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>Avg Tenure</div>
-            </div>
-          </div>
-          {clients.length > 0 && (() => {
-            const longest = [...clients].sort((a, b) => (b.months || 0) - (a.months || 0))[0];
-            if (!longest || !longest.months) return null;
-            const yrs = longest.months >= 12 ? (longest.months / 12).toFixed(1) + " yr" : longest.months + " mo";
-            return (
-              <div style={{ fontSize: 11, color: C.textMuted, paddingTop: 10, borderTop: "1px solid #E8ECE6" }}>
-                Longest relationship: <span style={{ color: C.text, fontWeight: 600 }}>{longest.name}</span>, {yrs}
-              </div>
-            );
-          })()}
-        </PanelCard>
-        {clients.length > 1 && (
-          <PanelCard style={{ marginBottom: 0 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>Client Drift</div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.success, textTransform: "uppercase", marginBottom: 5 }}>Improving</div>
-            {[...clients].sort((a, b) => (b.ret || 0) - (a.ret || 0)).slice(0, 2).map((c, ci) => (
-              <div key={"up" + ci} style={{ padding: "7px 0", borderBottom: "1px solid #E8ECE6", display: "flex", alignItems: "center", gap: 8 }}>
-                <ScoreRing score={c.ret || 0} size={26} strokeWidth={2} />
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.name}</span>
-              </div>
-            ))}
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.danger, textTransform: "uppercase", marginBottom: 5, marginTop: 12 }}>Declining</div>
-            {[...clients].sort((a, b) => (a.ret || 0) - (b.ret || 0)).slice(0, 2).map((c, ci) => (
-              <div key={"dn" + ci} style={{ padding: "7px 0", borderBottom: ci < 1 ? "1px solid #E8ECE6" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <ScoreRing score={c.ret || 0} size={26} strokeWidth={2} />
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 600 }}>{c.name}</span>
-              </div>
-            ))}
-          </PanelCard>
-        )}
-      </div>
-    );
-  };
-
   // ─── Daybook save handler — debounced 800ms ───────────────────────────
   const handleDaybookChange = (newValue) => {
     setDaybookEntry(newValue);
@@ -1708,321 +1627,6 @@ export default function App({ user }) {
   };
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
-  const RaiMiniPanel = () => (
-    <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
-      <div style={{
-        background: C.card,
-        border: "1px solid " + C.borderLight,
-        borderRadius: 14,
-        overflow: "hidden",
-        boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
-        display: "flex",
-        flexDirection: "column",
-        maxHeight: "calc(100vh - 140px)"
-      }}>
-
-        {/* LAVENDER INTRO — avatar + title + greeting grouped as one warm zone */}
-        <div style={{
-          background: "linear-gradient(180deg, #F7F4FC 0%, #FFFFFF 100%)",
-          padding: "20px 18px 18px",
-          borderBottom: "1px solid " + C.borderLight
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 8,
-              background: C.btn,
-              color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0
-            }}>
-              <Icon name="sparkles" size={13} color="#fff" />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>Talk to Rai</div>
-              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 5, height: 5, borderRadius: 3, background: C.success }} />
-                Reading your portfolio
-              </div>
-            </div>
-            {aiMessages.length > 0 && (
-              <button
-                onClick={startNewRaiChat}
-                title="New chat"
-                style={{
-                  height: 26, padding: "0 9px", borderRadius: 6,
-                  border: "1px solid " + C.borderLight,
-                  background: "#fff",
-                  color: C.btn,
-                  display: "inline-flex", alignItems: "center", gap: 4,
-                  cursor: "pointer",
-                  fontSize: 11, fontWeight: 600, fontFamily: "inherit"
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                New
-              </button>
-            )}
-          </div>
-
-          {aiMessages.length === 0 && (
-            <div style={{ fontSize: 13, lineHeight: 1.55, color: C.textSec }}>
-              <b style={{ fontWeight: 600, color: C.text }}>
-                {(() => {
-                  const h = new Date().getHours();
-                  if (h >= 5 && h < 12) return "Morning";
-                  if (h >= 12 && h < 17) return "Afternoon";
-                  return "Evening";
-                })()}{(() => {
-                  const n = user?.user_metadata?.full_name?.split(" ")[0]
-                    || (user?.email ? user.email.split("@")[0].replace(/^\w/, c => c.toUpperCase()) : "");
-                  return n ? ", " + n : "";
-                })()}.
-              </b>{" "}
-              I've been reading your book. Where should we start?
-            </div>
-          )}
-        </div>
-
-        {/* BODY — input + suggestions OR conversation */}
-        <div style={{ display: "flex", flexDirection: "column", overflowY: "auto", flex: 1 }}>
-
-          {/* Input section */}
-          <div style={{ padding: "14px 16px 4px" }}>
-            <div style={{
-              padding: "10px 12px",
-              background: C.bg,
-              border: "1px solid " + C.borderLight,
-              borderRadius: 10,
-              display: "flex", alignItems: "center", gap: 10
-            }}>
-              <Icon name="sparkles" size={13} color={C.btn} />
-              <input
-                value={aiInput}
-                onChange={e => setAiInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }}
-                placeholder="Ask Rai about your book..."
-                style={{
-                  flex: 1, border: "none", outline: "none", background: "transparent",
-                  fontSize: 13, fontFamily: "inherit", color: C.text
-                }}
-              />
-              <button
-                onClick={() => sendAi()}
-                disabled={!aiInput.trim()}
-                style={{
-                  width: 24, height: 24, borderRadius: 6,
-                  border: "none",
-                  background: aiInput.trim() ? C.btn : C.btnLight,
-                  color: aiInput.trim() ? "#fff" : C.btn,
-                  cursor: aiInput.trim() ? "pointer" : "default",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0
-                }}
-              ><svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 13L13 8L3 3V7L9 8L3 9V13Z" fill={aiInput.trim() ? "#fff" : C.btn}/></svg></button>
-            </div>
-          </div>
-
-          {aiMessages.length === 0 ? (
-            <>
-              {/* SUGGESTED label */}
-              <div style={{
-                fontSize: 10, color: C.textMuted, fontWeight: 700,
-                letterSpacing: 0.5, textTransform: "uppercase",
-                padding: "16px 18px 8px"
-              }}>Suggested</div>
-
-              {/* Suggestion rows — rounded pills inside card */}
-              <div style={{ display: "flex", flexDirection: "column", padding: "0 8px 4px" }}>
-                {[
-                  { label: "Who needs me today?" },
-                  { label: "Summarize this week" },
-                  { label: "Find risk patterns" },
-                  { label: "Draft a renewal note" },
-                  { label: "Find clients missing cadence" },
-                ].map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setAiInput(p.label); }}
-                    style={{
-                      display: "flex", alignItems: "center",
-                      padding: "10px 10px",
-                      background: "transparent",
-                      border: "none",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontFamily: "inherit",
-                      color: C.text,
-                      transition: "background 120ms"
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "#F7F4FC"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500 }}>{p.label}</span>
-                    <Icon name="chevron-right" size={12} color={C.textMuted} />
-                  </button>
-                ))}
-              </div>
-
-              {/* Disclaimer */}
-              <div style={{
-                padding: "14px 18px 16px",
-                marginTop: 8,
-                borderTop: "1px solid " + C.borderLight,
-                fontSize: 11,
-                color: C.textMuted,
-                lineHeight: 1.55
-              }}>
-                Rai only knows what's in your book. Ask about clients, cadence, revenue, or renewals.
-              </div>
-            </>
-          ) : (
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, padding: "14px 16px 16px" }}>
-              {aiMessages.map((m, i) => (
-                m.role === "user" ? (
-                  <div key={i} style={{ alignSelf: "flex-end", background: C.surface, color: C.text, borderRadius: 18, padding: "8px 14px", fontSize: 13, lineHeight: 1.5, maxWidth: "85%" }}>
-                    {m.text}
-                  </div>
-                ) : (
-                  <div key={i} style={{ padding: "2px 2px", color: C.text }}>
-                    <RaiMarkdown text={m.text} size={13} lineHeight={1.55} />
-                  </div>
-                )
-              ))}
-              {aiTyping && <div style={{ display: "flex", gap: 4, padding: "2px 2px", alignSelf: "flex-start" }}>{[0,1,2].map(j => <div key={j} style={{ width: 6, height: 6, borderRadius: "50%", background: C.textMuted, animation: `pulse 1.2s ease-in-out ${j*0.2}s infinite` }} />)}</div>}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  const RolodexPanel = () => {
-    const convertedClients = clients.filter(c => rolodex.some(r => r.name === c.name || r.client === c.name)).sort((a, b) => (b.ret || 0) - (a.ret || 0));
-    const totalLeads = rolodex.length;
-    const converted = convertedClients.length;
-    const convRate = totalLeads > 0 ? Math.round((converted / totalLeads) * 100) : 0;
-    const avgScore = converted > 0 ? Math.round(convertedClients.reduce((a, c) => a + (c.ret || 0), 0) / converted) : 0;
-    const staleLeads = rolodex.filter(r => !clients.some(c => c.name === r.name || c.name === r.client));
-    return (
-      <div className="r-today-panel" style={{ flexShrink: 0 }}>
-        <PanelCard style={{ padding: "16px" }}>
-          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            <div>
-              <ScoreRing score={avgScore || 0} size={56} strokeWidth={4} />
-              <div style={{ textAlign: "center", marginTop: 3 }}>
-                <div style={{ fontSize: 9, fontWeight: 600, color: C.textMuted }}>Converted health</div>
-              </div>
-            </div>
-            <div style={{ flex: 1 }}>
-              {[{ l: "Converted", v: converted }, { l: "Revenue added", v: "$" + Math.round(convertedClients.reduce((a, c) => a + (c.revenue || 0), 0) / 1000) + "k/mo" }, { l: "In pipeline", v: staleLeads.length }].map((r, i) => (
-                <div key={i} style={{ padding: "7px 0", borderBottom: i < 2 ? "1px solid #E8ECE6" : "none", display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, color: C.textMuted }}>{r.l}</span>
-                  <span style={{ fontSize: 14, fontWeight: 800 }}>{r.v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </PanelCard>
-        <PanelCard>
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Conversion Rate</div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 28, fontWeight: 900, color: C.primary }}>{convRate}%</span>
-            <span style={{ fontSize: 12, color: C.textMuted }}>became clients</span>
-          </div>
-          <div style={{ marginTop: 8 }}>
-            {[{ l: "Total leads", v: totalLeads }, { l: "Converted", v: converted }, { l: "Still in pipeline", v: staleLeads.length }].map((s, i) => (
-              <div key={i} style={{ padding: "5px 0", borderBottom: i < 2 ? "1px solid #E8ECE6" : "none", display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 11, color: C.textMuted }}>{s.l}</span>
-                <span style={{ fontSize: 11, fontWeight: 700 }}>{s.v}</span>
-              </div>
-            ))}
-          </div>
-        </PanelCard>
-        <PanelCard style={{ marginBottom: 0 }}>
-          {staleLeads.length > 0 ? (
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 600, color: C.warning, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Needs outreach</div>
-              {staleLeads.slice(0, 4).map((r, i) => (
-                <div key={i} style={{ padding: "7px 0", borderBottom: i < Math.min(staleLeads.length, 4) - 1 ? "1px solid #E8ECE6" : "none", display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{r.name || r.client}</span>
-                  <span style={{ fontSize: 11, color: C.textMuted }}>{r.contact}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 600, color: C.success, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Outreach</div>
-              <div style={{ fontSize: 12, color: C.textMuted }}>No stale leads. All contacts are active.</div>
-            </div>
-          )}
-        </PanelCard>
-      </div>
-    );
-  };
-
-  const ReferralsPanel = () => {
-    const referredClients = clients.filter(c => refs.some(r => r.referred === c.name || r.to === c.name));
-    const avgScore = referredClients.length > 0 ? Math.round(referredClients.reduce((a, c) => a + (c.ret || 0), 0) / referredClients.length) : 0;
-    const refRev = referredClients.reduce((a, c) => a + (c.revenue || 0), 0);
-    const totalReferred = refs.length;
-    const converted = referredClients.length;
-    const convRate = totalReferred > 0 ? Math.round((converted / totalReferred) * 100) : 0;
-    const likelyToRefer = [...clients].filter(c => (c.ret || 0) >= 80).sort((a, b) => (b.ret || 0) - (a.ret || 0)).slice(0, 3);
-    return (
-      <div className="r-today-panel" style={{ flexShrink: 0 }}>
-        <PanelCard style={{ padding: "16px" }}>
-          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            <div>
-              <ScoreRing score={avgScore || 0} size={56} strokeWidth={4} />
-              <div style={{ textAlign: "center", marginTop: 3 }}>
-                <div style={{ fontSize: 9, fontWeight: 600, color: C.textMuted }}>Referred health</div>
-              </div>
-            </div>
-            <div style={{ flex: 1 }}>
-              {[{ l: "Referred clients", v: converted }, { l: "Referral revenue", v: "$" + Math.round(refRev / 1000) + "k/mo" }, { l: "Referral LCV", v: "$" + Math.round(referredClients.reduce((a, c) => a + getAdjustedLTV(c), 0) / 1000) + "k" }].map((r, i) => (
-                <div key={i} style={{ padding: "7px 0", borderBottom: i < 2 ? "1px solid #E8ECE6" : "none", display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, color: C.textMuted }}>{r.l}</span>
-                  <span style={{ fontSize: 14, fontWeight: 800 }}>{r.v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </PanelCard>
-        <PanelCard>
-          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Referral Conversion</div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 28, fontWeight: 900, color: C.primary }}>{convRate}%</span>
-            <span style={{ fontSize: 12, color: C.textMuted }}>became clients</span>
-          </div>
-          <div style={{ marginTop: 8 }}>
-            {[{ l: "Total referred", v: totalReferred }, { l: "Converted", v: converted }, { l: "Lost", v: totalReferred - converted }].map((s, i) => (
-              <div key={i} style={{ padding: "5px 0", borderBottom: i < 2 ? "1px solid #E8ECE6" : "none", display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 11, color: C.textMuted }}>{s.l}</span>
-                <span style={{ fontSize: 11, fontWeight: 700 }}>{s.v}</span>
-              </div>
-            ))}
-          </div>
-        </PanelCard>
-        {likelyToRefer.length > 0 && (
-          <PanelCard style={{ marginBottom: 0 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Likely to refer</div>
-            <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8 }}>Thriving clients (80+)</div>
-            {likelyToRefer.map((c, i) => (
-              <div key={i} style={{ padding: "7px 0", borderBottom: i < likelyToRefer.length - 1 ? "1px solid #E8ECE6" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-                <ScoreRing score={c.ret || 0} size={26} strokeWidth={2} />
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{c.name}</span>
-                  <div style={{ fontSize: 10, color: C.textMuted }}>{c.months || 0}mo</div>
-                </div>
-                {refs.some(r => r.from === c.name || r.source === c.name) && <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: C.primarySoft, color: C.primary, fontWeight: 600 }}>Has referred</span>}
-              </div>
-            ))}
-          </PanelCard>
-        )}
-      </div>
-    );
-  };
   const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } setPage(id); setShowMore(false); };
   const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
@@ -2061,9 +1665,6 @@ export default function App({ user }) {
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
         .r-client-modal { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; transform: none !important; max-width: 100% !important; max-height: 100% !important; border-radius: 0 !important; }
-        /* Mobile: Log button becomes icon-only, tighter padding */
-        .r-log-label { display: none; }
-        .r-log-btn { padding: 0 10px !important; min-width: 44px; justify-content: center; }
         /* Mobile: chat user-message clearance from sticky top bar when scrolled */
         .r-rai-inner { padding-top: 56px !important; }
         .r-chat-msg-user { scroll-margin-top: 56px !important; }
@@ -2121,8 +1722,6 @@ export default function App({ user }) {
             height: 100vh;
             min-height: 0 !important;
           }
-          .r-log-label { display: inline !important; }
-          .r-log-btn { padding: 0 14px !important; }
           .r-rai-inner { padding-top: 32px !important; }
           .r-rai-inputbar { padding: 12px 24px 28px !important; }
           .r-chat-msg-user { scroll-margin-top: 24px !important; }
@@ -2241,9 +1840,6 @@ export default function App({ user }) {
           100% { background: rgba(255, 255, 255, 0); }
         }
 
-        /* Curtain element — unused, hidden */
-        .rt-curtain { display: none; }
-
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
@@ -2279,7 +1875,6 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          .rt-row-score { display: none !important; }
           /* Mobile: tag collapses to icon */
           .rt-row-tag { padding: 0 !important; border: none !important; background: transparent !important; }
           .rt-row-tag-label { display: none !important; }
@@ -2317,7 +1912,6 @@ export default function App({ user }) {
           .rc-desktop-view { display: none !important; }
           .rc-mobile-list { display: block !important; }
           .rt-mob-strip { display: block !important; }
-          .rt-desk-cal { display: none !important; }
           .rc-sort-cadence { display: none !important; }
           .rc-sort-renewal { display: none !important; }
           .rt-mob-cal-trigger { display: inline-flex !important; }
@@ -2351,23 +1945,10 @@ export default function App({ user }) {
           0%,100% { opacity: 0; transform: scale(0.5); }
           50% { opacity: 1; transform: scale(1.2); }
         }
-        .client-pill { transition: all 0.1s; cursor: pointer; }
-        .client-pill:hover { background: ${C.primarySoft} !important; border-color: ${C.primary} !important; }
-        .card-hover { transition: box-shadow 0.2s ease, transform 0.2s ease; cursor: pointer; }
-        .card-hover:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06); transform: translateY(-1px); }
-        .row-item { transition: background 0.12s ease; cursor: pointer; }
-        .row-item:hover { background: #33543E10; }
-        .btn-ghost { transition: all 0.12s ease; cursor: pointer; }
-        .btn-ghost:hover { background: #EEEFEB !important; }
-        .btn-ghost-green { transition: all 0.12s ease; cursor: pointer; }
-        .btn-ghost-green:hover { background: #D9EBE0 !important; }
-        .btn-ghost-red { transition: all 0.12s ease; cursor: pointer; }
-        .btn-ghost-red:hover { background: #F5DDD8 !important; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      {/* Focus mode curtain — single overlay at app-root, above sidebar (50). */}
-      <div className={"rt-curtain" + (focusMode ? " is-on" : "")} />
+      {/* Lightning flash — fires when focus mode toggles on */}
       {focusFlash && <div className="rt-flash is-firing" />}
 
       {/* Fireworks */}
@@ -2687,42 +2268,6 @@ export default function App({ user }) {
             const h = clientName.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
             return (h % 11) - 5; // -5 to +5
           };
-          const stubConfidence = () => 0.92;
-          const stubRetentionHistory = (score) => {
-            const base = Math.max(40, score - 15);
-            const pts = [];
-            for (let i = 0; i < 10; i++) {
-              const progress = i / 9;
-              const target = base + (score - base) * progress;
-              pts.push(Math.round(target + (Math.sin(i * 1.3) * 4)));
-            }
-            pts[pts.length - 1] = score;
-            return pts;
-          };
-          const stubDraft = (client) => {
-            if (!client) return "";
-            const first = client.split(/\s|&/)[0];
-            return `Hi ${first} — wanted to check in before the week gets away. I've been thinking about how the next quarter lines up and want to make sure we're pointed the same direction. Coffee Tuesday?`;
-          };
-          const stubWhy = (task, client) => {
-            if (!client) return task.text;
-            const score = client.ret || 60;
-            const delta = stubDelta(client.name);
-            if (delta < -2) return `Score dropped ${Math.abs(delta)} pts over the last period. Worth a check-in before it widens.`;
-            if (score < 55) return `Score is ${score} and they haven't heard from you in a while. Time to reconnect.`;
-            return `This relationship is due for a proactive touch. Not urgent, but don't let it drift.`;
-          };
-          const stubWhyNow = (task, client) => {
-            if (!client) return "";
-            const delta = stubDelta(client.name);
-            if (delta < -2) return "Score drift + cadence gap converging";
-            return `Last touch ${5 + Math.abs(delta)}d ago, longer than usual`;
-          };
-          const stubPattern = (task, client) => {
-            if (!client) return "";
-            if ((client.ret || 60) < 60) return "3 clients on this curve lost 12+ pts in 30d";
-            return "Similar clients stayed strong when touched now";
-          };
           // Relative time formatter — "Today" / "Yesterday" / "Nd ago" / "Nw ago" / "Nmo ago"
           const relTime = (dateStr) => {
             if (!dateStr) return "—";
@@ -2759,39 +2304,6 @@ export default function App({ user }) {
             if (daysSinceLast > avgInterval * 1.15) return "Slipping";
             return "On rhythm";
           };
-          // Real Context builder — reads last completed task + next health check / renewal
-          const buildContext = (client) => {
-            if (!client) return null;
-            // Last task: most recently completed task for this client
-            const completed = tasks
-              .filter(t => t.client === client.name && t.done && t.completed_at)
-              .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
-            const lastDone = completed[0];
-            const lastTask = lastDone ? `${lastDone.text} · ${relTime(lastDone.completed_at)}` : "No completed tasks yet";
-            // Upcoming: sooner of pending health check or renewal (real renewal_date if set)
-            const pendingHc = hcQueue.find(h => h.client === client.name);
-            const renewalDays = client.renewal_date
-              ? Math.ceil((new Date(client.renewal_date).getTime() - Date.now()) / 86400000)
-              : null;
-            let upcoming = null;
-            if (renewalDays !== null && renewalDays >= 0) upcoming = `Renewal in ${renewalDays}d`;
-            else if (renewalDays !== null && renewalDays < 0) upcoming = `Renewal overdue ${Math.abs(renewalDays)}d`;
-            if (pendingHc) {
-              if (pendingHc.overdue > 0) {
-                upcoming = `Health check overdue ${pendingHc.overdue}d`;
-              } else if (pendingHc.due_date) {
-                const daysUntilHc = Math.ceil((new Date(pendingHc.due_date).getTime() - Date.now()) / 86400000);
-                if (renewalDays === null || daysUntilHc < renewalDays) {
-                  upcoming = daysUntilHc <= 0 ? "Health check today" : `Health check in ${daysUntilHc}d`;
-                }
-              }
-            }
-            return {
-              cadence: calcCadence(client.name),
-              lastTask,
-              upcoming: upcoming || "Nothing scheduled",
-            };
-          };
 
           // ─── HANDLERS ────────────────────────────────────────────────────
           const greeting = (() => {
@@ -2826,33 +2338,6 @@ export default function App({ user }) {
                   </span>
                 )}
               </span>
-            );
-          };
-
-          // Due pill
-          const DuePill = ({ due }) => {
-            const label = due === "today" ? "Today" : due === "tomorrow" ? "Tmrw" : due || "Today";
-            return <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 500, padding: "2px 8px", background: C.borderLight, borderRadius: 999 }}>{label}</span>;
-          };
-
-          // Sparkline
-          const Spark = ({ data, color, width = 200, height = 36 }) => {
-            if (!data || data.length < 2) return null;
-            const min = Math.min(...data);
-            const max = Math.max(...data);
-            const range = max - min || 1;
-            const pad = 2;
-            const w = width - pad * 2;
-            const h = height - pad * 2;
-            const points = data.map((v, i) => {
-              const x = pad + (i / (data.length - 1)) * w;
-              const y = pad + h - ((v - min) / range) * h;
-              return `${x},${y}`;
-            }).join(" ");
-            return (
-              <svg width={width} height={height} style={{ display: "block" }}>
-                <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
             );
           };
 
@@ -2898,14 +2383,6 @@ export default function App({ user }) {
             setComposerMenuOpen(false);
           };
 
-          const applyPreset = (prefix) => {
-            setNewTask(prefix + " ");
-            setTimeout(() => {
-              const el = document.getElementById("rt-composer-input");
-              if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
-            }, 0);
-          };
-
           // ─── RENDER ──────────────────────────────────────────────────────
           return (
             <div
@@ -2919,7 +2396,7 @@ export default function App({ user }) {
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
               {/* STATUS BAND */}
-              <div className="rt-band" data-focus-dim style={{ gridArea: "band", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
+              <div className="rt-band" style={{ gridArea: "band", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>{displayDate}</div>
                   <h1 className="rt-band-greet" style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
@@ -2953,7 +2430,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" data-focus-dim style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "relative" }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "relative" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", flexWrap: "wrap" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Icon name="plus" size={14} color={C.btn} />
@@ -3327,7 +2804,6 @@ export default function App({ user }) {
                     return (
                       <div
                         className="observer-wrap"
-                        data-focus-dim
                         style={{
                           marginBottom: 24,
                           opacity: obsDismissing ? 0 : 1,
@@ -3776,7 +3252,7 @@ export default function App({ user }) {
                 </div>
 
               {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead. */}
-              <div className="rt-focus-col" data-focus-dim style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
+              <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px 12px" }}>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>Today's calendar</span>
                 </div>
@@ -3813,116 +3289,14 @@ export default function App({ user }) {
                 </div>
               </div>
 
-              {/* RAI COLUMN — wide desktop only (>=1440px). Grid auto-aligns with composer.
-                  On Today, the right rail shows the Daybook (notepad) instead of Talk to Rai.
-                  Inlined here (not extracted as a component) so the textarea identity stays
-                  stable across saves — keystrokes don't trigger remount + focus loss. */}
+              {/* DAYBOOK COLUMN — wide desktop only (>=1440px). Right-rail notepad. */}
               <div className="rt-rai-col" style={{ gridArea: "rai", display: "none", flexDirection: "column", gap: 16, position: "sticky", top: 20, alignSelf: "start" }}>
-                {(() => {
-                  const today = new Date();
-                  const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
-                  const monthName = today.toLocaleDateString("en-US", { month: "long" });
-                  const dateLine = `${dayName} · ${monthName} ${today.getDate()}`;
-                  return (
-                    <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
-                      <div style={{
-                        background: C.card,
-                        border: "1px solid " + C.borderLight,
-                        borderRadius: 14,
-                        overflow: "hidden",
-                        boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
-                        display: "flex",
-                        flexDirection: "column",
-                      }}>
-                        {/* Masthead — beige to white gradient (Option D) */}
-                        <div style={{
-                          padding: "16px 18px 14px",
-                          background: `linear-gradient(180deg, ${C.deepCream} 0%, ${C.card} 100%)`,
-                          borderBottom: "1px solid " + C.borderLight,
-                        }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
-                              Notes
-                            </div>
-                            {daybookSaveStatus === "saved" && (
-                              <div style={{
-                                fontSize: 10.5, color: C.success,
-                                display: "inline-flex", alignItems: "center", gap: 5,
-                                fontWeight: 500,
-                              }}>
-                                <span style={{ width: 5, height: 5, borderRadius: 999, background: C.success }} />
-                                Saved
-                              </div>
-                            )}
-                            {daybookSaveStatus === "saving" && (
-                              <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 500 }}>
-                                Saving…
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 500 }}>
-                            {dateLine}
-                          </div>
-                        </div>
-
-                        {/* Today's entry — editable textarea */}
-                        <div style={{ padding: "14px 18px 16px" }}>
-                          <textarea
-                            value={daybookEntry}
-                            onChange={(e) => handleDaybookChange(e.target.value)}
-                            placeholder="What's on your mind today?"
-                            style={{
-                              width: "100%",
-                              minHeight: 140,
-                              border: "none",
-                              outline: "none",
-                              background: "transparent",
-                              fontSize: 13.5,
-                              lineHeight: 1.6,
-                              color: C.text,
-                              fontFamily: "inherit",
-                              resize: "vertical",
-                              padding: 0,
-                            }}
-                          />
-                        </div>
-
-                        {/* Yesterday peek */}
-                        {daybookYesterday && daybookYesterday.body && (
-                          <div style={{
-                            padding: "12px 18px 14px",
-                            borderTop: "1px dashed " + C.border,
-                            background: C.surfaceWarm,
-                          }}>
-                            <div style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: C.textMuted,
-                              letterSpacing: 0.5,
-                              textTransform: "uppercase",
-                              marginBottom: 6,
-                            }}>
-                              Yesterday
-                            </div>
-                            <div style={{
-                              fontSize: 12,
-                              color: C.textSec,
-                              lineHeight: 1.5,
-                              fontFamily: "Georgia, serif",
-                              fontStyle: "italic",
-                              display: "-webkit-box",
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
-                            }}>
-                              "{daybookYesterday.body}"
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                <DaybookPanel
+                  entry={daybookEntry}
+                  yesterday={daybookYesterday}
+                  saveStatus={daybookSaveStatus}
+                  onChange={handleDaybookChange}
+                />
               </div>
 
               {/* CONFETTI */}
@@ -4955,9 +4329,14 @@ export default function App({ user }) {
                   )}
                 </div>
 
-                {/* RAI COLUMN — wide desktop only (>=1440px) */}
+                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiMiniPanel />
+                  <DaybookPanel
+                    entry={daybookEntry}
+                    yesterday={daybookYesterday}
+                    saveStatus={daybookSaveStatus}
+                    onChange={handleDaybookChange}
+                  />
                 </div>
               </div>
             </div>
@@ -5002,9 +4381,6 @@ export default function App({ user }) {
             return "At risk";
           };
 
-          const driftColor = (d) => d === "Improving" ? C.success : d === "Stable" ? C.primary : d === "Something shifted" ? C.warning : C.danger;
-          const driftBg = (d) => d === "Improving" ? "#D1FAE5" : d === "Stable" ? C.primarySoft : d === "Something shifted" ? "#FEF3C7" : "#FEE2E2";
-
           // Drift wall uses a 4-tier label set (Thriving / Stable / Shifted / Declining).
           // calcDrift() returns 5 states; merge "At risk" into "Declining" and "Improving"
           // into "Thriving" for plot + pill purposes.
@@ -5017,7 +4393,6 @@ export default function App({ user }) {
             return "Stable";
           };
           const driftTierColor = (t) => t === "Thriving" ? C.retElite : t === "Stable" ? C.retGood : t === "Shifted" ? C.retWarn : C.retCrit;
-          const driftTierBg = (t) => t === "Thriving" ? "#DDEBE3" : t === "Stable" ? "#E2F0E8" : t === "Shifted" ? "#FBEBD5" : "#F7D9D0";
           // Stubbed one-liner per drift tier (wired to real note field post-launch)
           const driftStub = (t) => t === "Thriving" ? "Relationship trending up." : t === "Stable" ? "Steady. Nothing to flag." : t === "Shifted" ? "Something worth watching." : "Signals are declining.";
 
@@ -5544,9 +4919,14 @@ export default function App({ user }) {
                   )}
                 </div>
 
-                {/* RAI COLUMN — wide desktop only (>=1440px) */}
+                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiMiniPanel />
+                  <DaybookPanel
+                    entry={daybookEntry}
+                    yesterday={daybookYesterday}
+                    saveStatus={daybookSaveStatus}
+                    onChange={handleDaybookChange}
+                  />
                 </div>
               </div>
             </div>
@@ -6079,9 +5459,14 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-                {/* RAI COLUMN — wide desktop only (>=1440px) */}
+                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiMiniPanel />
+                  <DaybookPanel
+                    entry={daybookEntry}
+                    yesterday={daybookYesterday}
+                    saveStatus={daybookSaveStatus}
+                    onChange={handleDaybookChange}
+                  />
                 </div>
               </div>
 
@@ -6548,9 +5933,14 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-                {/* RAI COLUMN — wide desktop only (>=1440px) */}
+                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiMiniPanel />
+                  <DaybookPanel
+                    entry={daybookEntry}
+                    yesterday={daybookYesterday}
+                    saveStatus={daybookSaveStatus}
+                    onChange={handleDaybookChange}
+                  />
                 </div>
               </div>
 
