@@ -330,23 +330,23 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 const navItemsCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
-  { id: "health", icon: "health", label: "Health Checks" },
+  { id: "health", icon: "health", label: "Health" },
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
-  { id: "coach", icon: "rai", label: "Talk to Rai" },
+  { id: "coach", icon: "rai", label: "Rai" },
 ];
 const navItemsEnterprise = [
   { id: "today", icon: "today", label: "Today" },
   { id: "sweeps", icon: "sweeps", label: "Sweeps" },
   { id: "clients", icon: "clients", label: "Clients" },
-  { id: "health", icon: "health", label: "Health Checks" },
+  { id: "health", icon: "health", label: "Health" },
   { id: "referral_intel", icon: "target", label: "Referral Intel" },
-  { id: "coach", icon: "rai", label: "Talk to Rai" },
+  { id: "coach", icon: "rai", label: "Rai" },
 ];
 const mobileNavCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
-  { id: "coach", icon: "rai", label: "Talk to Rai" },
+  { id: "coach", icon: "rai", label: "Rai" },
   { id: "health", icon: "health", label: "Health" },
   { id: "more", icon: "bento", label: "More" },
 ];
@@ -354,7 +354,7 @@ const mobileNavEnterprise = [
   { id: "today", icon: "today", label: "Today" },
   { id: "sweeps", icon: "sweeps", label: "Sweeps" },
   { id: "clients", icon: "clients", label: "Clients" },
-  { id: "coach", icon: "rai", label: "Talk to Rai" },
+  { id: "coach", icon: "rai", label: "Rai" },
   { id: "more", icon: "bento", label: "More" },
 ];
 const moreItemsCore = [
@@ -2889,8 +2889,83 @@ export default function App({ user }) {
                           border: "1px solid " + C.border,
                           padding: "24px 28px 22px",
                           position: "relative",
+                          overflow: "hidden",
                           boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
                         }}>
+                          {/* ─── ILLUSTRATION — top-right inside card ─── */}
+                          <div style={{
+                            position: "absolute",
+                            right: 24,
+                            top: 28,
+                            width: 200,
+                            height: 165,
+                            pointerEvents: "none",
+                            opacity: 0.9,
+                          }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300" style={{ width: "100%", height: "100%" }}>
+                              <g fill="none" stroke="#2F2F31" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M150 58 Q144 44 154 34 Q162 24 154 12"/>
+                                <path d="M178 54 Q172 38 182 28 Q188 20 182 8"/>
+                                <path d="M204 60 Q198 46 208 36 Q216 26 208 14"/>
+                              </g>
+                              <g transform="translate(110 70)">
+                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M130 50 Q170 50 170 90 Q170 130 130 130"/>
+                                <path fill="none" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round" d="M130 62 Q158 62 158 90 Q158 118 130 118"/>
+                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M6 44 Q4 38 12 38 L134 38 Q142 38 140 44 L132 174 Q130 184 120 184 L26 184 Q16 184 14 174 Z"/>
+                                <ellipse cx="73" cy="45" rx="62" ry="9" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                <ellipse cx="73" cy="45" rx="54" ry="6" fill="#3F434B" opacity="0.9"/>
+                                <path d="M40 42 Q52 38 70 39" stroke="#FCFCFE" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.8"/>
+                                <g stroke="#2F2F31" strokeWidth="0.9" opacity="0.35" strokeLinecap="round" fill="none">
+                                  <line x1="118" y1="70" x2="122" y2="164"/>
+                                  <line x1="124" y1="70" x2="127" y2="160"/>
+                                  <line x1="112" y1="72" x2="115" y2="166"/>
+                                </g>
+                              </g>
+                              <g transform="translate(220 130) rotate(10)">
+                                <rect x="0" y="0" width="92" height="140" rx="12" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round"/>
+                                <rect x="6" y="14" width="80" height="118" rx="6" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                <rect x="36" y="6" width="20" height="3" rx="1.5" fill="#2F2F31"/>
+                                <g transform="translate(10 22)">
+                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="#558B68"/>
+                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="none" stroke="#2F2F31" strokeWidth="1.8" strokeLinejoin="round"/>
+                                  <circle cx="10" cy="10" r="4" fill="#FCFCFE"/>
+                                  <circle cx="10" cy="10" r="4" fill="none" stroke="#2F2F31" strokeWidth="1.2"/>
+                                  <line x1="20" y1="8" x2="58" y2="8" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
+                                  <line x1="20" y1="14" x2="48" y2="14" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round" opacity="0.85"/>
+                                  <line x1="6" y1="26" x2="66" y2="26" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="6" y1="32" x2="58" y2="32" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="6" y1="38" x2="42" y2="38" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
+                                </g>
+                                <g transform="translate(10 74)">
+                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <line x1="18" y1="9" x2="58" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="18" y1="15" x2="44" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                </g>
+                                <g transform="translate(10 102)">
+                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <line x1="18" y1="9" x2="54" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="18" y1="15" x2="40" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                </g>
+                                <line x1="92" y1="30" x2="92" y2="48" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                              </g>
+                              <g stroke="#2F2F31" strokeWidth="1.8" strokeLinecap="round" fill="none">
+                                <path d="M232 108 L228 100"/>
+                                <path d="M246 102 L244 92"/>
+                                <path d="M260 100 L262 90"/>
+                                <path d="M274 104 L280 96"/>
+                              </g>
+                              <g transform="translate(300 100)">
+                                <circle cx="0" cy="0" r="10" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2"/>
+                                <line x1="0" y1="-4" x2="0" y2="2" stroke="#2F2F31" strokeWidth="2.4" strokeLinecap="round"/>
+                                <circle cx="0" cy="6" r="1.4" fill="#2F2F31"/>
+                              </g>
+                            </svg>
+                          </div>
+
+                          {/* ─── CONTENT (right-padded so it doesn't collide with illo) ─── */}
+                          <div style={{ paddingRight: 220 }}>
                           {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
                           <div style={{
                             display: "flex",
@@ -2950,6 +3025,7 @@ export default function App({ user }) {
                           }}>
                             {obs.front_body}
                           </p>
+                          </div>
 
                           {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
                           <div style={{
@@ -4420,7 +4496,7 @@ export default function App({ user }) {
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Monthly cadence · {monthLabel}</div>
-                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Health Checks</h1>
+                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Health</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ color: activeQueue.filter(h => h.overdue > 0).length > 0 ? C.retWarn : C.textMuted, fontWeight: 600 }}>
                       <b>{activeQueue.filter(h => h.overdue > 0).length}</b> overdue
