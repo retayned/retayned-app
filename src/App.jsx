@@ -3294,27 +3294,18 @@ export default function App({ user }) {
                           transition: "opacity 280ms ease, transform 280ms ease",
                         }}
                       >
-                        {/* ───── D2 PULLED-FROM-DECK CARD — on-brand creams ───── */}
+                        {/* ───── D2 PULLED-FROM-DECK CARD — solid dark beige ───── */}
                         <div style={{
                           position: "relative",
                           borderRadius: 22,
                           overflow: "hidden",
-                          // Container uses Retayned's existing creams. Front: warmer end of the
-                          // palette. Back: cooler end. Both stay within the brand surface family.
-                          background: !obsFlipped
-                            ? `linear-gradient(135deg, ${C.surfaceWarm} 0%, ${C.deepCream} 60%, #DDD6C2 100%)`
-                            : `linear-gradient(135deg, ${C.surface} 0%, ${C.surfaceWarm} 60%, ${C.deepCream} 100%)`,
+                          // Solid C.deepCream surface. No gradient — lets the card carry the weight.
+                          // Front and back use the same surface; the card face is what changes.
+                          background: C.deepCream,
                           border: "1px solid " + C.border,
                           padding: "44px 56px 44px 0",
                           minHeight: 360,
-                          transition: "background 280ms ease",
                         }}>
-                          {/* Subtle radial vignette at bottom for depth */}
-                          <div style={{
-                            position: "absolute", inset: 0,
-                            background: "radial-gradient(120% 80% at 50% 120%, rgba(31,42,36,0.10), transparent 60%)",
-                            pointerEvents: "none",
-                          }} />
 
                           <div style={{
                             display: "grid",
