@@ -496,7 +496,7 @@ export default function App({ user }) {
   const [clients, setClients] = useState([]);
   const [showAddClient, setShowAddClient] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
-  const [clientsSort, setClientsSort] = useState("priority");
+  const [clientsSort, setClientsSort] = useState("retention");
   const [clientsView, setClientsView] = useState(() => {
     try { return localStorage.getItem("clients-view") || "table"; } catch (e) { return "table"; }
   });
@@ -2189,60 +2189,63 @@ export default function App({ user }) {
           transition: opacity 280ms ease 200ms;
         }
         .rt-focus-on .rt-row.rt-focus-top {
-          border-color: ${C.btn} !important;
-          box-shadow: 0 4px 14px rgba(91,33,182,0.14), 0 0 0 1px ${C.btn} !important;
+          background: #FFFFFF !important;
+          border-color: transparent !important;
+          box-shadow: 0 4px 18px rgba(0,0,0,0.22), 0 12px 32px rgba(0,0,0,0.18) !important;
           transform: scale(1.012);
-          transition: transform 280ms ease 500ms, box-shadow 280ms ease 500ms, border-color 280ms ease 500ms;
+          transition: transform 280ms ease 500ms, box-shadow 280ms ease 500ms, background 280ms ease 500ms;
           position: relative;
           z-index: 35;
+        }
+        .rt-focus-on .rt-row.rt-focus-top * {
+          color: #1E261F !important;
         }
         .rt-focus-on .rt-row:not(.rt-focus-top) {
           opacity: 0.18 !important;
           pointer-events: none !important;
           transition: opacity 280ms ease 200ms;
         }
-        /* Curtain + flash overlay — positioned absolutely within .rt-today-v4 so they
-        /* Focus mode curtain — single overlay at app-root, above sidebar (50).
-           Doesn't cover sidebar by design (curtain stops at sidebar edge on desktop).
-           Main area dims via opacity on [data-focus-dim] elements + non-top tasks. */
+        /* Toolbar (toggle row with Ranked by Rai + Focus button) stays bright and clickable above the curtain */
+        .rt-focus-on .rt-toolbar {
+          position: relative;
+          z-index: 35;
+        }
+        /* Curtain — full-screen overlay covering everything including sidebar.
+           Dark forest with a soft top-down gradient so the focused task feels lit from above. */
         .rt-today-v4 { position: relative; }
         .rt-curtain {
           position: fixed;
           top: 0;
           right: 0;
           left: 0;
-          height: 0;
-          background: linear-gradient(180deg, rgba(28,50,36,0.78) 0%, rgba(28,50,36,0.60) 60%, rgba(28,50,36,0.0) 100%);
+          bottom: 0;
+          opacity: 0;
+          background:
+            radial-gradient(ellipse 80% 50% at 50% 35%, rgba(28,50,36,0.55) 0%, rgba(20,40,28,0.92) 70%, rgba(20,40,28,0.96) 100%);
           pointer-events: none;
           z-index: 30;
-          transition: height 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
+          transition: opacity 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
         }
-        @media (min-width: 768px) {
-          .rt-curtain {
-            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
-          }
-        }
-        .rt-curtain.is-on { height: 100vh; }
+        .rt-curtain.is-on { opacity: 1; }
+        /* Lightning flash — white burst, fast, twice (like a real lightning strike) */
         .rt-flash {
           position: fixed;
-          top: 0; right: 0; bottom: 0;
-          left: 0;
-          background: rgba(255, 245, 200, 0);
+          top: 0; right: 0; bottom: 0; left: 0;
+          background: rgba(255, 255, 255, 0);
           pointer-events: none;
-          z-index: 31;
-        }
-        @media (min-width: 768px) {
-          .rt-flash {
-            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
-          }
+          z-index: 32;
         }
         .rt-flash.is-firing {
-          animation: rt-flash-anim 450ms ease-out 400ms;
+          animation: rt-flash-anim 700ms ease-out 100ms;
         }
         @keyframes rt-flash-anim {
-          0%   { background: rgba(255, 245, 200, 0); }
-          25%  { background: rgba(255, 245, 200, 0.35); }
-          100% { background: rgba(255, 245, 200, 0); }
+          0%   { background: rgba(255, 255, 255, 0); }
+          5%   { background: rgba(255, 255, 255, 0.92); }
+          12%  { background: rgba(255, 255, 255, 0.10); }
+          22%  { background: rgba(255, 255, 255, 0.85); }
+          32%  { background: rgba(255, 255, 255, 0.05); }
+          45%  { background: rgba(255, 255, 255, 0.45); }
+          100% { background: rgba(255, 255, 255, 0); }
         }
         .rt-today-v4.rt-focus-on { z-index: 40; }
         /* Today v4 — Grid layout, 3 breakpoints */
@@ -3120,7 +3123,7 @@ export default function App({ user }) {
 
               {/* TASKS COLUMN */}
               <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
+                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
                       <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
@@ -4213,7 +4216,7 @@ export default function App({ user }) {
           const longestClient = [...activeClients].sort((a, b) => (b.months || 0) - (a.months || 0))[0];
 
           // ─── Sort + filter ─────────────────────────────────────────────────
-          const sortId = clientsSort || "priority";
+          const sortId = clientsSort || "retention";
           const filteredClients = (() => {
             let xs = activeClients;
             const q = (clientSearch || "").trim().toLowerCase();
@@ -4226,7 +4229,9 @@ export default function App({ user }) {
               );
             }
             const copy = [...xs];
-            if (sortId === "priority") copy.sort((a, b) => getProfileSortScore(b.name) - getProfileSortScore(a.name));
+            // Retention: highest score first (your healthiest clients at top).
+            // Use "Attention" sort for inverse — who needs help most.
+            if (sortId === "retention") copy.sort((a, b) => (b.ret || 0) - (a.ret || 0));
             else if (sortId === "attention") copy.sort((a, b) => (a.ret || 0) - (b.ret || 0));
             else if (sortId === "revenue") copy.sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
             else if (sortId === "trend") {
@@ -4247,7 +4252,7 @@ export default function App({ user }) {
 
           const variant = clientsView || "table";
           const sortOptions = [
-            { id: "priority",   label: "Priority" },
+            { id: "retention",  label: "Retention" },
             { id: "revenue",    label: "Revenue" },
             { id: "trend",      label: "Trend" },
             { id: "cadence",    label: "Cadence" },
@@ -4707,7 +4712,7 @@ export default function App({ user }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11, color: C.textMuted, padding: "0 4px 10px", letterSpacing: 0.1 }}>
                     <span>{filteredClients.length} {filteredClients.length === 1 ? "client" : "clients"}</span>
                     <span style={{ flex: 1 }} />
-                    <span>Sort: <b style={{ color: C.text, fontWeight: 500 }}>{sortOptions.find(s => s.id === sortId)?.label || "Priority"}</b></span>
+                    <span>Sort: <b style={{ color: C.text, fontWeight: 500 }}>{sortOptions.find(s => s.id === sortId)?.label || "Retention"}</b></span>
                   </div>
 
                   {/* COMPARE SURFACE — 3 variants */}
