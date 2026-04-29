@@ -3144,9 +3144,9 @@ export default function App({ user }) {
                                 background: C.btn,
                                 color: "#FFFFFF",
                                 border: "none",
-                                padding: "10px 20px",
-                                borderRadius: 999,
-                                fontSize: 12.5,
+                                padding: "8px 14px",
+                                borderRadius: 8,
+                                fontSize: 13,
                                 fontWeight: 600,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
@@ -3298,16 +3298,15 @@ export default function App({ user }) {
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                           </button>
 
-                          {client
-                            ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={28} /></div>
-                            : <div className="rt-task-avatar" style={{ width: 28, height: 28, borderRadius: 14, background: C.borderSoft, flexShrink: 0 }} />}
-
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               <span className="rt-task-title">{t.text}</span>
                             </div>
-                            <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: C.ink500, marginTop: 2, minWidth: 0 }}>
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : ""}</span>
+                            <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.ink500, marginTop: 4, minWidth: 0 }}>
+                              {client
+                                ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={22} /></div>
+                                : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : ""}</span>
                               {t.recurring && (
                                 <span className="rt-row-tag" style={{
                                   display: "inline-flex", alignItems: "center", gap: 4,
