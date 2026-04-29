@@ -44,7 +44,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
     bolt: (<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke={color} strokeWidth="1.8" fill="none" strokeLinejoin="round"/></>),
     trendUp: (<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/><polyline points="17 6 23 6 23 12" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     clock: (<><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" fill="none"/><polyline points="12 6 12 12 16 14" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/></>),
-    infinity: (<><path d="M5 12c0-2 1.5-3.5 3.5-3.5 1.8 0 3 1.2 3.5 2 0.5-0.8 1.7-2 3.5-2 2 0 3.5 1.5 3.5 3.5s-1.5 3.5-3.5 3.5c-1.8 0-3-1.2-3.5-2-0.5 0.8-1.7 2-3.5 2-2 0-3.5-1.5-3.5-3.5z" stroke={color} strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
+    infinity: (<><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 100 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 100-8c-2 0-4 1.33-6 4z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     sparkles: (<><path d="M12 3v3m0 12v3m-9-9H0m24 0h-3M5.5 5.5l2 2m9 9l2 2m-13 0l2-2m9-9l2-2" stroke={color} strokeWidth="1.6" strokeLinecap="round"/><circle cx="12" cy="12" r="3" fill={color}/></>),
     dot: (<><circle cx="12" cy="12" r="3" fill={color}/></>),
     flame: (<><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z" stroke={color} strokeWidth="1.6" fill="none" strokeLinejoin="round"/></>),
@@ -2446,9 +2446,7 @@ export default function App({ user }) {
                     {greeting}{firstName ? ", " + firstName : ""}.
                   </h1>
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{remaining}</b> tasks<span className="rt-band-sub-mobile-only" style={{ display: "none" }}> remaining</span></span>
-                    <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
-                    <span className="rt-band-sub-done"><b style={{ color: C.text, fontWeight: 700 }}>{doneCount}</b> done</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{totalVisible}</b> tasks</span>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
                     <span className="rt-band-sub-events"><b style={{ color: C.text, fontWeight: 700 }}>3</b> events</span>
                     <span className="rt-band-sub-pct" style={{ display: "none", marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999 }}>
