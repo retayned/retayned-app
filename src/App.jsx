@@ -3405,9 +3405,7 @@ export default function App({ user }) {
                                       lineHeight: 1.05,
                                     }}>
                                       {archetype.split(" ").map((word, i, arr) => (
-                                        <React.Fragment key={i}>
-                                          {word}{i < arr.length - 1 && <br/>}
-                                        </React.Fragment>
+                                        <span key={i}>{word}{i < arr.length - 1 && <br/>}</span>
                                       ))}
                                     </div>
                                   </div>
