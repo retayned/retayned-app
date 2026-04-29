@@ -44,6 +44,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
     bolt: (<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke={color} strokeWidth="1.8" fill="none" strokeLinejoin="round"/></>),
     trendUp: (<><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/><polyline points="17 6 23 6 23 12" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     clock: (<><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" fill="none"/><polyline points="12 6 12 12 16 14" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/></>),
+    infinity: (<><path d="M18.178 8c-3.18 0-4.178 4-7.178 4s-4-4-7.178-4a4 4 0 100 8c3.179 0 4.178-4 7.178-4s3.999 4 7.178 4a4 4 0 100-8z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     sparkles: (<><path d="M12 3v3m0 12v3m-9-9H0m24 0h-3M5.5 5.5l2 2m9 9l2 2m-13 0l2-2m9-9l2-2" stroke={color} strokeWidth="1.6" strokeLinecap="round"/><circle cx="12" cy="12" r="3" fill={color}/></>),
     dot: (<><circle cx="12" cy="12" r="3" fill={color}/></>),
     flame: (<><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z" stroke={color} strokeWidth="1.6" fill="none" strokeLinejoin="round"/></>),
@@ -3104,7 +3105,7 @@ export default function App({ user }) {
                             fontFamily: "'Fraunces', Georgia, serif",
                             fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
                             fontWeight: 400,
-                            fontStyle: "normal",
+                            fontStyle: "italic",
                             fontSize: 25,
                             lineHeight: 1.22,
                             letterSpacing: "-0.005em",
@@ -3334,14 +3335,14 @@ export default function App({ user }) {
                               {client
                                 ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={22} /></div>
                                 : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : ""}</span>
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
                               {t.recurring && (
                                 <span className="rt-row-tag" style={{
                                   display: "inline-flex", alignItems: "center",
                                   color: C.ink500,
                                   flexShrink: 0,
                                 }} title="Recurring">
-                                  <Icon name="clock" size={11} color={C.ink500} />
+                                  <Icon name="infinity" size={13} color={C.ink500} />
                                 </span>
                               )}
                             </div>
