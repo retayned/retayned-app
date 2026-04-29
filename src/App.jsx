@@ -407,7 +407,7 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
         {/* Masthead — beige to white gradient */}
         <div style={{
           padding: "16px 18px 14px",
-          background: `linear-gradient(180deg, ${C.deepCream} 0%, ${C.card} 100%)`,
+          background: `linear-gradient(180deg, rgba(234,228,214,0.5) 0%, ${C.card} 100%)`,
           borderBottom: "1px solid " + C.borderLight,
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
@@ -2899,7 +2899,7 @@ export default function App({ user }) {
                           {/* ─── ILLUSTRATION — top-right inside card ─── */}
                           <div style={{
                             position: "absolute",
-                            right: 0,
+                            right: 48,
                             top: 28,
                             width: 200,
                             height: 165,
