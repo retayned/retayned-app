@@ -3294,15 +3294,14 @@ export default function App({ user }) {
                           transition: "opacity 280ms ease, transform 280ms ease",
                         }}
                       >
-                        {/* ───── D2 PULLED-FROM-DECK CARD — solid dark beige ───── */}
+                        {/* ───── D2 PULLED-FROM-DECK CARD — solid dark beige, no border ───── */}
                         <div style={{
                           position: "relative",
                           borderRadius: 22,
                           overflow: "hidden",
-                          // Solid C.deepCream surface. No gradient — lets the card carry the weight.
-                          // Front and back use the same surface; the card face is what changes.
+                          // Solid C.deepCream surface. No border — color contrast against
+                          // the page does the boundary work.
                           background: C.deepCream,
-                          border: "1px solid " + C.border,
                           padding: "44px 56px 44px 0",
                           minHeight: 360,
                         }}>
