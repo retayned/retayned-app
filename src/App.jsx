@@ -2240,15 +2240,11 @@ export default function App({ user }) {
           z-index: 32;
         }
         .rt-flash.is-firing {
-          animation: rt-flash-anim 700ms ease-out 100ms;
+          animation: rt-flash-anim 380ms ease-out;
         }
         @keyframes rt-flash-anim {
           0%   { background: rgba(255, 255, 255, 0); }
-          5%   { background: rgba(255, 255, 255, 0.92); }
-          12%  { background: rgba(255, 255, 255, 0.10); }
-          22%  { background: rgba(255, 255, 255, 0.85); }
-          32%  { background: rgba(255, 255, 255, 0.05); }
-          45%  { background: rgba(255, 255, 255, 0.45); }
+          8%   { background: rgba(255, 255, 255, 0.85); }
           100% { background: rgba(255, 255, 255, 0); }
         }
         .rt-today-v4.rt-focus-on { z-index: 40; }
