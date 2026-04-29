@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, observations as observationsDb, buildRaiContext } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, profile as profileDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, buildRaiContext } from "./lib/db";
 
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
@@ -821,6 +821,13 @@ export default function App({ user }) {
   const [obsFlipped, setObsFlipped] = useState(false);
   const [obsDismissing, setObsDismissing] = useState(false);
 
+  // ─── Daybook state ── (right-rail notepad on Today page)
+  const [daybookEntry, setDaybookEntry] = useState("");
+  const [daybookYesterday, setDaybookYesterday] = useState(null);
+  const [daybookSaveStatus, setDaybookSaveStatus] = useState("idle"); // 'idle' | 'saving' | 'saved'
+  const daybookSaveTimerRef = useRef(null);
+  const daybookHydratedRef = useRef(false);
+
   // ═══ FETCH ALL DATA ON MOUNT ═══
   const loadData = useCallback(async () => {
     if (!user) return;
@@ -864,6 +871,21 @@ export default function App({ user }) {
       }
     } catch (e) {
       console.warn("Observer card failed to load:", e);
+    }
+
+    // Daybook — fetch today + yesterday in one shot. Hydrate the textarea once.
+    try {
+      if (typeof daybookDb?.getTodayAndYesterday === "function") {
+        const dbRes = await daybookDb.getTodayAndYesterday(uid);
+        if (dbRes?.data) {
+          setDaybookEntry(dbRes.data.today?.body || "");
+          setDaybookYesterday(dbRes.data.yesterday || null);
+          setDaybookSaveStatus(dbRes.data.today ? "saved" : "idle");
+          daybookHydratedRef.current = true;
+        }
+      }
+    } catch (e) {
+      console.warn("Daybook failed to load:", e);
     }
 
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
@@ -1663,6 +1685,144 @@ export default function App({ user }) {
             ))}
           </PanelCard>
         )}
+      </div>
+    );
+  };
+
+  // ─── Daybook save handler — debounced 800ms ───────────────────────────
+  const handleDaybookChange = (newValue) => {
+    setDaybookEntry(newValue);
+    setDaybookSaveStatus("saving");
+    if (daybookSaveTimerRef.current) clearTimeout(daybookSaveTimerRef.current);
+    daybookSaveTimerRef.current = setTimeout(async () => {
+      if (!user) return;
+      try {
+        const res = await daybookDb.save(user.id, newValue);
+        if (!res.error) setDaybookSaveStatus("saved");
+        else setDaybookSaveStatus("idle");
+      } catch (e) {
+        console.warn("Daybook save failed:", e);
+        setDaybookSaveStatus("idle");
+      }
+    }, 800);
+  };
+
+  // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
+  const DaybookPanel = () => {
+    // Format today's date as "Tuesday · April 28"
+    const today = new Date();
+    const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
+    const monthName = today.toLocaleDateString("en-US", { month: "long" });
+    const dateLine = `${dayName} · ${monthName} ${today.getDate()}`;
+
+    return (
+      <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
+        <div style={{
+          background: C.card,
+          border: "1px solid " + C.borderLight,
+          borderRadius: 14,
+          overflow: "hidden",
+          boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
+          display: "flex",
+          flexDirection: "column",
+        }}>
+
+          {/* Masthead — utilitarian: "Notes" + date */}
+          <div style={{
+            padding: "16px 18px 14px",
+            borderBottom: "1px solid " + C.borderLight,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+              <div style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: C.text,
+                lineHeight: 1.2,
+              }}>
+                Notes
+              </div>
+              {/* Saved status */}
+              {daybookSaveStatus === "saved" && (
+                <div style={{
+                  fontSize: 10.5, color: C.success,
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  fontWeight: 500,
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: 999, background: C.success }} />
+                  Saved
+                </div>
+              )}
+              {daybookSaveStatus === "saving" && (
+                <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 500 }}>
+                  Saving…
+                </div>
+              )}
+            </div>
+            <div style={{
+              fontSize: 11.5,
+              color: C.textMuted,
+              fontWeight: 500,
+            }}>
+              {dateLine}
+            </div>
+          </div>
+
+          {/* Today's entry — editable textarea */}
+          <div style={{ padding: "14px 18px 16px" }}>
+            <textarea
+              value={daybookEntry}
+              onChange={(e) => handleDaybookChange(e.target.value)}
+              placeholder="What's on your mind today?"
+              style={{
+                width: "100%",
+                minHeight: 140,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontSize: 13.5,
+                lineHeight: 1.6,
+                color: C.text,
+                fontFamily: "inherit",
+                resize: "vertical",
+                padding: 0,
+              }}
+            />
+          </div>
+
+          {/* Yesterday peek */}
+          {daybookYesterday && daybookYesterday.body && (
+            <div style={{
+              padding: "12px 18px 14px",
+              borderTop: "1px dashed " + C.border,
+              background: C.surfaceWarm,
+            }}>
+              <div style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: C.textMuted,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                marginBottom: 6,
+              }}>
+                Yesterday
+              </div>
+              <div style={{
+                fontSize: 12,
+                color: C.textSec,
+                lineHeight: 1.5,
+                fontFamily: "Georgia, serif",
+                fontStyle: "italic",
+                // Truncate long entries to 3 lines
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}>
+                "{daybookYesterday.body}"
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -2520,7 +2680,7 @@ export default function App({ user }) {
             { n: buckets.critical, label: "Critical", color: C.retCrit  },
           ].filter(s => s.n > 0);
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: "rgba(255,255,255,0.55)", borderRadius: 12, border: "1px solid " + C.borderSoft }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
                 <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "Georgia, serif", fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
@@ -3790,9 +3950,10 @@ export default function App({ user }) {
                 </div>
               </div>
 
-              {/* RAI COLUMN — wide desktop only (>=1440px). Grid auto-aligns with composer. */}
+              {/* RAI COLUMN — wide desktop only (>=1440px). Grid auto-aligns with composer.
+                  On Today, the right rail shows the Daybook (notepad) instead of Talk to Rai. */}
               <div className="rt-rai-col" style={{ gridArea: "rai", display: "none", flexDirection: "column", gap: 16, position: "sticky", top: 20, alignSelf: "start" }}>
-                <RaiMiniPanel />
+                <DaybookPanel />
               </div>
 
               {/* CONFETTI */}
