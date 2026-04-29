@@ -2199,7 +2199,7 @@ export default function App({ user }) {
           transform: scale(1.025);
           transition: transform 320ms ease 500ms, box-shadow 320ms ease 500ms, background 280ms ease 500ms;
           position: relative;
-          z-index: 35;
+          z-index: 65;
         }
         .rt-focus-on .rt-row.rt-focus-top * {
           color: #1E261F !important;
@@ -2212,10 +2212,9 @@ export default function App({ user }) {
         /* Toolbar (toggle row with Ranked by Rai + Focus button) stays bright and clickable above the curtain */
         .rt-focus-on .rt-toolbar {
           position: relative;
-          z-index: 35;
+          z-index: 65;
         }
-        /* Curtain — full-screen overlay covering everything including sidebar.
-           Darker overall so the white focused task pops harder. */
+        /* Curtain — z-index 60 to cover the sidebar (which is fixed at z-index 50). */
         .rt-today-v4 { position: relative; }
         .rt-curtain {
           position: fixed;
@@ -2227,17 +2226,17 @@ export default function App({ user }) {
           background:
             radial-gradient(ellipse 60% 35% at 50% 38%, rgba(28,50,36,0.78) 0%, rgba(15,28,20,0.96) 60%, rgba(10,20,14,0.98) 100%);
           pointer-events: none;
-          z-index: 30;
+          z-index: 60;
           transition: opacity 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
         }
         .rt-curtain.is-on { opacity: 1; }
-        /* Lightning flash — white burst, fast, twice (like a real lightning strike) */
+        /* Lightning flash — sits above curtain so it lights up the whole screen */
         .rt-flash {
           position: fixed;
           top: 0; right: 0; bottom: 0; left: 0;
           background: rgba(255, 255, 255, 0);
           pointer-events: none;
-          z-index: 32;
+          z-index: 62;
         }
         .rt-flash.is-firing {
           animation: rt-flash-anim 380ms ease-out;
@@ -2247,7 +2246,7 @@ export default function App({ user }) {
           8%   { background: rgba(255, 255, 255, 0.85); }
           100% { background: rgba(255, 255, 255, 0); }
         }
-        .rt-today-v4.rt-focus-on { z-index: 40; }
+        .rt-today-v4.rt-focus-on { z-index: 65; }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
