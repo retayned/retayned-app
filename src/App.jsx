@@ -478,7 +478,9 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
               fontSize: 12,
               color: C.textSec,
               lineHeight: 1.5,
-              fontFamily: "'Newsreader', Georgia, serif",
+              fontFamily: "'Fraunces', Georgia, serif",
+              fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
+              fontWeight: 400,
               fontStyle: "italic",
               display: "-webkit-box",
               WebkitLineClamp: 3,
@@ -1658,7 +1660,7 @@ export default function App({ user }) {
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400..600;1,6..72,400..600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: ${C.bg}; overscroll-behavior: none; }
         input, textarea, select { font-size: 16px !important; }
@@ -2184,7 +2186,7 @@ export default function App({ user }) {
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Newsreader', Georgia, serif", fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 400, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -3099,9 +3101,10 @@ export default function App({ user }) {
 
                           {/* ─── HEADLINE ─── */}
                           <h3 style={{
-                            fontFamily: "'Newsreader', Georgia, serif",
-                            fontWeight: 500,
-                            fontStyle: "italic",
+                            fontFamily: "'Fraunces', Georgia, serif",
+                            fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
+                            fontWeight: 400,
+                            fontStyle: "normal",
                             fontSize: 25,
                             lineHeight: 1.22,
                             letterSpacing: "-0.005em",
