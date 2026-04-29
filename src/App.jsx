@@ -2247,24 +2247,77 @@ export default function App({ user }) {
           8%   { background: rgba(255, 255, 255, 0.85); }
           100% { background: rgba(255, 255, 255, 0); }
         }
-        /* Focus mode: change .r-main background to dark green directly (not via overlay).
-           Avoids stacking context issues since .r-main is position:fixed and its children
-           with z-index can't escape its stacking context. With this approach, the cream
-           background simply changes color, dimmed children fade to dark, and the white
-           focused task pops naturally without needing to escape any stacking. */
-        body:has(.rt-focus-on) .r-main {
-          background: radial-gradient(ellipse 70% 45% at 50% 38%, rgba(28,50,36,1) 0%, rgba(15,28,20,1) 60%, rgba(10,20,14,1) 100%) !important;
-          transition: background 600ms ease;
-        }
+        /* ═══ FOCUS MODE — clean simple approach ═══
+           Strategy: change main bg to dark, dim everything inside main, then
+           explicitly un-dim the toolbar and focused task. No curtain, no z-index.
+        */
+
+        /* Sidebar fades to dark when focus is on (uses :has support — modern browsers only) */
         body:has(.rt-focus-on) .r-desk {
-          background: rgba(10,20,14,0.95) !important;
+          background: #0F1C14 !important;
           transition: background 600ms ease;
         }
-        body:has(.rt-focus-on) .r-desk * {
-          opacity: 0.18;
-          transition: opacity 280ms ease 200ms;
+        body:has(.rt-focus-on) .r-desk > * {
+          opacity: 0.05 !important;
+          transition: opacity 280ms ease;
         }
-        .rt-today-v4.rt-focus-on { /* no z-index — let darkened bg show through dimmed children */ }
+
+        /* Main bg goes dark green */
+        body:has(.rt-focus-on) .r-main {
+          background: radial-gradient(ellipse 70% 45% at 50% 35%, #1F3026 0%, #0F1C14 70%, #0A140E 100%) !important;
+          transition: background 600ms ease;
+        }
+
+        /* Inside .rt-focus-on: dim the direct grid areas (band, composer, calendar, focus rail) */
+        .rt-focus-on .rt-band,
+        .rt-focus-on .rt-composer,
+        .rt-focus-on .rt-cal-col,
+        .rt-focus-on .rt-rai-col,
+        .rt-focus-on .rt-focus-col,
+        .rt-focus-on .observer-wrap {
+          opacity: 0.08 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
+
+        /* Dim non-focused task rows */
+        .rt-focus-on .rt-row:not(.rt-focus-top) {
+          opacity: 0.08 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
+
+        /* Toolbar stays bright (no opacity change) — give it a light backdrop pill
+           so its dark text is readable against the dark green focus background */
+        .rt-focus-on .rt-toolbar {
+          background: rgba(255, 255, 255, 0.95) !important;
+          border-radius: 999px !important;
+          padding: 6px 8px !important;
+          margin-bottom: 12px !important;
+          width: fit-content !important;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.25) !important;
+        }
+        .rt-focus-on .rt-toolbar * {
+          color: #1E261F !important;
+        }
+
+        /* Focused task: pure white, dark text, strong shadow */
+        .rt-focus-on .rt-row.rt-focus-top {
+          background: #FFFFFF !important;
+          border-color: transparent !important;
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.3),
+            0 8px 32px rgba(0,0,0,0.45),
+            0 24px 64px rgba(0,0,0,0.45),
+            0 0 100px rgba(255,255,255,0.15) !important;
+          transform: scale(1.025);
+          transition: transform 320ms ease 200ms, box-shadow 320ms ease 200ms;
+        }
+        .rt-focus-on .rt-row.rt-focus-top * {
+          color: #1E261F !important;
+        }
+
+        .rt-today-v4.rt-focus-on { /* nothing — stacking handled by opacity, not z-index */ }
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
