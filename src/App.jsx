@@ -2191,9 +2191,13 @@ export default function App({ user }) {
         .rt-focus-on .rt-row.rt-focus-top {
           background: #FFFFFF !important;
           border-color: transparent !important;
-          box-shadow: 0 4px 18px rgba(0,0,0,0.22), 0 12px 32px rgba(0,0,0,0.18) !important;
-          transform: scale(1.012);
-          transition: transform 280ms ease 500ms, box-shadow 280ms ease 500ms, background 280ms ease 500ms;
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.6),
+            0 6px 24px rgba(0,0,0,0.35),
+            0 16px 48px rgba(0,0,0,0.30),
+            0 0 80px rgba(255,255,255,0.18) !important;
+          transform: scale(1.025);
+          transition: transform 320ms ease 500ms, box-shadow 320ms ease 500ms, background 280ms ease 500ms;
           position: relative;
           z-index: 35;
         }
@@ -2211,7 +2215,7 @@ export default function App({ user }) {
           z-index: 35;
         }
         /* Curtain — full-screen overlay covering everything including sidebar.
-           Dark forest with a soft top-down gradient so the focused task feels lit from above. */
+           Darker overall so the white focused task pops harder. */
         .rt-today-v4 { position: relative; }
         .rt-curtain {
           position: fixed;
@@ -2221,7 +2225,7 @@ export default function App({ user }) {
           bottom: 0;
           opacity: 0;
           background:
-            radial-gradient(ellipse 80% 50% at 50% 35%, rgba(28,50,36,0.55) 0%, rgba(20,40,28,0.92) 70%, rgba(20,40,28,0.96) 100%);
+            radial-gradient(ellipse 60% 35% at 50% 38%, rgba(28,50,36,0.78) 0%, rgba(15,28,20,0.96) 60%, rgba(10,20,14,0.98) 100%);
           pointer-events: none;
           z-index: 30;
           transition: opacity 600ms cubic-bezier(0.45, 0.05, 0.35, 1);
@@ -3331,6 +3335,7 @@ export default function App({ user }) {
                     return (
                       <div
                         className="observer-wrap"
+                        data-focus-dim
                         style={{
                           marginBottom: 24,
                           opacity: obsDismissing ? 0 : 1,
