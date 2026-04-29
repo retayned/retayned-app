@@ -2883,41 +2883,43 @@ export default function App({ user }) {
                         }}
                       >
                         <div style={{
-                          background: "#1E2920",
-                          color: "#F4EFE6",
-                          borderRadius: 18,
-                          padding: "32px 40px 28px",
+                          background: C.card,
+                          color: C.text,
+                          borderRadius: 14,
+                          border: "1px solid " + C.border,
+                          padding: "24px 28px 22px",
                           position: "relative",
+                          boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
                         }}>
                           {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
                           <div style={{
                             display: "flex",
                             alignItems: "center",
                             gap: 12,
-                            paddingBottom: 16,
-                            borderBottom: "1px dashed rgba(244,239,230,0.22)",
-                            marginBottom: 26,
+                            paddingBottom: 14,
+                            borderBottom: "1px dashed " + C.borderLight,
+                            marginBottom: 18,
                           }}>
                             <div style={{
-                              width: 9, height: 9, borderRadius: 999,
-                              background: "#C4A5F0", flexShrink: 0,
+                              width: 8, height: 8, borderRadius: 999,
+                              background: C.btn, flexShrink: 0,
                             }} />
                             <div style={{
                               fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                              fontSize: 12,
+                              fontSize: 11,
                               fontWeight: 700,
                               letterSpacing: "0.18em",
                               textTransform: "uppercase",
-                              color: "#F4EFE6",
+                              color: C.text,
                             }}>
                               {archetype}
                             </div>
-                            <div style={{ flex: 1, height: 1, background: "rgba(244,239,230,0.18)" }} />
+                            <div style={{ flex: 1, height: 1, background: C.borderLight }} />
                             <div style={{
                               fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                              fontSize: 12,
+                              fontSize: 11,
                               letterSpacing: "0.14em",
-                              color: "rgba(244,239,230,0.55)",
+                              color: C.textMuted,
                               whiteSpace: "nowrap",
                             }}>
                               № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
@@ -2928,31 +2930,31 @@ export default function App({ user }) {
                           <h3 style={{
                             fontFamily: "Georgia, 'Source Serif Pro', serif",
                             fontWeight: 400,
-                            fontSize: 28,
-                            lineHeight: 1.22,
+                            fontSize: 24,
+                            lineHeight: 1.25,
                             letterSpacing: "-0.005em",
-                            color: "#F4EFE6",
-                            margin: "0 0 16px",
-                            maxWidth: 780,
+                            color: C.text,
+                            margin: "0 0 12px",
+                            maxWidth: 620,
                           }}>
                             {obs.front_headline}
                           </h3>
 
                           {/* ─── BODY ─── */}
                           <p style={{
-                            fontSize: 14,
-                            lineHeight: 1.6,
-                            color: "rgba(244,239,230,0.78)",
-                            margin: "0 0 28px",
-                            maxWidth: 800,
+                            fontSize: 13.5,
+                            lineHeight: 1.55,
+                            color: C.textSec,
+                            margin: "0 0 22px",
+                            maxWidth: 640,
                           }}>
                             {obs.front_body}
                           </p>
 
                           {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
                           <div style={{
-                            paddingTop: 22,
-                            borderTop: "1px solid rgba(244,239,230,0.18)",
+                            paddingTop: 16,
+                            borderTop: "1px solid " + C.borderLight,
                             display: "flex",
                             alignItems: "center",
                             gap: 24,
@@ -2963,9 +2965,9 @@ export default function App({ user }) {
                                 <div key={key}>
                                   <div style={{
                                     fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 22,
+                                    fontSize: 18,
                                     fontWeight: 600,
-                                    color: "#F4EFE6",
+                                    color: C.text,
                                     lineHeight: 1,
                                   }}>
                                     {formatMetricValue(key, val)}
@@ -2976,8 +2978,8 @@ export default function App({ user }) {
                                     fontWeight: 700,
                                     letterSpacing: "0.18em",
                                     textTransform: "uppercase",
-                                    color: "rgba(244,239,230,0.5)",
-                                    marginTop: 6,
+                                    color: C.textMuted,
+                                    marginTop: 5,
                                   }}>
                                     {METRIC_LABELS[key] || key.replace(/_/g, " ")}
                                   </div>
@@ -2996,9 +2998,9 @@ export default function App({ user }) {
                                 background: C.btn,
                                 color: "#FFFFFF",
                                 border: "none",
-                                padding: "11px 22px",
+                                padding: "10px 20px",
                                 borderRadius: 999,
-                                fontSize: 13,
+                                fontSize: 12.5,
                                 fontWeight: 600,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
@@ -3013,16 +3015,16 @@ export default function App({ user }) {
                               onClick={handleDrop}
                               style={{
                                 background: "transparent",
-                                color: "rgba(244,239,230,0.55)",
+                                color: C.textMuted,
                                 border: "none",
-                                padding: "11px 8px",
+                                padding: "10px 8px",
                                 fontSize: 13,
                                 fontWeight: 500,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
                               }}
-                              onMouseEnter={e => e.currentTarget.style.color = "#F4EFE6"}
-                              onMouseLeave={e => e.currentTarget.style.color = "rgba(244,239,230,0.55)"}
+                              onMouseEnter={e => e.currentTarget.style.color = C.text}
+                              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
                             >
                               Dismiss
                             </button>
