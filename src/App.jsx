@@ -3294,238 +3294,303 @@ export default function App({ user }) {
                           transition: "opacity 280ms ease, transform 280ms ease",
                         }}
                       >
-                        <div
-                          className="observer-card"
-                          style={{
-                            background: C.deepCream,
-                            borderRadius: 12,
-                            padding: "26px 28px",
-                            display: "flex",
-                            gap: 28,
-                            alignItems: "stretch",
-                            position: "relative",
-                            transition: "background 240ms ease",
-                          }}
-                        >
-                          {/* ─── × close button — top-right, always visible ─── */}
-                          <button
-                            onClick={handleDrop}
-                            aria-label="Drop this observation"
-                            style={{
-                              position: "absolute",
-                              top: 12,
-                              right: 14,
-                              background: "transparent",
-                              border: "none",
-                              color: C.textMuted,
-                              fontSize: 18,
-                              lineHeight: 1,
-                              padding: 6,
-                              cursor: "pointer",
-                              fontFamily: "inherit",
-                              zIndex: 3,
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.color = C.text}
-                            onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                          >×</button>
+                        {/* ───── D2 PULLED-FROM-DECK CARD — on-brand creams ───── */}
+                        <div style={{
+                          position: "relative",
+                          borderRadius: 22,
+                          overflow: "hidden",
+                          // Container uses Retayned's existing creams. Front: warmer end of the
+                          // palette. Back: cooler end. Both stay within the brand surface family.
+                          background: !obsFlipped
+                            ? `linear-gradient(135deg, ${C.surfaceWarm} 0%, ${C.deepCream} 60%, #DDD6C2 100%)`
+                            : `linear-gradient(135deg, ${C.surface} 0%, ${C.surfaceWarm} 60%, ${C.deepCream} 100%)`,
+                          border: "1px solid " + C.border,
+                          padding: "44px 56px 44px 0",
+                          minHeight: 360,
+                          transition: "background 280ms ease",
+                        }}>
+                          {/* Subtle radial vignette at bottom for depth */}
+                          <div style={{
+                            position: "absolute", inset: 0,
+                            background: "radial-gradient(120% 80% at 50% 120%, rgba(31,42,36,0.10), transparent 60%)",
+                            pointerEvents: "none",
+                          }} />
 
-                          {/* ═══ FRONT FACE ═══ */}
-                          {!obsFlipped && (
-                          <div style={{ display: "flex", gap: 28, alignItems: "stretch", width: "100%" }}>
-                            {/* Deck stack — front (dark green face) */}
-                            <div style={{ position: "relative", width: 130, minWidth: 130, height: 220, flexShrink: 0 }}>
-                              {/* Stack back layer 1 */}
+                          <div style={{
+                            display: "grid",
+                            gridTemplateColumns: "380px 1fr",
+                            gap: 36,
+                            alignItems: "center",
+                            position: "relative",
+                          }}>
+                            {/* ─── CARD STAGE WITH DECK ─── */}
+                            <div style={{ position: "relative", height: 280, paddingLeft: 40 }}>
+                              {/* Bottom deck card */}
                               <div style={{
-                                position: "absolute", top: 8, left: -10, width: 116, height: 200,
-                                borderRadius: 10, background: "#DDD6C2", transform: "rotate(-3deg)",
+                                position: "absolute", left: 50, bottom: 0,
+                                width: 168, height: 240,
+                                background: !obsFlipped ? "#D9CDA3" : "#C9C2AE",
+                                border: "1px solid #BFB07F",
+                                borderRadius: 14,
+                                transform: "rotate(-10deg) translateY(8px)",
+                                boxShadow: "0 8px 18px rgba(31,42,36,0.18)",
+                                transition: "background 280ms ease",
                               }} />
-                              {/* Stack back layer 2 */}
+                              {/* Middle deck card */}
                               <div style={{
-                                position: "absolute", top: 4, left: -4, width: 116, height: 200,
-                                borderRadius: 10, background: "#E8E2D2", transform: "rotate(-1.5deg)",
+                                position: "absolute", left: 64, bottom: 0,
+                                width: 168, height: 240,
+                                background: !obsFlipped ? "#E6D9AB" : "#D4C9A1",
+                                border: "1px solid #BFB07F",
+                                borderRadius: 14,
+                                transform: "rotate(-5deg) translateY(4px)",
+                                boxShadow: "0 8px 18px rgba(31,42,36,0.18)",
+                                transition: "background 280ms ease",
                               }} />
-                              {/* Front face */}
-                              <div style={{
-                                position: "absolute", top: 0, left: 0, width: 116, height: 200,
-                                borderRadius: 10, background: C.primaryDeep, padding: "16px 14px",
-                                display: "flex", flexDirection: "column",
-                                boxShadow: "0 4px 12px rgba(31,48,38,0.12)",
-                              }}>
-                                <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: "#8FA697", letterSpacing: "0.15em", lineHeight: 1.5, marginBottom: 10, fontWeight: 500 }}>
-                                  OBSERVATION ·<br/>{String(obs.observation_number || "").padStart(3, "0")}
-                                </div>
-                                <div style={{ fontFamily: "ui-serif, Georgia, serif", fontStyle: "italic", fontSize: 17, color: "#FAFAF7", lineHeight: 1.05, fontWeight: 400, marginBottom: 12 }}>
-                                  {archetype}
-                                </div>
-                                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  <div style={{ width: 40, height: 40, border: "1px solid rgba(250,250,247,0.32)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
-                                      <circle cx="12" cy="12" r="2.2" fill="#FAFAF7"/>
-                                      <g stroke="#FAFAF7" strokeWidth="1.4" strokeLinecap="round" opacity="0.85">
-                                        <line x1="12" y1="3.5" x2="12" y2="6.5"/>
-                                        <line x1="12" y1="17.5" x2="12" y2="20.5"/>
-                                        <line x1="3.5" y1="12" x2="6.5" y2="12"/>
-                                        <line x1="17.5" y1="12" x2="20.5" y2="12"/>
-                                        <line x1="6" y1="6" x2="8" y2="8"/>
-                                        <line x1="16" y1="16" x2="18" y2="18"/>
-                                        <line x1="6" y1="18" x2="8" y2="16"/>
-                                        <line x1="16" y1="8" x2="18" y2="6"/>
-                                      </g>
-                                    </svg>
+
+                              {/* PULLED CARD — front: forest green face. back: cream face. */}
+                              <div style={{ position: "absolute", left: 96, bottom: 14, transform: "rotate(4deg)" }}>
+                                <div style={{
+                                  width: 168 * 1.1,
+                                  height: 240 * 1.1,
+                                  background: !obsFlipped
+                                    ? "linear-gradient(160deg, #1F2A24 0%, #1A3A2E 100%)"
+                                    : `linear-gradient(160deg, ${C.bg} 0%, ${C.surfaceWarm} 100%)`,
+                                  color: !obsFlipped ? "#F4EFE6" : C.text,
+                                  border: !obsFlipped ? "1px solid #16302A" : "1px solid " + C.border,
+                                  borderRadius: 14,
+                                  padding: 18,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  justifyContent: "space-between",
+                                  boxShadow: !obsFlipped
+                                    ? "0 28px 70px -16px rgba(31,42,36,0.55), 0 8px 22px rgba(31,42,36,0.18), inset 0 1px 0 rgba(255,255,255,0.06)"
+                                    : "0 28px 70px -16px rgba(120,100,60,0.30), 0 8px 22px rgba(120,100,60,0.10), inset 0 1px 0 rgba(255,255,255,0.5)",
+                                  position: "relative",
+                                  overflow: "hidden",
+                                  transition: "background 280ms ease, color 280ms ease, border-color 280ms ease",
+                                }}>
+                                  {/* Inner glow */}
+                                  <div style={{
+                                    position: "absolute", inset: 0,
+                                    background: !obsFlipped
+                                      ? "radial-gradient(circle at 30% 0%, rgba(255,216,154,0.08), transparent 60%)"
+                                      : "radial-gradient(circle at 30% 0%, rgba(91,33,182,0.04), transparent 60%)",
+                                    pointerEvents: "none",
+                                  }} />
+                                  {/* Inner border */}
+                                  <div style={{
+                                    position: "absolute", inset: 6,
+                                    border: !obsFlipped
+                                      ? "1px solid rgba(255,255,255,0.08)"
+                                      : "1px solid rgba(31,42,36,0.06)",
+                                    borderRadius: 10, pointerEvents: "none",
+                                  }} />
+
+                                  {/* Top: number + title — Instrument Serif allowed for the title */}
+                                  <div style={{ position: "relative" }}>
+                                    <div style={{
+                                      fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
+                                      fontSize: 9,
+                                      letterSpacing: "0.18em",
+                                      color: !obsFlipped ? "rgba(255,255,255,0.55)" : "rgba(31,42,36,0.55)",
+                                    }}>
+                                      {!obsFlipped ? "OBSERVATION" : "RAI'S READING"} · {String(obs.observation_number || "").padStart(3, "0")}
+                                    </div>
+                                    <div style={{
+                                      fontFamily: '"Instrument Serif", "Source Serif Pro", Georgia, serif',
+                                      fontSize: 24,
+                                      fontStyle: "italic",
+                                      marginTop: 8,
+                                      lineHeight: 1.05,
+                                    }}>
+                                      {archetype.split(" ").map((word, i, arr) => (
+                                        <React.Fragment key={i}>
+                                          {word}{i < arr.length - 1 && <br/>}
+                                        </React.Fragment>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Middle: on-brand Rai mark (sparkles icon) */}
+                                  <div style={{ display: "grid", placeItems: "center", position: "relative" }}>
+                                    <div style={{
+                                      width: 62, height: 62, borderRadius: 999,
+                                      border: !obsFlipped ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(31,42,36,0.18)",
+                                      display: "grid", placeItems: "center",
+                                    }}>
+                                      <Icon name="sparkles" size={22} color={!obsFlipped ? "#F4EFE6" : C.text} />
+                                    </div>
+                                  </div>
+
+                                  {/* Bottom: RAI · DATE */}
+                                  <div style={{
+                                    display: "flex", justifyContent: "space-between",
+                                    fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
+                                    fontSize: 9,
+                                    color: !obsFlipped ? "rgba(255,255,255,0.5)" : "rgba(31,42,36,0.5)",
+                                    letterSpacing: "0.1em",
+                                    position: "relative",
+                                  }}>
+                                    <span>RAI</span><span>{firedMonthDay}</span>
                                   </div>
                                 </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: "#8FA697", letterSpacing: "0.15em", fontWeight: 500 }}>
-                                  <span>RAI</span><span>{firedMonthDay}</span>
-                                </div>
+                              </div>
+
+                              {/* On-brand Rai sparkle trail — using `sparkles` icon for consistency */}
+                              <div style={{ position: "absolute", left: 268, top: 22, opacity: 0.7 }}>
+                                <Icon name="sparkles" size={14} color={C.btn} />
+                              </div>
+                              <div style={{ position: "absolute", left: 290, top: 56, opacity: 0.45 }}>
+                                <Icon name="sparkles" size={10} color={C.btn} />
+                              </div>
+                              <div style={{ position: "absolute", left: 312, top: 86, opacity: 0.3 }}>
+                                <Icon name="sparkles" size={8} color={C.btn} />
                               </div>
                             </div>
 
-                            {/* Body */}
-                            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, padding: "4px 0", justifyContent: "center" }}>
-                              <div style={{ fontSize: 10.5, fontWeight: 500, color: C.btn, letterSpacing: "0.14em", marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-                                ✻&nbsp;&nbsp;{firedDay} YOU PULLED · {archetype.toUpperCase()}
+                            {/* ─── RIGHT COLUMN — text + actions ─── */}
+                            <div style={{ position: "relative" }}>
+                              {/* Eyebrow — uses on-brand sparkles icon, brand sans-serif */}
+                              <div style={{
+                                fontSize: 10.5, letterSpacing: "0.18em", textTransform: "uppercase",
+                                color: C.btn, fontWeight: 700,
+                                display: "inline-flex", alignItems: "center", gap: 8,
+                                fontFamily: "inherit",
+                              }}>
+                                <Icon name="sparkles" size={11} color={C.btn} />
+                                {!obsFlipped
+                                  ? `${firedDay.charAt(0)}${firedDay.slice(1).toLowerCase()} you pulled · ${archetype}`
+                                  : `Rai's reading · ${archetype}`}
                               </div>
-                              <div style={{ fontFamily: "ui-serif, Georgia, serif", fontSize: 21, fontWeight: 400, color: C.text, lineHeight: 1.22, marginBottom: 10, letterSpacing: "-0.005em", maxWidth: 560 }}>
-                                {obs.front_headline}
-                              </div>
-                              <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.55, marginBottom: 18, maxWidth: 540 }}>
-                                {obs.front_body}
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                                <button
-                                  onClick={handleFlip}
-                                  style={{
-                                    background: C.primaryDeep, color: "#FAFAF7", border: "none",
-                                    borderRadius: 999, padding: "9px 20px",
-                                    fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                                  }}
-                                >
-                                  Flip it over
-                                </button>
-                                <button
-                                  onClick={handleDrop}
-                                  style={{
-                                    background: "none", border: "none", color: C.textMuted,
-                                    fontSize: 13, cursor: "pointer", padding: "9px 4px",
-                                    fontStyle: "italic", fontFamily: "inherit",
-                                  }}
-                                >
-                                  Drop it
-                                </button>
-                                {daysAgo > 0 && (
-                                  <span style={{
-                                    marginLeft: "auto",
-                                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                                    fontSize: 9.5, color: C.textMuted,
-                                    letterSpacing: "0.14em", fontWeight: 500,
-                                  }}>
-                                    PULLED {firedDay} · {daysAgo} DAY{daysAgo === 1 ? "" : "S"} AGO
-                                  </span>
+
+                              {/* Headline / Reading — uses brand serif, NOT Instrument Serif */}
+                              <h3 style={{
+                                fontFamily: "ui-serif, Georgia, serif",
+                                fontWeight: 400,
+                                fontSize: 30, lineHeight: 1.18, letterSpacing: "-0.018em",
+                                margin: "10px 0 10px",
+                                color: C.text,
+                                maxWidth: 560,
+                                fontStyle: obsFlipped ? "italic" : "normal",
+                              }}>
+                                {!obsFlipped ? obs.front_headline : obs.back_reading}
+                              </h3>
+
+                              {/* Body / Question — brand sans */}
+                              <p style={{
+                                fontSize: 13.5, color: C.textSec,
+                                lineHeight: 1.55, margin: 0, maxWidth: 540,
+                                fontFamily: "inherit",
+                              }}>
+                                {!obsFlipped ? obs.front_body : obs.back_question}
+                              </p>
+
+                              {/* ───── ACTION BUTTONS ─────
+                                  Front side: Flip it over + Drop it (both soft cream/grey, identical)
+                                  Back side: Unpack with Rai (purple) + Turn back over + Drop it
+                                  All buttons same size and shape. Only Rai button is purple.
+                              */}
+                              <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 22 }}>
+                                {!obsFlipped ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={handleFlip}
+                                      style={{
+                                        padding: "10px 22px",
+                                        background: C.card,
+                                        color: C.text,
+                                        border: "1px solid " + C.border,
+                                        borderRadius: 999,
+                                        fontSize: 13, fontWeight: 500, cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        transition: "background 120ms ease, border-color 120ms ease",
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = C.surface; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = C.card; }}
+                                    >
+                                      Flip it over
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleDrop}
+                                      style={{
+                                        padding: "10px 22px",
+                                        background: C.card,
+                                        color: C.textSec,
+                                        border: "1px solid " + C.border,
+                                        borderRadius: 999,
+                                        fontSize: 13, fontWeight: 500, cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        transition: "background 120ms ease, border-color 120ms ease",
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = C.surface; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = C.card; }}
+                                    >
+                                      Drop it
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={handleUnpack}
+                                      style={{
+                                        padding: "10px 22px",
+                                        background: C.btn, color: "#fff",
+                                        border: "1px solid " + C.btn,
+                                        borderRadius: 999,
+                                        fontSize: 13, fontWeight: 500, cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        transition: "background 120ms ease, border-color 120ms ease",
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = C.btnHover; e.currentTarget.style.borderColor = C.btnHover; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = C.btn; e.currentTarget.style.borderColor = C.btn; }}
+                                    >
+                                      Unpack with Rai
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleFlipBack}
+                                      style={{
+                                        padding: "10px 22px",
+                                        background: C.card,
+                                        color: C.textSec,
+                                        border: "1px solid " + C.border,
+                                        borderRadius: 999,
+                                        fontSize: 13, fontWeight: 500, cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        transition: "background 120ms ease, border-color 120ms ease",
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = C.surface; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = C.card; }}
+                                    >
+                                      Turn back over
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleDrop}
+                                      style={{
+                                        padding: "10px 22px",
+                                        background: C.card,
+                                        color: C.textSec,
+                                        border: "1px solid " + C.border,
+                                        borderRadius: 999,
+                                        fontSize: 13, fontWeight: 500, cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        transition: "background 120ms ease, border-color 120ms ease",
+                                      }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = C.surface; }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = C.card; }}
+                                    >
+                                      Drop it
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
                           </div>
-                          )}
-
-                          {/* ═══ BACK FACE ═══ */}
-                          {obsFlipped && (
-                          <div style={{ display: "flex", gap: 28, alignItems: "stretch", width: "100%" }}>
-                            {/* Deck stack — back (cream face) */}
-                            <div style={{ position: "relative", width: 130, minWidth: 130, height: 220, flexShrink: 0 }}>
-                              <div style={{
-                                position: "absolute", top: 8, left: -10, width: 116, height: 200,
-                                borderRadius: 10, background: "#DDD6C2", transform: "rotate(-3deg)",
-                              }} />
-                              <div style={{
-                                position: "absolute", top: 4, left: -4, width: 116, height: 200,
-                                borderRadius: 10, background: "#E8E2D2", transform: "rotate(-1.5deg)",
-                              }} />
-                              <div style={{
-                                position: "absolute", top: 0, left: 0, width: 116, height: 200,
-                                borderRadius: 10, background: C.bg,
-                                border: "1px solid #C9C2AE",
-                                padding: "16px 14px",
-                                display: "flex", flexDirection: "column",
-                              }}>
-                                <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: C.textMuted, letterSpacing: "0.15em", lineHeight: 1.5, marginBottom: 10, fontWeight: 500 }}>
-                                  RAI'S READING ·<br/>OBS · {String(obs.observation_number || "").padStart(3, "0")}
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-                                  <div style={{ width: 40, height: 40, border: "1px solid rgba(31,48,38,0.3)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
-                                      <circle cx="12" cy="12" r="2.2" fill={C.primaryDeep}/>
-                                      <g stroke={C.primaryDeep} strokeWidth="1.4" strokeLinecap="round" opacity="0.85">
-                                        <line x1="12" y1="3.5" x2="12" y2="6.5"/>
-                                        <line x1="12" y1="17.5" x2="12" y2="20.5"/>
-                                        <line x1="3.5" y1="12" x2="6.5" y2="12"/>
-                                        <line x1="17.5" y1="12" x2="20.5" y2="12"/>
-                                        <line x1="6" y1="6" x2="8" y2="8"/>
-                                        <line x1="16" y1="16" x2="18" y2="18"/>
-                                        <line x1="6" y1="18" x2="8" y2="16"/>
-                                        <line x1="16" y1="8" x2="18" y2="6"/>
-                                      </g>
-                                    </svg>
-                                  </div>
-                                </div>
-                                <div style={{ flex: 1, fontFamily: "ui-serif, Georgia, serif", fontStyle: "italic", fontSize: 17, color: C.text, lineHeight: 1.05, fontWeight: 400, textAlign: "center" }}>
-                                  {archetype}
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 8, color: C.textMuted, letterSpacing: "0.15em", fontWeight: 500 }}>
-                                  <span>RAI</span><span>{firedMonthDay}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Body */}
-                            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, padding: "4px 0", justifyContent: "center" }}>
-                              <div style={{ fontSize: 10.5, fontWeight: 500, color: C.btn, letterSpacing: "0.14em", marginBottom: 18, display: "flex", alignItems: "center", gap: 6 }}>
-                                ✻&nbsp;&nbsp;RAI'S READING
-                              </div>
-                              <div style={{ fontFamily: "ui-serif, Georgia, serif", fontSize: 21, fontWeight: 400, color: C.text, lineHeight: 1.4, marginBottom: 14, letterSpacing: "-0.005em", maxWidth: 540, fontStyle: "italic" }}>
-                                {obs.back_reading}
-                              </div>
-                              <div style={{ fontFamily: "ui-serif, Georgia, serif", fontSize: 16, fontWeight: 400, color: C.textSec, lineHeight: 1.5, marginBottom: 28, maxWidth: 500 }}>
-                                {obs.back_question}
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                                <button
-                                  onClick={handleUnpack}
-                                  style={{
-                                    background: C.btn, color: "#FAFAF7", border: "none",
-                                    borderRadius: 999, padding: "13px 28px",
-                                    fontSize: 14.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
-                                  onMouseLeave={e => e.currentTarget.style.background = C.btn}
-                                >
-                                  Unpack with Rai
-                                </button>
-                                <button
-                                  onClick={handleDrop}
-                                  style={{
-                                    background: "none", border: "none", color: C.textMuted,
-                                    fontSize: 13, cursor: "pointer", padding: "13px 8px",
-                                    fontStyle: "italic", fontFamily: "inherit",
-                                  }}
-                                >
-                                  Drop it
-                                </button>
-                                <button
-                                  onClick={handleFlipBack}
-                                  style={{
-                                    background: "none", border: "none", color: C.textMuted,
-                                    fontSize: 13, cursor: "pointer", padding: "13px 0",
-                                    marginLeft: "auto", fontFamily: "inherit",
-                                  }}
-                                  onMouseEnter={e => e.currentTarget.style.color = C.text}
-                                  onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                                >
-                                  Turn back over
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          )}
                         </div>
                       </div>
                     );
