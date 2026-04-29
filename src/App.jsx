@@ -2928,11 +2928,11 @@ export default function App({ user }) {
                           <h3 style={{
                             fontFamily: "Georgia, 'Source Serif Pro', serif",
                             fontWeight: 400,
-                            fontSize: 36,
-                            lineHeight: 1.18,
+                            fontSize: 28,
+                            lineHeight: 1.22,
                             letterSpacing: "-0.005em",
                             color: "#F4EFE6",
-                            margin: "0 0 18px",
+                            margin: "0 0 16px",
                             maxWidth: 780,
                           }}>
                             {obs.front_headline}
@@ -2940,7 +2940,7 @@ export default function App({ user }) {
 
                           {/* ─── BODY ─── */}
                           <p style={{
-                            fontSize: 14.5,
+                            fontSize: 14,
                             lineHeight: 1.6,
                             color: "rgba(244,239,230,0.78)",
                             margin: "0 0 28px",
@@ -2993,8 +2993,8 @@ export default function App({ user }) {
                               type="button"
                               onClick={handleUnpack}
                               style={{
-                                background: "#C4A5F0",
-                                color: "#1F2A24",
+                                background: C.btn,
+                                color: "#FFFFFF",
                                 border: "none",
                                 padding: "11px 22px",
                                 borderRadius: 999,
@@ -3003,8 +3003,8 @@ export default function App({ user }) {
                                 cursor: "pointer",
                                 fontFamily: "inherit",
                               }}
-                              onMouseEnter={e => e.currentTarget.style.background = "#B391E8"}
-                              onMouseLeave={e => e.currentTarget.style.background = "#C4A5F0"}
+                              onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
+                              onMouseLeave={e => e.currentTarget.style.background = C.btn}
                             >
                               Unpack with Rai
                             </button>
@@ -3016,10 +3016,10 @@ export default function App({ user }) {
                                 color: "rgba(244,239,230,0.55)",
                                 border: "none",
                                 padding: "11px 8px",
-                                fontSize: 14,
-                                fontStyle: "italic",
+                                fontSize: 13,
+                                fontWeight: 500,
                                 cursor: "pointer",
-                                fontFamily: "Georgia, 'Source Serif Pro', serif",
+                                fontFamily: "inherit",
                               }}
                               onMouseEnter={e => e.currentTarget.style.color = "#F4EFE6"}
                               onMouseLeave={e => e.currentTarget.style.color = "rgba(244,239,230,0.55)"}
