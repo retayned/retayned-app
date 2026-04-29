@@ -917,7 +917,6 @@ export default function App({ user }) {
 
   // ─── Observer card state ──
   const [observation, setObservation] = useState(null);
-  const [obsFlipped, setObsFlipped] = useState(false);
   const [obsDismissing, setObsDismissing] = useState(false);
 
   // ─── Daybook state ── (right-rail notepad on Today page)
@@ -964,8 +963,6 @@ export default function App({ user }) {
         const obsRes = await observationsDb.getCurrent(uid);
         if (obsRes?.data) {
           setObservation(obsRes.data);
-          // Restore flipped state if operator already flipped this card
-          setObsFlipped(obsRes.data.status === "flipped");
         }
       }
     } catch (e) {
@@ -2750,60 +2747,134 @@ export default function App({ user }) {
                   )}
 
                   {/* ═══════════════════════════════════════════════════════════════
-                      OBSERVER CARD
-                      Sits between toggle row and task list. Front shows the law and
-                      the data; back shows Rai's reading and the question.
-                      Flip animation: 3D rotateY transition between two faces.
-                      Hidden if no observation exists or it's been dropped/expired.
+                      OBSERVER CARD — single dark green panel, no flip.
+                      Top bar: card name + observation number/week/date.
+                      Headline + body, then divider, then metric strip + actions.
                   ═══════════════════════════════════════════════════════════════ */}
                   {observation && !obsDismissing && (() => {
                     const obs = observation;
                     const rawName = obs.card_name || "Observation";
-                    // Safety net: ensure archetype always reads as "The X" — Rai sometimes
-                    // drops the article. The "The" gives every card a consistent voice.
                     const archetype = /^the\s/i.test(rawName) ? rawName : `The ${rawName}`;
-                    // Resolve client names from clients_named UUIDs
-                    const namedClients = (obs.clients_named || [])
-                      .map(id => clients.find(c => c.id === id))
-                      .filter(Boolean);
-                    // Days since pulled — for the "PULLED FRIDAY · N DAYS AGO" tag
+
+                    // Top-bar metadata: № (observation number) / WK (ISO week) / DATE
                     const firedAt = new Date(obs.fired_at);
-                    const daysAgo = Math.floor((Date.now() - firedAt.getTime()) / (1000*60*60*24));
-                    const firedDay = firedAt.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-                    const firedMonthDay = firedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).replace(' ', ' · ').toUpperCase();
+                    const obsNum = String(obs.observation_number || "").padStart(2, "0");
+                    const weekNum = (() => {
+                      // ISO week number
+                      const d = new Date(Date.UTC(firedAt.getFullYear(), firedAt.getMonth(), firedAt.getDate()));
+                      const dayNum = d.getUTCDay() || 7;
+                      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+                      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                    })();
+                    const firedDate = firedAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '.');
 
                     // ─── Action handlers ───
-                    const handleFlip = async () => {
-                      setObsFlipped(true);
-                      try { await observationsDb.updateStatus(obs.id, "flipped"); } catch (e) { /* non-blocking */ }
-                    };
-                    const handleFlipBack = async () => {
-                      setObsFlipped(false);
-                      try { await observationsDb.updateStatus(obs.id, "unread"); } catch (e) { /* non-blocking */ }
-                    };
                     const handleDrop = async () => {
                       setObsDismissing(true);
-                      // Animate out, then clear from state
                       setTimeout(() => setObservation(null), 280);
                       try { await observationsDb.updateStatus(obs.id, "dropped"); } catch (e) { /* non-blocking */ }
                     };
                     const handleUnpack = async () => {
-                      // Mark as unpacked, then navigate to Rai chat with seeded context
                       try { await observationsDb.updateStatus(obs.id, "unpacked"); } catch (e) { /* non-blocking */ }
-                      const clientNamesStr = namedClients.length > 0
-                        ? namedClients.map(c => c.name).join(" and ")
-                        : "this pattern";
-                      const seededMessage = (
-                        `You turned over ${archetype}. ${obs.back_reading}\n\n` +
-                        `Where do you want to start — ${namedClients.length > 0 ? clientNamesStr + ", " : ""}or the pattern as a whole?`
-                      );
+                      const seededMessage = `You pulled ${archetype}. ${obs.front_headline}\n\nWhere do you want to start?`;
                       setAiMessages([{ role: "ai", text: seededMessage }]);
                       setPage("coach");
                     };
 
+                    // ─── Metric strip: per-detector label mapping ───
+                    // Each detector outputs different metric keys. We translate them
+                    // into short, readable labels for display.
+                    const METRIC_LABELS = {
+                      // Counts & generic
+                      count: "Clients",
+                      book_size: "Book size",
+                      // Frequency / depth
+                      avg_touch_30d: "Avg / 30d",
+                      avg_touch_60d: "Avg / 60d",
+                      median_touch_30d: "Book median",
+                      expected_touch: "Expected",
+                      // Anniversaries
+                      nearest_days: "Days out",
+                      farthest_days: "Latest",
+                      avg_years: "Avg years",
+                      days_window: "Window",
+                      count_anniv: "Anniversaries",
+                      count_stale_rate: "Stale rates",
+                      // Tenure
+                      avg_tenure_yrs: "Avg tenure",
+                      long_tenure_pct: "Long tenure",
+                      year_two_count: "Year two",
+                      // Score
+                      avg_score: "Avg score",
+                      avg_drop: "Avg drop",
+                      max_drop: "Max drop",
+                      avg_score_drop: "Score drop",
+                      // Health checks
+                      never_had: "No HC ever",
+                      avg_days_since_hc: "Days since HC",
+                      // Expectations
+                      avg_expectations: "Avg score",
+                      // Effort
+                      effort_multiple: "Effort",
+                      revenue_gap_pct: "Revenue gap",
+                      task_pct: "Task share",
+                      revenue_pct: "Revenue share",
+                      top_pct: "Top share",
+                      // Rates
+                      avg_rate_age_days: "Rate age",
+                      gap_pct: "Rate gap",
+                      median: "Book median",
+                      max: "Top rate",
+                      drop_pct: "Drop",
+                      // Referrals
+                      avg_referrals_made: "Avg referrals",
+                      days_since_last: "Days since",
+                      // Cadence / drift census
+                      touched: "Touched",
+                      silent: "Silent",
+                      Stable: "Stable",
+                      Improving: "Improving",
+                      "Something shifted": "Shifted",
+                      Declining: "Declining",
+                      "At risk": "At risk",
+                      // Self-cluster
+                      patterns_count: "Patterns",
+                      affected_pct: "Affected",
+                    };
+
+                    const formatMetricValue = (key, val) => {
+                      if (val == null) return "—";
+                      // Percentages
+                      if (key.endsWith("_pct") || key === "long_tenure_pct" || key === "affected_pct") {
+                        return `${val}%`;
+                      }
+                      // Day counts
+                      if (key.endsWith("_days") || key === "days_window") {
+                        return `${val}d`;
+                      }
+                      // Year counts
+                      if (key.endsWith("_yrs") || key === "avg_years") {
+                        return `${val}yr`;
+                      }
+                      // Effort multiples
+                      if (key === "effort_multiple") {
+                        return `${val}x`;
+                      }
+                      // Score drops — show as negative
+                      if (key.includes("drop") && typeof val === "number" && val > 0) {
+                        return `−${val}`;
+                      }
+                      return String(val);
+                    };
+
+                    const metrics = (obs.data_payload && obs.data_payload.metrics) || {};
+                    const metricEntries = Object.entries(metrics)
+                      .filter(([k, v]) => v != null && v !== 0 || (k === "count" && v != null))  // hide zero-value noise except count
+                      .slice(0, 4);  // cap at 4 metrics in the strip
+
                     return (
                       <div
-                        className="observer-wrap"
                         style={{
                           marginBottom: 24,
                           opacity: obsDismissing ? 0 : 1,
@@ -2811,272 +2882,150 @@ export default function App({ user }) {
                           transition: "opacity 280ms ease, transform 280ms ease",
                         }}
                       >
-                        {/* ═══════════════════════════════════════════════════════════════
-                            C-2 · NO BACKGROUND
-                            Card rises from the page surface (no tile, no border, no padded
-                            container). Content is "painted" on the page to the right —
-                            purple block-marker eyebrow, large italic serif headline, body
-                            with subtle highlight on client name. The deck is the only
-                            object; everything else is page-native typography.
-                        ═══════════════════════════════════════════════════════════════ */}
                         <div style={{
+                          background: "#1E2920",
+                          color: "#F4EFE6",
+                          borderRadius: 18,
+                          padding: "32px 40px 28px",
                           position: "relative",
-                          display: "grid",
-                          gridTemplateColumns: "300px 1fr",
-                          gap: 28,
-                          alignItems: "end",
-                          minHeight: 240,
-                          padding: "16px 0 24px",
                         }}>
-                          {/* × close — top-right of the row */}
-                          <button
-                            type="button"
-                            aria-label="Drop this observation"
-                            onClick={handleDrop}
-                            style={{
-                              position: "absolute", top: 0, right: 0,
-                              width: 28, height: 28, borderRadius: 999,
-                              background: "transparent", border: "none",
-                              color: C.textMuted, display: "grid", placeItems: "center",
-                              cursor: "pointer", zIndex: 4,
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.color = C.text}
-                            onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                              stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M6 6l12 12M18 6 6 18"/>
-                            </svg>
-                          </button>
-
-                          {/* ─── DECK — rises from the page surface, no container ─── */}
-                          <div style={{ position: "relative", height: 220, paddingLeft: 30 }}>
-                            {/* Bottom deck card */}
+                          {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            paddingBottom: 16,
+                            borderBottom: "1px dashed rgba(244,239,230,0.22)",
+                            marginBottom: 26,
+                          }}>
                             <div style={{
-                              position: "absolute", left: 30, bottom: 0,
-                              width: 142, height: 200,
-                              background: "#DDD6C2",
-                              borderRadius: 12,
-                              transform: "rotate(-10deg) translateY(8px)",
-                              boxShadow: "0 6px 14px rgba(31,42,36,0.16)",
+                              width: 9, height: 9, borderRadius: 999,
+                              background: "#C4A5F0", flexShrink: 0,
                             }} />
-                            {/* Middle deck card */}
                             <div style={{
-                              position: "absolute", left: 44, bottom: 0,
-                              width: 142, height: 200,
-                              background: "#E0D9C5",
-                              borderRadius: 12,
-                              transform: "rotate(-5deg) translateY(4px)",
-                              boxShadow: "0 6px 14px rgba(31,42,36,0.16)",
-                            }} />
-                            {/* PULLED CARD — front face is forest green, back face is cream */}
-                            <div style={{ position: "absolute", left: 70, bottom: 12, transform: "rotate(4deg)" }}>
-                              <div style={{
-                                width: 156, height: 222,
-                                background: !obsFlipped
-                                  ? "linear-gradient(160deg, #1F2A24 0%, #1A3A2E 100%)"
-                                  : "linear-gradient(160deg, #FAF6EB 0%, #F2EAD0 100%)",
-                                color: !obsFlipped ? "#F4EFE6" : C.text,
-                                borderRadius: 12,
-                                padding: 14,
-                                display: "flex",
-                                flexDirection: "column",
-                                justifyContent: "space-between",
-                                boxShadow: "0 22px 56px -14px rgba(31,42,36,0.5), 0 6px 18px rgba(31,42,36,0.16)",
-                                transition: "background 280ms ease, color 280ms ease",
-                              }}>
-                                <div>
-                                  <div style={{
-                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 8, letterSpacing: "0.18em",
-                                    color: !obsFlipped ? "rgba(255,255,255,0.55)" : "rgba(31,42,36,0.55)",
-                                  }}>
-                                    {!obsFlipped ? "OBSERVATION" : "RAI'S READING"} · {String(obs.observation_number || "").padStart(3, "0")}
-                                  </div>
-                                  <div style={{
-                                    fontFamily: "Georgia, 'Source Serif Pro', serif",
-                                    fontSize: 20, fontStyle: "italic",
-                                    lineHeight: 1.05, marginTop: 6,
-                                  }}>
-                                    {archetype.split(" ").map((word, i, arr) => (
-                                      <span key={i}>{word}{i < arr.length - 1 && <br/>}</span>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div style={{ display: "grid", placeItems: "center" }}>
-                                  <div style={{
-                                    width: 48, height: 48, borderRadius: 999,
-                                    border: !obsFlipped ? "1px solid rgba(255,255,255,0.22)" : "1px solid rgba(31,42,36,0.22)",
-                                    display: "grid", placeItems: "center",
-                                  }}>
-                                    <Icon name="sparkles" size={18} color={!obsFlipped ? "#F4EFE6" : C.text} />
-                                  </div>
-                                </div>
-                                <div style={{
-                                  display: "flex", justifyContent: "space-between",
-                                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                  fontSize: 8, letterSpacing: "0.1em",
-                                  color: !obsFlipped ? "rgba(255,255,255,0.5)" : "rgba(31,42,36,0.5)",
-                                }}>
-                                  <span>RAI</span><span>{firedMonthDay}</span>
-                                </div>
-                              </div>
+                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              letterSpacing: "0.18em",
+                              textTransform: "uppercase",
+                              color: "#F4EFE6",
+                            }}>
+                              {archetype}
+                            </div>
+                            <div style={{ flex: 1, height: 1, background: "rgba(244,239,230,0.18)" }} />
+                            <div style={{
+                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                              fontSize: 12,
+                              letterSpacing: "0.14em",
+                              color: "rgba(244,239,230,0.55)",
+                              whiteSpace: "nowrap",
+                            }}>
+                              № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
                             </div>
                           </div>
 
-                          {/* ─── CONTENT — painted directly on the page ─── */}
-                          <div style={{ paddingRight: 36, paddingBottom: 12 }}>
-                            {/* Eyebrow as purple block-marker — like a stamp on the page */}
-                            <div style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 8,
-                              background: C.btn,
-                              color: "#FAFAF7",
-                              padding: "6px 12px 6px 14px",
-                              fontSize: 10.5,
-                              letterSpacing: "0.2em",
-                              textTransform: "uppercase",
-                              fontWeight: 700,
-                              marginBottom: 18,
-                              transform: "rotate(-0.5deg)",
-                            }}>
-                              <Icon name="sparkles" size={11} color="#FAFAF7" />
-                              {!obsFlipped
-                                ? `${firedDay.charAt(0)}${firedDay.slice(1).toLowerCase()} you pulled · ${archetype}`.toUpperCase()
-                                : `Rai's reading · ${archetype}`.toUpperCase()}
+                          {/* ─── HEADLINE ─── */}
+                          <h3 style={{
+                            fontFamily: "Georgia, 'Source Serif Pro', serif",
+                            fontWeight: 400,
+                            fontSize: 36,
+                            lineHeight: 1.18,
+                            letterSpacing: "-0.005em",
+                            color: "#F4EFE6",
+                            margin: "0 0 18px",
+                            maxWidth: 780,
+                          }}>
+                            {obs.front_headline}
+                          </h3>
+
+                          {/* ─── BODY ─── */}
+                          <p style={{
+                            fontSize: 14.5,
+                            lineHeight: 1.6,
+                            color: "rgba(244,239,230,0.78)",
+                            margin: "0 0 28px",
+                            maxWidth: 800,
+                          }}>
+                            {obs.front_body}
+                          </p>
+
+                          {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
+                          <div style={{
+                            paddingTop: 22,
+                            borderTop: "1px solid rgba(244,239,230,0.18)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 24,
+                          }}>
+                            {/* METRIC STRIP */}
+                            <div style={{ display: "flex", gap: 28 }}>
+                              {metricEntries.map(([key, val]) => (
+                                <div key={key}>
+                                  <div style={{
+                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                    fontSize: 22,
+                                    fontWeight: 600,
+                                    color: "#F4EFE6",
+                                    lineHeight: 1,
+                                  }}>
+                                    {formatMetricValue(key, val)}
+                                  </div>
+                                  <div style={{
+                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                    fontSize: 9.5,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.18em",
+                                    textTransform: "uppercase",
+                                    color: "rgba(244,239,230,0.5)",
+                                    marginTop: 6,
+                                  }}>
+                                    {METRIC_LABELS[key] || key.replace(/_/g, " ")}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
 
-                            {/* Headline — large italic serif, painted */}
-                            <h3 style={{
-                              fontFamily: "Georgia, 'Source Serif Pro', serif",
-                              fontWeight: 400,
-                              fontSize: 36,
-                              lineHeight: 1.1,
-                              letterSpacing: "-0.022em",
-                              margin: "0 0 16px",
-                              color: C.text,
-                              maxWidth: 580,
-                              fontStyle: "italic",
-                            }}>
-                              {!obsFlipped ? obs.front_headline : obs.back_reading}
-                            </h3>
+                            {/* SPACER */}
+                            <div style={{ flex: 1 }} />
 
-                            {/* Body — with subtle purple highlight on client names */}
-                            <p style={{
-                              fontSize: 14,
-                              color: "#4A4F4A",
-                              lineHeight: 1.55,
-                              margin: "0 0 22px",
-                              maxWidth: 540,
-                            }}>
-                              {(() => {
-                                const text = !obsFlipped ? obs.front_body : obs.back_question;
-                                if (!text) return null;
-                                // Highlight any named client mentions in the body with a soft purple chip
-                                if (namedClients.length === 0) return text;
-                                let parts = [text];
-                                namedClients.forEach(client => {
-                                  const next = [];
-                                  parts.forEach(p => {
-                                    if (typeof p !== "string") { next.push(p); return; }
-                                    const idx = p.indexOf(client.name);
-                                    if (idx === -1) { next.push(p); return; }
-                                    next.push(p.slice(0, idx));
-                                    next.push(
-                                      <span key={`c-${client.id}`} style={{
-                                        background: "rgba(91,33,182,0.10)",
-                                        padding: "1px 5px",
-                                        color: C.text,
-                                        fontWeight: 600,
-                                        borderRadius: 2,
-                                      }}>{client.name}</span>
-                                    );
-                                    next.push(p.slice(idx + client.name.length));
-                                  });
-                                  parts = next;
-                                });
-                                return parts;
-                              })()}
-                            </p>
-
-                            {/* Actions — painted */}
-                            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                              {!obsFlipped ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={handleFlip}
-                                    style={{
-                                      background: C.primaryDeep, color: "#fff",
-                                      border: "none", padding: "10px 20px",
-                                      borderRadius: 999,
-                                      fontSize: 13, fontWeight: 600, cursor: "pointer",
-                                      fontFamily: "inherit",
-                                    }}
-                                  >
-                                    Flip it over
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleDrop}
-                                    style={{
-                                      background: "transparent", border: "none",
-                                      color: C.textMuted, fontStyle: "italic",
-                                      fontSize: 13, cursor: "pointer",
-                                      padding: "10px 12px", fontFamily: "inherit",
-                                    }}
-                                  >
-                                    Drop it
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={handleUnpack}
-                                    style={{
-                                      background: C.btn, color: "#fff",
-                                      border: "none", padding: "10px 20px",
-                                      borderRadius: 999,
-                                      fontSize: 13, fontWeight: 600, cursor: "pointer",
-                                      fontFamily: "inherit",
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
-                                    onMouseLeave={e => e.currentTarget.style.background = C.btn}
-                                  >
-                                    Unpack with Rai
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleDrop}
-                                    style={{
-                                      background: "transparent", border: "none",
-                                      color: C.textMuted, fontStyle: "italic",
-                                      fontSize: 13, cursor: "pointer",
-                                      padding: "10px 12px", fontFamily: "inherit",
-                                    }}
-                                  >
-                                    Drop it
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={handleFlipBack}
-                                    style={{
-                                      background: "transparent", border: "none",
-                                      color: C.textMuted,
-                                      fontSize: 13, cursor: "pointer",
-                                      padding: "10px 12px", marginLeft: "auto",
-                                      fontFamily: "inherit",
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.color = C.text}
-                                    onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                                  >
-                                    Turn back over
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            {/* BUTTONS */}
+                            <button
+                              type="button"
+                              onClick={handleUnpack}
+                              style={{
+                                background: "#C4A5F0",
+                                color: "#1F2A24",
+                                border: "none",
+                                padding: "11px 22px",
+                                borderRadius: 999,
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = "#B391E8"}
+                              onMouseLeave={e => e.currentTarget.style.background = "#C4A5F0"}
+                            >
+                              Unpack with Rai
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDrop}
+                              style={{
+                                background: "transparent",
+                                color: "rgba(244,239,230,0.55)",
+                                border: "none",
+                                padding: "11px 8px",
+                                fontSize: 14,
+                                fontStyle: "italic",
+                                cursor: "pointer",
+                                fontFamily: "Georgia, 'Source Serif Pro', serif",
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = "#F4EFE6"}
+                              onMouseLeave={e => e.currentTarget.style.color = "rgba(244,239,230,0.55)"}
+                            >
+                              Dismiss
+                            </button>
                           </div>
                         </div>
                       </div>
