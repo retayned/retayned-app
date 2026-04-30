@@ -983,7 +983,7 @@ export default function App({ user }) {
             if (!localStorage.getItem(seenKey)) {
               localStorage.setItem(seenKey, "1");
               setObsPulse(true);
-              setTimeout(() => setObsPulse(false), 1600);
+              setTimeout(() => setObsPulse(false), 3000);
             }
           } catch {}
         }
@@ -1801,16 +1801,17 @@ export default function App({ user }) {
           border-color: ${C.success} !important;
           transform: scale(1.18);
         }
-        /* Observer card "this is today's" reveal pulse — purple glow that fades in and out once.
+        /* Observer card "this is today's" reveal pulse — purple glow.
+           Asymmetric: builds quickly to peak (catches eye), then releases slowly (gentle goodbye).
            Triggered the first time per observation per day (see obsPulse state). Lives on the
            outer wrapper so the glow isn't clipped by the inner card's overflow:hidden. */
         @keyframes rt-obs-pulse {
           0%   { box-shadow: 0 0 0 0 rgba(91,33,182,0); }
-          25%  { box-shadow: 0 0 0 8px rgba(91,33,182,0.16); }
+          18%  { box-shadow: 0 0 0 9px rgba(91,33,182,0.20); }
           100% { box-shadow: 0 0 0 0 rgba(91,33,182,0); }
         }
         .rt-obs-pulse {
-          animation: rt-obs-pulse 1500ms cubic-bezier(.4, 0, .2, 1) 200ms;
+          animation: rt-obs-pulse 2600ms cubic-bezier(.2, .9, .3, 1) 200ms;
         }
         .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
         /* Rai sidebar — reveal star/delete on row hover */
@@ -1952,13 +1953,8 @@ export default function App({ user }) {
           .rc-sort-cadence { display: none !important; }
           .rc-sort-renewal { display: none !important; }
           .rt-mob-cal-trigger { display: none !important; }
-          .rt-mob-cal-trigger-band { display: inline-flex !important; }
           .rt-mob-cal-sheet { display: none !important; }
           .rt-mob-cal-sheet-band { display: block !important; }
-          .rt-band-sub-done { display: none !important; }
-          .rt-band-sub-events { display: none !important; }
-          .rt-band-sub-sep { display: none !important; }
-          .rt-band-sub-mobile-only { display: inline !important; }
           .rt-today-v4 {
             grid-template-areas: "band" "composer" "tasks" !important;
           }
@@ -2446,36 +2442,32 @@ export default function App({ user }) {
                     {greeting}{firstName ? ", " + firstName : ""}.
                   </h1>
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{totalVisible}</b> tasks</span>
+                    <button
+                      className="rt-band-sub-events"
+                      onClick={() => setTodayStripOpen(!todayStripOpen)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        background: "transparent",
+                        border: "none",
+                        padding: 0,
+                        margin: 0,
+                        cursor: "pointer",
+                        color: C.textMuted,
+                        fontSize: "inherit",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      <b style={{ color: C.text, fontWeight: 700 }}>3</b> events scheduled
+                      <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textMuted} />
+                    </button>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
-                    <span className="rt-band-sub-events"><b style={{ color: C.text, fontWeight: 700 }}>3</b> events</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{remaining}</b> remaining</span>
                     <span className="rt-band-sub-pct" style={{ display: "none", marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999 }}>
                       {Math.round(pct * 100)}%
                     </span>
                   </div>
-                  {/* Mobile-only calendar trigger — shown right under the greeting/counts */}
-                  <button
-                    className="rt-mob-cal-trigger-band"
-                    onClick={() => setTodayStripOpen(!todayStripOpen)}
-                    style={{
-                      display: "none",
-                      alignItems: "center",
-                      gap: 5,
-                      marginTop: 8,
-                      padding: 0,
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      color: C.textSec,
-                      fontSize: 13.5,
-                      fontWeight: 500,
-                      fontFamily: "inherit"
-                    }}
-                  >
-                    <Icon name="calendar" size={14} color={C.textSec} />
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>3</b> events today</span>
-                    <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textSec} />
-                  </button>
 
                   {/* Mobile calendar dropdown — drops down right under the band trigger */}
                   {todayStripOpen && (
@@ -2583,8 +2575,55 @@ export default function App({ user }) {
                       <Icon name="infinity" size={14} color={C.textMuted} />
                       <span style={{ fontWeight: newTaskRecurring ? 600 : 500 }}>Recurring</span>
                     </button>
-                    <button onClick={submitComposer} disabled={!newTask.trim()} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 14px", height: 28, background: C.btn, color: "#fff", borderRadius: 7, fontSize: 12, fontWeight: 600, border: "none", cursor: newTask.trim() ? "pointer" : "default", opacity: newTask.trim() ? 1 : 0.4, fontFamily: "inherit", marginLeft: "auto", flexShrink: 0 }}>
+                    <button
+                      onClick={submitComposer}
+                      disabled={!newTask.trim()}
+                      className="rt-add-task-btn"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
+                        height: 28,
+                        background: newTask.trim() ? C.btn : "#DBD0EF",
+                        color: "#fff",
+                        borderRadius: 7,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: newTask.trim() ? "pointer" : "default",
+                        fontFamily: "inherit",
+                        marginLeft: "auto",
+                        flexShrink: 0,
+                        boxShadow: newTask.trim()
+                          ? "0 1px 2px rgba(91,33,182,0.20), 0 4px 12px rgba(91,33,182,0.18)"
+                          : "none",
+                        transition: "transform 200ms cubic-bezier(.2,.7,.3,1), box-shadow 200ms ease, background 200ms ease, padding 200ms ease",
+                      }}
+                      onMouseEnter={e => {
+                        if (newTask.trim()) {
+                          e.currentTarget.style.background = C.btnHover;
+                          e.currentTarget.style.transform = "translateY(-1px)";
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (newTask.trim()) {
+                          e.currentTarget.style.background = C.btn;
+                          e.currentTarget.style.transform = "translateY(0)";
+                        }
+                      }}
+                    >
                       Add Task
+                      {newTask.trim() && (
+                        <span style={{
+                          background: "rgba(255,255,255,0.20)",
+                          padding: "1px 6px",
+                          borderRadius: 4,
+                          fontSize: 10.5,
+                          fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                          lineHeight: 1.3,
+                        }}>⏎</span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -2988,7 +3027,6 @@ export default function App({ user }) {
                           position: "relative",
                           overflow: "hidden",
                           boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
-                          maxWidth: 920,
                         }}>
                           {/* ─── ILLUSTRATION — top-right inside card ─── */}
                           <div style={{
@@ -3765,8 +3803,8 @@ export default function App({ user }) {
                   {tier === "enterprise" && (
                     <button onClick={() => { setShowImport(!showImport); setShowAddClient(false); }} style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Import Clients</button>
                   )}
-                  <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-                    <span style={{ whiteSpace: "nowrap" }}>Add client</span>
+                  <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                    Add client
                   </button>
                 </div>
               </div>
@@ -5288,7 +5326,6 @@ export default function App({ user }) {
                 </div>
                 <div style={{ flexShrink: 0 }}>
                   <button onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
-                    <Icon name="plus" size={14} color="#fff" />
                     Log a referral
                   </button>
                 </div>
@@ -5815,7 +5852,6 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <button onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
-                  <Icon name="plus" size={14} color="#fff" />
                   <span style={{ whiteSpace: "nowrap" }}>New contact</span>
                 </button>
               </div>
