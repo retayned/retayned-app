@@ -807,6 +807,23 @@ export default function App({ user }) {
     return Math.max(1, Math.min(99, Math.round(rs * multiplier)));
   };
 
+  // Debug-only: returns the UNCAPPED raw value before the Math.min(99, ...) clamp.
+  // Used by the debug overlay to surface true math so we can see how much
+  // the 99-clamp is collapsing the top tier into ties.
+  // Same logic as calcProfileScore but skips the upper clamp.
+  const calcProfileScoreRaw = (rs, client, allClients) => {
+    if (rs == null || allClients.length === 0) return rs || 0;
+    const total = allClients.reduce((a, c) => a + (c.revenue || 0), 0);
+    const avg = 1 / allClients.length;
+    const revFactor = total > 0 ? ((client.revenue || 0) / total) / avg : 1;
+    const revNorm = Math.max(0.75, Math.min(1.25, 0.4 + revFactor * 0.6));
+    const ltvF = 0.8 + percentileRank(allClients.map(c => getAdjustedLTV(c)), getAdjustedLTV(client)) * 0.4;
+    const tenF = 0.8 + percentileRank(allClients.map(c => c.months || 0), client.months || 0) * 0.4;
+    const multiplier = Math.max(0.75, revNorm * 0.60 + ltvF * 0.20 + tenF * 0.20);
+    // No upper clamp — return the raw multiplied value (rounded for readability).
+    return Math.round(rs * multiplier * 10) / 10;  // one decimal for visibility
+  };
+
   // ─── NEW CLIENT BOOST ───
   const calcNewClientBoost = (rs, revPct, daysSinceStart) => {
     if (rs < 40 || daysSinceStart >= 30) return 0;
@@ -3374,6 +3391,7 @@ export default function App({ user }) {
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
                               {debugScores && client && (() => {
                                 const psBase = calcProfileScore(client.ret || 50, client, clients);
+                                const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
                                 const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
                                 const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
                                 const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
@@ -3392,7 +3410,7 @@ export default function App({ user }) {
                                     flexShrink: 0,
                                     whiteSpace: "nowrap",
                                   }}>
-                                    ret:{client.ret} ps:{psBase} nb:{newBoost} rai:{raiBoost} → <b>{finalScore}</b>
+                                    ret:{client.ret} raw:{psRaw} ps:{psBase} nb:{newBoost} rai:{raiBoost} → <b>{finalScore}</b>
                                   </span>
                                 );
                               })()}
