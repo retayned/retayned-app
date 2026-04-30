@@ -804,7 +804,17 @@ export default function App({ user }) {
     const tenF = 0.8 + percentileRank(allClients.map(c => c.months || 0), client.months || 0) * 0.4;
     // Lowered floor: was 0.90, now 0.75. Lets struggling clients actually sink.
     const multiplier = Math.max(0.75, revNorm * 0.60 + ltvF * 0.20 + tenF * 0.20);
-    return Math.max(1, Math.min(99, Math.round(rs * multiplier)));
+    const raw = rs * multiplier;
+    // Soft clamp: anything <= 85 untouched. Above 85, compress excess to 50%.
+    // This preserves real differentiation among top-tier clients (which used to
+    // pile up at the hard 99 ceiling) while leaving mid/bottom tier clients
+    // exactly where the multiplier puts them.
+    // Returns a FLOAT — sort comparators use it directly. UI rounds for display.
+    // Hard ceiling at 97 protects against runaway outliers without flattening the top.
+    const T = 85;
+    const ratio = 0.50;
+    const softClamped = raw <= T ? raw : Math.min(97, T + (raw - T) * ratio);
+    return Math.max(1, softClamped);
   };
 
   // Debug-only: returns the UNCAPPED raw value before the Math.min(99, ...) clamp.
@@ -3390,13 +3400,13 @@ export default function App({ user }) {
                                 : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
                               {debugScores && client && (() => {
-                                const psBase = calcProfileScore(client.ret || 50, client, clients);
+                                const psFloat = calcProfileScore(client.ret || 50, client, clients);
                                 const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
                                 const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
                                 const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
                                 const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
-                                const raiBoost = t.raiPriority ? getRaiBoost(psBase) : 0;
-                                const finalScore = Math.min(99, psBase + newBoost + raiBoost);
+                                const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
+                                const finalScore = Math.min(99, psFloat + newBoost + raiBoost);
                                 return (
                                   <span style={{
                                     fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
@@ -3410,7 +3420,7 @@ export default function App({ user }) {
                                     flexShrink: 0,
                                     whiteSpace: "nowrap",
                                   }}>
-                                    ret:{client.ret} raw:{psRaw} ps:{psBase} nb:{newBoost} rai:{raiBoost} → <b>{finalScore}</b>
+                                    ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} → <b>{finalScore.toFixed(1)}</b>
                                   </span>
                                 );
                               })()}
