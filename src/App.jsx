@@ -1070,23 +1070,41 @@ export default function App({ user }) {
     if (taskRes.data) {
       // Auto-cleanup at the most recent 2 AM local time:
       //   - Recurring tasks completed before cutoff → reset is_done (they reappear fresh)
-      //   - Non-recurring tasks → always preserved in DB; the user is the only one who
-      //     deletes (via the X button). Completed ones drop out of the UI automatically
-      //     via listToday's completed_at.gte.today filter.
+      //   - Non-recurring tasks completed before cutoff → SOFT-CLEARED via cleared_at
+      //     timestamp. Row stays in DB so Rai/detectors can still count historical
+      //     task volume, identify client task patterns, etc. Hidden only from the
+      //     active Today list.
+      //   - Open tasks (not done) → preserved regardless of age (carry forward)
+      //
+      // Cutoff is today at 2 AM local; if it's currently before 2 AM, cutoff is
+      // yesterday at 2 AM (so user's late-night completed tasks survive into the
+      // morning until the natural 2 AM rollover).
       const now = new Date();
       const today2am = new Date(now);
       today2am.setHours(2, 0, 0, 0);
       const cutoff = now < today2am ? new Date(today2am.getTime() - 86400000) : today2am;
 
+      // Recurring + done + completed before cutoff → reset to incomplete
       const toReset = taskRes.data.filter(t =>
         t.is_recurring && t.is_done &&
         t.completed_at && new Date(t.completed_at) < cutoff
       );
 
-      // Fire off DB updates in background (don't block UI)
-      toReset.forEach(t => { tasksDb.toggle(t.id, false); });
+      // Non-recurring + done + completed before cutoff → soft-clear from active view
+      // (row stays in DB; only hidden from frontend's active Today list)
+      const toClear = taskRes.data.filter(t =>
+        !t.is_recurring && t.is_done && !t.cleared_at &&
+        t.completed_at && new Date(t.completed_at) < cutoff
+      );
 
-      setTasks(taskRes.data.map(t => {
+      // Fire off DB mutations in background (don't block UI render)
+      toReset.forEach(t => { tasksDb.toggle(t.id, false); });
+      toClear.forEach(t => { tasksDb.clearFromActive(t.id); });
+
+      // Build local task list excluding cleared IDs and applying recurring resets
+      const clearedIds = new Set(toClear.map(t => t.id));
+      // Also exclude any task already cleared on a previous load
+      setTasks(taskRes.data.filter(t => !clearedIds.has(t.id) && !t.cleared_at).map(t => {
         const reset = toReset.find(r => r.id === t.id);
         return {
           id: t.id,
