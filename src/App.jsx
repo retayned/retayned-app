@@ -557,6 +557,20 @@ export default function App({ user }) {
   const [focusMode, setFocusMode] = useState(false);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   const [focusFlash, setFocusFlash] = useState(false);
+  // Debug overlay — shows priority score breakdown inline on each task row.
+  // Toggle with Cmd+Shift+D (Mac) or Ctrl+Shift+D (Windows). Internal tool;
+  // not user-facing.
+  const [debugScores, setDebugScores] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        setDebugScores(v => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // Rank mode: 'rai' (default, sorted by Profile Score) or 'manual' (user drag-and-drop order).
   // Persisted in localStorage. Manual order also persisted, restored when user toggles back to manual.
   const [rankMode, _setRankMode] = useState(() => {
@@ -2797,6 +2811,21 @@ export default function App({ user }) {
                           </span>
                         </button>
                       )}
+                      {debugScores && (
+                        <span style={{
+                          fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "3px 8px",
+                          borderRadius: 999,
+                          background: "#FEF3C7",
+                          color: "#7C2D12",
+                          letterSpacing: "0.05em",
+                          textTransform: "uppercase",
+                        }}>
+                          Debug · ⌘⇧D
+                        </span>
+                      )}
                     </div>
                     {/* Mobile-only calendar trigger (LEGACY — hidden, replaced by band-level trigger above) */}
                     <button
@@ -3343,6 +3372,30 @@ export default function App({ user }) {
                                 ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={22} /></div>
                                 : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
                               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
+                              {debugScores && client && (() => {
+                                const psBase = calcProfileScore(client.ret || 50, client, clients);
+                                const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
+                                const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
+                                const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
+                                const raiBoost = t.raiPriority ? getRaiBoost(psBase) : 0;
+                                const finalScore = Math.min(99, psBase + newBoost + raiBoost);
+                                return (
+                                  <span style={{
+                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    padding: "2px 6px",
+                                    borderRadius: 4,
+                                    background: "#FEF3C7",
+                                    color: "#7C2D12",
+                                    border: "1px solid #FDE68A",
+                                    flexShrink: 0,
+                                    whiteSpace: "nowrap",
+                                  }}>
+                                    ret:{client.ret} ps:{psBase} nb:{newBoost} rai:{raiBoost} → <b>{finalScore}</b>
+                                  </span>
+                                );
+                              })()}
                               {t.recurring && (
                                 <span className="rt-row-tag" style={{
                                   display: "inline-flex", alignItems: "center",
