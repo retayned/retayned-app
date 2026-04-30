@@ -188,6 +188,7 @@ export const tasks = {
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
+      .is('cleared_at', null)  // exclude soft-cleared (post-2am rollover) tasks
       .or(`is_done.eq.false,completed_at.gte.${today},is_recurring.eq.true`)
       .order('sort_order', { ascending: true });
     return { data: data || [], error };
@@ -219,6 +220,19 @@ export const tasks = {
     const { error } = await supabase
       .from('tasks')
       .delete()
+      .eq('id', taskId);
+    return { error };
+  },
+
+  // Soft-clear a task from the active Today view without deleting the row.
+  // Used by the 2am rollover for non-recurring done tasks. Row stays in DB so
+  // Rai/detectors can count historical task volume, client task distribution, etc.
+  // To restore visibility (e.g., for a "history" view), query rows where
+  // cleared_at is not null.
+  clearFromActive: async (taskId) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ cleared_at: new Date().toISOString() })
       .eq('id', taskId);
     return { error };
   },
