@@ -684,12 +684,29 @@ export const touchpoints = {
 // ============================================================
 
 export const observations = {
-  // Get the most recent active observation (status not in 'dropped' or 'expired')
+  // Get this week's active observation, if any.
+  //
+  // Scoped to fired_at within the current week (Friday-anchored, matching the
+  // observer cron's weekStart logic). Dismissing this week's observation does
+  // not rotate to a stale older observation that happens to still be active.
+  // Returns null if this week's observation has been dropped or no observation
+  // has fired this week.
   getCurrent: async (userId) => {
+    // Compute the most recent Friday at 00:00 UTC (start of "this week" by Observer's clock).
+    // ISO getUTCDay: Sun=0, Mon=1, ..., Fri=5, Sat=6.
+    const now = new Date();
+    const dow = now.getUTCDay();
+    const daysSinceFriday = (dow + 2) % 7; // Fri→0, Sat→1, Sun→2, Mon→3, ..., Thu→6
+    const startOfWeekUtc = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - daysSinceFriday,
+    ));
     const { data, error } = await supabase
       .from('observations')
       .select('*')
       .eq('user_id', userId)
+      .gte('fired_at', startOfWeekUtc.toISOString())
       .not('status', 'in', '(dropped,expired)')
       .order('fired_at', { ascending: false })
       .limit(1)
