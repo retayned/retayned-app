@@ -920,8 +920,6 @@ export default function App({ user }) {
   const [todayComposerMenu, setTodayComposerMenu] = useState(false);
   const [todayComposerQuery, setTodayComposerQuery] = useState("");
   const [todayCompletedOpen, setTodayCompletedOpen] = useState(false);
-  const [streak, setStreak] = useState(0);
-  const [showStreakModal, setShowStreakModal] = useState(false);
 
   // ─── Observer card state ──
   const [observation, setObservation] = useState(null);
@@ -1201,8 +1199,6 @@ export default function App({ user }) {
     const doneNow = countable.filter(t => t.done).length;
     if (doneNow === countable.length && countable.length > 0) {
       setConfetti(true);
-      setStreak(prev => prev + 1);
-      setShowStreakModal(true);
       setTimeout(() => setConfetti(false), 3000);
     }
     // Persist
@@ -2062,22 +2058,6 @@ export default function App({ user }) {
               opacity: 0, animationFillMode: "forwards",
             }} />
           ))}
-        </div>
-      )}
-
-      {/* Streak celebration modal */}
-      {showStreakModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 250, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.3)" }}>
-          <div style={{ background: C.card, borderRadius: 20, padding: "40px 48px", textAlign: "center", maxWidth: 360, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>&#127881;</div>
-            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: "-0.03em", marginBottom: 4 }}>All done!</div>
-            <div style={{ fontSize: 14, color: C.textMuted, marginBottom: 20 }}>Every task completed today.</div>
-            <div style={{ background: C.primarySoft, borderRadius: 12, padding: "16px", marginBottom: 20 }}>
-              <div style={{ fontSize: 36, fontWeight: 900, color: C.primary }}>{streak} {streak === 1 ? "day" : "days"}</div>
-              <div style={{ fontSize: 14, color: C.primary, fontWeight: 600 }}>completion streak</div>
-            </div>
-            <button className="r-btn" onClick={() => setShowStreakModal(false)} style={{ padding: "12px 32px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Nice</button>
-          </div>
         </div>
       )}
 
@@ -3253,16 +3233,6 @@ export default function App({ user }) {
                       </div>
                       <div style={{ fontSize: 18, fontWeight: 700 }}>Nothing on your plate.</div>
                       <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Add something, or enjoy the quiet.</div>
-                    </div>
-                  )}
-
-                  {openTasks.length === 0 && completedTasks.length > 0 && (
-                    <div style={{ textAlign: "center", padding: "28px 20px", background: C.primaryGhost || C.primarySoft, border: "1px solid " + C.borderLight, borderRadius: 14, marginBottom: 14 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 22, background: C.card, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", border: "2px solid " + C.primary }}>
-                        <Icon name="check" size={22} color={C.primary} />
-                      </div>
-                      <div style={{ fontSize: 17, fontWeight: 700 }}>Plate cleared.</div>
-                      <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 4 }}>{completedTasks.length} things done today. Take five.</div>
                     </div>
                   )}
 
