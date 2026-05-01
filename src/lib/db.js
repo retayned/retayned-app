@@ -116,7 +116,7 @@ export const clients = {
   deactivate: async (clientId) => {
     const { data, error } = await supabase
       .from('clients')
-      .update({ is_active: false })
+      .update({ is_active: false, archived_at: new Date().toISOString() })
       .eq('id', clientId)
       .select()
       .single();
