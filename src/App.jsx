@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb } from "./lib/db";
 
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
@@ -1204,6 +1204,31 @@ export default function App({ user }) {
 
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Sync user's IANA timezone to the profiles table once per session.
+  // Used by the Observer cron and any future server-side scheduling that
+  // needs to anchor "today" / "this week" to the user's local clock instead
+  // of UTC. Only writes if the detected tz differs from what's stored
+  // (avoids unnecessary writes on every load).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const profRes = await profileDb.get(user.id);
+        if (cancelled) return;
+        const storedTz = profRes?.data?.timezone || 'UTC';
+        if (detectedTz && detectedTz !== storedTz) {
+          await profileDb.update(user.id, { timezone: detectedTz });
+        }
+      } catch (e) {
+        // Non-blocking — failure here just means observations/etc fall back to UTC
+        console.warn('Timezone sync failed:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   // Schedule automatic recurring-task reset at 2 AM local, every day
   // Fires even if the tab stays open across midnight — ensures no one sees stale "done" checkmarks
