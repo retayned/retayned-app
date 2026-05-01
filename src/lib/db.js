@@ -700,27 +700,29 @@ export const touchpoints = {
 export const observations = {
   // Get this week's active observation, if any.
   //
-  // Scoped to fired_at within the current week (Friday-anchored, matching the
-  // observer cron's weekStart logic). Dismissing this week's observation does
-  // not rotate to a stale older observation that happens to still be active.
-  // Returns null if this week's observation has been dropped or no observation
-  // has fired this week.
+  // Scoped to observations whose week_start matches "this Friday" computed in
+  // the BROWSER's local timezone — which equals the user's local timezone
+  // (the same one the observer cron uses for that user, since the frontend
+  // wrote it to profiles.timezone on first load). This way "this week" means
+  // the same thing on both sides: from local Friday 00:00 to next local
+  // Thursday 23:59. Returns null if dismissed or no observation this week.
   getCurrent: async (userId) => {
-    // Compute the most recent Friday at 00:00 UTC (start of "this week" by Observer's clock).
-    // ISO getUTCDay: Sun=0, Mon=1, ..., Fri=5, Sat=6.
+    // Compute most recent Friday in local time (browser's TZ).
+    // getDay(): Sun=0, Mon=1, ..., Fri=5, Sat=6.
     const now = new Date();
-    const dow = now.getUTCDay();
+    const dow = now.getDay();
     const daysSinceFriday = (dow + 2) % 7; // Fri→0, Sat→1, Sun→2, Mon→3, ..., Thu→6
-    const startOfWeekUtc = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() - daysSinceFriday,
-    ));
+    const localFriday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceFriday);
+    // Format as YYYY-MM-DD (matches week_start column format in observations table).
+    const yyyy = localFriday.getFullYear();
+    const mm = String(localFriday.getMonth() + 1).padStart(2, '0');
+    const dd = String(localFriday.getDate()).padStart(2, '0');
+    const weekStartStr = `${yyyy}-${mm}-${dd}`;
     const { data, error } = await supabase
       .from('observations')
       .select('*')
       .eq('user_id', userId)
-      .gte('fired_at', startOfWeekUtc.toISOString())
+      .eq('week_start', weekStartStr)
       .not('status', 'in', '(dropped,expired)')
       .order('fired_at', { ascending: false })
       .limit(1)
