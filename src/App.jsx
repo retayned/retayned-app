@@ -965,10 +965,6 @@ export default function App({ user }) {
   // ─── Observer card state ──
   const [observation, setObservation] = useState(null);
   const [obsDismissing, setObsDismissing] = useState(false);
-  // True once on first view per observation per day. Drives the soft purple pulse
-  // that signals "this is today's observation." Set when observation arrives if it
-  // hasn't been seen today (localStorage keyed by obs id), then never again.
-  const [obsPulse, setObsPulse] = useState(false);
 
   // ─── Daybook state ── (right-rail notepad on Today page)
   const [daybookEntry, setDaybookEntry] = useState("");
@@ -1014,17 +1010,6 @@ export default function App({ user }) {
         const obsRes = await observationsDb.getCurrent(uid);
         if (obsRes?.data) {
           setObservation(obsRes.data);
-          // Pulse animation — first view per observation, per day.
-          // Key includes today's date so the pulse repeats daily for the same obs id.
-          try {
-            const today = new Date().toISOString().slice(0, 10);
-            const seenKey = `obs-seen-${obsRes.data.id}-${today}`;
-            if (!localStorage.getItem(seenKey)) {
-              localStorage.setItem(seenKey, "1");
-              setObsPulse(true);
-              setTimeout(() => setObsPulse(false), 3000);
-            }
-          } catch {}
         }
       }
     } catch (e) {
@@ -1881,18 +1866,6 @@ export default function App({ user }) {
           border-color: ${C.success} !important;
           transform: scale(1.18);
         }
-        /* Observer card "this is today's" reveal pulse — purple glow.
-           Asymmetric: builds quickly to peak (catches eye), then releases slowly (gentle goodbye).
-           Triggered the first time per observation per day (see obsPulse state). Lives on the
-           outer wrapper so the glow isn't clipped by the inner card's overflow:hidden. */
-        @keyframes rt-obs-pulse {
-          0%   { box-shadow: 0 0 0 0 rgba(91,33,182,0); }
-          18%  { box-shadow: 0 0 0 9px rgba(91,33,182,0.20); }
-          100% { box-shadow: 0 0 0 0 rgba(91,33,182,0); }
-        }
-        .rt-obs-pulse {
-          animation: rt-obs-pulse 2600ms cubic-bezier(.2, .9, .3, 1) 200ms;
-        }
         .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover { background: rgba(91,33,182,0.06); }
@@ -2041,6 +2014,9 @@ export default function App({ user }) {
         }
         @media (min-width: 769px) {
           .rc-mobile-list { display: none !important; }
+          /* Events dropdown is mobile-only — on desktop the button reads as plain text */
+          .rt-band-sub-events-chev { display: none !important; }
+          .rt-band-sub-events { cursor: default !important; pointer-events: none !important; }
         }
         @media (min-width: 1440px) {
           .rc-grid { grid-template-columns: 240px minmax(0, 1fr) 360px; }
@@ -2523,11 +2499,13 @@ export default function App({ user }) {
                         fontFamily: "inherit",
                       }}
                     >
-                      <b style={{ color: C.text, fontWeight: 700 }}>3</b> events scheduled
-                      <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textMuted} />
+                      <b style={{ color: C.text, fontWeight: 700 }}>3</b> events
+                      <span className="rt-band-sub-events-chev" style={{ display: "inline-flex" }}>
+                        <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textMuted} />
+                      </span>
                     </button>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{remaining}</b> remaining</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{totalVisible}</b> tasks</span>
                     <span className="rt-band-sub-pct" style={{ display: "none", marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999 }}>
                       {Math.round(pct * 100)}%
                     </span>
@@ -2605,7 +2583,7 @@ export default function App({ user }) {
                         else if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
                         else if (e.key === "Escape") { setComposerMenuOpen(false); }
                       }}
-                      placeholder={composerClient ? "What needs to happen?" : 'What\'s next? Try "Call Ana about renewal" — press / to tag a client'}
+                      placeholder={composerClient ? "What needs to happen?" : "Add a task for a client"}
                       style={{ flex: 1, minWidth: 100, border: "none", outline: "none", background: "transparent", fontSize: 14.5, padding: "4px 0", fontFamily: "inherit", color: C.text }}
                     />
                   </div>
@@ -2958,372 +2936,6 @@ export default function App({ user }) {
                       </div>
                     </div>
                   )}
-
-                  {/* ═══════════════════════════════════════════════════════════════
-                      OBSERVER CARD — single dark green panel, no flip.
-                      Top bar: card name + observation number/week/date.
-                      Headline + body, then divider, then metric strip + actions.
-                  ═══════════════════════════════════════════════════════════════ */}
-                  {observation && !obsDismissing && (() => {
-                    const obs = observation;
-                    const rawName = obs.card_name || "Observation";
-                    const archetype = /^the\s/i.test(rawName) ? rawName : `The ${rawName}`;
-
-                    // Top-bar metadata: № (observation number) / WK (ISO week) / DATE
-                    const firedAt = new Date(obs.fired_at);
-                    const obsNum = String(obs.observation_number || "").padStart(2, "0");
-                    const weekNum = (() => {
-                      // ISO week number
-                      const d = new Date(Date.UTC(firedAt.getFullYear(), firedAt.getMonth(), firedAt.getDate()));
-                      const dayNum = d.getUTCDay() || 7;
-                      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-                      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-                      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-                    })();
-                    const firedDate = firedAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '.');
-
-                    // ─── Action handlers ───
-                    const handleDrop = async () => {
-                      setObsDismissing(true);
-                      setTimeout(() => setObservation(null), 280);
-                      try { await observationsDb.updateStatus(obs.id, "dropped"); } catch (e) { /* non-blocking */ }
-                    };
-                    const handleUnpack = async () => {
-                      try { await observationsDb.updateStatus(obs.id, "unpacked"); } catch (e) { /* non-blocking */ }
-                      const seededMessage = `You pulled ${archetype}. ${obs.front_headline}\n\nWhere do you want to start?`;
-                      setAiMessages([{ role: "ai", text: seededMessage }]);
-                      setPage("coach");
-                    };
-
-                    // ─── Metric strip: per-detector label mapping ───
-                    // Each detector outputs different metric keys. We translate them
-                    // into short, readable labels for display.
-                    const METRIC_LABELS = {
-                      // Counts & generic
-                      count: "Clients",
-                      book_size: "Book size",
-                      // Frequency / depth
-                      avg_touch_30d: "Avg / 30d",
-                      avg_touch_60d: "Avg / 60d",
-                      median_touch_30d: "Book median",
-                      expected_touch: "Expected",
-                      // Anniversaries
-                      nearest_days: "Days out",
-                      farthest_days: "Latest",
-                      avg_years: "Avg years",
-                      days_window: "Window",
-                      count_anniv: "Anniversaries",
-                      count_stale_rate: "Stale rates",
-                      // Tenure
-                      avg_tenure_yrs: "Avg tenure",
-                      long_tenure_pct: "Long tenure",
-                      year_two_count: "Year two",
-                      // Score
-                      avg_score: "Avg score",
-                      avg_drop: "Avg drop",
-                      max_drop: "Max drop",
-                      avg_score_drop: "Score drop",
-                      // Health checks
-                      never_had: "No HC ever",
-                      avg_days_since_hc: "Days since HC",
-                      // Expectations
-                      avg_expectations: "Avg score",
-                      // Effort
-                      effort_multiple: "Effort",
-                      revenue_gap_pct: "Revenue gap",
-                      task_pct: "Task share",
-                      revenue_pct: "Revenue share",
-                      top_pct: "Top share",
-                      // Rates
-                      avg_rate_age_days: "Rate age",
-                      gap_pct: "Rate gap",
-                      median: "Book median",
-                      max: "Top rate",
-                      drop_pct: "Drop",
-                      // Referrals
-                      avg_referrals_made: "Avg referrals",
-                      days_since_last: "Days since",
-                      // Cadence / drift census
-                      touched: "Touched",
-                      silent: "Silent",
-                      Stable: "Stable",
-                      Improving: "Improving",
-                      "Something shifted": "Shifted",
-                      Declining: "Declining",
-                      "At risk": "At risk",
-                      // Self-cluster
-                      patterns_count: "Patterns",
-                      affected_pct: "Affected",
-                    };
-
-                    const formatMetricValue = (key, val) => {
-                      if (val == null) return "—";
-                      // Percentages
-                      if (key.endsWith("_pct") || key === "long_tenure_pct" || key === "affected_pct") {
-                        return `${val}%`;
-                      }
-                      // Day counts
-                      if (key.endsWith("_days") || key === "days_window") {
-                        return `${val}d`;
-                      }
-                      // Year counts
-                      if (key.endsWith("_yrs") || key === "avg_years") {
-                        return `${val}yr`;
-                      }
-                      // Effort multiples
-                      if (key === "effort_multiple") {
-                        return `${val}x`;
-                      }
-                      // Score drops — show as negative
-                      if (key.includes("drop") && typeof val === "number" && val > 0) {
-                        return `−${val}`;
-                      }
-                      return String(val);
-                    };
-
-                    const metrics = (obs.data_payload && obs.data_payload.metrics) || {};
-                    const metricEntries = Object.entries(metrics)
-                      .filter(([k, v]) => v != null && v !== 0 || (k === "count" && v != null))  // hide zero-value noise except count
-                      .slice(0, 4);  // cap at 4 metrics in the strip
-
-                    return (
-                      <div
-                        className={obsPulse ? "rt-obs-pulse" : ""}
-                        style={{
-                          marginBottom: 24,
-                          opacity: obsDismissing ? 0 : 1,
-                          transform: obsDismissing ? "scale(0.97)" : "scale(1)",
-                          transition: "opacity 280ms ease, transform 280ms ease",
-                          borderRadius: 14,
-                        }}
-                      >
-                        <div style={{
-                          background: C.card,
-                          color: C.text,
-                          borderRadius: 14,
-                          border: "1px solid " + C.border,
-                          padding: "24px 28px 22px",
-                          position: "relative",
-                          overflow: "hidden",
-                          boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
-                        }}>
-                          {/* ─── ILLUSTRATION — top-right inside card ─── */}
-                          <div style={{
-                            position: "absolute",
-                            right: 36,
-                            top: 28,
-                            width: 200,
-                            height: 165,
-                            pointerEvents: "none",
-                            opacity: 0.9,
-                          }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300" style={{ width: "100%", height: "100%" }}>
-                              <g fill="none" stroke="#2F2F31" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M150 58 Q144 44 154 34 Q162 24 154 12"/>
-                                <path d="M178 54 Q172 38 182 28 Q188 20 182 8"/>
-                                <path d="M204 60 Q198 46 208 36 Q216 26 208 14"/>
-                              </g>
-                              <g transform="translate(110 70)">
-                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M130 50 Q170 50 170 90 Q170 130 130 130"/>
-                                <path fill="none" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round" d="M130 62 Q158 62 158 90 Q158 118 130 118"/>
-                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M6 44 Q4 38 12 38 L134 38 Q142 38 140 44 L132 174 Q130 184 120 184 L26 184 Q16 184 14 174 Z"/>
-                                <ellipse cx="73" cy="45" rx="62" ry="9" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                <ellipse cx="73" cy="45" rx="54" ry="6" fill="#3F434B" opacity="0.9"/>
-                                <path d="M40 42 Q52 38 70 39" stroke="#FCFCFE" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.8"/>
-                                <g stroke="#2F2F31" strokeWidth="0.9" opacity="0.35" strokeLinecap="round" fill="none">
-                                  <line x1="118" y1="70" x2="122" y2="164"/>
-                                  <line x1="124" y1="70" x2="127" y2="160"/>
-                                  <line x1="112" y1="72" x2="115" y2="166"/>
-                                </g>
-                              </g>
-                              <g transform="translate(220 130) rotate(10)">
-                                <rect x="0" y="0" width="92" height="140" rx="12" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round"/>
-                                <rect x="6" y="14" width="80" height="118" rx="6" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                <rect x="36" y="6" width="20" height="3" rx="1.5" fill="#2F2F31"/>
-                                <g transform="translate(10 22)">
-                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="#558B68"/>
-                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="none" stroke="#2F2F31" strokeWidth="1.8" strokeLinejoin="round"/>
-                                  <circle cx="10" cy="10" r="4" fill="#FCFCFE"/>
-                                  <circle cx="10" cy="10" r="4" fill="none" stroke="#2F2F31" strokeWidth="1.2"/>
-                                  <line x1="20" y1="8" x2="58" y2="8" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
-                                  <line x1="20" y1="14" x2="48" y2="14" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round" opacity="0.85"/>
-                                  <line x1="6" y1="26" x2="66" y2="26" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="6" y1="32" x2="58" y2="32" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="6" y1="38" x2="42" y2="38" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
-                                </g>
-                                <g transform="translate(10 74)">
-                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <line x1="18" y1="9" x2="58" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="18" y1="15" x2="44" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                </g>
-                                <g transform="translate(10 102)">
-                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <line x1="18" y1="9" x2="54" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="18" y1="15" x2="40" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                </g>
-                                <line x1="92" y1="30" x2="92" y2="48" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                              </g>
-                              <g stroke="#2F2F31" strokeWidth="1.8" strokeLinecap="round" fill="none">
-                                <path d="M232 108 L228 100"/>
-                                <path d="M246 102 L244 92"/>
-                                <path d="M260 100 L262 90"/>
-                                <path d="M274 104 L280 96"/>
-                              </g>
-                              <g transform="translate(300 100)">
-                                <circle cx="0" cy="0" r="10" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2"/>
-                                <line x1="0" y1="-4" x2="0" y2="2" stroke="#2F2F31" strokeWidth="2.4" strokeLinecap="round"/>
-                                <circle cx="0" cy="6" r="1.4" fill="#2F2F31"/>
-                              </g>
-                            </svg>
-                          </div>
-
-                          {/* ─── CONTENT (right-padded so it doesn't collide with illo) ─── */}
-                          <div style={{ paddingRight: 220 }}>
-                          {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
-                          <div style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            paddingBottom: 14,
-                            borderBottom: "1px dashed " + C.borderLight,
-                            marginBottom: 18,
-                          }}>
-                            <div style={{
-                              width: 8, height: 8, borderRadius: 999,
-                              background: C.btn, flexShrink: 0,
-                            }} />
-                            <div style={{
-                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              letterSpacing: "0.18em",
-                              textTransform: "uppercase",
-                              color: C.text,
-                            }}>
-                              {archetype}
-                            </div>
-                            <div style={{ flex: 1, height: 1, background: C.borderLight }} />
-                            <div style={{
-                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                              fontSize: 11,
-                              letterSpacing: "0.14em",
-                              color: C.textMuted,
-                              whiteSpace: "nowrap",
-                            }}>
-                              № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
-                            </div>
-                          </div>
-
-                          {/* ─── HEADLINE ─── */}
-                          <h3 style={{
-                            fontFamily: "'Fraunces', Georgia, serif",
-                            fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
-                            fontWeight: 400,
-                            fontStyle: "italic",
-                            fontSize: 25,
-                            lineHeight: 1.22,
-                            letterSpacing: "-0.005em",
-                            color: C.text,
-                            margin: "0 0 12px",
-                          }}>
-                            {obs.front_headline}
-                          </h3>
-
-                          {/* ─── BODY ─── */}
-                          <p style={{
-                            fontSize: 13.5,
-                            lineHeight: 1.55,
-                            color: C.textSec,
-                            margin: "0 0 22px",
-                          }}>
-                            {obs.front_body}
-                          </p>
-                          </div>
-
-                          {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
-                          <div style={{
-                            paddingTop: 16,
-                            borderTop: "1px solid " + C.borderLight,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 24,
-                          }}>
-                            {/* METRIC STRIP */}
-                            <div style={{ display: "flex", gap: 28 }}>
-                              {metricEntries.map(([key, val]) => (
-                                <div key={key}>
-                                  <div style={{
-                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 18,
-                                    fontWeight: 600,
-                                    color: C.text,
-                                    lineHeight: 1,
-                                  }}>
-                                    {formatMetricValue(key, val)}
-                                  </div>
-                                  <div style={{
-                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 9.5,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.18em",
-                                    textTransform: "uppercase",
-                                    color: C.textMuted,
-                                    marginTop: 5,
-                                  }}>
-                                    {METRIC_LABELS[key] || key.replace(/_/g, " ")}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* SPACER */}
-                            <div style={{ flex: 1 }} />
-
-                            {/* BUTTONS */}
-                            <button
-                              type="button"
-                              onClick={handleUnpack}
-                              style={{
-                                background: C.btn,
-                                color: "#FFFFFF",
-                                border: "none",
-                                padding: "8px 14px",
-                                borderRadius: 8,
-                                fontSize: 13,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
-                              onMouseLeave={e => e.currentTarget.style.background = C.btn}
-                            >
-                              Unpack with Rai
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleDrop}
-                              style={{
-                                background: "transparent",
-                                color: C.textMuted,
-                                border: "none",
-                                padding: "10px 8px",
-                                fontSize: 13,
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.color = C.text}
-                              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
 
                   {openTasks.length === 0 && completedTasks.length === 0 && (
                     <div style={{ textAlign: "center", padding: "60px 20px", background: C.primaryGhost || C.primarySoft, border: "1px dashed " + C.border, borderRadius: 14 }}>
@@ -4737,6 +4349,371 @@ export default function App({ user }) {
                   </div>
                 </div>
               </div>
+
+                  {/* ═══════════════════════════════════════════════════════════════
+                      OBSERVER CARD — single dark green panel, no flip.
+                      Top bar: card name + observation number/week/date.
+                      Headline + body, then divider, then metric strip + actions.
+                  ═══════════════════════════════════════════════════════════════ */}
+                  {observation && !obsDismissing && (() => {
+                    const obs = observation;
+                    const rawName = obs.card_name || "Observation";
+                    const archetype = /^the\s/i.test(rawName) ? rawName : `The ${rawName}`;
+
+                    // Top-bar metadata: № (observation number) / WK (ISO week) / DATE
+                    const firedAt = new Date(obs.fired_at);
+                    const obsNum = String(obs.observation_number || "").padStart(2, "0");
+                    const weekNum = (() => {
+                      // ISO week number
+                      const d = new Date(Date.UTC(firedAt.getFullYear(), firedAt.getMonth(), firedAt.getDate()));
+                      const dayNum = d.getUTCDay() || 7;
+                      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+                      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                    })();
+                    const firedDate = firedAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '.');
+
+                    // ─── Action handlers ───
+                    const handleDrop = async () => {
+                      setObsDismissing(true);
+                      setTimeout(() => setObservation(null), 280);
+                      try { await observationsDb.updateStatus(obs.id, "dropped"); } catch (e) { /* non-blocking */ }
+                    };
+                    const handleUnpack = async () => {
+                      try { await observationsDb.updateStatus(obs.id, "unpacked"); } catch (e) { /* non-blocking */ }
+                      const seededMessage = `You pulled ${archetype}. ${obs.front_headline}\n\nWhere do you want to start?`;
+                      setAiMessages([{ role: "ai", text: seededMessage }]);
+                      setPage("coach");
+                    };
+
+                    // ─── Metric strip: per-detector label mapping ───
+                    // Each detector outputs different metric keys. We translate them
+                    // into short, readable labels for display.
+                    const METRIC_LABELS = {
+                      // Counts & generic
+                      count: "Clients",
+                      book_size: "Book size",
+                      // Frequency / depth
+                      avg_touch_30d: "Avg / 30d",
+                      avg_touch_60d: "Avg / 60d",
+                      median_touch_30d: "Book median",
+                      expected_touch: "Expected",
+                      // Anniversaries
+                      nearest_days: "Days out",
+                      farthest_days: "Latest",
+                      avg_years: "Avg years",
+                      days_window: "Window",
+                      count_anniv: "Anniversaries",
+                      count_stale_rate: "Stale rates",
+                      // Tenure
+                      avg_tenure_yrs: "Avg tenure",
+                      long_tenure_pct: "Long tenure",
+                      year_two_count: "Year two",
+                      // Score
+                      avg_score: "Avg score",
+                      avg_drop: "Avg drop",
+                      max_drop: "Max drop",
+                      avg_score_drop: "Score drop",
+                      // Health checks
+                      never_had: "No HC ever",
+                      avg_days_since_hc: "Days since HC",
+                      // Expectations
+                      avg_expectations: "Avg score",
+                      // Effort
+                      effort_multiple: "Effort",
+                      revenue_gap_pct: "Revenue gap",
+                      task_pct: "Task share",
+                      revenue_pct: "Revenue share",
+                      top_pct: "Top share",
+                      // Rates
+                      avg_rate_age_days: "Rate age",
+                      gap_pct: "Rate gap",
+                      median: "Book median",
+                      max: "Top rate",
+                      drop_pct: "Drop",
+                      // Referrals
+                      avg_referrals_made: "Avg referrals",
+                      days_since_last: "Days since",
+                      // Cadence / drift census
+                      touched: "Touched",
+                      silent: "Silent",
+                      Stable: "Stable",
+                      Improving: "Improving",
+                      "Something shifted": "Shifted",
+                      Declining: "Declining",
+                      "At risk": "At risk",
+                      // Self-cluster
+                      patterns_count: "Patterns",
+                      affected_pct: "Affected",
+                    };
+
+                    const formatMetricValue = (key, val) => {
+                      if (val == null) return "—";
+                      // Percentages
+                      if (key.endsWith("_pct") || key === "long_tenure_pct" || key === "affected_pct") {
+                        return `${val}%`;
+                      }
+                      // Day counts
+                      if (key.endsWith("_days") || key === "days_window") {
+                        return `${val}d`;
+                      }
+                      // Year counts
+                      if (key.endsWith("_yrs") || key === "avg_years") {
+                        return `${val}yr`;
+                      }
+                      // Effort multiples
+                      if (key === "effort_multiple") {
+                        return `${val}x`;
+                      }
+                      // Score drops — show as negative
+                      if (key.includes("drop") && typeof val === "number" && val > 0) {
+                        return `−${val}`;
+                      }
+                      return String(val);
+                    };
+
+                    const metrics = (obs.data_payload && obs.data_payload.metrics) || {};
+                    const metricEntries = Object.entries(metrics)
+                      .filter(([k, v]) => v != null && v !== 0 || (k === "count" && v != null))  // hide zero-value noise except count
+                      .slice(0, 4);  // cap at 4 metrics in the strip
+
+                    return (
+                      <div
+                        style={{
+                          marginBottom: 24,
+                          opacity: obsDismissing ? 0 : 1,
+                          transform: obsDismissing ? "scale(0.97)" : "scale(1)",
+                          transition: "opacity 280ms ease, transform 280ms ease",
+                          borderRadius: 14,
+                        }}
+                      >
+                        <div style={{
+                          background: C.card,
+                          color: C.text,
+                          borderRadius: 14,
+                          border: "1px solid " + C.border,
+                          padding: "24px 28px 22px",
+                          position: "relative",
+                          overflow: "hidden",
+                          boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
+                        }}>
+                          {/* ─── ILLUSTRATION — top-right inside card ─── */}
+                          <div style={{
+                            position: "absolute",
+                            right: 36,
+                            top: 28,
+                            width: 200,
+                            height: 165,
+                            pointerEvents: "none",
+                            opacity: 0.9,
+                          }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300" style={{ width: "100%", height: "100%" }}>
+                              <g fill="none" stroke="#2F2F31" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M150 58 Q144 44 154 34 Q162 24 154 12"/>
+                                <path d="M178 54 Q172 38 182 28 Q188 20 182 8"/>
+                                <path d="M204 60 Q198 46 208 36 Q216 26 208 14"/>
+                              </g>
+                              <g transform="translate(110 70)">
+                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M130 50 Q170 50 170 90 Q170 130 130 130"/>
+                                <path fill="none" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round" d="M130 62 Q158 62 158 90 Q158 118 130 118"/>
+                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M6 44 Q4 38 12 38 L134 38 Q142 38 140 44 L132 174 Q130 184 120 184 L26 184 Q16 184 14 174 Z"/>
+                                <ellipse cx="73" cy="45" rx="62" ry="9" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                <ellipse cx="73" cy="45" rx="54" ry="6" fill="#3F434B" opacity="0.9"/>
+                                <path d="M40 42 Q52 38 70 39" stroke="#FCFCFE" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.8"/>
+                                <g stroke="#2F2F31" strokeWidth="0.9" opacity="0.35" strokeLinecap="round" fill="none">
+                                  <line x1="118" y1="70" x2="122" y2="164"/>
+                                  <line x1="124" y1="70" x2="127" y2="160"/>
+                                  <line x1="112" y1="72" x2="115" y2="166"/>
+                                </g>
+                              </g>
+                              <g transform="translate(220 130) rotate(10)">
+                                <rect x="0" y="0" width="92" height="140" rx="12" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round"/>
+                                <rect x="6" y="14" width="80" height="118" rx="6" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                <rect x="36" y="6" width="20" height="3" rx="1.5" fill="#2F2F31"/>
+                                <g transform="translate(10 22)">
+                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="#558B68"/>
+                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="none" stroke="#2F2F31" strokeWidth="1.8" strokeLinejoin="round"/>
+                                  <circle cx="10" cy="10" r="4" fill="#FCFCFE"/>
+                                  <circle cx="10" cy="10" r="4" fill="none" stroke="#2F2F31" strokeWidth="1.2"/>
+                                  <line x1="20" y1="8" x2="58" y2="8" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
+                                  <line x1="20" y1="14" x2="48" y2="14" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round" opacity="0.85"/>
+                                  <line x1="6" y1="26" x2="66" y2="26" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="6" y1="32" x2="58" y2="32" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="6" y1="38" x2="42" y2="38" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
+                                </g>
+                                <g transform="translate(10 74)">
+                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <line x1="18" y1="9" x2="58" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="18" y1="15" x2="44" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                </g>
+                                <g transform="translate(10 102)">
+                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
+                                  <line x1="18" y1="9" x2="54" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                  <line x1="18" y1="15" x2="40" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                                </g>
+                                <line x1="92" y1="30" x2="92" y2="48" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
+                              </g>
+                              <g stroke="#2F2F31" strokeWidth="1.8" strokeLinecap="round" fill="none">
+                                <path d="M232 108 L228 100"/>
+                                <path d="M246 102 L244 92"/>
+                                <path d="M260 100 L262 90"/>
+                                <path d="M274 104 L280 96"/>
+                              </g>
+                              <g transform="translate(300 100)">
+                                <circle cx="0" cy="0" r="10" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2"/>
+                                <line x1="0" y1="-4" x2="0" y2="2" stroke="#2F2F31" strokeWidth="2.4" strokeLinecap="round"/>
+                                <circle cx="0" cy="6" r="1.4" fill="#2F2F31"/>
+                              </g>
+                            </svg>
+                          </div>
+
+                          {/* ─── CONTENT (right-padded so it doesn't collide with illo) ─── */}
+                          <div style={{ paddingRight: 220 }}>
+                          {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            paddingBottom: 14,
+                            borderBottom: "1px dashed " + C.borderLight,
+                            marginBottom: 18,
+                          }}>
+                            <div style={{
+                              width: 8, height: 8, borderRadius: 999,
+                              background: C.btn, flexShrink: 0,
+                            }} />
+                            <div style={{
+                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              letterSpacing: "0.18em",
+                              textTransform: "uppercase",
+                              color: C.text,
+                            }}>
+                              {archetype}
+                            </div>
+                            <div style={{ flex: 1, height: 1, background: C.borderLight }} />
+                            <div style={{
+                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                              fontSize: 11,
+                              letterSpacing: "0.14em",
+                              color: C.textMuted,
+                              whiteSpace: "nowrap",
+                            }}>
+                              № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
+                            </div>
+                          </div>
+
+                          {/* ─── HEADLINE ─── */}
+                          <h3 style={{
+                            fontFamily: "'Fraunces', Georgia, serif",
+                            fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
+                            fontWeight: 400,
+                            fontStyle: "italic",
+                            fontSize: 25,
+                            lineHeight: 1.22,
+                            letterSpacing: "-0.005em",
+                            color: C.text,
+                            margin: "0 0 12px",
+                          }}>
+                            {obs.front_headline}
+                          </h3>
+
+                          {/* ─── BODY ─── */}
+                          <p style={{
+                            fontSize: 13.5,
+                            lineHeight: 1.55,
+                            color: C.textSec,
+                            margin: "0 0 22px",
+                          }}>
+                            {obs.front_body}
+                          </p>
+                          </div>
+
+                          {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
+                          <div style={{
+                            paddingTop: 16,
+                            borderTop: "1px solid " + C.borderLight,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 24,
+                          }}>
+                            {/* METRIC STRIP */}
+                            <div style={{ display: "flex", gap: 28 }}>
+                              {metricEntries.map(([key, val]) => (
+                                <div key={key}>
+                                  <div style={{
+                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                    fontSize: 18,
+                                    fontWeight: 600,
+                                    color: C.text,
+                                    lineHeight: 1,
+                                  }}>
+                                    {formatMetricValue(key, val)}
+                                  </div>
+                                  <div style={{
+                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                    fontSize: 9.5,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.18em",
+                                    textTransform: "uppercase",
+                                    color: C.textMuted,
+                                    marginTop: 5,
+                                  }}>
+                                    {METRIC_LABELS[key] || key.replace(/_/g, " ")}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* SPACER */}
+                            <div style={{ flex: 1 }} />
+
+                            {/* BUTTONS */}
+                            <button
+                              type="button"
+                              onClick={handleUnpack}
+                              style={{
+                                background: C.btn,
+                                color: "#FFFFFF",
+                                border: "none",
+                                padding: "8px 14px",
+                                borderRadius: 8,
+                                fontSize: 13,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
+                              onMouseLeave={e => e.currentTarget.style.background = C.btn}
+                            >
+                              Unpack with Rai
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDrop}
+                              style={{
+                                background: "transparent",
+                                color: C.textMuted,
+                                border: "none",
+                                padding: "10px 8px",
+                                fontSize: 13,
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = C.text}
+                              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
               {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
               <div className="rt-mob-strip" style={{ marginBottom: 16 }}>
