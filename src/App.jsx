@@ -2445,29 +2445,13 @@ export default function App({ user }) {
             );
           };
 
-          // ─── STATUS BAND ─────────────────────────────────────────────────
-          const totalVisible = visibleTasks.length;
-          const doneCount = completedTasks.length;
-          const remaining = totalVisible - doneCount;
-          const pct = totalVisible ? doneCount / totalVisible : 0;
-
-          // ─── DUE-DATE BUCKETING ──────────────────────────────────────────
-          // Today's local YYYY-MM-DD and tomorrow's local YYYY-MM-DD as
-          // the bucket boundaries. Recurring tasks always live in Today
-          // (they have no due_date by design).
+          // ─── DATE BOUNDARIES (hoisted so status band can count today-only tasks) ──
           const _now = new Date();
           const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _tomorrow = new Date(_now);
           _tomorrow.setDate(_tomorrow.getDate() + 1);
           const _tomorrowStr = `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
 
-          // bucketOf returns 'today' | 'tomorrow' | 'later'
-          // Rules:
-          //   - Recurring                         → today  (always)
-          //   - No due_date                       → today  (active work, no specific date)
-          //   - due_date <= today (incl. overdue) → today
-          //   - due_date == tomorrow              → tomorrow
-          //   - due_date >  tomorrow              → later
           const bucketOf = (t) => {
             if (t.recurring) return "today";
             if (!t.due_date) return "today";
@@ -2476,6 +2460,24 @@ export default function App({ user }) {
             if (dateStr === _tomorrowStr) return "tomorrow";
             return "later";
           };
+
+          // ─── STATUS BAND ─────────────────────────────────────────────────
+          const totalVisible = visibleTasks.length;
+          const todayCount = visibleTasks.filter(t => bucketOf(t) === "today").length;
+          const doneCount = completedTasks.length;
+          const remaining = totalVisible - doneCount;
+          const pct = totalVisible ? doneCount / totalVisible : 0;
+
+          // ─── DUE-DATE BUCKETING (helpers — _now/_todayStr/etc hoisted above) ──
+
+          // bucketOf returns 'today' | 'tomorrow' | 'later'
+          // Rules:
+          //   - Recurring                         → today  (always)
+          //   - No due_date                       → today  (active work, no specific date)
+          //   - due_date <= today (incl. overdue) → today
+          //   - due_date == tomorrow              → tomorrow
+          //   - due_date >  tomorrow              → later
+          // (bucketOf defined above near hoisted date boundaries)
 
           // Push button helpers — change due_date and update local state.
           const setTaskDueDate = async (taskId, newDateStr) => {
@@ -2576,7 +2578,7 @@ export default function App({ user }) {
                       </span>
                     </button>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{totalVisible}</b> tasks</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
                     <span className="rt-band-sub-pct" style={{ display: "none", marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999 }}>
                       {Math.round(pct * 100)}%
                     </span>
@@ -2655,7 +2657,7 @@ export default function App({ user }) {
                         else if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
                         else if (e.key === "Escape") { setComposerMenuOpen(false); }
                       }}
-                      placeholder={composerClient ? "What needs to happen?" : "Add a task for a client"}
+                      placeholder={composerClient ? "What needs to happen?" : "Add a task. Use / to select a client."}
                       style={{ flex: 1, minWidth: 100, border: "none", outline: "none", background: "transparent", fontSize: 14.5, padding: "4px 0", fontFamily: "inherit", color: C.text }}
                     />
                   </div>
@@ -2753,7 +2755,7 @@ export default function App({ user }) {
                             const opts = [
                               { label: "Today", value: _todayStr },
                               { label: "Tomorrow", value: _tomorrowStr },
-                              { label: "Next week", value: _later7Str },
+                              { label: "Later", value: _later7Str },
                             ];
                             return opts.map(o => (
                               <button
@@ -2770,57 +2772,15 @@ export default function App({ user }) {
                                   fontWeight: newTaskDueDate === o.value ? 600 : 500,
                                   cursor: "pointer",
                                   fontFamily: "inherit",
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  gap: 12,
+                                  display: "block",
                                 }}
                                 onMouseEnter={e => { if (newTaskDueDate !== o.value) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
                                 onMouseLeave={e => { if (newTaskDueDate !== o.value) e.currentTarget.style.background = "transparent"; }}
                               >
-                                <span>{o.label}</span>
-                                <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>
-                                  {new Date(o.value + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                </span>
+                                {o.label}
                               </button>
                             ));
                           })()}
-                          <input
-                            type="date"
-                            value={newTaskDueDate || ""}
-                            min={_todayStr}
-                            onChange={e => { if (e.target.value) { setNewTaskDueDate(e.target.value); setDuePickerOpen(false); } }}
-                            style={{
-                              marginTop: 4,
-                              padding: "8px 10px",
-                              border: "1px solid " + C.borderLight,
-                              borderRadius: 6,
-                              fontSize: 13,
-                              fontFamily: "inherit",
-                              color: C.text,
-                              background: C.bg,
-                              cursor: "pointer",
-                            }}
-                          />
-                          {newTaskDueDate && (
-                            <button
-                              onClick={() => { setNewTaskDueDate(null); setDuePickerOpen(false); }}
-                              style={{
-                                marginTop: 2,
-                                padding: "6px 10px",
-                                background: "transparent",
-                                border: "none",
-                                borderRadius: 6,
-                                fontSize: 12,
-                                color: C.textMuted,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                textAlign: "left",
-                              }}
-                            >
-                              Clear date
-                            </button>
-                          )}
                         </div>
                       )}
                     </div>
@@ -2878,7 +2838,7 @@ export default function App({ user }) {
                 </div>
 
                 {composerMenuOpen && (
-                  <div style={{ position: "absolute", top: 64, right: 16, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
                       <input autoFocus value={composerQuery} onChange={e => setComposerQuery(e.target.value)}
@@ -2987,7 +2947,7 @@ export default function App({ user }) {
                             padding: "6px 14px",
                             borderRadius: 999,
                             border: "none",
-                            background: rankMode === "rai" ? "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(91,33,182,0.18), rgba(91,33,182,0) 75%), #FFFFFF" : "transparent",
+                            background: rankMode === "rai" ? C.card : "transparent",
                             fontFamily: "inherit",
                             fontSize: 12,
                             fontWeight: 600,
@@ -3261,14 +3221,14 @@ export default function App({ user }) {
 
                             {/* Avatar — moved left of the body for the new mock layout */}
                             {client
-                              ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={26} /></div>
-                              : <div className="rt-task-avatar" style={{ width: 26, height: 26, borderRadius: 13, background: C.borderSoft, flexShrink: 0 }} />}
+                              ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={18} /></div>
+                              : <div className="rt-task-avatar" style={{ width: 18, height: 18, borderRadius: 9, background: C.borderSoft, flexShrink: 0 }} />}
   
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 <span className="rt-task-title">{t.text}</span>
                               </div>
-                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.ink500, marginTop: 3, minWidth: 0 }}>
+                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink500, marginTop: 4, minWidth: 0 }}>
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
@@ -3393,16 +3353,19 @@ export default function App({ user }) {
                     const BucketHeader = ({ name, count, dimmed }) => (
                       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>{name}</div>
-                        <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>{count}{dimmed ? " · sorted by due" : ""}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>{count}</div>
                       </div>
                     );
 
                     return (
                       <>
                         {/* TODAY bucket */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          {_todayBucket.map(t => renderRow(t, "today"))}
-                        </div>
+                        {_todayBucket.length > 0 && (<>
+                          <BucketHeader name="Today" count={_todayBucket.length} dimmed={false} />
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {_todayBucket.map(t => renderRow(t, "today"))}
+                          </div>
+                        </>)}
 
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
@@ -3429,7 +3392,7 @@ export default function App({ user }) {
               {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead. */}
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px 12px" }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>Today's calendar</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>Calendar events</span>
                 </div>
                 <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
