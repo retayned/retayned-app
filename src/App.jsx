@@ -2071,9 +2071,6 @@ export default function App({ user }) {
           .rt-row-due.rt-due-today,
           .rt-row-due.rt-due-overdue { padding: 3px 5px !important; }
           .rt-row-due.rt-due-future { display: none !important; }
-          /* Sticky composer + toolbar disabled on mobile — too cramped on small screens */
-          .rt-composer { position: relative !important; top: auto !important; }
-          .rt-toolbar { position: relative !important; top: auto !important; }
         }
         @media (min-width: 769px) {
           .rc-mobile-list { display: none !important; }
@@ -2513,13 +2510,14 @@ export default function App({ user }) {
 
           // ─── STATUS BAND ─────────────────────────────────────────────────
           const totalVisible = visibleTasks.length;
-          const todayCount = visibleTasks.filter(t => bucketOf(t) === "today").length;
-          const todayDoneCount = completedTasks.filter(t => bucketOf(t) === "today").length;
-          const todayTotalCount = todayCount + todayDoneCount;
+          // Today bucket = visibleTasks (open + done) that bucket as "today".
+          const todayBucketTasks = visibleTasks.filter(t => bucketOf(t) === "today");
+          const todayCount = todayBucketTasks.length;                       // total today (open + done) — for "X tasks" subhead
+          const todayDoneCount = todayBucketTasks.filter(t => t.done).length;
           const doneCount = completedTasks.length;
           const remaining = totalVisible - doneCount;
           // Percent complete is today-only — Tomorrow/Later don't count toward today's %.
-          const pct = todayTotalCount ? todayDoneCount / todayTotalCount : 0;
+          const pct = todayCount ? todayDoneCount / todayCount : 0;
 
           // ─── DUE-DATE BUCKETING (helpers — _now/_todayStr/etc hoisted above) ──
 
@@ -2688,7 +2686,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "sticky", top: 14, zIndex: 8 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "relative" }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -3051,7 +3049,7 @@ export default function App({ user }) {
 
               {/* TASKS COLUMN */}
               <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
-                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 4px 12px", position: "sticky", top: 124, zIndex: 7, background: C.bg }}>
+                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
                       <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
