@@ -2062,6 +2062,18 @@ export default function App({ user }) {
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
           .rt-composer-client-chip { padding: 2px 4px 2px 2px !important; }
+          /* Task right-side indicators on mobile:
+             - Recurring: keep ∞ icon only, hide "Recurring" label
+             - Today / Overdue date pill: keep calendar icon only, hide date text
+             - Tomorrow / Later (rt-due-future): hide the whole pill — irrelevant here */
+          .rt-row-text { display: none !important; }
+          .rt-row-recur { padding: 3px 5px !important; }
+          .rt-row-due.rt-due-today,
+          .rt-row-due.rt-due-overdue { padding: 3px 5px !important; }
+          .rt-row-due.rt-due-future { display: none !important; }
+          /* Sticky composer + toolbar disabled on mobile — too cramped on small screens */
+          .rt-composer { position: relative !important; top: auto !important; }
+          .rt-toolbar { position: relative !important; top: auto !important; }
         }
         @media (min-width: 769px) {
           .rc-mobile-list { display: none !important; }
@@ -2502,9 +2514,12 @@ export default function App({ user }) {
           // ─── STATUS BAND ─────────────────────────────────────────────────
           const totalVisible = visibleTasks.length;
           const todayCount = visibleTasks.filter(t => bucketOf(t) === "today").length;
+          const todayDoneCount = completedTasks.filter(t => bucketOf(t) === "today").length;
+          const todayTotalCount = todayCount + todayDoneCount;
           const doneCount = completedTasks.length;
           const remaining = totalVisible - doneCount;
-          const pct = totalVisible ? doneCount / totalVisible : 0;
+          // Percent complete is today-only — Tomorrow/Later don't count toward today's %.
+          const pct = todayTotalCount ? todayDoneCount / todayTotalCount : 0;
 
           // ─── DUE-DATE BUCKETING (helpers — _now/_todayStr/etc hoisted above) ──
 
@@ -2635,7 +2650,7 @@ export default function App({ user }) {
                             <Icon name="calendar" size={13} color={C.primary} />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>From Google Calendar</div>
+                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
                             <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
                           </div>
                         </div>
@@ -2673,7 +2688,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "relative" }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "sticky", top: 14, zIndex: 8 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -3036,7 +3051,7 @@ export default function App({ user }) {
 
               {/* TASKS COLUMN */}
               <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
-                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
+                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 4px 12px", position: "sticky", top: 124, zIndex: 7, background: C.bg }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
                       <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
@@ -3174,7 +3189,7 @@ export default function App({ user }) {
                             <Icon name="calendar" size={13} color={C.primary} />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>From Google Calendar</div>
+                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
                             <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
                           </div>
                         </div>
@@ -3456,7 +3471,7 @@ export default function App({ user }) {
                                 background: "transparent",
                               }} title="Recurring">
                                 <Icon name="infinity" size={12} color={C.textMuted} />
-                                Recurring
+                                <span className="rt-row-text">Recurring</span>
                               </span>
                             ) : t.due_date ? (() => {
                               const isToday = String(t.due_date).slice(0,10) === _todayStr;
@@ -3471,7 +3486,7 @@ export default function App({ user }) {
                                 : isTomorrow ? "Tomorrow"
                                 : new Date(String(t.due_date).slice(0,10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
                               return (
-                                <span className="rt-row-due" style={{
+                                <span className={"rt-row-due " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
                                   display: "inline-flex", alignItems: "center", gap: 4,
                                   padding: "3px 9px",
                                   borderRadius: 999,
@@ -3483,7 +3498,7 @@ export default function App({ user }) {
                                   border: isOverdue || isToday ? "none" : "1px solid " + C.borderLight,
                                 }}>
                                   <Icon name="calendar" size={10} color={isOverdue ? C.danger : isToday ? C.text : C.textMuted} />
-                                  {label}
+                                  <span className="rt-row-text">{label}</span>
                                 </span>
                               );
                             })() : null}
@@ -3585,7 +3600,7 @@ export default function App({ user }) {
                         <Icon name="calendar" size={13} color={C.primary} />
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>From Google Calendar</div>
+                        <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
                         <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
                       </div>
                     </div>
