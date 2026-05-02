@@ -1281,8 +1281,19 @@ export default function App({ user }) {
       }, 720);
     }
     const countable = updated;
-    const doneNow = countable.filter(t => t.done).length;
-    if (doneNow === countable.length && countable.length > 0) {
+    // Fireworks fire only when ALL of TODAY's tasks are complete.
+    // "Today" = recurring + no due_date + due_date <= today.
+    // Tomorrow / Later tasks don't count toward the celebration.
+    const _now = new Date();
+    const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+    const todayCountable = countable.filter(t => {
+      if (t.recurring) return true;
+      if (!t.due_date) return true;
+      const d = String(t.due_date).slice(0, 10);
+      return d <= _todayStr;
+    });
+    const todayDoneNow = todayCountable.filter(t => t.done).length;
+    if (todayDoneNow === todayCountable.length && todayCountable.length > 0) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 3000);
     }
@@ -2544,7 +2555,11 @@ export default function App({ user }) {
             const clientName = composerClient || "";
             const clientObj = clients.find(c => c.name === clientName);
             // Recurring tasks cannot have a due_date — they reset daily at 2am local.
-            const dueDateForCreate = newTaskRecurring ? null : (newTaskDueDate || null);
+            // For non-recurring tasks: if no due date was picked, default to today
+            // so the task is anchored (not free-floating) and renders in the Today bucket.
+            const dueDateForCreate = newTaskRecurring
+              ? null
+              : (newTaskDueDate || _todayStr);
             const { data: created } = await tasksDb.create(user.id, {
               text,
               client_name: clientName,
@@ -3188,13 +3203,18 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {openTasks.length === 0 && completedTasks.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "60px 20px", background: C.primaryGhost || C.primarySoft, border: "1px dashed " + C.border, borderRadius: 14 }}>
-                      <div style={{ width: 56, height: 56, borderRadius: 28, background: C.card, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", border: "2px solid " + C.primary }}>
-                        <Icon name="check" size={26} color={C.primary} />
+                  {dataLoaded && openTasks.length === 0 && completedTasks.length === 0 && (
+                    <div style={{ padding: "28px 4px 20px", borderTop: "1px solid " + C.borderLight }}>
+                      <div style={{
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                        fontStyle: "italic",
+                        fontWeight: 400,
+                        fontSize: 15,
+                        color: C.textMuted,
+                      }}>
+                        No tasks for today.
                       </div>
-                      <div style={{ fontSize: 18, fontWeight: 700 }}>Nothing on your plate.</div>
-                      <div style={{ fontSize: 13, color: C.textMuted, marginTop: 4 }}>Add something, or enjoy the quiet.</div>
                     </div>
                   )}
 
