@@ -1824,6 +1824,12 @@ export default function App({ user }) {
           100% { transform: translate(var(--tx), 70vh) rotate(var(--rot)); opacity: 0; }
         }
         .rt-row:hover .rt-dismiss { opacity: 1 !important; }
+        /* Composer focus-within — soft purple glow when the user is creating a task */
+        .rt-composer { transition: border-color 200ms ease, box-shadow 200ms ease; }
+        .rt-composer:focus-within {
+          border-color: rgba(91,33,182,0.32) !important;
+          box-shadow: 0 0 0 4px rgba(91,33,182,0.08), ${C.shadowMd} !important;
+        }
         /* ASMR completion — done state styling */
         .rt-row.is-done {
           background: ${C.bg} !important;
@@ -2624,10 +2630,11 @@ export default function App({ user }) {
 
               {/* COMPOSER */}
               <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "relative" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", flexWrap: "wrap" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Icon name="plus" size={14} color={C.btn} />
-                  </div>
+                {/* Row 1: quiet plus + input */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
+                  <span style={{ width: 20, height: 20, display: "grid", placeItems: "center", flexShrink: 0, color: C.textMuted }} aria-hidden="true">
+                    <Icon name="plus" size={14} color="currentColor" />
+                  </span>
                   <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {composerClient && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px 2px 2px", background: C.btnLight, color: C.btn, borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
@@ -2652,7 +2659,14 @@ export default function App({ user }) {
                       style={{ flex: 1, minWidth: 100, border: "none", outline: "none", background: "transparent", fontSize: 14.5, padding: "4px 0", fontFamily: "inherit", color: C.text }}
                     />
                   </div>
-                  <div className="rt-composer-controls" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
+                </div>
+
+                {/* Divider between rows */}
+                <div style={{ height: 1, background: C.borderLight, margin: "0 14px" }} />
+
+                {/* Row 2: chips + Add Task button */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 10px", flexWrap: "wrap" }}>
+                  <div className="rt-composer-controls" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", flex: 1, minWidth: 0 }}>
                     <button onClick={() => setComposerMenuOpen(!composerMenuOpen)} className="rt-composer-pill" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "0 10px", height: 28, border: "none", borderRadius: 7, fontSize: 12, color: C.textSec, background: composerMenuOpen ? "rgba(0,0,0,0.04)" : "transparent", cursor: "pointer", fontFamily: "inherit", flexShrink: 0, transition: "background 120ms ease, color 120ms ease" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
                       onMouseLeave={e => { if (!composerMenuOpen) e.currentTarget.style.background = "transparent"; }}>
@@ -2973,7 +2987,7 @@ export default function App({ user }) {
                             padding: "6px 14px",
                             borderRadius: 999,
                             border: "none",
-                            background: rankMode === "rai" ? C.card : "transparent",
+                            background: rankMode === "rai" ? "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(91,33,182,0.18), rgba(91,33,182,0) 75%), #FFFFFF" : "transparent",
                             fontFamily: "inherit",
                             fontSize: 12,
                             fontWeight: 600,
@@ -3244,16 +3258,18 @@ export default function App({ user }) {
                               }}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </button>
+
+                            {/* Avatar — moved left of the body for the new mock layout */}
+                            {client
+                              ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={26} /></div>
+                              : <div className="rt-task-avatar" style={{ width: 26, height: 26, borderRadius: 13, background: C.borderSoft, flexShrink: 0 }} />}
   
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 <span className="rt-task-title">{t.text}</span>
                               </div>
-                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.ink500, marginTop: 4, minWidth: 0 }}>
-                                {client
-                                  ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={22} /></div>
-                                  : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
+                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.ink500, marginTop: 3, minWidth: 0 }}>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
                                   const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
@@ -3290,6 +3306,37 @@ export default function App({ user }) {
                                 )}
                               </div>
                             </div>
+
+                            {/* Date pill — right side, hidden on recurring (no due_date) */}
+                            {!t.recurring && t.due_date && (() => {
+                              const isToday = String(t.due_date).slice(0,10) === _todayStr;
+                              const isTomorrow = String(t.due_date).slice(0,10) === _tomorrowStr;
+                              const isOverdue = !isDone && String(t.due_date).slice(0,10) < _todayStr;
+                              const label = isOverdue
+                                ? (() => {
+                                    const days = Math.round((new Date(_todayStr) - new Date(String(t.due_date).slice(0,10))) / 86400000);
+                                    return days === 1 ? "1d late" : days + "d late";
+                                  })()
+                                : isToday ? "Today"
+                                : isTomorrow ? "Tomorrow"
+                                : new Date(String(t.due_date).slice(0,10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                              return (
+                                <span className="rt-row-due" style={{
+                                  display: "inline-flex", alignItems: "center", gap: 4,
+                                  padding: "3px 9px",
+                                  borderRadius: 999,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  flexShrink: 0,
+                                  background: isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : "transparent",
+                                  color: isOverdue ? C.danger : isToday ? C.text : C.textMuted,
+                                  border: isOverdue || isToday ? "none" : "1px solid " + C.borderLight,
+                                }}>
+                                  <Icon name="calendar" size={10} color={isOverdue ? C.danger : isToday ? C.text : C.textMuted} />
+                                  {label}
+                                </span>
+                              );
+                            })()}
   
                             {/* Push button — direction depends on bucket.
                                 Today/Tomorrow → push forward to next bucket.
