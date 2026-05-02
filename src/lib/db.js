@@ -216,6 +216,29 @@ export const tasks = {
     return { data, error };
   },
 
+  // Set / clear / change a task's due_date. Used by:
+  //   - Composer Due chip (creates with date)
+  //   - Push buttons on task tiles (Today→Tomorrow, Tomorrow→Later, Later→pull to Today)
+  //   - Custom date picker
+  // Pass null to clear (returns task to "no specific date" → renders in Today bucket).
+  // Pass YYYY-MM-DD string or Date object.
+  setDueDate: async (taskId, dueDate) => {
+    const dateStr = dueDate == null
+      ? null
+      : (dueDate instanceof Date
+        ? dueDate.toISOString().split('T')[0]
+        : (typeof dueDate === 'string' && dueDate.includes('T'))
+          ? dueDate.split('T')[0]
+          : dueDate);
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ due_date: dateStr })
+      .eq('id', taskId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
   delete: async (taskId) => {
     const { error } = await supabase
       .from('tasks')
