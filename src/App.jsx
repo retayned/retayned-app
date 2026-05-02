@@ -594,6 +594,12 @@ export default function App({ user }) {
     try { window.localStorage.setItem("rt_manual_task_order", JSON.stringify(order)); } catch {}
   };
   const [draggingTaskId, setDraggingTaskId] = useState(null);
+  // Mobile swipe state — tracks touch translation per task ID.
+  // swipeOffset[id] = current x offset (negative when swiping left).
+  // swipeStartX[id] = the touchStart X coordinate.
+  // Used to drag a task left to reveal a "push to next bucket" action.
+  const [swipeOffset, setSwipeOffset] = useState({});
+  const [swipeStartX, setSwipeStartX] = useState({});
   const [dragOverTaskId, setDragOverTaskId] = useState(null);
   const [healthStripOpen, setHealthStripOpen] = useState(false);
   const [retroAnswers, setRetroAnswers] = useState({});
@@ -2135,7 +2141,7 @@ export default function App({ user }) {
       )}
 
       {/* SIDEBAR */}
-      <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 2px 4px rgba(10,10,10,0.04), 0 8px 24px rgba(10,10,10,0.08)" }}>
+      <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 2px 6px rgba(10,10,10,0.04)" }}>
         {/* Logo — fixed at top */}
         <div style={{ padding: "20px 18px 18px", flexShrink: 0 }}>
           <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
@@ -2733,6 +2739,11 @@ export default function App({ user }) {
                         <span>{newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due"}</span>
                       </button>
                       {duePickerOpen && (
+                        <>
+                        <div
+                          onClick={() => setDuePickerOpen(false)}
+                          style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
+                        />
                         <div style={{
                           position: "absolute",
                           top: "calc(100% + 6px)",
@@ -2782,6 +2793,7 @@ export default function App({ user }) {
                             ));
                           })()}
                         </div>
+                        </>
                       )}
                     </div>
                     <button
@@ -2838,7 +2850,13 @@ export default function App({ user }) {
                 </div>
 
                 {composerMenuOpen && (
-                  <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                  <>
+                    {/* Click-outside backdrop — invisible but captures clicks anywhere on the page */}
+                    <div
+                      onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
+                      style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
+                    />
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
                       <input autoFocus value={composerQuery} onChange={e => setComposerQuery(e.target.value)}
@@ -2861,6 +2879,7 @@ export default function App({ user }) {
                       {clientMatches.length === 0 && <div style={{ padding: "12px 10px", fontSize: 12, color: C.textMuted }}>No matches</div>}
                     </div>
                   </div>
+                  </>
                 )}
 
                 {showTouchpoint && (
@@ -3130,8 +3149,10 @@ export default function App({ user }) {
                         const isManual = rankMode === "manual";
                         const isDragging = draggingTaskId === t.id;
                         const isDragOver = dragOverTaskId === t.id && draggingTaskId !== t.id;
-                        // Focus target: first NON-done task in renderTasks. In focus mode it gets highlighted; others dim.
-                        const focusTopId = renderTasks.find(rt => !rt.done)?.id;
+                        // Focus target: first NON-done task in the TODAY bucket only.
+                        // Previously this looked at all of renderTasks which included Tomorrow/Later
+                        // and would mis-anchor if a future task happened to sort first.
+                        const focusTopId = renderTasks.find(rt => !rt.done && bucketOf(rt) === "today")?.id;
                         const isFocusTop = focusMode && t.id === focusTopId;
                         const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "");
   
@@ -3160,8 +3181,78 @@ export default function App({ user }) {
                           setDragOverTaskId(null);
                         };
   
+                        const offset = swipeOffset[t.id] || 0;
+                        const SWIPE_THRESHOLD = 90;
+                        const SWIPE_MAX = 130;
+
+                        const handleTouchStart = (e) => {
+                          if (e.touches.length !== 1) return;
+                          setSwipeStartX(prev => ({ ...prev, [t.id]: e.touches[0].clientX }));
+                          setSwipeOffset(prev => ({ ...prev, [t.id]: 0 }));
+                        };
+                        const handleTouchMove = (e) => {
+                          const startX = swipeStartX[t.id];
+                          if (startX == null) return;
+                          const deltaX = e.touches[0].clientX - startX;
+                          // Only allow leftward swipe (negative deltaX); clamp to SWIPE_MAX
+                          const clamped = Math.max(-SWIPE_MAX, Math.min(0, deltaX));
+                          setSwipeOffset(prev => ({ ...prev, [t.id]: clamped }));
+                        };
+                        const handleTouchEnd = () => {
+                          const off = swipeOffset[t.id] || 0;
+                          if (off <= -SWIPE_THRESHOLD) {
+                            // Commit bucket move based on bucketKey
+                            // Animate the row off-screen briefly, then reset
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
+                            setTimeout(() => {
+                              if (bucketKey === "today") pushToTomorrow(t.id);
+                              else if (bucketKey === "tomorrow") pushToLater(t.id);
+                              else if (bucketKey === "later") pullToToday(t.id);
+                              setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                              setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                            }, 180);
+                          } else {
+                            // Snap back
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: 0 }));
+                            setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                          }
+                        };
+
+                        // Action label per bucket
+                        const swipeActionLabel = bucketKey === "today" ? "Tomorrow"
+                          : bucketKey === "tomorrow" ? "Later"
+                          : "Today";
+
+                        // Don't enable swipe on done tasks or recurring (no due_date)
+                        const swipeable = !isDone && !t.recurring;
+
                         return (
-                          <div key={t.id}
+                          <div key={t.id} style={{ position: "relative", borderRadius: 12, overflow: "hidden" }}>
+                            {/* Swipe action background — purple bg with the destination bucket label.
+                                Reveals as the row slides left. Only renders when actively swiping. */}
+                            {swipeable && offset < 0 && (
+                              <div style={{
+                                position: "absolute",
+                                inset: 0,
+                                background: C.btn,
+                                borderRadius: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                paddingRight: 22,
+                                gap: 8,
+                                color: "#fff",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                pointerEvents: "none",
+                              }}>
+                                <span>{swipeActionLabel}</span>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                  <path d="M3 8h9M9 5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </div>
+                            )}
+                          <div
                             className={cls}
                             draggable={isManual}
                             onDragStart={isManual ? (e) => {
@@ -3180,6 +3271,10 @@ export default function App({ user }) {
                               setDraggingTaskId(null);
                               setDragOverTaskId(null);
                             } : undefined}
+                            onTouchStart={swipeable ? handleTouchStart : undefined}
+                            onTouchMove={swipeable ? handleTouchMove : undefined}
+                            onTouchEnd={swipeable ? handleTouchEnd : undefined}
+                            onTouchCancel={swipeable ? handleTouchEnd : undefined}
                             style={{
                               display: "flex", alignItems: "center", gap: 12,
                               padding: "12px 14px",
@@ -3189,7 +3284,13 @@ export default function App({ user }) {
                               boxShadow: isDragOver ? "0 0 0 2px " + C.btnLight + ", " + C.shadowSm : C.shadowSm,
                               opacity: isDragging ? 0.4 : 1,
                               cursor: isManual ? "grab" : "default",
-                              transition: "border-color 120ms, box-shadow 120ms, opacity 120ms",
+                              transform: offset !== 0 ? `translateX(${offset}px)` : undefined,
+                              transition: swipeStartX[t.id] != null
+                                ? "border-color 120ms, box-shadow 120ms, opacity 120ms"
+                                : "border-color 120ms, box-shadow 120ms, opacity 120ms, transform 200ms ease",
+                              touchAction: swipeable ? "pan-y" : "auto",
+                              position: "relative",
+                              zIndex: 2,
                             }}>
                             {isManual && (
                               <div
@@ -3218,17 +3319,15 @@ export default function App({ user }) {
                               }}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             </button>
-
-                            {/* Avatar — moved left of the body for the new mock layout */}
-                            {client
-                              ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={18} /></div>
-                              : <div className="rt-task-avatar" style={{ width: 18, height: 18, borderRadius: 9, background: C.borderSoft, flexShrink: 0 }} />}
   
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 <span className="rt-task-title">{t.text}</span>
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink500, marginTop: 4, minWidth: 0 }}>
+                                {client
+                                  ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
+                                  : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
@@ -3255,20 +3354,26 @@ export default function App({ user }) {
                                     </span>
                                   );
                                 })()}
-                                {t.recurring && (
-                                  <span className="rt-row-tag" style={{
-                                    display: "inline-flex", alignItems: "center",
-                                    color: C.ink500,
-                                    flexShrink: 0,
-                                  }} title="Recurring">
-                                    <Icon name="infinity" size={13} color={C.ink500} />
-                                  </span>
-                                )}
                               </div>
                             </div>
 
-                            {/* Date pill — right side, hidden on recurring (no due_date) */}
-                            {!t.recurring && t.due_date && (() => {
+                            {/* Right-side indicator — recurring infinity OR date pill (mutually exclusive) */}
+                            {t.recurring ? (
+                              <span className="rt-row-recur" style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                padding: "3px 9px",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                flexShrink: 0,
+                                color: C.textMuted,
+                                border: "1px solid " + C.borderLight,
+                                background: "transparent",
+                              }} title="Recurring">
+                                <Icon name="infinity" size={12} color={C.textMuted} />
+                                Recurring
+                              </span>
+                            ) : t.due_date ? (() => {
                               const isToday = String(t.due_date).slice(0,10) === _todayStr;
                               const isTomorrow = String(t.due_date).slice(0,10) === _tomorrowStr;
                               const isOverdue = !isDone && String(t.due_date).slice(0,10) < _todayStr;
@@ -3296,7 +3401,7 @@ export default function App({ user }) {
                                   {label}
                                 </span>
                               );
-                            })()}
+                            })() : null}
   
                             {/* Push button — direction depends on bucket.
                                 Today/Tomorrow → push forward to next bucket.
@@ -3346,6 +3451,7 @@ export default function App({ user }) {
                               <Icon name="x" size={12} />
                             </button>
                           </div>
+                          </div>
                         );
                     };
 
@@ -3360,12 +3466,9 @@ export default function App({ user }) {
                     return (
                       <>
                         {/* TODAY bucket */}
-                        {_todayBucket.length > 0 && (<>
-                          <BucketHeader name="Today" count={_todayBucket.length} dimmed={false} />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {_todayBucket.map(t => renderRow(t, "today"))}
-                          </div>
-                        </>)}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {_todayBucket.map(t => renderRow(t, "today"))}
+                        </div>
 
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
@@ -3392,7 +3495,7 @@ export default function App({ user }) {
               {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead. */}
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px 12px" }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>Calendar events</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>Today's calendar</span>
                 </div>
                 <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
