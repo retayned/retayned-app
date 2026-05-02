@@ -3578,9 +3578,6 @@ export default function App({ user }) {
 
               {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead. */}
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 4px 12px" }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text }}>Today's calendar</span>
-                </div>
                 <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
