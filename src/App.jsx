@@ -956,14 +956,10 @@ export default function App({ user }) {
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
-  const [showTouchpoint, setShowTouchpoint] = useState(false);
-  const [tpClient, setTpClient] = useState(null);
-  const [tpChannel, setTpChannel] = useState(null);
-  const [tpSearch, setTpSearch] = useState("");
+  // Touchpoint data layer is intact (allTouchpoints + tpLogged still load from DB
+  // for rhythm calc and history) — only the manual Log UI was removed.
   const [tpLogged, setTpLogged] = useState([]);
   const [allTouchpoints, setAllTouchpoints] = useState([]);
-  // Toast for touchpoint logging confirmation: { id, channel, client } | null
-  const [tpToast, setTpToast] = useState(null);
   const [confetti, setConfetti] = useState(false);
   // ─── Today v4 state ──
   const [todayFocusId, setTodayFocusId] = useState(null);
@@ -1955,6 +1951,12 @@ export default function App({ user }) {
         }
         /* Dim siblings of focus wrapper too */
         .rt-focus-on .rt-row-wrap:not(.rt-focus-top-wrap) {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
+        /* Dim bucket headers (TOMORROW / LATER labels) in focus mode */
+        .rt-focus-on .rt-bucket-head {
           opacity: 0.06 !important;
           pointer-events: none !important;
           transition: opacity 280ms ease;
@@ -2975,75 +2977,6 @@ export default function App({ user }) {
                   </>
                 )}
 
-                {showTouchpoint && (
-                  <div style={{ position: "absolute", top: 64, right: 80, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
-                    {!tpClient && (
-                      <>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
-                          <Icon name="search" size={12} color={C.textMuted} />
-                          <input autoFocus value={tpSearch} onChange={e => setTpSearch(e.target.value)}
-                            onKeyDown={e => { if (e.key === "Escape") setShowTouchpoint(false); }}
-                            placeholder="Search clients…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontFamily: "inherit", color: C.text }} />
-                          <button onClick={() => setShowTouchpoint(false)} style={{ padding: 2, background: "none", border: "none", cursor: "pointer", color: C.textMuted, display: "flex", alignItems: "center" }}><Icon name="x" size={14} /></button>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", paddingTop: 4, maxHeight: 300, overflow: "auto" }}>
-                          {(() => {
-                            const q = tpSearch.trim().toLowerCase();
-                            const list = q ? clients.filter(c => (c.name || "").toLowerCase().includes(q)) : clients;
-                            if (list.length === 0) {
-                              return <div style={{ padding: "12px 10px", fontSize: 12, color: C.textMuted }}>No matches</div>;
-                            }
-                            return list.map(c => (
-                              <button key={c.id || c.name} onClick={() => setTpClient(c.name)}
-                                style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", borderRadius: 6, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                                <ClientAvatar client={c} size={22} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                                  <div style={{ fontSize: 10.5, color: C.textMuted }}>{c.industry || "Client"}</div>
-                                </div>
-                                <ScoreChip score={c.ret} delta={stubDelta(c.name)} size="sm" />
-                              </button>
-                            ));
-                          })()}
-                        </div>
-                      </>
-                    )}
-                    {tpClient && (
-                      <div style={{ padding: 8 }}>
-                        <button onClick={() => setShowTouchpoint(false)} style={{ position: "absolute", top: 8, right: 8, padding: 2, background: "none", border: "none", cursor: "pointer", color: C.textMuted, display: "flex", alignItems: "center" }}><Icon name="x" size={14} /></button>
-                        <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6, marginRight: 24 }}>{tpClient} · How did you reach out?</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-                          {[
-                            { key: "call", icon: "phone", label: "Call" },
-                            { key: "email", icon: "mail", label: "Email" },
-                            { key: "dm", icon: "chat", label: "DM" },
-                            { key: "loom", icon: "video", label: "Loom" },
-                            { key: "voice", icon: "mic", label: "Voice" },
-                          ].map(ch => (
-                            <button key={ch.key} onClick={async () => {
-                              const cObj = clients.find(c => c.name === tpClient);
-                              const tpRes = await touchpointsDb.create(user.id, { client_id: cObj?.id || null, client_name: tpClient, channel: ch.key });
-                              const newId = tpRes?.data?.id || null;
-                              setTpLogged(prev => [...prev, { id: newId, client: tpClient, channel: ch.key, t: Date.now() }]);
-                              setShowTouchpoint(false);
-                              const loggedClient = tpClient;
-                              setTpClient(null);
-                              // Toast confirmation — auto-dismiss after 4s
-                              setTpToast({ id: newId, channel: ch.key, client: loggedClient });
-                              setTimeout(() => {
-                                setTpToast(prev => (prev && prev.id === newId) ? null : prev);
-                              }, 4000);
-                            }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 4px", background: C.primaryGhost, border: "1px solid " + C.borderLight, borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
-                              <Icon name={ch.icon} size={16} color={C.textSec} />
-                              <span style={{ fontSize: 10.5, color: C.textSec, fontWeight: 500 }}>{ch.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                        <button onClick={() => setTpClient(null)} style={{ marginTop: 8, fontSize: 11, color: C.textMuted, background: "none", border: "none", cursor: "pointer", padding: 4, fontFamily: "inherit" }}>← Pick another client</button>
-                      </div>
-                    )}
-                  </div>
-                )}
 
               </div>
 
@@ -3192,9 +3125,6 @@ export default function App({ user }) {
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                          <button onClick={() => { setShowTouchpoint(!showTouchpoint); setTpClient(null); setTpChannel(null); setTpSearch(""); }} className="rt-composer-pill" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, color: C.textSec, background: C.card, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }} title="Log a touchpoint">
-                            <Icon name="phone" size={12} /><span>Log</span>
-                          </button>
                           <button style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 12px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Connect</button>
                         </div>
                       </div>
@@ -3555,7 +3485,7 @@ export default function App({ user }) {
 
                     // Bucket header component (inline).
                     const BucketHeader = ({ name, dimmed }) => (
-                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
+                      <div className="rt-bucket-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>{name}</div>
                       </div>
                     );
@@ -3603,9 +3533,6 @@ export default function App({ user }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <button onClick={() => { setShowTouchpoint(!showTouchpoint); setTpClient(null); setTpChannel(null); setTpSearch(""); }} className="rt-composer-pill" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, color: C.textSec, background: C.card, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }} title="Log a touchpoint">
-                        <Icon name="phone" size={12} /><span>Log</span>
-                      </button>
                       <button style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 12px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Connect</button>
                     </div>
                   </div>
@@ -7844,58 +7771,6 @@ export default function App({ user }) {
             </div>
           </div>
         </>
-      )}
-
-      {/* Touchpoint logged toast — bottom of screen, auto-dismisses after 4s */}
-      {tpToast && (
-        <div style={{
-          position: "fixed",
-          bottom: 28,
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "#1E261F",
-          color: "#FFFFFF",
-          borderRadius: 12,
-          padding: "12px 14px 12px 16px",
-          boxShadow: "0 12px 32px rgba(10,10,10,0.25), 0 4px 12px rgba(10,10,10,0.12)",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          zIndex: 100,
-          maxWidth: "calc(100vw - 32px)",
-          fontSize: 13.5,
-          animation: "fadeIn 0.2s ease",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <div style={{ width: 20, height: 20, borderRadius: 10, background: C.success, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Icon name="check" size={12} color="#fff" />
-            </div>
-            <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              Logged · {tpToast.channel} · <span style={{ fontWeight: 700 }}>{tpToast.client}</span>
-            </span>
-          </div>
-          <button
-            onClick={async () => {
-              if (tpToast.id) {
-                await touchpointsDb.delete(tpToast.id);
-                setTpLogged(prev => prev.filter(t => t.id !== tpToast.id));
-              }
-              setTpToast(null);
-            }}
-            style={{
-              background: "transparent",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 600,
-              padding: "4px 10px",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontFamily: "inherit",
-              flexShrink: 0,
-            }}
-          >Undo</button>
-        </div>
       )}
     </div>
   );
