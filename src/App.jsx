@@ -972,6 +972,9 @@ export default function App({ user }) {
   const [todayComposerClient, setTodayComposerClient] = useState("");
   const [todayComposerMenu, setTodayComposerMenu] = useState(false);
   const [todayComposerQuery, setTodayComposerQuery] = useState("");
+  // Highlighted index in the client picker dropdown (for keyboard nav).
+  // -1 = nothing highlighted yet (let Enter fall through to first match).
+  const [composerHighlight, setComposerHighlight] = useState(0);
   const [todayCompletedOpen, setTodayCompletedOpen] = useState(false);
 
   // ─── Observer card state ──
@@ -1930,6 +1933,21 @@ export default function App({ user }) {
             0 24px 64px rgba(0,0,0,0.10) !important;
           transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
         }
+        /* When focus row is wrapped in a swipe container, scale + shadow apply to wrapper */
+        .rt-focus-on .rt-focus-top-wrap {
+          transform: scale(1.015);
+          box-shadow:
+            0 0 0 1px rgba(91,33,182,0.35),
+            0 8px 28px rgba(91,33,182,0.18),
+            0 24px 64px rgba(0,0,0,0.10);
+          transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
+        }
+        /* Dim siblings of focus wrapper too */
+        .rt-focus-on .rt-row-wrap:not(.rt-focus-top-wrap) {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
 
         /* Lightning flash — single white burst when toggling focus on */
         .rt-flash {
@@ -2030,6 +2048,9 @@ export default function App({ user }) {
           .rt-today-v4 {
             grid-template-areas: "band" "composer" "tasks" !important;
           }
+          /* Composer selected-client chip: avatar only on mobile, name hidden */
+          .rt-composer-client-name { display: none !important; }
+          .rt-composer-client-chip { padding: 2px 4px 2px 2px !important; }
         }
         @media (min-width: 769px) {
           .rc-mobile-list { display: none !important; }
@@ -2645,12 +2666,12 @@ export default function App({ user }) {
                   </div>
                   <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {composerClient && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px 2px 2px", background: C.btnLight, color: C.btn, borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
+                      <span className="rt-composer-client-chip" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px 2px 2px", background: C.btnLight, color: C.btn, borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
                         {(() => {
                           const cObj = clients.find(c => c.name === composerClient);
                           return cObj ? <ClientAvatar client={cObj} size={16} /> : null;
                         })()}
-                        <span>{composerClient}</span>
+                        <span className="rt-composer-client-name">{composerClient}</span>
                         <button onClick={() => setComposerClient("")} style={{ color: "inherit", padding: 2, opacity: 0.6, background: "none", border: "none", cursor: "pointer" }}><Icon name="x" size={10} /></button>
                       </span>
                     )}
@@ -2859,18 +2880,62 @@ export default function App({ user }) {
                     <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
-                      <input autoFocus value={composerQuery} onChange={e => setComposerQuery(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Escape") setComposerMenuOpen(false); if (e.key === "Enter" && clientMatches[0]) { setComposerClient(clientMatches[0].name); setComposerMenuOpen(false); setComposerQuery(""); } }}
+                      <input autoFocus value={composerQuery}
+                        onChange={e => { setComposerQuery(e.target.value); setComposerHighlight(0); }}
+                        onKeyDown={e => {
+                          if (e.key === "Escape") { setComposerMenuOpen(false); return; }
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            setComposerHighlight(h => Math.min(h + 1, Math.max(0, clientMatches.length - 1)));
+                            return;
+                          }
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            setComposerHighlight(h => Math.max(h - 1, 0));
+                            return;
+                          }
+                          if (e.key === "Enter") {
+                            const pick = clientMatches[composerHighlight] || clientMatches[0];
+                            if (pick) {
+                              setComposerClient(pick.name);
+                              setComposerMenuOpen(false);
+                              setComposerQuery("");
+                              setComposerHighlight(0);
+                              // Refocus the task input so the user can type immediately
+                              setTimeout(() => {
+                                const el = document.getElementById("rt-composer-input");
+                                if (el) el.focus();
+                              }, 0);
+                            }
+                          }
+                        }}
                         placeholder="Search clients…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontFamily: "inherit", color: C.text }} />
                       <button onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }} style={{ padding: 2, background: "none", border: "none", cursor: "pointer", color: C.textMuted, display: "flex", alignItems: "center" }}><Icon name="x" size={14} /></button>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", paddingTop: 4, maxHeight: 300, overflow: "auto" }}>
-                      {clientMatches.map(c => (
-                        <button key={c.id || c.name} onClick={() => { setComposerClient(c.name); setComposerMenuOpen(false); setComposerQuery(""); }}
-                          style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", borderRadius: 6, textAlign: "left", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                      {clientMatches.map((c, idx) => (
+                        <button key={c.id || c.name}
+                          onClick={() => {
+                            setComposerClient(c.name);
+                            setComposerMenuOpen(false);
+                            setComposerQuery("");
+                            setComposerHighlight(0);
+                            // Refocus the task input so the user can type immediately
+                            setTimeout(() => {
+                              const el = document.getElementById("rt-composer-input");
+                              if (el) el.focus();
+                            }, 0);
+                          }}
+                          onMouseEnter={() => setComposerHighlight(idx)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            padding: "7px 8px", borderRadius: 6, textAlign: "left",
+                            background: idx === composerHighlight ? C.btnLight : "none",
+                            border: "none", cursor: "pointer", fontFamily: "inherit",
+                          }}>
                           <ClientAvatar client={c} size={22} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                            <div style={{ fontSize: 12.5, fontWeight: idx === composerHighlight ? 600 : 500, color: idx === composerHighlight ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
                             <div style={{ fontSize: 10.5, color: C.textMuted }}>{c.industry || "Client"}</div>
                           </div>
                           <ScoreChip score={c.ret} size="sm" />
@@ -3227,7 +3292,7 @@ export default function App({ user }) {
                         const swipeable = !isDone && !t.recurring;
 
                         return (
-                          <div key={t.id} style={{ position: "relative", borderRadius: 12, overflow: "hidden" }}>
+                          <div key={t.id} className={isFocusTop && focusMode ? "rt-row-wrap rt-focus-top-wrap" : "rt-row-wrap"} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
                             {/* Swipe action background — purple bg with the destination bucket label.
                                 Reveals as the row slides left. Only renders when actively swiping. */}
                             {swipeable && offset < 0 && (
@@ -3456,10 +3521,9 @@ export default function App({ user }) {
                     };
 
                     // Bucket header component (inline).
-                    const BucketHeader = ({ name, count, dimmed }) => (
+                    const BucketHeader = ({ name, dimmed }) => (
                       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>{name}</div>
-                        <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>{count}</div>
                       </div>
                     );
 
@@ -3472,7 +3536,7 @@ export default function App({ user }) {
 
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
-                          <BucketHeader name="Tomorrow" count={_tomorrowBucket.length} dimmed={true} />
+                          <BucketHeader name="Tomorrow" dimmed={true} />
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                           </div>
@@ -3480,7 +3544,7 @@ export default function App({ user }) {
 
                         {/* LATER bucket */}
                         {_laterBucket.length > 0 && (<>
-                          <BucketHeader name="Later" count={_laterBucket.length} dimmed={true} />
+                          <BucketHeader name="Later" dimmed={true} />
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
