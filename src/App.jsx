@@ -943,6 +943,12 @@ export default function App({ user }) {
   const [newTask, setNewTask] = useState("");
   const [newTaskClient, setNewTaskClient] = useState("");
   const [newTaskRecurring, setNewTaskRecurring] = useState(false);
+  // Composer Due chip — null means no due date (renders in Today bucket).
+  // Stores YYYY-MM-DD string. Mutually exclusive with newTaskRecurring (selecting
+  // recurring clears due date; selecting due date clears recurring).
+  const [newTaskDueDate, setNewTaskDueDate] = useState(null);
+  // Date picker popover state — opens when Due chip is clicked
+  const [duePickerOpen, setDuePickerOpen] = useState(false);
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [showTouchpoint, setShowTouchpoint] = useState(false);
   const [tpClient, setTpClient] = useState(null);
@@ -1099,6 +1105,7 @@ export default function App({ user }) {
           completed_at: reset ? null : t.completed_at,
           alert: t.is_alert,
           recurring: t.is_recurring,
+          due_date: t.due_date || null,
           sort_order: t.sort_order,
           raiPriority: t.is_rai_priority || false,
           created_at: t.created_at ? new Date(t.created_at).getTime() : 0,
@@ -2438,6 +2445,59 @@ export default function App({ user }) {
           const remaining = totalVisible - doneCount;
           const pct = totalVisible ? doneCount / totalVisible : 0;
 
+          // ─── DUE-DATE BUCKETING ──────────────────────────────────────────
+          // Today's local YYYY-MM-DD and tomorrow's local YYYY-MM-DD as
+          // the bucket boundaries. Recurring tasks always live in Today
+          // (they have no due_date by design).
+          const _now = new Date();
+          const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+          const _tomorrow = new Date(_now);
+          _tomorrow.setDate(_tomorrow.getDate() + 1);
+          const _tomorrowStr = `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
+
+          // bucketOf returns 'today' | 'tomorrow' | 'later'
+          // Rules:
+          //   - Recurring                         → today  (always)
+          //   - No due_date                       → today  (active work, no specific date)
+          //   - due_date <= today (incl. overdue) → today
+          //   - due_date == tomorrow              → tomorrow
+          //   - due_date >  tomorrow              → later
+          const bucketOf = (t) => {
+            if (t.recurring) return "today";
+            if (!t.due_date) return "today";
+            const dateStr = String(t.due_date).slice(0, 10);
+            if (dateStr <= _todayStr) return "today";
+            if (dateStr === _tomorrowStr) return "tomorrow";
+            return "later";
+          };
+
+          // Push button helpers — change due_date and update local state.
+          const setTaskDueDate = async (taskId, newDateStr) => {
+            // Update local first for snappy UI; DB write is async
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: newDateStr } : t));
+            try { await tasksDb.setDueDate(taskId, newDateStr); } catch (e) { console.warn("setDueDate failed:", e); }
+          };
+          const pushToTomorrow = (taskId) => setTaskDueDate(taskId, _tomorrowStr);
+          const pushToLater = (taskId) => {
+            // Default: 7 days from today
+            const later = new Date(_now);
+            later.setDate(later.getDate() + 7);
+            const dateStr = `${later.getFullYear()}-${String(later.getMonth() + 1).padStart(2, "0")}-${String(later.getDate()).padStart(2, "0")}`;
+            setTaskDueDate(taskId, dateStr);
+          };
+          const pullToToday = (taskId) => setTaskDueDate(taskId, _todayStr);
+
+          // Format a YYYY-MM-DD due date for display in the chip / row.
+          // "Today" / "Tomorrow" for the immediate window; otherwise short date.
+          const formatDueLabel = (dateStr, todayStr, tomorrowStr) => {
+            if (!dateStr) return "Due";
+            const s = String(dateStr).slice(0, 10);
+            if (s === todayStr) return "Today";
+            if (s === tomorrowStr) return "Tomorrow";
+            const d = new Date(s + "T00:00:00");
+            return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          };
+
           // ─── COMPOSER helpers ────────────────────────────────────────────
           const clientMatches = composerQuery.trim()
             ? clients.filter(c => c.name.toLowerCase().includes(composerQuery.trim().toLowerCase()))
@@ -2448,17 +2508,22 @@ export default function App({ user }) {
             const text = newTask.trim();
             const clientName = composerClient || "";
             const clientObj = clients.find(c => c.name === clientName);
+            // Recurring tasks cannot have a due_date — they reset daily at 2am local.
+            const dueDateForCreate = newTaskRecurring ? null : (newTaskDueDate || null);
             const { data: created } = await tasksDb.create(user.id, {
               text,
               client_name: clientName,
               client_id: clientObj?.id || null,
               is_recurring: newTaskRecurring,
+              due_date: dueDateForCreate,
             });
-            const task = { id: created?.id || "u" + Date.now(), text, client: clientName || null, done: false, ai: false, recurring: newTaskRecurring, raiPriority: false, alert: false, created_at: Date.now() };
+            const task = { id: created?.id || "u" + Date.now(), text, client: clientName || null, done: false, ai: false, recurring: newTaskRecurring, due_date: dueDateForCreate, raiPriority: false, alert: false, created_at: Date.now() };
             setTasks(prev => [task, ...prev]);
             setNewTask("");
             setComposerClient("");
             setNewTaskRecurring(false);
+            setNewTaskDueDate(null);
+            setDuePickerOpen(false);
             setComposerMenuOpen(false);
           };
 
@@ -2597,7 +2662,12 @@ export default function App({ user }) {
                       type="button"
                       role="switch"
                       aria-checked={newTaskRecurring}
-                      onClick={() => setNewTaskRecurring(!newTaskRecurring)}
+                      onClick={() => {
+                        const next = !newTaskRecurring;
+                        setNewTaskRecurring(next);
+                        // Mutual exclusion: enabling recurring clears any due date
+                        if (next) { setNewTaskDueDate(null); setDuePickerOpen(false); }
+                      }}
                       className="rt-composer-pill"
                       style={{
                         display: "inline-flex", alignItems: "center", gap: 5,
@@ -2617,6 +2687,129 @@ export default function App({ user }) {
                       <Icon name="infinity" size={14} color={C.textMuted} />
                       <span style={{ fontWeight: newTaskRecurring ? 600 : 500 }}>Recurring</span>
                     </button>
+                    {/* Due chip — opens inline date picker. Mutually exclusive with Recurring. */}
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Mutual exclusion: opening Due clears recurring
+                          if (newTaskRecurring) setNewTaskRecurring(false);
+                          setDuePickerOpen(!duePickerOpen);
+                        }}
+                        className="rt-composer-pill"
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          padding: "0 10px",
+                          height: 28,
+                          border: "none",
+                          borderRadius: 7,
+                          fontSize: 12,
+                          color: newTaskDueDate ? C.btn : C.textSec,
+                          background: newTaskDueDate ? C.btnLight : (duePickerOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                          cursor: "pointer", fontFamily: "inherit",
+                          fontWeight: newTaskDueDate ? 600 : 500,
+                          transition: "background 120ms ease, color 120ms ease",
+                        }}
+                        onMouseEnter={e => { if (!newTaskDueDate && !duePickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                        onMouseLeave={e => { if (!newTaskDueDate && !duePickerOpen) e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <Icon name="calendar" size={12} color={newTaskDueDate ? C.btn : C.textMuted} />
+                        <span>{newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due"}</span>
+                      </button>
+                      {duePickerOpen && (
+                        <div style={{
+                          position: "absolute",
+                          top: "calc(100% + 6px)",
+                          right: 0,
+                          background: C.card,
+                          border: "1px solid " + C.border,
+                          borderRadius: 10,
+                          padding: 8,
+                          boxShadow: "0 4px 16px rgba(20,30,22,0.12), 0 1px 3px rgba(20,30,22,0.06)",
+                          zIndex: 50,
+                          minWidth: 180,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 2,
+                        }}>
+                          {(() => {
+                            const _later7 = new Date(_now);
+                            _later7.setDate(_later7.getDate() + 7);
+                            const _later7Str = `${_later7.getFullYear()}-${String(_later7.getMonth() + 1).padStart(2, "0")}-${String(_later7.getDate()).padStart(2, "0")}`;
+                            const opts = [
+                              { label: "Today", value: _todayStr },
+                              { label: "Tomorrow", value: _tomorrowStr },
+                              { label: "Next week", value: _later7Str },
+                            ];
+                            return opts.map(o => (
+                              <button
+                                key={o.value}
+                                onClick={() => { setNewTaskDueDate(o.value); setDuePickerOpen(false); }}
+                                style={{
+                                  textAlign: "left",
+                                  padding: "8px 10px",
+                                  background: newTaskDueDate === o.value ? C.btnLight : "transparent",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  fontSize: 13,
+                                  color: newTaskDueDate === o.value ? C.btn : C.text,
+                                  fontWeight: newTaskDueDate === o.value ? 600 : 500,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  gap: 12,
+                                }}
+                                onMouseEnter={e => { if (newTaskDueDate !== o.value) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                                onMouseLeave={e => { if (newTaskDueDate !== o.value) e.currentTarget.style.background = "transparent"; }}
+                              >
+                                <span>{o.label}</span>
+                                <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>
+                                  {new Date(o.value + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                </span>
+                              </button>
+                            ));
+                          })()}
+                          <input
+                            type="date"
+                            value={newTaskDueDate || ""}
+                            min={_todayStr}
+                            onChange={e => { if (e.target.value) { setNewTaskDueDate(e.target.value); setDuePickerOpen(false); } }}
+                            style={{
+                              marginTop: 4,
+                              padding: "8px 10px",
+                              border: "1px solid " + C.borderLight,
+                              borderRadius: 6,
+                              fontSize: 13,
+                              fontFamily: "inherit",
+                              color: C.text,
+                              background: C.bg,
+                              cursor: "pointer",
+                            }}
+                          />
+                          {newTaskDueDate && (
+                            <button
+                              onClick={() => { setNewTaskDueDate(null); setDuePickerOpen(false); }}
+                              style={{
+                                marginTop: 2,
+                                padding: "6px 10px",
+                                background: "transparent",
+                                border: "none",
+                                borderRadius: 6,
+                                fontSize: 12,
+                                color: C.textMuted,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                textAlign: "left",
+                              }}
+                            >
+                              Clear date
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={submitComposer}
                       disabled={!newTask.trim()}
@@ -2947,160 +3140,241 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {/* TASK LIST — open + done rendered together, done state visual only */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {renderTasks.map(t => {
-                      const client = clients.find(c => c.name === t.client);
-                      const isDone = !!t.done;
-                      const isJustDone = !!justCompletedIds[t.id];
-                      const isManual = rankMode === "manual";
-                      const isDragging = draggingTaskId === t.id;
-                      const isDragOver = dragOverTaskId === t.id && draggingTaskId !== t.id;
-                      // Focus target: first NON-done task in renderTasks. In focus mode it gets highlighted; others dim.
-                      const focusTopId = renderTasks.find(rt => !rt.done)?.id;
-                      const isFocusTop = focusMode && t.id === focusTopId;
-                      const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "");
+                  {/* TASK LIST — three buckets: Today / Tomorrow / Later */}
+                  {(() => {
+                    const _todayBucket = renderTasks.filter(t => bucketOf(t) === "today");
+                    const _tomorrowBucket = renderTasks.filter(t => bucketOf(t) === "tomorrow")
+                      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+                    const _laterBucket = renderTasks.filter(t => bucketOf(t) === "later")
+                      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
 
-                      // Reorder handler: when dropping onto target, move dragging task to target's position
-                      const handleDrop = (e) => {
-                        e.preventDefault();
-                        if (!draggingTaskId || draggingTaskId === t.id) {
-                          setDraggingTaskId(null);
-                          setDragOverTaskId(null);
-                          return;
-                        }
-                        // Build current order from renderTasks (current visual order)
-                        const currentOrder = renderTasks.map(rt => rt.id);
-                        const fromIdx = currentOrder.indexOf(draggingTaskId);
-                        const toIdx = currentOrder.indexOf(t.id);
-                        if (fromIdx === -1 || toIdx === -1) {
-                          setDraggingTaskId(null);
-                          setDragOverTaskId(null);
-                          return;
-                        }
-                        const newOrder = [...currentOrder];
-                        newOrder.splice(fromIdx, 1);
-                        newOrder.splice(toIdx, 0, draggingTaskId);
-                        setManualTaskOrder(newOrder);
-                        setDraggingTaskId(null);
-                        setDragOverTaskId(null);
-                      };
-
-                      return (
-                        <div key={t.id}
-                          className={cls}
-                          draggable={isManual}
-                          onDragStart={isManual ? (e) => {
-                            setDraggingTaskId(t.id);
-                            try { e.dataTransfer.effectAllowed = "move"; } catch {}
-                          } : undefined}
-                          onDragOver={isManual ? (e) => {
-                            e.preventDefault();
-                            if (draggingTaskId && draggingTaskId !== t.id) setDragOverTaskId(t.id);
-                          } : undefined}
-                          onDragLeave={isManual ? () => {
-                            if (dragOverTaskId === t.id) setDragOverTaskId(null);
-                          } : undefined}
-                          onDrop={isManual ? handleDrop : undefined}
-                          onDragEnd={isManual ? () => {
+                    // Inline row renderer — captures bucketKey so the push button knows direction.
+                    const renderRow = (t, bucketKey) => {
+                        const client = clients.find(c => c.name === t.client);
+                        const isDone = !!t.done;
+                        const isJustDone = !!justCompletedIds[t.id];
+                        const isManual = rankMode === "manual";
+                        const isDragging = draggingTaskId === t.id;
+                        const isDragOver = dragOverTaskId === t.id && draggingTaskId !== t.id;
+                        // Focus target: first NON-done task in renderTasks. In focus mode it gets highlighted; others dim.
+                        const focusTopId = renderTasks.find(rt => !rt.done)?.id;
+                        const isFocusTop = focusMode && t.id === focusTopId;
+                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "");
+  
+                        // Reorder handler: when dropping onto target, move dragging task to target's position
+                        const handleDrop = (e) => {
+                          e.preventDefault();
+                          if (!draggingTaskId || draggingTaskId === t.id) {
                             setDraggingTaskId(null);
                             setDragOverTaskId(null);
-                          } : undefined}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 12,
-                            padding: "12px 14px",
-                            background: C.card,
-                            border: isDragOver ? "1px solid " + C.btn : "1px solid " + C.borderSoft,
-                            borderRadius: 12,
-                            boxShadow: isDragOver ? "0 0 0 2px " + C.btnLight + ", " + C.shadowSm : C.shadowSm,
-                            opacity: isDragging ? 0.4 : 1,
-                            cursor: isManual ? "grab" : "default",
-                            transition: "border-color 120ms, box-shadow 120ms, opacity 120ms",
-                          }}>
-                          {isManual && (
-                            <div
-                              aria-hidden="true"
-                              style={{
-                                color: C.textMuted,
-                                fontSize: 14,
-                                lineHeight: 1,
-                                letterSpacing: "-1px",
-                                userSelect: "none",
-                                flexShrink: 0,
-                                cursor: "grab",
-                                padding: "0 2px",
-                              }}>
-                              ⋮⋮
-                            </div>
-                          )}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleTask(t.id); }}
-                            aria-label={isDone ? "mark incomplete" : "mark complete"}
-                            className="rt-check"
+                            return;
+                          }
+                          // Build current order from renderTasks (current visual order)
+                          const currentOrder = renderTasks.map(rt => rt.id);
+                          const fromIdx = currentOrder.indexOf(draggingTaskId);
+                          const toIdx = currentOrder.indexOf(t.id);
+                          if (fromIdx === -1 || toIdx === -1) {
+                            setDraggingTaskId(null);
+                            setDragOverTaskId(null);
+                            return;
+                          }
+                          const newOrder = [...currentOrder];
+                          newOrder.splice(fromIdx, 1);
+                          newOrder.splice(toIdx, 0, draggingTaskId);
+                          setManualTaskOrder(newOrder);
+                          setDraggingTaskId(null);
+                          setDragOverTaskId(null);
+                        };
+  
+                        return (
+                          <div key={t.id}
+                            className={cls}
+                            draggable={isManual}
+                            onDragStart={isManual ? (e) => {
+                              setDraggingTaskId(t.id);
+                              try { e.dataTransfer.effectAllowed = "move"; } catch {}
+                            } : undefined}
+                            onDragOver={isManual ? (e) => {
+                              e.preventDefault();
+                              if (draggingTaskId && draggingTaskId !== t.id) setDragOverTaskId(t.id);
+                            } : undefined}
+                            onDragLeave={isManual ? () => {
+                              if (dragOverTaskId === t.id) setDragOverTaskId(null);
+                            } : undefined}
+                            onDrop={isManual ? handleDrop : undefined}
+                            onDragEnd={isManual ? () => {
+                              setDraggingTaskId(null);
+                              setDragOverTaskId(null);
+                            } : undefined}
                             style={{
-                              width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.ink300,
-                              background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                              flexShrink: 0, cursor: "pointer", padding: 0,
+                              display: "flex", alignItems: "center", gap: 12,
+                              padding: "12px 14px",
+                              background: C.card,
+                              border: isDragOver ? "1px solid " + C.btn : "1px solid " + C.borderSoft,
+                              borderRadius: 12,
+                              boxShadow: isDragOver ? "0 0 0 2px " + C.btnLight + ", " + C.shadowSm : C.shadowSm,
+                              opacity: isDragging ? 0.4 : 1,
+                              cursor: isManual ? "grab" : "default",
+                              transition: "border-color 120ms, box-shadow 120ms, opacity 120ms",
                             }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                          </button>
-
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              <span className="rt-task-title">{t.text}</span>
-                            </div>
-                            <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.ink500, marginTop: 4, minWidth: 0 }}>
-                              {client
-                                ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={22} /></div>
-                                : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
-                              {debugScores && client && (() => {
-                                const psFloat = calcProfileScore(client.ret || 50, client, clients);
-                                const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
-                                const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
-                                const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
-                                const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
-                                const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
-                                const finalScore = Math.min(99, psFloat + newBoost + raiBoost);
-                                return (
-                                  <span style={{
-                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    padding: "2px 6px",
-                                    borderRadius: 4,
-                                    background: "#FEF3C7",
-                                    color: "#7C2D12",
-                                    border: "1px solid #FDE68A",
-                                    flexShrink: 0,
-                                    whiteSpace: "nowrap",
-                                  }}>
-                                    ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} → <b>{finalScore.toFixed(1)}</b>
-                                  </span>
-                                );
-                              })()}
-                              {t.recurring && (
-                                <span className="rt-row-tag" style={{
-                                  display: "inline-flex", alignItems: "center",
-                                  color: C.ink500,
+                            {isManual && (
+                              <div
+                                aria-hidden="true"
+                                style={{
+                                  color: C.textMuted,
+                                  fontSize: 14,
+                                  lineHeight: 1,
+                                  letterSpacing: "-1px",
+                                  userSelect: "none",
                                   flexShrink: 0,
-                                }} title="Recurring">
-                                  <Icon name="infinity" size={13} color={C.ink500} />
-                                </span>
-                              )}
+                                  cursor: "grab",
+                                  padding: "0 2px",
+                                }}>
+                                ⋮⋮
+                              </div>
+                            )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleTask(t.id); }}
+                              aria-label={isDone ? "mark incomplete" : "mark complete"}
+                              className="rt-check"
+                              style={{
+                                width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.ink300,
+                                background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                                flexShrink: 0, cursor: "pointer", padding: 0,
+                              }}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </button>
+  
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <span className="rt-task-title">{t.text}</span>
+                              </div>
+                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.ink500, marginTop: 4, minWidth: 0 }}>
+                                {client
+                                  ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={22} /></div>
+                                  : <div className="rt-task-avatar" style={{ width: 22, height: 22, borderRadius: 11, background: C.borderSoft, flexShrink: 0 }} />}
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, marginLeft: 2 }}>{client ? client.name : "N/A"}</span>
+                                {debugScores && client && (() => {
+                                  const psFloat = calcProfileScore(client.ret || 50, client, clients);
+                                  const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
+                                  const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
+                                  const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
+                                  const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
+                                  const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
+                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost);
+                                  return (
+                                    <span style={{
+                                      fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                      fontSize: 10,
+                                      fontWeight: 600,
+                                      padding: "2px 6px",
+                                      borderRadius: 4,
+                                      background: "#FEF3C7",
+                                      color: "#7C2D12",
+                                      border: "1px solid #FDE68A",
+                                      flexShrink: 0,
+                                      whiteSpace: "nowrap",
+                                    }}>
+                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} → <b>{finalScore.toFixed(1)}</b>
+                                    </span>
+                                  );
+                                })()}
+                                {t.recurring && (
+                                  <span className="rt-row-tag" style={{
+                                    display: "inline-flex", alignItems: "center",
+                                    color: C.ink500,
+                                    flexShrink: 0,
+                                  }} title="Recurring">
+                                    <Icon name="infinity" size={13} color={C.ink500} />
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
+  
+                            {/* Push button — direction depends on bucket.
+                                Today/Tomorrow → push forward to next bucket.
+                                Later → pull back to Today.
+                                Hidden on done tasks (no point pushing a completed item).
+                                Hidden on recurring (they have no due_date by design). */}
+                            {!isDone && !t.recurring && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (bucketKey === "today") pushToTomorrow(t.id);
+                                  else if (bucketKey === "tomorrow") pushToLater(t.id);
+                                  else if (bucketKey === "later") pullToToday(t.id);
+                                }}
+                                className="rt-push"
+                                style={{
+                                  width: 26, height: 26, borderRadius: 6,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  color: C.textMuted, opacity: 0.3,
+                                  background: "none", border: "none", cursor: "pointer",
+                                  flexShrink: 0,
+                                  transition: "opacity 120ms ease, background 120ms ease, color 120ms ease",
+                                }}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.opacity = "1";
+                                  e.currentTarget.style.background = C.btnLight;
+                                  e.currentTarget.style.color = C.btn;
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.opacity = "0.3";
+                                  e.currentTarget.style.background = "none";
+                                  e.currentTarget.style.color = C.textMuted;
+                                }}
+                                aria-label={bucketKey === "later" ? "pull to today" : bucketKey === "tomorrow" ? "push to later" : "push to tomorrow"}
+                                title={bucketKey === "later" ? "Pull to Today" : bucketKey === "tomorrow" ? "Push to Later" : "Push to Tomorrow"}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ transform: bucketKey === "later" ? "rotate(180deg)" : "none" }}>
+                                  <path d="M3 8h9M9 5l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </button>
+                            )}
 
-                          <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
-                            className="rt-dismiss"
-                            style={{ width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0.3, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
-                            aria-label="dismiss">
-                            <Icon name="x" size={12} />
-                          </button>
+                            <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
+                              className="rt-dismiss"
+                              style={{ width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0.3, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
+                              aria-label="dismiss">
+                              <Icon name="x" size={12} />
+                            </button>
+                          </div>
+                        );
+                    };
+
+                    // Bucket header component (inline).
+                    const BucketHeader = ({ name, count, dimmed }) => (
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
+                        <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>{name}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>{count}{dimmed ? " · sorted by due" : ""}</div>
+                      </div>
+                    );
+
+                    return (
+                      <>
+                        {/* TODAY bucket */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {_todayBucket.map(t => renderRow(t, "today"))}
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        {/* TOMORROW bucket */}
+                        {_tomorrowBucket.length > 0 && (<>
+                          <BucketHeader name="Tomorrow" count={_tomorrowBucket.length} dimmed={true} />
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
+                            {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
+                          </div>
+                        </>)}
+
+                        {/* LATER bucket */}
+                        {_laterBucket.length > 0 && (<>
+                          <BucketHeader name="Later" count={_laterBucket.length} dimmed={true} />
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
+                            {_laterBucket.map(t => renderRow(t, "later"))}
+                          </div>
+                        </>)}
+                      </>
+                    );
+                  })()}
 
                   {/* Completed section removed — done tasks now render inline above with strikethrough state. */}
                 </div>
