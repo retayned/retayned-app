@@ -6078,6 +6078,15 @@ export default function App({ user }) {
             );
           };
 
+          // Distribution row in the Team rail card
+          const DistRow = ({ color, count, label, muted = false }) => (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 4, background: color, opacity: muted ? 0.5 : 1, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: count > 0 ? C.text : C.textMuted, fontWeight: 600, fontVariantNumeric: "tabular-nums", width: 24 }}>{count}</span>
+              <span style={{ fontSize: 12.5, color: C.textMuted }}>{label}</span>
+            </div>
+          );
+
           // ─── Stats engine ──────────────────────────────────────────────
           // For each worker, compute throughput, reliability, client mix,
           // and a Worker Impact Score that weights completions by client value.
@@ -6238,6 +6247,69 @@ export default function App({ user }) {
             .map(w => ({ w, s: statsByWorker[w.id] }))
             .sort((a, b) => b.s.completed30 - a.s.completed30);
 
+          // ─── Left-rail aggregations ─────────────────────────────────
+          // Avg Impact (only includes workers with track record)
+          const scorableWorkers = workersList.filter(w => !statsByWorker[w.id].isBuilding);
+          const avgImpact = scorableWorkers.length
+            ? Math.round(scorableWorkers.reduce((a, w) => a + statsByWorker[w.id].impact, 0) / scorableWorkers.length)
+            : null;
+
+          // Distribution buckets (mirrors Clients page Thriving/Healthy/Watch/At-risk/Critical)
+          const distHigh   = workersList.filter(w => !statsByWorker[w.id].isBuilding && statsByWorker[w.id].impact >= 70).length;
+          const distSolid  = workersList.filter(w => !statsByWorker[w.id].isBuilding && statsByWorker[w.id].impact >= 40 && statsByWorker[w.id].impact < 70).length;
+          const distLow    = workersList.filter(w => !statsByWorker[w.id].isBuilding && statsByWorker[w.id].impact < 40).length;
+          const distBuild  = workersList.filter(w => statsByWorker[w.id].isBuilding).length;
+
+          // Lifetime team task count + avg time-to-complete
+          const allCompletedAcrossTeam = allAssigned.filter(t => t.done && (t.completed_at || t.worker_completed_at));
+          const lifetimeTasksDone = allCompletedAcrossTeam.length;
+          // Avg time-to-complete (days). created_at → completed_at/worker_completed_at.
+          const avgDaysToComplete = (() => {
+            if (allCompletedAcrossTeam.length === 0) return null;
+            const total = allCompletedAcrossTeam.reduce((acc, t) => {
+              const start = t.created_at ? new Date(t.created_at).getTime() : null;
+              const end = (t.completed_at || t.worker_completed_at) ? new Date(t.completed_at || t.worker_completed_at).getTime() : null;
+              if (!start || !end || end < start) return acc;
+              return acc + (end - start) / 86400000;
+            }, 0);
+            return Math.round((total / allCompletedAcrossTeam.length) * 10) / 10; // 1 decimal
+          })();
+
+          // Most-tenured worker (longest with us by created_at)
+          const mostTenured = (() => {
+            if (workersList.length === 0) return null;
+            const sorted = [...workersList].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+            const w = sorted[0];
+            if (!w.created_at) return null;
+            const months = Math.max(1, Math.round((Date.now() - new Date(w.created_at).getTime()) / (86400000 * 30)));
+            return { name: w.name, months };
+          })();
+
+          // Recent movement: completions last 7d vs prior 7d
+          const _7dAgo = new Date(_now); _7dAgo.setDate(_7dAgo.getDate() - 7);
+          const _14dAgo = new Date(_now); _14dAgo.setDate(_14dAgo.getDate() - 14);
+          const movementByWorker = workersList.map(w => {
+            const wTasks = allAssigned.filter(t => t.assigned_worker_id === w.id);
+            const completed = wTasks.filter(t => t.done && (t.completed_at || t.worker_completed_at));
+            const last7 = completed.filter(t => {
+              const c = new Date(t.completed_at || t.worker_completed_at);
+              return c >= _7dAgo;
+            }).length;
+            const prior7 = completed.filter(t => {
+              const c = new Date(t.completed_at || t.worker_completed_at);
+              return c >= _14dAgo && c < _7dAgo;
+            }).length;
+            return { w, last7, prior7, delta: last7 - prior7 };
+          });
+          const climbing = [...movementByWorker]
+            .filter(x => x.delta > 0)
+            .sort((a, b) => b.delta - a.delta)
+            .slice(0, 3);
+          const slipping = [...movementByWorker]
+            .filter(x => x.delta < 0)
+            .sort((a, b) => a.delta - b.delta)
+            .slice(0, 3);
+
           return (
             <div>
               {/* HEADER — mirrors Clients page exactly */}
@@ -6289,7 +6361,125 @@ export default function App({ user }) {
                   <div style={{ fontSize: 13, color: C.textMuted }}>Add someone you delegate tasks to — internal employee, freelancer, VA. They'll get an email when you assign them work.</div>
                 </div>
               ) : (
-                <>
+                <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
+                  {/* LEFT RAIL — Team / Team History / Recent Movement */}
+                  <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Card 1: TEAM (mirrors Portfolio) */}
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                      <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Team</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+                        <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
+                          <svg width={64} height={64} style={{ transform: "rotate(-90deg)" }}>
+                            <circle cx={32} cy={32} r={28} fill="none" stroke={C.borderLight} strokeWidth="3" />
+                            {avgImpact != null && (
+                              <circle cx={32} cy={32} r={28} fill="none"
+                                stroke={avgImpact >= 70 ? C.success : avgImpact >= 40 ? C.warning : C.danger}
+                                strokeWidth="3" strokeLinecap="round"
+                                strokeDasharray={2 * Math.PI * 28}
+                                strokeDashoffset={2 * Math.PI * 28 * (1 - avgImpact / 100)} />
+                            )}
+                          </svg>
+                          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ fontSize: 19, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3, lineHeight: 1 }}>{avgImpact != null ? avgImpact : "—"}</div>
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                            <span style={{ fontSize: 11.5, color: C.textMuted }}>Workers</span>
+                            <span style={{ fontSize: 12, color: C.textSec, fontVariantNumeric: "tabular-nums" }}>{workersList.length}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                            <span style={{ fontSize: 11.5, color: C.textMuted }}>Pending</span>
+                            <span style={{ fontSize: 12, color: C.textSec, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{teamPending}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                            <span style={{ fontSize: 11.5, color: C.textMuted }}>On-time</span>
+                            <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", fontWeight: 600, color: teamOnTimeRate == null ? C.textMuted : teamOnTimeRate >= 80 ? C.success : teamOnTimeRate >= 60 ? C.warning : C.danger }}>
+                              {teamOnTimeRate != null ? `${teamOnTimeRate}%` : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Distribution bar — mirrors Clients health distribution */}
+                      <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: C.borderLight, marginBottom: 10 }}>
+                        {distHigh > 0 && <div style={{ background: C.success, flex: distHigh }} />}
+                        {distSolid > 0 && <div style={{ background: C.warning, flex: distSolid }} />}
+                        {distLow > 0 && <div style={{ background: C.danger, flex: distLow }} />}
+                        {distBuild > 0 && <div style={{ background: C.textMuted, opacity: 0.4, flex: distBuild }} />}
+                      </div>
+                      {/* Bucket counts */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <DistRow color={C.success} count={distHigh} label="High impact" />
+                        <DistRow color={C.warning} count={distSolid} label="Solid" />
+                        <DistRow color={C.danger} count={distLow} label="Underperforming" />
+                        <DistRow color={C.textMuted} count={distBuild} label="Building" muted />
+                      </div>
+                    </div>
+
+                    {/* Card 2: TEAM HISTORY */}
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                      <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Team history</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5, lineHeight: 1.05 }}>{lifetimeTasksDone}</div>
+                          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>Tasks done</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5, lineHeight: 1.05 }}>
+                            {avgDaysToComplete != null ? `${avgDaysToComplete}d` : "—"}
+                          </div>
+                          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>Avg time</div>
+                        </div>
+                      </div>
+                      {mostTenured && (
+                        <div style={{ paddingTop: 10, borderTop: "1px solid " + C.borderLight, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ fontSize: 11.5, color: C.textMuted }}>Most tenured</span>
+                          <div style={{ display: "flex", gap: 6, alignItems: "baseline", minWidth: 0 }}>
+                            <span style={{ fontSize: 12, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mostTenured.name}</span>
+                            <span style={{ fontSize: 11, color: C.textMuted, flexShrink: 0 }}>{mostTenured.months >= 12 ? `${(mostTenured.months / 12).toFixed(1)} yr` : `${mostTenured.months} mo`}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card 3: RECENT MOVEMENT */}
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                        <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Recent movement</div>
+                        <div style={{ fontSize: 10.5, color: C.textMuted }}>7d</div>
+                      </div>
+                      {climbing.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.success, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>More active</div>
+                          {climbing.map(({ w, delta }) => (
+                            <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}</div>
+                              <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: C.success, fontVariantNumeric: "tabular-nums" }}>+{delta}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {slipping.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.warning, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Gone quiet</div>
+                          {slipping.map(({ w, delta }) => (
+                            <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                              <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}</div>
+                              <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: C.warning, fontVariantNumeric: "tabular-nums" }}>{delta}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {climbing.length === 0 && slipping.length === 0 && (
+                        <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "4px 0" }}>No movement to report yet</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* MAIN COLUMN — leaderboards + worker rows */}
+                  <div style={{ minWidth: 0 }}>
                   {/* Comparative — Team Leaderboards */}
                   {workersList.length >= 2 && (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20, maxWidth: 880 }}>
@@ -6411,7 +6601,17 @@ export default function App({ user }) {
                       );
                     })}
                   </div>
-                </>
+                  </div>
+                  {/* DAYBOOK COLUMN — wide desktop only (>=1440px), shared global notes */}
+                  <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
+                    <DaybookPanel
+                      entry={daybookEntry}
+                      yesterday={daybookYesterday}
+                      saveStatus={daybookSaveStatus}
+                      onChange={handleDaybookChange}
+                    />
+                  </div>
+                </div>
               )}
             </div>
           );
