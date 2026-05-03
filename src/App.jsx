@@ -547,12 +547,13 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
           />
         </div>
 
-        {/* Yesterday peek */}
+        {/* Yesterday peek — same white bg as the rest of the notepad,
+            visually separated only by a dotted top border. */}
         {yesterday && yesterday.body && (
           <div style={{
             padding: "12px 18px 14px",
             borderTop: "1px dashed " + C.border,
-            background: C.surfaceWarm,
+            background: C.card,
           }}>
             <div style={{
               fontSize: 10,
@@ -4833,9 +4834,9 @@ export default function App({ user }) {
                         {sortOptions.map(s => (
                           <button key={s.id} onClick={() => setClientsSort(s.id)} className={s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : ""} style={{
                             padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                            background: sortId === s.id ? C.text : "transparent",
+                            background: sortId === s.id ? C.btn : "transparent",
                             color: sortId === s.id ? "#fff" : C.textMuted,
-                            border: "1px solid " + (sortId === s.id ? C.text : C.borderLight),
+                            border: "1px solid " + (sortId === s.id ? C.btn : C.borderLight),
                           }}>{s.label}</button>
                         ))}
                       </div>
