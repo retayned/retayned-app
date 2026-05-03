@@ -25,6 +25,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
   const paths = {
     today: (<><circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="3.5" fill={color}/></>),
     clients: (<><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/><path d="M23 21v-2a4 4 0 00-3-3.87" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><path d="M16 3.13a4 4 0 010 7.75" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/></>),
+    user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
     health: (<><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     rai: (<><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     rolodex: (<><rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth="1.8" fill="none"/><path d="M2 10h20" stroke={color} strokeWidth="1.8"/><circle cx="12" cy="14.5" r="1.5" fill={color}/></>),
@@ -331,11 +332,11 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 
 const navItemsCore = [
   { id: "today", icon: "today", label: "Today" },
-  { id: "clients", icon: "clients", label: "Clients" },
-  { id: "workers", icon: "clients", label: "Workers" },
+  { id: "clients", icon: "user", label: "Clients" },
   { id: "health", icon: "health", label: "Health" },
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
+  { id: "workers", icon: "clients", label: "Workers" },
   { id: "coach", icon: "rai", label: "Rai" },
 ];
 const navItemsEnterprise = [
@@ -2636,10 +2637,33 @@ export default function App({ user }) {
           // (bucketOf defined above near hoisted date boundaries)
 
           // Push button helpers — change due_date and update local state.
+          // Also notify worker by email if the task is assigned to one.
           const setTaskDueDate = async (taskId, newDateStr) => {
+            // Find current task to detect if it has a worker assignment
+            const currentTask = tasks.find(t => t.id === taskId);
+            const oldDateStr = currentTask?.due_date || null;
+            const wasAssigned = !!currentTask?.assigned_worker_id;
+            const dateChanged = String(oldDateStr || "").slice(0,10) !== String(newDateStr || "").slice(0,10);
+
             // Update local first for snappy UI; DB write is async
             setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: newDateStr } : t));
             try { await tasksDb.setDueDate(taskId, newDateStr); } catch (e) { console.warn("setDueDate failed:", e); }
+
+            // Re-notify worker if assigned + date actually changed.
+            // Edge Function applies a 12-hour cooldown per task to prevent spam.
+            if (wasAssigned && dateChanged) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/worker-task-notify`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                  },
+                  body: JSON.stringify({ task_id: taskId, kind: "date_change" }),
+                }).catch(e => console.warn("Worker date-change notify failed:", e));
+              } catch (e) { console.warn("Worker date-change notify error:", e); }
+            }
           };
           const pushToTomorrow = (taskId) => setTaskDueDate(taskId, _tomorrowStr);
           const pushToLater = (taskId) => {
@@ -2830,16 +2854,6 @@ export default function App({ user }) {
                     <Icon name="plus" size={14} color={C.btn} />
                   </div>
                   <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    {composerClient && (
-                      <span className="rt-composer-client-chip" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "2px 8px 2px 2px", background: C.btnLight, color: C.btn, borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
-                        {(() => {
-                          const cObj = clients.find(c => c.name === composerClient);
-                          return cObj ? <ClientAvatar client={cObj} size={16} /> : null;
-                        })()}
-                        <span className="rt-composer-client-name">{composerClient}</span>
-                        <button onClick={() => setComposerClient("")} style={{ color: "inherit", padding: 2, opacity: 0.6, background: "none", border: "none", cursor: "pointer" }}><Icon name="x" size={10} /></button>
-                      </span>
-                    )}
                     <input
                       id="rt-composer-input"
                       value={newTask}
@@ -2861,11 +2875,65 @@ export default function App({ user }) {
                 {/* Row 2: chips + Add Task button */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 10px", flexWrap: "wrap" }}>
                   <div className="rt-composer-controls" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", flex: 1, minWidth: 0 }}>
-                    <button onClick={() => setComposerMenuOpen(!composerMenuOpen)} className="rt-composer-pill" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "0 10px", height: 28, border: "none", borderRadius: 7, fontSize: 12, color: C.textSec, background: composerMenuOpen ? "rgba(0,0,0,0.04)" : "transparent", cursor: "pointer", fontFamily: "inherit", flexShrink: 0, transition: "background 120ms ease, color 120ms ease" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                      onMouseLeave={e => { if (!composerMenuOpen) e.currentTarget.style.background = "transparent"; }}>
-                      <Icon name="clients" size={12} /><span style={{ fontWeight: 500 }}>Client</span>
-                    </button>
+                    {(() => {
+                      const selectedClientObj = composerClient ? clients.find(c => c.name === composerClient) : null;
+                      return (
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                          <button
+                            onClick={() => setComposerMenuOpen(!composerMenuOpen)}
+                            className="rt-composer-pill"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: selectedClientObj ? "0 4px 0 4px" : "0 10px",
+                              height: 28,
+                              border: "none",
+                              borderRadius: 7,
+                              fontSize: 12,
+                              color: selectedClientObj ? C.btn : C.textSec,
+                              background: selectedClientObj ? C.btnLight : (composerMenuOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                              cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                              fontWeight: selectedClientObj ? 600 : 500,
+                              transition: "background 120ms ease, color 120ms ease",
+                            }}
+                            onMouseEnter={e => { if (!selectedClientObj && !composerMenuOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                            onMouseLeave={e => { if (!selectedClientObj && !composerMenuOpen) e.currentTarget.style.background = "transparent"; }}
+                          >
+                            {selectedClientObj ? (
+                              <>
+                                <ClientAvatar client={selectedClientObj} size={20} />
+                                <span className="rt-composer-client-name" style={{ paddingRight: 4 }}>{selectedClientObj.name}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Icon name="clients" size={12} />
+                                <span style={{ fontWeight: 500 }}>Client</span>
+                              </>
+                            )}
+                          </button>
+                          {selectedClientObj && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setComposerClient(""); }}
+                              style={{
+                                position: "absolute",
+                                top: -3, right: -3,
+                                width: 16, height: 16,
+                                borderRadius: 8,
+                                background: C.card,
+                                border: "1px solid " + C.borderLight,
+                                color: C.textMuted,
+                                cursor: "pointer",
+                                display: "grid", placeItems: "center",
+                                padding: 0,
+                              }}
+                              aria-label="Clear client"
+                              title="Clear client"
+                            >
+                              <Icon name="x" size={9} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {/* Worker chip — only renders if user has at least one worker added.
                         When clicked, opens picker. Mutual exclusion: just selecting/clearing,
                         no other state interaction. Default (null) = self-assigned. */}
@@ -3432,13 +3500,26 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {/* TASK LIST — three buckets: Today / Tomorrow / Later */}
+                  {/* TASK LIST — three buckets: Today / Tomorrow / Later
+                      Within each bucket, assigned tasks (delegated to a worker)
+                      sort to the BOTTOM. Operator's own tasks (no assignment)
+                      keep their existing order (Rai ranking or manual). */}
                   {(() => {
-                    const _todayBucket = renderTasks.filter(t => bucketOf(t) === "today");
-                    const _tomorrowBucket = renderTasks.filter(t => bucketOf(t) === "tomorrow")
-                      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
-                    const _laterBucket = renderTasks.filter(t => bucketOf(t) === "later")
-                      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+                    // Stable partition: unassigned first (preserving order), then assigned (preserving order).
+                    const partitionByAssignment = (arr) => {
+                      const unassigned = arr.filter(t => !t.assigned_worker_id);
+                      const assigned = arr.filter(t => !!t.assigned_worker_id);
+                      return [...unassigned, ...assigned];
+                    };
+                    const _todayBucket = partitionByAssignment(renderTasks.filter(t => bucketOf(t) === "today"));
+                    const _tomorrowBucket = partitionByAssignment(
+                      renderTasks.filter(t => bucketOf(t) === "tomorrow")
+                        .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
+                    );
+                    const _laterBucket = partitionByAssignment(
+                      renderTasks.filter(t => bucketOf(t) === "later")
+                        .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
+                    );
 
                     // Inline row renderer — captures bucketKey so the push button knows direction.
                     const renderRow = (t, bucketKey) => {
@@ -3670,12 +3751,14 @@ export default function App({ user }) {
                                   fontSize: 11,
                                   fontWeight: 600,
                                   flexShrink: 0,
-                                  background: isWorkerDone ? "rgba(45,134,89,0.10)" : C.btnLight,
-                                  color: isWorkerDone ? C.success : C.btn,
+                                  // Pending = gold (warning) — distinct from purple (selected) and green (done).
+                                  // Done = neutral grey, doesn't compete with the strikethrough on the title.
+                                  background: isWorkerDone ? C.surfaceWarm : "rgba(184,139,21,0.14)",
+                                  color: isWorkerDone ? C.textMuted : C.warning,
                                 }} title={isWorkerDone ? `${w.name} completed this` : `Assigned to ${w.name}`}>
                                   <span style={{
                                     width: 18, height: 18, borderRadius: 9,
-                                    background: isWorkerDone ? C.success : C.primary,
+                                    background: isWorkerDone ? C.textMuted : C.warning,
                                     color: "#fff", fontSize: 8, fontWeight: 700,
                                     display: "grid", placeItems: "center",
                                   }}>{initials}</span>
@@ -5967,90 +6050,372 @@ export default function App({ user }) {
         )}
 
         {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
-        {page === "workers" && (
-          <div style={{ padding: "0 4px", maxWidth: 880 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", paddingBottom: 18, borderBottom: "1px solid " + C.borderLight, marginBottom: 20 }}>
+        {page === "workers" && (() => {
+          // Inline mini Stat component for the per-worker stat grid
+          const Stat = ({ label, value, sub, tone = "default", isText = false }) => {
+            const valueColor =
+              tone === "danger" ? C.danger :
+              tone === "warning" ? C.warning :
+              tone === "success" ? C.success :
+              C.text;
+            return (
               <div>
-                <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.015em", margin: "0 0 4px" }}>Workers</h2>
-                <div style={{ fontSize: 13, color: C.textMuted }}>People you delegate tasks to. They receive emails, you see status here.</div>
-              </div>
-              <button
-                onClick={() => { setNewWorkerName(""); setNewWorkerEmail(""); setNewWorkerRole(""); setAddWorkerOpen(true); }}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "8px 14px",
-                  background: C.btn, color: "#fff",
-                  border: "none", borderRadius: 8,
-                  fontFamily: "inherit", fontSize: 13, fontWeight: 600,
-                  cursor: "pointer",
-                  boxShadow: "0 1px 2px rgba(91,33,182,0.18), 0 4px 12px rgba(91,33,182,0.14)",
-                }}
-              >
-                <Icon name="plus" size={12} color="#fff" />
-                Add worker
-              </button>
-            </div>
-
-            {workersList.length === 0 ? (
-              <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14 }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: C.textMuted, fontWeight: 600 }}>{label}</div>
                 <div style={{
-                  fontFamily: "'Fraunces', Georgia, serif",
-                  fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
-                  fontStyle: "italic",
-                  fontSize: 16,
-                  color: C.textMuted,
-                  marginBottom: 4,
-                }}>No workers yet.</div>
-                <div style={{ fontSize: 13, color: C.textMuted }}>Add someone you delegate tasks to — internal employee, freelancer, VA. They'll get an email when you assign them work.</div>
+                  fontSize: isText ? 13 : 17,
+                  fontWeight: isText ? 600 : 700,
+                  color: valueColor,
+                  marginTop: 3,
+                  fontVariantNumeric: "tabular-nums",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>{value}</div>
+                {sub && (
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{sub}</div>
+                )}
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {workersList.map(w => {
-                  const counts = workerCounts[w.id] || { pending: 0, done: 0 };
-                  const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
-                  return (
-                    <div key={w.id} style={{
-                      display: "grid",
-                      gridTemplateColumns: "auto 1fr auto auto",
-                      alignItems: "center", gap: 14,
-                      padding: "14px 16px",
-                      background: C.card,
-                      border: "1px solid " + C.borderLight,
-                      borderRadius: 12,
-                    }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 18, background: C.primary, color: "#fff", fontSize: 12, fontWeight: 700, display: "grid", placeItems: "center" }}>{initials}</div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{w.name}</div>
-                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
-                          {w.email}{w.role ? " · " + w.role : ""}
-                        </div>
+            );
+          };
+
+          // ─── Stats engine ──────────────────────────────────────────────
+          // For each worker, compute throughput, reliability, client mix,
+          // and a Worker Impact Score that weights completions by client value.
+          const _now = new Date();
+          const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+          const _30dAgo = new Date(_now); _30dAgo.setDate(_30dAgo.getDate() - 30);
+          const _30dAgoIso = _30dAgo.toISOString();
+
+          // All tasks ever assigned to a worker (for all-time stats).
+          // We rely on the in-memory `tasks` array for now; for a deeper history we'd query.
+          const allAssigned = tasks.filter(t => !!t.assigned_worker_id);
+
+          // Compute total revenue across clients (for revenue concentration in Impact).
+          const totalRevenue = clients.reduce((a, c) => a + (c.revenue || 0), 0) || 1;
+
+          // Per-client value heuristic (used in Impact Score).
+          // 0 → low value, ~1 → top-tier value.
+          const clientValue = (clientName) => {
+            const c = clients.find(x => x.name === clientName);
+            if (!c) return 0.3; // unknown client → conservative floor
+            const ret = (c.ret || 60) / 100;                 // 0..1
+            const conc = (c.revenue || 0) / totalRevenue;     // 0..1
+            const tenureBoost = 1 + Math.min((c.months || 0) / 24, 1); // 1..2
+            return ret * conc * tenureBoost;
+          };
+
+          // Compute per-worker stats
+          const computeStats = (workerId) => {
+            const wTasks = allAssigned.filter(t => t.assigned_worker_id === workerId);
+            const wTasksAll = wTasks.length;
+            const wDone = wTasks.filter(t => t.done).length;
+
+            // 30-day window — based on completed_at for done tasks, created_at for assigned
+            const wAssigned30 = wTasks.filter(t => {
+              const ts = t.created_at || 0;
+              return new Date(ts).getTime() >= _30dAgo.getTime();
+            }).length;
+            const wDone30 = wTasks.filter(t => {
+              if (!t.done) return false;
+              const cAt = t.completed_at || t.worker_completed_at;
+              return cAt && new Date(cAt).getTime() >= _30dAgo.getTime();
+            }).length;
+
+            // On-time: completed_at <= due_date (or no due_date counts as on-time if completed)
+            const completedTasks = wTasks.filter(t => t.done && (t.completed_at || t.worker_completed_at));
+            const onTimeAll = completedTasks.filter(t => {
+              if (!t.due_date) return true;
+              const cAt = t.completed_at || t.worker_completed_at;
+              return String(cAt).slice(0,10) <= String(t.due_date).slice(0,10);
+            }).length;
+            const onTimeRateAll = completedTasks.length ? Math.round((onTimeAll / completedTasks.length) * 100) : null;
+
+            const completed30 = completedTasks.filter(t => {
+              const cAt = t.completed_at || t.worker_completed_at;
+              return new Date(cAt).getTime() >= _30dAgo.getTime();
+            });
+            const onTime30 = completed30.filter(t => {
+              if (!t.due_date) return true;
+              const cAt = t.completed_at || t.worker_completed_at;
+              return String(cAt).slice(0,10) <= String(t.due_date).slice(0,10);
+            }).length;
+            const onTimeRate30 = completed30.length ? Math.round((onTime30 / completed30.length) * 100) : null;
+
+            // Pending + overdue
+            const pending = wTasks.filter(t => !t.done).length;
+            const overdue = wTasks.filter(t => !t.done && t.due_date && String(t.due_date).slice(0,10) < _todayStr).length;
+
+            // Client mix
+            const clientMap = {};
+            wTasks.forEach(t => {
+              const k = t.client || "(no client)";
+              clientMap[k] = (clientMap[k] || 0) + 1;
+            });
+            const clientEntries = Object.entries(clientMap).sort((a, b) => b[1] - a[1]);
+            const topClient = clientEntries[0]?.[0] || null;
+            const clientDiversity = clientEntries.filter(([k]) => k !== "(no client)").length;
+
+            // Top client (last 30d)
+            const wTasks30 = wTasks.filter(t => {
+              const ts = t.created_at || 0;
+              return new Date(ts).getTime() >= _30dAgo.getTime();
+            });
+            const clientMap30 = {};
+            wTasks30.forEach(t => {
+              const k = t.client || "(no client)";
+              clientMap30[k] = (clientMap30[k] || 0) + 1;
+            });
+            const topClient30 = Object.entries(clientMap30).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+            // Worker Impact Score
+            // For each completed task: weight = on-time bonus, multiplied by client_value.
+            // Penalty for overdue tasks (still open, past due).
+            // Normalize by total task count, then scale to 0-99.
+            let rawImpact = 0;
+            completedTasks.forEach(t => {
+              const isOnTime = !t.due_date || (() => {
+                const cAt = t.completed_at || t.worker_completed_at;
+                return String(cAt).slice(0,10) <= String(t.due_date).slice(0,10);
+              })();
+              const taskWeight = t.recurring ? 1.0 : (isOnTime ? 1.5 : 0.7);
+              // Time decay: tasks > 90 days old count for half
+              const cAt = t.completed_at || t.worker_completed_at;
+              const ageDays = cAt ? (Date.now() - new Date(cAt).getTime()) / 86400000 : 0;
+              const decay = ageDays > 90 ? 0.5 : 1.0;
+              rawImpact += taskWeight * clientValue(t.client) * decay;
+            });
+            // Penalty for overdue
+            const overdueTasks = wTasks.filter(t => !t.done && t.due_date && String(t.due_date).slice(0,10) < _todayStr);
+            overdueTasks.forEach(t => {
+              rawImpact -= 0.5 * clientValue(t.client);
+            });
+
+            // Normalize. Empirical: scale by sqrt of total task count to dampen massive volume.
+            // Floor at 0, cap at 99.
+            const denom = Math.sqrt(Math.max(wTasksAll, 1));
+            let impact = denom ? Math.round((rawImpact / denom) * 35) : 0;
+            impact = Math.max(0, Math.min(99, impact));
+
+            // "Building track record" if < 5 completed
+            const isBuilding = completedTasks.length < 5;
+
+            return {
+              wTasksAll, wDone, wAssigned30, wDone30,
+              pending, overdue,
+              onTimeRateAll, onTimeRate30,
+              completedAll: completedTasks.length,
+              completed30: completed30.length,
+              topClient, topClient30, clientDiversity,
+              impact, isBuilding,
+            };
+          };
+
+          // Build stats map
+          const statsByWorker = {};
+          workersList.forEach(w => { statsByWorker[w.id] = computeStats(w.id); });
+
+          // Subhead aggregates
+          const teamPending = workersList.reduce((a, w) => a + (statsByWorker[w.id]?.pending || 0), 0);
+          const teamOnTimeRate = (() => {
+            // Aggregate completion + on-time across team
+            let totalCompleted = 0, totalOnTime = 0;
+            workersList.forEach(w => {
+              const s = statsByWorker[w.id];
+              if (s?.onTimeRateAll != null && s.completedAll > 0) {
+                totalCompleted += s.completedAll;
+                totalOnTime += Math.round(s.completedAll * (s.onTimeRateAll / 100));
+              }
+            });
+            return totalCompleted > 0 ? Math.round((totalOnTime / totalCompleted) * 100) : null;
+          })();
+
+          // Comparative: leaderboards
+          const sortedByImpact = [...workersList]
+            .map(w => ({ w, s: statsByWorker[w.id] }))
+            .filter(x => !x.s.isBuilding)
+            .sort((a, b) => b.s.impact - a.s.impact);
+          const sortedByVolume = [...workersList]
+            .map(w => ({ w, s: statsByWorker[w.id] }))
+            .sort((a, b) => b.s.completed30 - a.s.completed30);
+
+          return (
+            <div>
+              {/* HEADER — mirrors Clients page exactly */}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Your team</div>
+                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Workers</h1>
+                  <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{workersList.length}</b> {workersList.length === 1 ? "worker" : "workers"}</span>
+                    <span style={{ color: C.border }}>·</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{teamPending}</b> pending</span>
+                    <span style={{ color: C.border }}>·</span>
+                    {teamOnTimeRate != null ? (
+                      <span><b style={{ color: teamOnTimeRate >= 80 ? C.success : teamOnTimeRate >= 60 ? C.warning : C.danger, fontWeight: 700 }}>{teamOnTimeRate}%</b> on-time</span>
+                    ) : (
+                      <span style={{ color: C.textMuted, fontStyle: "italic" }}>building track record</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    onClick={() => { setNewWorkerName(""); setNewWorkerEmail(""); setNewWorkerRole(""); setAddWorkerOpen(true); }}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "10px 16px",
+                      background: C.btn, color: "#fff",
+                      border: "none", borderRadius: 10,
+                      fontSize: 13.5, fontWeight: 600,
+                      cursor: "pointer", fontFamily: "inherit",
+                      boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Add worker
+                  </button>
+                </div>
+              </div>
+
+              {workersList.length === 0 ? (
+                <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14, maxWidth: 880 }}>
+                  <div style={{
+                    fontFamily: "'Fraunces', Georgia, serif",
+                    fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                    fontStyle: "italic",
+                    fontSize: 16,
+                    color: C.textMuted,
+                    marginBottom: 4,
+                  }}>No workers yet.</div>
+                  <div style={{ fontSize: 13, color: C.textMuted }}>Add someone you delegate tasks to — internal employee, freelancer, VA. They'll get an email when you assign them work.</div>
+                </div>
+              ) : (
+                <>
+                  {/* Comparative — Team Leaderboards */}
+                  {workersList.length >= 2 && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20, maxWidth: 880 }}>
+                      {/* Impact leaderboard */}
+                      <div style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12, padding: "14px 16px" }}>
+                        <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Impact · last 90 days</div>
+                        {sortedByImpact.length === 0 ? (
+                          <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>Not enough completed tasks yet</div>
+                        ) : sortedByImpact.slice(0, 3).map(({ w, s }, i) => (
+                          <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                            <span style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums", width: 14 }}>{i + 1}</span>
+                            <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500 }}>{w.name}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: s.impact >= 70 ? C.success : s.impact >= 40 ? C.text : C.warning, fontVariantNumeric: "tabular-nums" }}>{s.impact}</span>
+                          </div>
+                        ))}
                       </div>
-                      <div style={{
-                        fontSize: 11, fontWeight: 600,
-                        color: counts.pending > 0 ? C.btn : C.textSec,
-                        background: counts.pending > 0 ? C.btnLight : C.surfaceWarm,
-                        padding: "4px 10px", borderRadius: 999,
-                      }}>
-                        {counts.pending} pending · {counts.done} done
+                      {/* Volume leaderboard */}
+                      <div style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12, padding: "14px 16px" }}>
+                        <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Throughput · last 30 days</div>
+                        {sortedByVolume.slice(0, 3).map(({ w, s }, i) => (
+                          <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                            <span style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums", width: 14 }}>{i + 1}</span>
+                            <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500 }}>{w.name}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{s.completed30}</span>
+                          </div>
+                        ))}
                       </div>
-                      <button
-                        onClick={async () => {
-                          if (!confirm(`Remove ${w.name}? Their assigned tasks stay assigned for history.`)) return;
-                          await workersDb.archive(w.id);
-                          setWorkersList(prev => prev.filter(x => x.id !== w.id));
-                        }}
-                        style={{ width: 28, height: 28, background: "transparent", border: 0, borderRadius: 6, color: C.textMuted, cursor: "pointer", display: "grid", placeItems: "center" }}
-                        title="Remove worker"
-                      >
-                        <Icon name="x" size={14} />
-                      </button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                  )}
+
+                  {/* Worker rows */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 880 }}>
+                    {workersList.map(w => {
+                      const s = statsByWorker[w.id];
+                      const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+                      return (
+                        <div key={w.id} style={{
+                          padding: "16px 18px",
+                          background: C.card,
+                          border: "1px solid " + C.borderLight,
+                          borderRadius: 12,
+                        }}>
+                          {/* Top row: avatar + name + impact + remove */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                            <div style={{ width: 40, height: 40, borderRadius: 20, background: C.primary, color: "#fff", fontSize: 13, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{initials}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{w.name}</div>
+                              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                                {w.email}{w.role ? " · " + w.role : ""}
+                              </div>
+                            </div>
+                            {!s.isBuilding && (
+                              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: C.textMuted, fontWeight: 600 }}>Impact</div>
+                                <div style={{ fontSize: 22, fontWeight: 700, color: s.impact >= 70 ? C.success : s.impact >= 40 ? C.text : C.warning, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.impact}</div>
+                              </div>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Remove ${w.name}? Their assigned tasks stay assigned for history.`)) return;
+                                await workersDb.archive(w.id);
+                                setWorkersList(prev => prev.filter(x => x.id !== w.id));
+                              }}
+                              style={{ width: 28, height: 28, background: "transparent", border: 0, borderRadius: 6, color: C.textMuted, cursor: "pointer", display: "grid", placeItems: "center", flexShrink: 0 }}
+                              title="Remove worker"
+                            >
+                              <Icon name="x" size={14} />
+                            </button>
+                          </div>
+
+                          {/* Stats grid */}
+                          <div style={{
+                            marginTop: 14,
+                            paddingTop: 14,
+                            borderTop: "1px solid " + C.borderLight,
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                            gap: 12,
+                          }}>
+                            <Stat
+                              label="Pending"
+                              value={s.pending}
+                              sub={s.overdue > 0 ? `${s.overdue} overdue` : null}
+                              tone={s.overdue > 0 ? "danger" : "default"}
+                            />
+                            <Stat
+                              label="Done · 30d"
+                              value={s.completed30}
+                              sub={`${s.completedAll} all-time`}
+                            />
+                            <Stat
+                              label="On-time · 30d"
+                              value={s.onTimeRate30 != null ? `${s.onTimeRate30}%` : "—"}
+                              sub={s.onTimeRateAll != null ? `${s.onTimeRateAll}% all-time` : "no data"}
+                              tone={s.onTimeRate30 != null && s.onTimeRate30 < 60 ? "warning" : "default"}
+                            />
+                            <Stat
+                              label="Top client"
+                              value={s.topClient30 || "—"}
+                              sub={s.clientDiversity ? `${s.clientDiversity} client${s.clientDiversity === 1 ? "" : "s"} total` : "no clients yet"}
+                              isText
+                            />
+                          </div>
+
+                          {s.isBuilding && (
+                            <div style={{
+                              marginTop: 12,
+                              padding: "8px 12px",
+                              background: C.surfaceWarm,
+                              borderRadius: 8,
+                              fontSize: 11.5,
+                              color: C.textMuted,
+                              fontStyle: "italic",
+                            }}>
+                              Building track record — Impact score appears once {w.name.split(' ')[0]} has completed 5+ tasks.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Add-worker modal */}
         {addWorkerOpen && (
