@@ -1384,7 +1384,10 @@ export default function App({ user }) {
     // Fireworks fire only when ALL of TODAY's tasks are complete.
     // "Today" = recurring + no due_date + due_date <= today.
     // Tomorrow / Later tasks don't count toward the celebration.
+    // Day boundary anchored to 2am local — between midnight and 2am, "today"
+    // still refers to yesterday's calendar date (matches task soft-clear cron).
     const _now = new Date();
+    if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
     const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
     const todayCountable = countable.filter(t => {
       if (t.recurring) return true;
@@ -2599,7 +2602,11 @@ export default function App({ user }) {
           };
 
           // ─── DATE BOUNDARIES (hoisted so status band can count today-only tasks) ──
+          // Day boundary anchored to 2am local — between midnight and 2am, "today"
+          // still refers to yesterday's calendar date (matches task soft-clear cron
+          // and worker dashboard logic).
           const _now = new Date();
+          if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
           const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _tomorrow = new Date(_now);
           _tomorrow.setDate(_tomorrow.getDate() + 1);
@@ -6090,7 +6097,9 @@ export default function App({ user }) {
           // ─── Stats engine ──────────────────────────────────────────────
           // For each worker, compute throughput, reliability, client mix,
           // and a Worker Impact Score that weights completions by client value.
+          // Day boundary anchored to 2am local — matches task soft-clear cron.
           const _now = new Date();
+          if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
           const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _30dAgo = new Date(_now); _30dAgo.setDate(_30dAgo.getDate() - 30);
           const _30dAgoIso = _30dAgo.toISOString();
@@ -6349,7 +6358,7 @@ export default function App({ user }) {
               </div>
 
               {workersList.length === 0 ? (
-                <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14, maxWidth: 880 }}>
+                <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14 }}>
                   <div style={{
                     fontFamily: "'Fraunces', Georgia, serif",
                     fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
@@ -6482,7 +6491,7 @@ export default function App({ user }) {
                   <div style={{ minWidth: 0 }}>
                   {/* Comparative — Team Leaderboards */}
                   {workersList.length >= 2 && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20, maxWidth: 880 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20 }}>
                       {/* Impact leaderboard */}
                       <div style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12, padding: "14px 16px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Impact · last 90 days</div>
@@ -6511,7 +6520,7 @@ export default function App({ user }) {
                   )}
 
                   {/* Worker rows */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 880 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {workersList.map(w => {
                       const s = statsByWorker[w.id];
                       const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
