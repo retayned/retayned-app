@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, realtime as realtimeDb } from "./lib/db";
+import WorkerDashboard from "./WorkerDashboard";
 
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
@@ -331,6 +332,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 const navItemsCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
+  { id: "workers", icon: "clients", label: "Workers" },
   { id: "health", icon: "health", label: "Health" },
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
@@ -498,6 +500,13 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
 };
 
 export default function App({ user }) {
+  // ─── ROUTING: Worker magic-link page lives at /w/{token} (no auth needed) ──
+  // Detect this route before any auth-gated logic runs. Returns WorkerDashboard
+  // standalone if matched.
+  if (typeof window !== "undefined" && /^\/w\//.test(window.location.pathname)) {
+    return <WorkerDashboard />;
+  }
+
   const [tier, setTier] = useState("core");  // "core" | "enterprise"
   const [page, setPage] = useState("today");
   // Scroll to top on page change. .r-main is now a fixed-positioned scroll
@@ -955,6 +964,17 @@ export default function App({ user }) {
   const [newTaskDueDate, setNewTaskDueDate] = useState(null);
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
+
+  // ─── Workers state ──
+  const [workersList, setWorkersList] = useState([]);
+  const [workerCounts, setWorkerCounts] = useState({}); // { worker_id: { pending, done } }
+  const [newTaskWorkerId, setNewTaskWorkerId] = useState(null);   // composer: assigned worker for new task
+  const [newTaskShareCtx, setNewTaskShareCtx] = useState(true);    // composer: share client context, default ON
+  const [workerPickerOpen, setWorkerPickerOpen] = useState(false); // composer popover
+  const [addWorkerOpen, setAddWorkerOpen] = useState(false);       // add-worker modal
+  const [newWorkerName, setNewWorkerName] = useState("");
+  const [newWorkerEmail, setNewWorkerEmail] = useState("");
+  const [newWorkerRole, setNewWorkerRole] = useState("");
   const [showClientPicker, setShowClientPicker] = useState(false);
   // Touchpoint data layer is intact (allTouchpoints + tpLogged still load from DB
   // for rhythm calc and history) — only the manual Log UI was removed.
@@ -1111,6 +1131,9 @@ export default function App({ user }) {
           alert: t.is_alert,
           recurring: t.is_recurring,
           due_date: t.due_date || null,
+          assigned_worker_id: t.assigned_worker_id || null,
+          share_client_context: t.share_client_context !== false,
+          worker_completed_at: t.worker_completed_at || null,
           sort_order: t.sort_order,
           raiPriority: t.is_rai_priority || false,
           created_at: t.created_at ? new Date(t.created_at).getTime() : 0,
@@ -1196,11 +1219,91 @@ export default function App({ user }) {
       setRaiConvoList(convoListRes.data);
     }
 
+    // Workers — non-blocking, optional table
+    try {
+      const [wRes, wcRes] = await Promise.all([
+        workersDb.list(uid),
+        workersDb.getCounts(uid),
+      ]);
+      if (wRes?.data) setWorkersList(wRes.data);
+      if (wcRes?.data) setWorkerCounts(wcRes.data);
+    } catch (e) {
+      console.warn("Workers load failed (table may not exist yet):", e);
+    }
+
     setDataLoaded(true);
   }, [user]);
 
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ─── Realtime task sync ─────────────────────────────────────
+  // Subscribe to all tasks-table changes for this user. Primary use:
+  // when a Worker marks a task complete via the magic-link page,
+  // the change shows up on the Operator's UI without a refresh.
+  // Also catches multi-device edits (open Retayned on phone + laptop).
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const subscription = realtimeDb.onTaskChange(user.id, (payload) => {
+      // payload.eventType: "INSERT" | "UPDATE" | "DELETE"
+      // payload.new: the new row (for INSERT/UPDATE)
+      // payload.old: the old row (for UPDATE/DELETE)
+      const ev = payload.eventType;
+      const row = payload.new || payload.old;
+      if (!row?.id) return;
+
+      if (ev === "DELETE") {
+        setTasks(prev => prev.filter(t => t.id !== row.id));
+        return;
+      }
+
+      // Map DB row → UI shape (matches the loadData task mapping)
+      const mapped = {
+        id: row.id,
+        text: row.text,
+        client: row.client_name || null,
+        client_id: row.client_id || null,
+        done: !!row.is_done,
+        ai: !!row.ai_generated,
+        recurring: !!row.is_recurring,
+        due_date: row.due_date || null,
+        raiPriority: !!row.is_rai_priority,
+        alert: false,
+        created_at: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+        completed_at: row.completed_at || null,
+        cleared_at: row.cleared_at || null,
+        assigned_worker_id: row.assigned_worker_id || null,
+        share_client_context: row.share_client_context !== false,
+        worker_completed_at: row.worker_completed_at || null,
+      };
+
+      if (ev === "INSERT") {
+        setTasks(prev => {
+          // Avoid duplicates if the local insert already added it
+          if (prev.some(t => t.id === mapped.id)) return prev;
+          return [mapped, ...prev];
+        });
+      } else if (ev === "UPDATE") {
+        setTasks(prev => prev.map(t => {
+          if (t.id !== mapped.id) return t;
+          // Preserve any local-only fields by spreading mapped over t
+          return { ...t, ...mapped };
+        }));
+        // Refresh worker counts if a worker assignment changed or task got completed
+        if (row.assigned_worker_id) {
+          workersDb.getCounts(user.id).then(({ data }) => {
+            if (data) setWorkerCounts(data);
+          }).catch(() => {});
+        }
+      }
+    });
+
+    return () => {
+      // Cleanup on unmount or user change
+      try { subscription?.unsubscribe?.(); } catch {}
+    };
+  }, [user?.id]);
 
   // Sync user's IANA timezone to the profiles table once per session.
   // Used by the Observer cron and any future server-side scheduling that
@@ -2581,14 +2684,46 @@ export default function App({ user }) {
               client_id: clientObj?.id || null,
               is_recurring: newTaskRecurring,
               due_date: dueDateForCreate,
+              assigned_worker_id: newTaskWorkerId || null,
+              share_client_context: newTaskShareCtx,
             });
-            const task = { id: created?.id || "u" + Date.now(), text, client: clientName || null, done: false, ai: false, recurring: newTaskRecurring, due_date: dueDateForCreate, raiPriority: false, alert: false, created_at: Date.now() };
+            const task = {
+              id: created?.id || "u" + Date.now(),
+              text,
+              client: clientName || null,
+              done: false, ai: false,
+              recurring: newTaskRecurring,
+              due_date: dueDateForCreate,
+              raiPriority: false, alert: false,
+              created_at: Date.now(),
+              assigned_worker_id: newTaskWorkerId || null,
+              share_client_context: newTaskShareCtx,
+            };
             setTasks(prev => [task, ...prev]);
+
+            // Fire email send if assigned to a worker (non-blocking).
+            if (newTaskWorkerId && created?.id) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/worker-task-notify`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                  },
+                  body: JSON.stringify({ task_id: created.id }),
+                }).catch(e => console.warn("Worker notify failed:", e));
+              } catch (e) { console.warn("Worker notify error:", e); }
+            }
+
             setNewTask("");
             setComposerClient("");
             setNewTaskRecurring(false);
             setNewTaskDueDate(null);
+            setNewTaskWorkerId(null);
+            setNewTaskShareCtx(true);
             setDuePickerOpen(false);
+            setWorkerPickerOpen(false);
             setComposerMenuOpen(false);
           };
 
@@ -2731,44 +2866,146 @@ export default function App({ user }) {
                       onMouseLeave={e => { if (!composerMenuOpen) e.currentTarget.style.background = "transparent"; }}>
                       <Icon name="clients" size={12} /><span style={{ fontWeight: 500 }}>Client</span>
                     </button>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={newTaskRecurring}
-                      onClick={() => {
-                        const next = !newTaskRecurring;
-                        setNewTaskRecurring(next);
-                        // Mutual exclusion: enabling recurring clears any due date
-                        if (next) { setNewTaskDueDate(null); setDuePickerOpen(false); }
-                      }}
-                      className="rt-composer-pill"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "0 10px",
-                        height: 28,
-                        border: "none",
-                        borderRadius: 7,
-                        fontSize: 12,
-                        color: C.textSec,
-                        background: newTaskRecurring ? "rgba(0,0,0,0.04)" : "transparent",
-                        cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-                        transition: "background 120ms ease, color 120ms ease",
-                      }}
-                      onMouseEnter={e => { if (!newTaskRecurring) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                      onMouseLeave={e => { if (!newTaskRecurring) e.currentTarget.style.background = "transparent"; }}
-                    >
-                      <Icon name="infinity" size={14} color={C.textMuted} />
-                      <span style={{ fontWeight: newTaskRecurring ? 600 : 500 }}>Recurring</span>
-                    </button>
-                    {/* Due chip — opens inline date picker. Mutually exclusive with Recurring. */}
+                    {/* Worker chip — only renders if user has at least one worker added.
+                        When clicked, opens picker. Mutual exclusion: just selecting/clearing,
+                        no other state interaction. Default (null) = self-assigned. */}
+                    {workersList.length > 0 && (() => {
+                      const selectedWorker = workersList.find(w => w.id === newTaskWorkerId);
+                      return (
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => setWorkerPickerOpen(!workerPickerOpen)}
+                            className="rt-composer-pill"
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: "0 10px",
+                              height: 28,
+                              border: "none",
+                              borderRadius: 7,
+                              fontSize: 12,
+                              color: selectedWorker ? C.btn : C.textSec,
+                              background: selectedWorker ? C.btnLight : (workerPickerOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                              cursor: "pointer", fontFamily: "inherit",
+                              fontWeight: selectedWorker ? 600 : 500,
+                              transition: "background 120ms ease, color 120ms ease",
+                            }}
+                            onMouseEnter={e => { if (!selectedWorker && !workerPickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                            onMouseLeave={e => { if (!selectedWorker && !workerPickerOpen) e.currentTarget.style.background = "transparent"; }}
+                            title={selectedWorker ? `Assigned to ${selectedWorker.name}` : "Assign to a worker"}
+                          >
+                            <Icon name="clients" size={12} color={selectedWorker ? C.btn : C.textMuted} />
+                            <span>{selectedWorker ? selectedWorker.name.split(' ')[0] : "Worker"}</span>
+                          </button>
+                          {workerPickerOpen && (
+                            <>
+                              <div onClick={() => setWorkerPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
+                              <div style={{
+                                position: "absolute",
+                                top: "calc(100% + 6px)",
+                                left: 0,
+                                width: 260,
+                                background: C.card,
+                                border: "1px solid " + C.border,
+                                borderRadius: 10,
+                                padding: 6,
+                                boxShadow: "0 12px 32px rgba(20,30,22,0.12)",
+                                zIndex: 50,
+                              }}>
+                                {/* Self-assigned (default) option */}
+                                <button
+                                  onClick={() => { setNewTaskWorkerId(null); setWorkerPickerOpen(false); }}
+                                  style={{
+                                    width: "100%",
+                                    display: "flex", alignItems: "center", gap: 10,
+                                    padding: "8px 9px",
+                                    background: !newTaskWorkerId ? C.btnLight : "transparent",
+                                    border: "none", borderRadius: 6,
+                                    cursor: "pointer", fontFamily: "inherit",
+                                    textAlign: "left",
+                                  }}
+                                  onMouseEnter={e => { if (newTaskWorkerId) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                                  onMouseLeave={e => { if (newTaskWorkerId) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  <div style={{ width: 22, height: 22, borderRadius: 11, background: C.borderLight, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                                    <Icon name="clients" size={12} color={C.textMuted} />
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: !newTaskWorkerId ? 600 : 500, color: !newTaskWorkerId ? C.btn : C.text }}>Just me</div>
+                                    <div style={{ fontSize: 11, color: C.textMuted }}>Default — keep on my list</div>
+                                  </div>
+                                </button>
+                                <div style={{ height: 1, background: C.borderLight, margin: "4px 6px" }} />
+                                {workersList.map(w => (
+                                  <button
+                                    key={w.id}
+                                    onClick={() => { setNewTaskWorkerId(w.id); setWorkerPickerOpen(false); }}
+                                    style={{
+                                      width: "100%",
+                                      display: "flex", alignItems: "center", gap: 10,
+                                      padding: "8px 9px",
+                                      background: newTaskWorkerId === w.id ? C.btnLight : "transparent",
+                                      border: "none", borderRadius: 6,
+                                      cursor: "pointer", fontFamily: "inherit",
+                                      textAlign: "left",
+                                    }}
+                                    onMouseEnter={e => { if (newTaskWorkerId !== w.id) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                                    onMouseLeave={e => { if (newTaskWorkerId !== w.id) e.currentTarget.style.background = "transparent"; }}
+                                  >
+                                    <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                                      {w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontSize: 13, fontWeight: newTaskWorkerId === w.id ? 600 : 500, color: newTaskWorkerId === w.id ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</div>
+                                      <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.email}</div>
+                                    </div>
+                                  </button>
+                                ))}
+                                {/* Share client context toggle (only meaningful when a worker is picked) */}
+                                {newTaskWorkerId && (
+                                  <div style={{
+                                    marginTop: 6,
+                                    padding: "9px 11px 8px",
+                                    borderTop: "1px solid " + C.borderLight,
+                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                    fontSize: 12, color: C.textSec,
+                                  }}>
+                                    <span>Share client context</span>
+                                    <button
+                                      onClick={() => setNewTaskShareCtx(!newTaskShareCtx)}
+                                      style={{
+                                        width: 30, height: 16,
+                                        background: newTaskShareCtx ? C.btn : C.borderLight,
+                                        borderRadius: 999,
+                                        border: "none",
+                                        position: "relative",
+                                        cursor: "pointer",
+                                        padding: 0,
+                                      }}
+                                      aria-label="Toggle share client context"
+                                    >
+                                      <span style={{
+                                        position: "absolute",
+                                        top: 2,
+                                        [newTaskShareCtx ? "right" : "left"]: 2,
+                                        width: 12, height: 12,
+                                        background: "#fff",
+                                        borderRadius: 6,
+                                      }} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {/* Due chip — opens date picker. Mutually exclusive with Recurring (which lives inside the menu). */}
                     <div style={{ position: "relative", flexShrink: 0 }}>
                       <button
                         type="button"
-                        onClick={() => {
-                          // Mutual exclusion: opening Due clears recurring
-                          if (newTaskRecurring) setNewTaskRecurring(false);
-                          setDuePickerOpen(!duePickerOpen);
-                        }}
+                        onClick={() => setDuePickerOpen(!duePickerOpen)}
                         className="rt-composer-pill"
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
@@ -2777,17 +3014,17 @@ export default function App({ user }) {
                           border: "none",
                           borderRadius: 7,
                           fontSize: 12,
-                          color: newTaskDueDate ? C.btn : C.textSec,
-                          background: newTaskDueDate ? C.btnLight : (duePickerOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                          color: (newTaskDueDate || newTaskRecurring) ? C.btn : C.textSec,
+                          background: (newTaskDueDate || newTaskRecurring) ? C.btnLight : (duePickerOpen ? "rgba(0,0,0,0.04)" : "transparent"),
                           cursor: "pointer", fontFamily: "inherit",
-                          fontWeight: newTaskDueDate ? 600 : 500,
+                          fontWeight: (newTaskDueDate || newTaskRecurring) ? 600 : 500,
                           transition: "background 120ms ease, color 120ms ease",
                         }}
-                        onMouseEnter={e => { if (!newTaskDueDate && !duePickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                        onMouseLeave={e => { if (!newTaskDueDate && !duePickerOpen) e.currentTarget.style.background = "transparent"; }}
+                        onMouseEnter={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                        onMouseLeave={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "transparent"; }}
                       >
-                        <Icon name="calendar" size={12} color={newTaskDueDate ? C.btn : C.textMuted} />
-                        <span>{newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due"}</span>
+                        <Icon name={newTaskRecurring ? "infinity" : "calendar"} size={newTaskRecurring ? 14 : 12} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
+                        <span>{newTaskRecurring ? "Recurring" : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
                       </button>
                       {duePickerOpen && (
                         <>
@@ -2819,29 +3056,63 @@ export default function App({ user }) {
                               { label: "Tomorrow", value: _tomorrowStr },
                               { label: "Later", value: _later7Str },
                             ];
-                            return opts.map(o => (
-                              <button
-                                key={o.value}
-                                onClick={() => { setNewTaskDueDate(o.value); setDuePickerOpen(false); }}
-                                style={{
-                                  textAlign: "left",
-                                  padding: "8px 10px",
-                                  background: newTaskDueDate === o.value ? C.btnLight : "transparent",
-                                  border: "none",
-                                  borderRadius: 6,
-                                  fontSize: 13,
-                                  color: newTaskDueDate === o.value ? C.btn : C.text,
-                                  fontWeight: newTaskDueDate === o.value ? 600 : 500,
-                                  cursor: "pointer",
-                                  fontFamily: "inherit",
-                                  display: "block",
-                                }}
-                                onMouseEnter={e => { if (newTaskDueDate !== o.value) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                                onMouseLeave={e => { if (newTaskDueDate !== o.value) e.currentTarget.style.background = "transparent"; }}
-                              >
-                                {o.label}
-                              </button>
-                            ));
+                            return (
+                              <>
+                                {opts.map(o => {
+                                  const isSel = !newTaskRecurring && newTaskDueDate === o.value;
+                                  return (
+                                    <button
+                                      key={o.value}
+                                      onClick={() => { setNewTaskDueDate(o.value); setNewTaskRecurring(false); setDuePickerOpen(false); }}
+                                      style={{
+                                        textAlign: "left",
+                                        padding: "8px 10px",
+                                        background: isSel ? C.btnLight : "transparent",
+                                        border: "none",
+                                        borderRadius: 6,
+                                        fontSize: 13,
+                                        color: isSel ? C.btn : C.text,
+                                        fontWeight: isSel ? 600 : 500,
+                                        cursor: "pointer",
+                                        fontFamily: "inherit",
+                                        display: "block",
+                                        width: "100%",
+                                      }}
+                                      onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                                      onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+                                    >
+                                      {o.label}
+                                    </button>
+                                  );
+                                })}
+                                {/* Recurring option — bottom of menu, divider above */}
+                                <div style={{ height: 1, background: C.borderLight, margin: "4px 6px" }} />
+                                <button
+                                  onClick={() => { setNewTaskRecurring(true); setNewTaskDueDate(null); setDuePickerOpen(false); }}
+                                  style={{
+                                    textAlign: "left",
+                                    padding: "8px 10px",
+                                    background: newTaskRecurring ? C.btnLight : "transparent",
+                                    border: "none",
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    color: newTaskRecurring ? C.btn : C.text,
+                                    fontWeight: newTaskRecurring ? 600 : 500,
+                                    cursor: "pointer",
+                                    fontFamily: "inherit",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 7,
+                                    width: "100%",
+                                  }}
+                                  onMouseEnter={e => { if (!newTaskRecurring) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                                  onMouseLeave={e => { if (!newTaskRecurring) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  <Icon name="infinity" size={14} color={newTaskRecurring ? C.btn : C.textMuted} />
+                                  Recurring
+                                </button>
+                              </>
+                            );
                           })()}
                         </div>
                         </>
@@ -3384,6 +3655,34 @@ export default function App({ user }) {
                                 })()}
                               </div>
                             </div>
+
+                            {/* Worker assignment badge — only renders if task is assigned. */}
+                            {t.assigned_worker_id && (() => {
+                              const w = workersList.find(x => x.id === t.assigned_worker_id);
+                              if (!w) return null;
+                              const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+                              const isWorkerDone = !!t.worker_completed_at;
+                              return (
+                                <span className="rt-row-worker" style={{
+                                  display: "inline-flex", alignItems: "center", gap: 5,
+                                  padding: "3px 9px 3px 3px",
+                                  borderRadius: 999,
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  flexShrink: 0,
+                                  background: isWorkerDone ? "rgba(45,134,89,0.10)" : C.btnLight,
+                                  color: isWorkerDone ? C.success : C.btn,
+                                }} title={isWorkerDone ? `${w.name} completed this` : `Assigned to ${w.name}`}>
+                                  <span style={{
+                                    width: 18, height: 18, borderRadius: 9,
+                                    background: isWorkerDone ? C.success : C.primary,
+                                    color: "#fff", fontSize: 8, fontWeight: 700,
+                                    display: "grid", placeItems: "center",
+                                  }}>{initials}</span>
+                                  <span className="rt-row-text">{w.name.split(' ')[0]}{isWorkerDone ? " · done" : ""}</span>
+                                </span>
+                              );
+                            })()}
 
                             {/* Right-side indicator — recurring infinity OR date pill (mutually exclusive) */}
                             {t.recurring ? (
@@ -5665,6 +5964,167 @@ export default function App({ user }) {
               <button className="r-btn" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: "Let's talk referral strategy. Who are you thinking about asking? I can help you find the right moment and the right words." }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai</button>
             </div>
           </div>
+        )}
+
+        {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
+        {page === "workers" && (
+          <div style={{ padding: "0 4px", maxWidth: 880 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", paddingBottom: 18, borderBottom: "1px solid " + C.borderLight, marginBottom: 20 }}>
+              <div>
+                <h2 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.015em", margin: "0 0 4px" }}>Workers</h2>
+                <div style={{ fontSize: 13, color: C.textMuted }}>People you delegate tasks to. They receive emails, you see status here.</div>
+              </div>
+              <button
+                onClick={() => { setNewWorkerName(""); setNewWorkerEmail(""); setNewWorkerRole(""); setAddWorkerOpen(true); }}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "8px 14px",
+                  background: C.btn, color: "#fff",
+                  border: "none", borderRadius: 8,
+                  fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0 1px 2px rgba(91,33,182,0.18), 0 4px 12px rgba(91,33,182,0.14)",
+                }}
+              >
+                <Icon name="plus" size={12} color="#fff" />
+                Add worker
+              </button>
+            </div>
+
+            {workersList.length === 0 ? (
+              <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14 }}>
+                <div style={{
+                  fontFamily: "'Fraunces', Georgia, serif",
+                  fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                  fontStyle: "italic",
+                  fontSize: 16,
+                  color: C.textMuted,
+                  marginBottom: 4,
+                }}>No workers yet.</div>
+                <div style={{ fontSize: 13, color: C.textMuted }}>Add someone you delegate tasks to — internal employee, freelancer, VA. They'll get an email when you assign them work.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {workersList.map(w => {
+                  const counts = workerCounts[w.id] || { pending: 0, done: 0 };
+                  const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+                  return (
+                    <div key={w.id} style={{
+                      display: "grid",
+                      gridTemplateColumns: "auto 1fr auto auto",
+                      alignItems: "center", gap: 14,
+                      padding: "14px 16px",
+                      background: C.card,
+                      border: "1px solid " + C.borderLight,
+                      borderRadius: 12,
+                    }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 18, background: C.primary, color: "#fff", fontSize: 12, fontWeight: 700, display: "grid", placeItems: "center" }}>{initials}</div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{w.name}</div>
+                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                          {w.email}{w.role ? " · " + w.role : ""}
+                        </div>
+                      </div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 600,
+                        color: counts.pending > 0 ? C.btn : C.textSec,
+                        background: counts.pending > 0 ? C.btnLight : C.surfaceWarm,
+                        padding: "4px 10px", borderRadius: 999,
+                      }}>
+                        {counts.pending} pending · {counts.done} done
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Remove ${w.name}? Their assigned tasks stay assigned for history.`)) return;
+                          await workersDb.archive(w.id);
+                          setWorkersList(prev => prev.filter(x => x.id !== w.id));
+                        }}
+                        style={{ width: 28, height: 28, background: "transparent", border: 0, borderRadius: 6, color: C.textMuted, cursor: "pointer", display: "grid", placeItems: "center" }}
+                        title="Remove worker"
+                      >
+                        <Icon name="x" size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Add-worker modal */}
+        {addWorkerOpen && (
+          <>
+            <div onClick={() => setAddWorkerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 99 }} />
+            <div style={{
+              position: "fixed", top: "20vh", left: "50%", transform: "translateX(-50%)",
+              width: 460, maxWidth: "calc(100vw - 32px)",
+              background: C.card, borderRadius: 14, padding: "24px 26px",
+              boxShadow: "0 20px 50px rgba(20,30,22,0.30)",
+              zIndex: 100,
+            }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 14px" }}>Add a worker</h3>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Name</label>
+                <input
+                  autoFocus
+                  value={newWorkerName}
+                  onChange={e => setNewWorkerName(e.target.value)}
+                  placeholder="Sarah Kim"
+                  style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Email</label>
+                <input
+                  type="email"
+                  value={newWorkerEmail}
+                  onChange={e => setNewWorkerEmail(e.target.value)}
+                  placeholder="sarah@yourdomain.com"
+                  style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
+                />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Role <span style={{ color: C.textMuted, fontWeight: 400 }}>· optional</span></label>
+                <input
+                  value={newWorkerRole}
+                  onChange={e => setNewWorkerRole(e.target.value)}
+                  placeholder="Internal · Freelancer · VA"
+                  style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22, paddingTop: 18, borderTop: "1px solid " + C.borderLight }}>
+                <button
+                  onClick={() => setAddWorkerOpen(false)}
+                  style={{ padding: "8px 14px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                >Cancel</button>
+                <button
+                  onClick={async () => {
+                    if (!newWorkerName.trim() || !newWorkerEmail.trim()) return;
+                    const { data, error } = await workersDb.create(user.id, {
+                      name: newWorkerName.trim(),
+                      email: newWorkerEmail.trim(),
+                      role: newWorkerRole.trim() || null,
+                    });
+                    if (data) {
+                      setWorkersList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+                      setAddWorkerOpen(false);
+                    } else if (error) {
+                      alert("Failed to add worker: " + error.message);
+                    }
+                  }}
+                  disabled={!newWorkerName.trim() || !newWorkerEmail.trim()}
+                  style={{
+                    padding: "8px 14px",
+                    background: (!newWorkerName.trim() || !newWorkerEmail.trim()) ? C.btnDisabled : C.btn,
+                    color: "#fff", border: "none", borderRadius: 8,
+                    fontFamily: "inherit", fontSize: 13, fontWeight: 600,
+                    cursor: (!newWorkerName.trim() || !newWorkerEmail.trim()) ? "default" : "pointer",
+                  }}
+                >Add worker</button>
+              </div>
+            </div>
+          </>
         )}
 
         {/* ═══ REFERRALS v2 — "The Network Map" ═══ */}
