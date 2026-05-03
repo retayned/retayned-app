@@ -6311,10 +6311,10 @@ export default function App({ user }) {
             .slice(0, 3);
 
           return (
-            <div>
-              {/* HEADER — mirrors Clients page exactly */}
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0 }}>
+            <div style={{ width: "100%" }}>
+              {/* STATUS BAND — mirrors Clients page exactly (border, spacing, alignment) */}
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
+                <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Your team</div>
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Workers</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
