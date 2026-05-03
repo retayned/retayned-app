@@ -1963,8 +1963,8 @@ export default function App({ user }) {
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
-        ${THEME_CSS}
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&display=swap');
+        ${THEME_CSS}
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: var(--rt-bg); overscroll-behavior: none; }
         input, textarea, select { font-size: 16px !important; }
@@ -4833,10 +4833,10 @@ export default function App({ user }) {
                         <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Sort</span>
                         {sortOptions.map(s => (
                           <button key={s.id} onClick={() => setClientsSort(s.id)} className={s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : ""} style={{
-                            padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: 500, cursor: "pointer", fontFamily: "inherit",
-                            background: sortId === s.id ? C.btn : "transparent",
-                            color: sortId === s.id ? "#fff" : C.textMuted,
-                            border: "1px solid " + (sortId === s.id ? C.btn : C.borderLight),
+                            padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
+                            background: sortId === s.id ? C.deepCream : "transparent",
+                            color: sortId === s.id ? C.text : C.textMuted,
+                            border: "1px solid " + (sortId === s.id ? C.deepCream : C.borderLight),
                           }}>{s.label}</button>
                         ))}
                       </div>
