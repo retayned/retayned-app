@@ -3,23 +3,107 @@ import { supabase } from "./lib/supabase";
 import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, realtime as realtimeDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
+// ============================================================
+// PALETTE
+// ============================================================
+// Surface tones (bg, card, text, borders) reference CSS variables so
+// theme can swap at runtime by toggling `data-theme="dark"` on <html>.
+// Accent colors (purple, green, gold, danger) stay as hex — they look
+// good in both light and warm-dark, no variant needed (Direction A).
+//
+// The CSS variable definitions live in a <style> block injected at App
+// mount-time so they're available before any component reads them.
 const C = {
   primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
-  bg: "#FAFAF7", card: "#FFFFFF", surface: "#EEEFEB", surfaceWarm: "#F2EEE8", deepCream: "#EAE4D6",
-  sidebar: "#FAFAF7",
-  text: "#1E261F", textSec: "#6B6B66", textMuted: "#9A9A93",
-  ink900: "#0A0A0A", ink700: "#2A2A28", ink500: "#6B6B66", ink400: "#9A9A93", ink300: "#C4C4BD",
-  border: "#D8DFD8", borderLight: "#EFEFEA", borderSoft: "#EFEFEA",
-  surfaceSelected: "#F3F8F5",
+
+  // Surfaces — themed
+  bg: "var(--rt-bg)",
+  card: "var(--rt-card)",
+  surface: "var(--rt-surface)",
+  surfaceWarm: "var(--rt-surface-warm)",
+  deepCream: "var(--rt-deep-cream)",
+  sidebar: "var(--rt-sidebar)",
+
+  // Text — themed
+  text: "var(--rt-text)",
+  textSec: "var(--rt-text-sec)",
+  textMuted: "var(--rt-text-muted)",
+  ink900: "var(--rt-ink-900)", ink700: "var(--rt-ink-700)", ink500: "var(--rt-ink-500)", ink400: "var(--rt-ink-400)", ink300: "var(--rt-ink-300)",
+
+  // Borders — themed
+  border: "var(--rt-border)",
+  borderLight: "var(--rt-border-light)",
+  borderSoft: "var(--rt-border-soft)",
+  surfaceSelected: "var(--rt-surface-selected)",
+
+  // Gradients use only fixed dark colors so they read well on either theme bg
   heroGrad: "linear-gradient(145deg, #1E261F 0%, #2A382C 40%, #33543E 100%)",
   raiGrad: "linear-gradient(145deg, #1E261F 0%, #33543E 55%, #558B68 100%)",
+
+  // Accents — fixed (Direction A: warm dark; original colors hold up against warm-brown bg)
   danger: "#C4432B", warning: "#B88B15", success: "#2D8659",
   retCrit: "#B4341F", retWarn: "#D17A1B", retOk: "#A8A420", retGood: "#1F7A5C", retElite: "#0C3A2E",
-  btn: "#5B21B6", btnHover: "#4C1D95", btnLight: "#EDE4FA",
-  cardShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)",
-  shadowSm: "0 1px 2px rgba(10,10,10,0.04), 0 1px 3px rgba(10,10,10,0.03)",
-  shadowMd: "0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
+  btn: "#5B21B6", btnHover: "#4C1D95", btnLight: "var(--rt-btn-light)",
+
+  // Shadows — slightly stronger in dark mode for depth perception
+  cardShadow: "var(--rt-shadow-card)",
+  shadowSm: "var(--rt-shadow-sm)",
+  shadowMd: "var(--rt-shadow-md)",
 };
+
+// CSS variable definitions for both themes. Injected in the App component's
+// style block so they're authoritative at the document root.
+const THEME_CSS = `
+  :root, :root[data-theme="light"] {
+    --rt-bg: #FAFAF7;
+    --rt-card: #FFFFFF;
+    --rt-surface: #EEEFEB;
+    --rt-surface-warm: #F2EEE8;
+    --rt-deep-cream: #EAE4D6;
+    --rt-sidebar: #FAFAF7;
+    --rt-text: #1E261F;
+    --rt-text-sec: #6B6B66;
+    --rt-text-muted: #9A9A93;
+    --rt-ink-900: #0A0A0A;
+    --rt-ink-700: #2A2A28;
+    --rt-ink-500: #6B6B66;
+    --rt-ink-400: #9A9A93;
+    --rt-ink-300: #C4C4BD;
+    --rt-border: #D8DFD8;
+    --rt-border-light: #EFEFEA;
+    --rt-border-soft: #EFEFEA;
+    --rt-surface-selected: #F3F8F5;
+    --rt-btn-light: #EDE4FA;
+    --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
+    --rt-shadow-sm: 0 1px 2px rgba(10,10,10,0.04), 0 1px 3px rgba(10,10,10,0.03);
+    --rt-shadow-md: 0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05);
+  }
+  :root[data-theme="dark"] {
+    --rt-bg: #1A1612;
+    --rt-card: #221C16;
+    --rt-surface: #2A231C;
+    --rt-surface-warm: #2A231C;
+    --rt-deep-cream: #3A2F22;
+    --rt-sidebar: #1A1612;
+    --rt-text: #E8E2D5;
+    --rt-text-sec: #C4BAA5;
+    --rt-text-muted: #8A8276;
+    --rt-ink-900: #E8E2D5;
+    --rt-ink-700: #C4BAA5;
+    --rt-ink-500: #8A8276;
+    --rt-ink-400: #6F675A;
+    --rt-ink-300: #4A4338;
+    --rt-border: #3A3027;
+    --rt-border-light: #2A231C;
+    --rt-border-soft: #2A231C;
+    --rt-surface-selected: #2C2620;
+    --rt-btn-light: rgba(91,33,182,0.22);
+    --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.40), 0 4px 16px rgba(0,0,0,0.30);
+    --rt-shadow-sm: 0 1px 2px rgba(0,0,0,0.30), 0 1px 3px rgba(0,0,0,0.20);
+    --rt-shadow-md: 0 2px 4px rgba(0,0,0,0.40), 0 4px 12px rgba(0,0,0,0.35);
+  }
+  html, body { background: var(--rt-bg); }
+`;
 
 const Icon = ({ name, size = 18, color = "currentColor" }) => {
   const paths = {
@@ -31,6 +115,8 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
     rolodex: (<><rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth="1.8" fill="none"/><path d="M2 10h20" stroke={color} strokeWidth="1.8"/><circle cx="12" cy="14.5" r="1.5" fill={color}/></>),
     referrals: (<><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/><path d="M19 8v6M22 11h-6" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     settings: (<><circle cx="12" cy="12" r="3" stroke={color} strokeWidth="1.8" fill="none"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke={color} strokeWidth="1.8" fill="none"/></>),
+    sun: (<><circle cx="12" cy="12" r="4.5" stroke={color} strokeWidth="1.8" fill="none"/><path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" stroke={color} strokeWidth="1.8" strokeLinecap="round"/></>),
+    moon: (<><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     sweeps: (<><path d="M18 20V10M12 20V4M6 20v-6" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     target: (<><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="6" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="2" fill={color}/></>),
     spark: (<><path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z" stroke={color} strokeWidth="1.6" fill="none" strokeLinejoin="round"/></>),
@@ -408,10 +494,10 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
         display: "flex",
         flexDirection: "column",
       }}>
-        {/* Masthead — beige to white gradient */}
+        {/* Masthead — beige (cream) gradient that auto-themes light/dark */}
         <div style={{
           padding: "16px 18px 14px",
-          background: `linear-gradient(180deg, rgba(234,228,214,0.5) 0%, ${C.card} 100%)`,
+          background: `linear-gradient(180deg, ${C.deepCream} 0%, ${C.card} 100%)`,
           borderBottom: "1px solid " + C.borderLight,
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
@@ -510,6 +596,26 @@ export default function App({ user }) {
 
   const [tier, setTier] = useState("core");  // "core" | "enterprise"
   const [page, setPage] = useState("today");
+
+  // ─── Theme (light / dark) ───────────────────────────────────────────
+  // Persisted in localStorage. Applies `data-theme` to <html> so CSS
+  // variables flip without re-render. Defaults to user's system preference
+  // on first visit; then the choice sticks.
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    try {
+      const saved = window.localStorage.getItem("rt-theme");
+      if (saved === "light" || saved === "dark") return saved;
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch { return "light"; }
+  });
+  useEffect(() => {
+    try {
+      document.documentElement.setAttribute("data-theme", theme);
+      window.localStorage.setItem("rt-theme", theme);
+    } catch {}
+  }, [theme]);
+  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
   // Scroll to top on page change. .r-main is now a fixed-positioned scroll
   // container (not the document), so we reset its scrollTop plus the Rai
   // chat's internal scroller. The document itself no longer scrolls, so no
@@ -1856,16 +1962,17 @@ export default function App({ user }) {
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
+        ${THEME_CSS}
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { background: ${C.bg}; overscroll-behavior: none; }
+        html, body { background: var(--rt-bg); overscroll-behavior: none; }
         input, textarea, select { font-size: 16px !important; }
         @media (min-width: 768px) { input, textarea, select { font-size: 14px !important; } }
         ::selection { background: #33543E; color: #fff; }
         ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #D8DFD8; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
         .nav-item { transition: all 0.12s; cursor: pointer; }
-        .nav-item:hover { background: rgba(255,255,255,0.08); }
+        .nav-item:hover { background: var(--rt-deep-cream); }
         .r-btn { transition: all 0.15s ease; cursor: pointer; }
         @media (hover: hover) {
           .r-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(91,33,182,0.18); }
@@ -2422,8 +2529,28 @@ export default function App({ user }) {
           {(() => {
             const active = page === "settings";
             return (
-              <div className="nav-item" onClick={() => goTo("settings")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, color: active ? C.text : C.text, background: active ? C.deepCream : "transparent", fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
-                <span style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="settings" size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div className="nav-item" onClick={() => goTo("settings")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, color: active ? C.text : C.text, background: active ? C.deepCream : "transparent", fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
+                  <span style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="settings" size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
+                </div>
+                <button
+                  onClick={toggleTheme}
+                  title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  style={{
+                    width: 34, height: 34, border: 0,
+                    background: "transparent",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    display: "grid", placeItems: "center",
+                    color: C.ink500,
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = C.deepCream}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  <Icon name={theme === "dark" ? "sun" : "moon"} size={16} color={C.ink500} />
+                </button>
               </div>
             );
           })()}
@@ -3253,7 +3380,7 @@ export default function App({ user }) {
                       onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
                       style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
                     />
-                    <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: "#fff", border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                    <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
                       <input autoFocus value={composerQuery}
@@ -3701,7 +3828,7 @@ export default function App({ user }) {
                               className="rt-check"
                               style={{
                                 width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.ink300,
-                                background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                                background: C.card, display: "flex", alignItems: "center", justifyContent: "center",
                                 flexShrink: 0, cursor: "pointer", padding: 0,
                               }}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -7391,7 +7518,7 @@ export default function App({ user }) {
                               <div style={{ position: "absolute", inset: 0, border: "1px dashed " + C.border, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, color: C.textMuted }}>empty</div>
                             ) : (
                               Array.from({ length: cards }).map((_, i) => (
-                                <div key={i} style={{ position: "absolute", bottom: i * 3, left: i * 2, right: -i * 2, top: i * 3, background: "#fff", border: "1px solid " + s.tone, borderRadius: 5, opacity: 0.35 + (i / cards) * 0.6, boxShadow: i === cards - 1 ? "0 1px 2px rgba(0,0,0,0.05)" : "none" }} />
+                                <div key={i} style={{ position: "absolute", bottom: i * 3, left: i * 2, right: -i * 2, top: i * 3, background: C.card, border: "1px solid " + s.tone, borderRadius: 5, opacity: 0.35 + (i / cards) * 0.6, boxShadow: i === cards - 1 ? "0 1px 2px rgba(0,0,0,0.05)" : "none" }} />
                               ))
                             )}
                           </div>
