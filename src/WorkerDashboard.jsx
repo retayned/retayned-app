@@ -358,12 +358,18 @@ function ScreenWrap({ children }) {
   );
 }
 
+// Day boundaries anchored to 2am local time.
+// Between midnight and 2am, "today" still refers to yesterday's calendar date —
+// matches the Operator side's day-rollover rule (tasks reset at 2am, not at 12am).
 function todayStr() {
   const n = new Date();
+  if (n.getHours() < 2) n.setDate(n.getDate() - 1);
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 function tomorrowStr() {
-  const n = new Date(); n.setDate(n.getDate() + 1);
+  const n = new Date();
+  if (n.getHours() < 2) n.setDate(n.getDate() - 1);
+  n.setDate(n.getDate() + 1);
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 function timeAgo(iso) {
@@ -373,4 +379,3 @@ function timeAgo(iso) {
   if (s < 86400) return Math.floor(s / 3600) + "h ago";
   return Math.floor(s / 86400) + "d ago";
 }
-
