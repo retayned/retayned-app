@@ -280,7 +280,39 @@ export const tasks = {
       .eq('is_done', true)
       .select();
     return { data, error };
-  }
+  },
+
+  // Assign a task to a worker (or unassign by passing null).
+  // shareClientContext defaults true — controls whether the Worker
+  // sees the task's client_name on their magic-link dashboard.
+  assign: async (taskId, workerId, shareClientContext = true) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({
+        assigned_worker_id: workerId || null,
+        share_client_context: shareClientContext,
+      })
+      .eq('id', taskId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Worker-side mark complete. Sets is_done + worker_completed_at.
+  // Called from the magic-link Edge Function with service role.
+  markCompleteByWorker: async (taskId) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({
+        is_done: true,
+        completed_at: new Date().toISOString(),
+        worker_completed_at: new Date().toISOString(),
+      })
+      .eq('id', taskId)
+      .select()
+      .single();
+    return { data, error };
+  },
 };
 
 
@@ -926,4 +958,144 @@ export const buildRaiContext = async (userId, clientId = null) => {
   }
 
   return context;
+};
+
+
+// ============================================================
+// WORKERS — people Operator delegates tasks to
+// ============================================================
+
+export const workers = {
+  // List all active (non-archived) workers for this Operator
+  list: async (userId) => {
+    const { data, error } = await supabase
+      .from('workers')
+      .select('*')
+      .eq('user_id', userId)
+      .is('archived_at', null)
+      .order('name', { ascending: true });
+    return { data, error };
+  },
+
+  create: async (userId, { name, email, role }) => {
+    const { data, error } = await supabase
+      .from('workers')
+      .insert({
+        user_id: userId,
+        name,
+        email: email.toLowerCase().trim(),
+        role: role || null,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  update: async (workerId, fields) => {
+    const { data, error } = await supabase
+      .from('workers')
+      .update(fields)
+      .eq('id', workerId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Soft-archive (Worker stops appearing in pickers). Their assigned
+  // tasks keep the assigned_worker_id reference for history.
+  archive: async (workerId) => {
+    const { data, error } = await supabase
+      .from('workers')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', workerId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Stats for the Workers page list — pending/done counts per worker.
+  // Returns an object keyed by worker_id: { pending, done }.
+  getCounts: async (userId) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('assigned_worker_id, is_done')
+      .eq('user_id', userId)
+      .not('assigned_worker_id', 'is', null);
+    if (error) return { data: null, error };
+    const counts = {};
+    (data || []).forEach(t => {
+      const wid = t.assigned_worker_id;
+      if (!counts[wid]) counts[wid] = { pending: 0, done: 0 };
+      if (t.is_done) counts[wid].done++;
+      else counts[wid].pending++;
+    });
+    return { data: counts, error: null };
+  },
+};
+
+
+// ============================================================
+// WORKER MAGIC TOKENS — auth for the magic-link dashboard
+// ============================================================
+
+// Generate a URL-safe random token (32 chars).
+// Uses crypto.getRandomValues for cryptographic randomness.
+function generateToken() {
+  const bytes = new Uint8Array(24);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  // base64url
+  let str = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return str;
+}
+
+export const workerTokens = {
+  // Get or create an active token for a worker. If a non-expired
+  // non-revoked token exists, reuse it — otherwise create a fresh one.
+  // 7-day expiry from creation.
+  getOrCreate: async (userId, workerId) => {
+    // First check for an existing active token
+    const { data: existing } = await supabase
+      .from('worker_magic_tokens')
+      .select('*')
+      .eq('worker_id', workerId)
+      .is('revoked_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) return { data: existing, error: null };
+
+    // Create new
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+
+    const { data, error } = await supabase
+      .from('worker_magic_tokens')
+      .insert({
+        user_id: userId,
+        worker_id: workerId,
+        token: generateToken(),
+        expires_at: expires.toISOString(),
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Revoke a token (Worker clicks "this isn't me")
+  revoke: async (token) => {
+    const { data, error } = await supabase
+      .from('worker_magic_tokens')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('token', token)
+      .select()
+      .single();
+    return { data, error };
+  },
 };
