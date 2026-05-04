@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, realtime as realtimeDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, realtime as realtimeDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -669,6 +669,13 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
+  // Rai user state — toggles + adaptive frequency state from rai_user_state table.
+  // Loaded once on mount in loadData, kept in sync via realtime subscription.
+  // Two user-controllable booleans:
+  //   - task_gen_enabled: "Rai Tasks / Off" toggle in toolbar
+  //   - ranking_enabled: "Ranked by Rai / Manual" toggle (eventually replaces localStorage rankMode)
+  // Initialized null so we can distinguish "not yet loaded" from "loaded with defaults".
+  const [raiState, setRaiState] = useState(null);
   // Focus mode: laser-focus on top task, dim everything else. Only available in Rai mode.
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
@@ -1170,6 +1177,20 @@ export default function App({ user }) {
       console.warn("Daybook failed to load:", e);
     }
 
+    // Rai user state — toggles and adaptive frequency state.
+    // If row missing (legacy user pre-trigger), state stays null and toggles
+    // fall back to permissive defaults until a sweep creates the row.
+    try {
+      if (typeof raiUserStateDb?.get === "function") {
+        const raiRes = await raiUserStateDb.get(uid);
+        if (raiRes?.data) {
+          setRaiState(raiRes.data);
+        }
+      }
+    } catch (e) {
+      console.warn("Rai user state failed to load:", e);
+    }
+
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
       id: t.id,
       client: t.client_name,
@@ -1373,7 +1394,9 @@ export default function App({ user }) {
         client: row.client_name || null,
         client_id: row.client_id || null,
         done: !!row.is_done,
-        ai: !!row.ai_generated,
+        createdBy: row.created_by || 'user',
+        raiPattern: row.rai_pattern || null,
+        raiDismissedAt: row.rai_dismissed_at || null,
         recurring: !!row.is_recurring,
         due_date: row.due_date || null,
         raiPriority: !!row.is_rai_priority,
@@ -1407,9 +1430,18 @@ export default function App({ user }) {
       }
     });
 
+    // Subscribe to rai_user_state changes (cross-tab toggle sync).
+    // When user flips "Rai Tasks / Off" on phone, this tab updates without refresh.
+    const raiStateSubscription = realtimeDb.onRaiUserStateChange(user.id, (payload) => {
+      const row = payload.new;
+      if (!row) return;
+      setRaiState(row);
+    });
+
     return () => {
       // Cleanup on unmount or user change
       try { subscription?.unsubscribe?.(); } catch {}
+      try { raiStateSubscription?.unsubscribe?.(); } catch {}
     };
   }, [user?.id]);
 
@@ -3500,6 +3532,71 @@ export default function App({ user }) {
                           Manual
                         </button>
                       </div>
+                      {/* Rai Tasks / Off toggle — pill segmented control.
+                          Controls whether Rai's daily sweep generates tasks for this user
+                          AND whether existing Rai-created tasks are shown in the list.
+                          Off = sweep skips user, existing rai_dismissed_at IS NULL Rai
+                          tasks remain in DB but hidden from view. Default: on.
+                          State source of truth is rai_user_state.task_gen_enabled. */}
+                      {raiState && (
+                        <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
+                          <button
+                            onClick={async () => {
+                              if (raiState.task_gen_enabled) return;
+                              // Optimistic update — realtime sub will reconcile if server rejects
+                              setRaiState({ ...raiState, task_gen_enabled: true });
+                              try {
+                                await raiUserStateDb.updateToggles(user.id, { task_gen_enabled: true });
+                              } catch (e) {
+                                console.warn("Failed to enable Rai Tasks:", e);
+                                setRaiState({ ...raiState, task_gen_enabled: false });
+                              }
+                            }}
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 999,
+                              border: "none",
+                              background: raiState.task_gen_enabled ? C.card : "transparent",
+                              fontFamily: "inherit",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: raiState.task_gen_enabled ? C.btn : C.textSec,
+                              cursor: "pointer",
+                              boxShadow: raiState.task_gen_enabled ? C.shadowSm : "none",
+                              transition: "background 120ms"
+                            }}
+                          >
+                            Rai Tasks
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!raiState.task_gen_enabled) return;
+                              setRaiState({ ...raiState, task_gen_enabled: false });
+                              try {
+                                await raiUserStateDb.updateToggles(user.id, { task_gen_enabled: false });
+                              } catch (e) {
+                                console.warn("Failed to disable Rai Tasks:", e);
+                                setRaiState({ ...raiState, task_gen_enabled: true });
+                              }
+                            }}
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 999,
+                              border: "none",
+                              background: !raiState.task_gen_enabled ? C.card : "transparent",
+                              fontFamily: "inherit",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: !raiState.task_gen_enabled ? C.text : C.textSec,
+                              cursor: "pointer",
+                              boxShadow: !raiState.task_gen_enabled ? C.shadowSm : "none",
+                              transition: "background 120ms"
+                            }}
+                          >
+                            Off
+                          </button>
+                        </div>
+                      )}
                       {/* Focus mode button — only enabled in Rai mode */}
                       {rankMode === "rai" && (
                         <button
