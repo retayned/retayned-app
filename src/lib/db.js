@@ -313,6 +313,71 @@ export const tasks = {
       .single();
     return { data, error };
   },
+
+  // Mark a Rai-created task as dismissed (user said "not for me").
+  // Soft-dismissal: row stays in DB so Rai's adaptive frequency engine
+  // can score this as a rejection signal and back off accordingly.
+  // reason is optional — if provided, helps tune Rai's pattern detection.
+  dismissRai: async (taskId, reason = null) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({
+        rai_dismissed_at: new Date().toISOString(),
+        rai_dismissal_reason: reason,
+      })
+      .eq('id', taskId)
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
+
+// ============================================================
+// RAI USER STATE — per-user Rai toggles + adaptive frequency
+// One row per user, auto-created on signup via DB trigger.
+//
+// Drives:
+//   - "Ranked by Rai / Manual" toggle  (.ranking_enabled)
+//   - "Rai Tasks / Off" toggle         (.task_gen_enabled)
+//   - Daily sweep eligibility          (.acceptance_score, .next_sweep_eligible_at)
+//
+// Users can only update their own toggles via RLS; counters and
+// adaptive scores are written by the daily sweep Edge Function
+// using the service role.
+// ============================================================
+
+export const raiUserState = {
+  // Get the current user's Rai state row.
+  // Uses maybeSingle() so a missing row (e.g. user created before
+  // the trigger existed) returns null instead of throwing.
+  get: async (userId) => {
+    const { data, error } = await supabase
+      .from('rai_user_state')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return { data, error };
+  },
+
+  // Update toggles. Only task_gen_enabled and ranking_enabled are
+  // user-writable — RLS rejects everything else.
+  // Pass either or both fields. Omitted fields stay unchanged.
+  updateToggles: async (userId, { task_gen_enabled, ranking_enabled } = {}) => {
+    const updates = {};
+    if (typeof task_gen_enabled === 'boolean') updates.task_gen_enabled = task_gen_enabled;
+    if (typeof ranking_enabled === 'boolean') updates.ranking_enabled = ranking_enabled;
+    if (Object.keys(updates).length === 0) {
+      return { data: null, error: new Error('updateToggles: no valid fields to update') };
+    }
+    const { data, error } = await supabase
+      .from('rai_user_state')
+      .update(updates)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    return { data, error };
+  },
 };
 
 
@@ -677,7 +742,22 @@ export const realtime = {
         filter: `user_id=eq.${userId}`
       }, callback)
       .subscribe();
-  }
+  },
+
+  // Subscribe to rai_user_state changes (for cross-tab toggle sync).
+  // When user flips "Rai Tasks / Off" on phone, the desktop tab
+  // updates without a refresh. Same channel pattern as onTaskChange.
+  onRaiUserStateChange: (userId, callback) => {
+    return supabase
+      .channel('rai-user-state-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'rai_user_state',
+        filter: `user_id=eq.${userId}`
+      }, callback)
+      .subscribe();
+  },
 };
 
 
