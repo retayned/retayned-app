@@ -358,6 +358,22 @@ export const raiUserState = {
       .single();
     return { data, error };
   },
+
+  // Set the active "Rai's pick" badge to a specific task. Called by frontend
+  // when 60s settle window passes for a picked client and the badge transitions
+  // from waiting to active. Pass null taskId to clear the badge.
+  setBadgeTask: async (userId, taskId) => {
+    const { data, error } = await supabase
+      .from('rai_user_state')
+      .update({
+        todays_badged_task_id: taskId,
+        todays_badge_set_at: taskId ? new Date().toISOString() : null,
+      })
+      .eq('user_id', userId)
+      .select()
+      .single();
+    return { data, error };
+  },
 };
 
 
@@ -732,6 +748,20 @@ export const raiPicks = {
       .gt('expires_at', new Date().toISOString())
       .order('rank', { ascending: true });
     return { data: data || [], error };
+  },
+
+  // Mark a pick as actually-annotated (badge landed on it). Called by
+  // frontend after the 60s settle fires for a picked client. Used by the
+  // next sweep's variety guidance — Rai sees which picks became badges
+  // and prefers not to repeat them too often.
+  markAnnotated: async (userId, clientId) => {
+    const { data, error } = await supabase
+      .from('rai_picks')
+      .update({ was_annotated: true })
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .select();
+    return { data, error };
   },
 };
 
