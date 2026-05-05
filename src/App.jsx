@@ -714,11 +714,17 @@ export default function App({ user }) {
   //   - ranking_enabled: "Ranked by Rai / Manual" toggle (eventually replaces localStorage rankMode)
   // Initialized null so we can distinguish "not yet loaded" from "loaded with defaults".
   const [raiState, setRaiState] = useState(null);
-  // Active Rai pick — one row pointing at a task Rai annotates as today's
-  // priority. Sweep writes one per day per user with 24-hr expiry. Null when
-  // no active pick (sweep hasn't run, expired, or skipped this cycle).
-  // Realtime sub keeps this in sync if a fresh pick lands while app is open.
-  const [raiPick, setRaiPick] = useState(null);
+  // Active Rai picks — array of 1-3 rows pointing at clients, ordered by rank
+  // (1=primary, 2=backup1, 3=backup2). Sweep writes them with 24-hr expiry.
+  // Empty array when no active picks (sweep hasn't run, expired, or skipped).
+  // Realtime sub keeps this in sync if a fresh sweep lands while app is open.
+  const [raiPicks, setRaiPicks] = useState([]);
+  // Burst tracker — per-client timestamp of most recent task creation.
+  // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
+  // badge from flickering while the user is rapidly creating tasks for a
+  // picked client. Lives in a ref so updates don't trigger renders.
+  // Shape: { [clientName]: { firstCreatedAt: ms, lastCreatedAt: ms } }
+  const raiBurstTrackerRef = useRef({});
   // Focus mode: laser-focus on top task, dim everything else. Only available in Rai mode.
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
@@ -1234,19 +1240,16 @@ export default function App({ user }) {
       console.warn("Rai user state failed to load:", e);
     }
 
-    // Rai's active pick — daily sweep writes one row per user pointing at a
-    // task. Null is fine (sweep skipped, expired, or hasn't run yet).
+    // Rai's active picks — daily sweep writes 1-3 ranked rows pointing at
+    // clients. Empty array is fine (sweep skipped, expired, or hasn't run).
     try {
       if (typeof raiPicksDb?.getCurrent === "function") {
         const pickRes = await raiPicksDb.getCurrent(uid);
-        if (pickRes?.data) {
-          setRaiPick(pickRes.data);
-        } else {
-          setRaiPick(null);
-        }
+        setRaiPicks(pickRes?.data || []);
       }
     } catch (e) {
-      console.warn("Rai pick failed to load:", e);
+      console.warn("Rai picks failed to load:", e);
+      setRaiPicks([]);
     }
 
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
@@ -1268,9 +1271,10 @@ export default function App({ user }) {
       referrals: 0,
       profileScores: c.profile_scores || {},
       qualifyingFlags: c.qualifying_flags || {},
-      // Rai's daily reweighting + reasoning (per-client). Sweep writes these
+      // Rai's daily reweighting + reasoning (per-client). Sweep writes raiNudge
       // overnight. Sort comparator reads raiNudge to influence task ordering.
-      // raiRationale is the user-facing reason text for the "Rai's pick" badge.
+      // raiSignal/raiRationale at client-level are debug fields; the pick badge
+      // hover text comes from rai_picks.reason (per-pick), not the client.
       raiNudge: c.rai_nudge != null ? Number(c.rai_nudge) : 0,
       raiSignal: c.rai_signal || null,
       raiRationale: c.rai_rationale || null,
@@ -1475,6 +1479,21 @@ export default function App({ user }) {
       };
 
       if (ev === "INSERT") {
+        // Track burst timing for the 60s rule (with 5-min cap). When a task
+        // is created for any client, record the timestamp so the badge logic
+        // knows whether the picked client is in an active "burst" of task
+        // creation. Tracker is keyed by client name (matches t.client).
+        if (mapped.client) {
+          const now = Date.now();
+          const tracker = raiBurstTrackerRef.current;
+          const existing = tracker[mapped.client];
+          tracker[mapped.client] = {
+            firstCreatedAt: existing && (now - existing.firstCreatedAt < 5 * 60 * 1000)
+              ? existing.firstCreatedAt
+              : now,
+            lastCreatedAt: now,
+          };
+        }
         setTasks(prev => {
           // Avoid duplicates if the local insert already added it
           if (prev.some(t => t.id === mapped.id)) return prev;
@@ -1503,21 +1522,15 @@ export default function App({ user }) {
       setRaiState(row);
     });
 
-    // Subscribe to rai_picks changes — when overnight sweep writes a fresh pick,
-    // the badge appears on the new task without a page refresh. Handles INSERT
-    // (new pick lands), UPDATE (pick mutated), and DELETE (pick revoked).
-    const raiPickSubscription = realtimeDb.onRaiPickChange(user.id, (payload) => {
-      const ev = payload.eventType;
-      if (ev === "DELETE") {
-        // If the active pick was deleted, clear local state
-        setRaiPick(prev => (prev && prev.id === payload.old?.id) ? null : prev);
-        return;
-      }
-      const row = payload.new;
-      if (!row) return;
-      // Only adopt the row if it's still active (not yet expired)
-      if (row.expires_at && new Date(row.expires_at) > new Date()) {
-        setRaiPick(row);
+    // Subscribe to rai_picks changes — when overnight sweep writes fresh picks,
+    // refetch the full ranked list (1-3 rows). Simpler than maintaining the
+    // ranked array in-place across INSERT/UPDATE/DELETE events.
+    const raiPickSubscription = realtimeDb.onRaiPickChange(user.id, async () => {
+      try {
+        const pickRes = await raiPicksDb.getCurrent(user.id);
+        setRaiPicks(pickRes?.data || []);
+      } catch (e) {
+        console.warn("Failed to refetch rai picks after change:", e);
       }
     });
 
@@ -1683,7 +1696,7 @@ export default function App({ user }) {
     return 25;
   };
 
-  const getProfileSortScore = (clientName, hasRaiBoost = false) => {
+  const getProfileSortScore = (clientName, hasRaiBoost = false, pickBoost = 0) => {
     if (!clientName || clientName === "All Clients") return 200; // All Clients tasks first
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
@@ -1692,12 +1705,14 @@ export default function App({ user }) {
     const revPct = totalRev > 0 ? (c.revenue || 0) / totalRev : 0;
     const boost = calcNewClientBoost(c.ret || 50, revPct, c.daysOld != null ? c.daysOld : 999);
     const raiBoost = hasRaiBoost ? getRaiBoost(ps) : 0;
-    // Rai's daily nudge lives on the client (set by overnight sweep). Every
-    // task for this client inherits the same nudge — including new tasks
-    // created during the day. Range -10..+10 normal, up to +20 for the
-    // client whose task is the daily annotated pick. Final score clamps at 99.
+    // Layered Rai score:
+    //   client nudge (-10..+10) — all tasks of this client get this
+    //   pick boost (+10..+20)  — only the specific picked task gets this on top
+    // Pick is captured in rai_picks.task_id (NOT stored on the client), so this
+    // function takes pickBoost as a parameter and the caller passes it in only
+    // when the task being scored matches the active pick.
     const raiNudge = c.raiNudge || 0;
-    return Math.min(99, ps + boost + raiBoost + raiNudge);
+    return Math.min(99, ps + boost + raiBoost + raiNudge + (pickBoost || 0));
   };
 
 
@@ -2750,21 +2765,81 @@ export default function App({ user }) {
           // dismiss affordance during this session.
           const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
 
-          // Sort comparator for Rai mode. Final score chain:
-          //   profile_score (with soft-clamp inside)
+          // ─── RAI'S ACTIVE PICKED TASK ────────────────────────────────────
+          // Resolve which single task currently carries the "Rai's pick" badge.
+          //
+          // Rai picks 1-3 CLIENTS (ranked: primary, backup1, backup2). The
+          // system selects which TASK of the picked client gets the badge,
+          // using priority_score with a 60-second burst rule (5-min cap).
+          //
+          // Algorithm:
+          //   1. Walk picks in rank order (1, 2, 3).
+          //   2. For each pick, find that client's open visible tasks.
+          //   3. If the client has tasks AND we're past the burst window for
+          //      that client, badge the highest-priority task. Done.
+          //   4. If the client is in an active burst (recent task creation
+          //      within 60s, but firstCreatedAt is within last 5 min), don't
+          //      commit yet — fall through to the next pick.
+          //   5. If client has zero tasks, fall through to the next pick.
+          //   6. If no pick yields a valid task, no badge today.
+          const activeBadge = (() => {
+            if (rankMode !== "rai" || !raiPicks || raiPicks.length === 0) return null;
+            const now = Date.now();
+            const BURST_MS = 60 * 1000;       // 60s settle window
+            const BURST_CAP_MS = 5 * 60 * 1000; // 5-min hard cap
+
+            for (const pick of raiPicks) {
+              const c = clients.find(x => x.id === pick.client_id);
+              if (!c) continue; // client may have been moved to rolodex / archived
+
+              const clientTasks = visibleTasks.filter(t => !t.done && t.client === c.name);
+              if (clientTasks.length === 0) continue; // exhausted, try next rank
+
+              // 60s burst rule: if a task was created for this client within
+              // the last 60s AND the burst started within the last 5 min,
+              // hold off until the burst settles.
+              const burst = raiBurstTrackerRef.current[c.name];
+              if (burst) {
+                const sinceLast = now - burst.lastCreatedAt;
+                const sinceFirst = now - burst.firstCreatedAt;
+                if (sinceLast < BURST_MS && sinceFirst < BURST_CAP_MS) {
+                  // Still bursting — try next rank's pick
+                  continue;
+                }
+              }
+
+              // Find the highest-priority task for this client. Use raw
+              // getProfileSortScore (no pick boost yet — that's what we're
+              // computing) plus tiebreakers consistent with raiCompare.
+              const sortedClientTasks = [...clientTasks].sort((a, b) => {
+                const psA = getProfileSortScore(a.client, a.raiPriority, 0);
+                const psB = getProfileSortScore(b.client, b.raiPriority, 0);
+                if (psA !== psB) return psB - psA;
+                if (a.alert !== b.alert) return a.alert ? -1 : 1;
+                if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+                return (b.created_at || 0) - (a.created_at || 0);
+              });
+              return {
+                taskId: sortedClientTasks[0].id,
+                pick,
+              };
+            }
+            return null;
+          })();
+          const activeBadgeTaskId = activeBadge ? activeBadge.taskId : null;
+          const activeBadgePick = activeBadge ? activeBadge.pick : null;
+
+          // Sort comparator for Rai mode. Layered final score:
+          //   priority_score (deterministic, with soft clamp inside)
           //   + new_client_boost
           //   + rai_priority_boost (older is_rai_priority flag)
-          //   + client.raiNudge (NEW: Rai's daily ±10 reweighting per CLIENT,
-          //     +10..+20 for the client whose task is the daily pick)
+          //   + client.raiNudge   (-10..+10) — applies to ALL tasks of that client
+          //   + pick_boost        (+10..+20) — only the badged task, layered on top
           //   → clamped to 99
-          //
-          // Nudge lives on the client, not the task. Every task for that client
-          // inherits the same nudge — including tasks added during the day after
-          // the overnight sweep ran.
           //
           // Tiebreakers, in order:
           //   1. final score desc
-          //   2. nudge magnitude desc — Rai breaks ties (per RANKER-SPEC-v3)
+          //   2. nudge magnitude desc — Rai breaks ties
           //   3. alert (true wins)
           //   4. recurring (true wins)
           //   5. created_at desc (newer wins)
@@ -2773,9 +2848,13 @@ export default function App({ user }) {
             const c = clients.find(x => x.name === clientName);
             return c ? (c.raiNudge || 0) : 0;
           };
+          const pickBoostForTask = (taskId) => {
+            if (taskId !== activeBadgeTaskId || !activeBadgePick) return 0;
+            return Number(activeBadgePick.pick_boost) || 0;
+          };
           const raiCompare = (a, b) => {
-            const psA = getProfileSortScore(a.client, a.raiPriority);
-            const psB = getProfileSortScore(b.client, b.raiPriority);
+            const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForTask(a.id));
+            const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForTask(b.id));
             if (psA !== psB) return psB - psA;
             // Rai's tiebreak: larger nudge magnitude wins (positive = stronger
             // surface signal, negative = stronger demote signal — both meaningful).
@@ -4052,13 +4131,14 @@ export default function App({ user }) {
                             </button>
   
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              {/* Rai's pick badge — daily annotation. Renders only in Rai mode
-                                  when the active pick row references this task. Hover/tap shows
-                                  rai_rationale text from the task's CLIENT (Rai's reasoning is
-                                  per-client now). Disappears in Manual mode. */}
-                              {rankMode === "rai" && raiPick && raiPick.task_id === t.id && (
+                              {/* Rai's pick badge — daily annotation. The system selects which
+                                  task gets the badge from Rai's ranked client picks (primary,
+                                  backup1, backup2) using priority_score + the 60s burst rule.
+                                  Hover/tap shows the active pick's reason text. Disappears in
+                                  Manual mode (activeBadgeTaskId is null there). */}
+                              {activeBadgeTaskId === t.id && activeBadgePick && (
                                 <div
-                                  title={(client && client.raiRationale) || "Rai's pick for today"}
+                                  title={activeBadgePick.reason || "Rai's pick for today"}
                                   style={{
                                     display: "inline-flex",
                                     alignItems: "center",
@@ -4093,7 +4173,9 @@ export default function App({ user }) {
                                   const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
                                   const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
                                   const nudge = client.raiNudge || 0;
-                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge);
+                                  const isPicked = activeBadgeTaskId === t.id;
+                                  const pickBoost = isPicked && activeBadgePick ? (Number(activeBadgePick.pick_boost) || 0) : 0;
+                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge + pickBoost);
                                   return (
                                     <span style={{
                                       fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
@@ -4107,7 +4189,7 @@ export default function App({ user }) {
                                       flexShrink: 0,
                                       whiteSpace: "nowrap",
                                     }}>
-                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} nudge:{nudge >= 0 ? "+" : ""}{nudge} → <b>{finalScore.toFixed(1)}</b>
+                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} nudge:{nudge >= 0 ? "+" : ""}{nudge}{isPicked ? ` pick:+${pickBoost}` : ""} → <b>{finalScore.toFixed(1)}</b>
                                     </span>
                                   );
                                 })()}
