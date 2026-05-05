@@ -781,6 +781,21 @@ export const realtime = {
       }, callback)
       .subscribe();
   },
+
+  // Subscribe to client changes — primarily so that Rai's nudge updates
+  // (written by overnight sweep into clients.rai_nudge) propagate without
+  // a page refresh. Also catches any client metadata edits made elsewhere.
+  onClientChange: (userId, callback) => {
+    return supabase
+      .channel('clients-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'clients',
+        filter: `user_id=eq.${userId}`
+      }, callback)
+      .subscribe();
+  },
 };
 
 
