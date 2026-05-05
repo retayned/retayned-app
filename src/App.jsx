@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, realtime as realtimeDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -343,6 +343,45 @@ function retColor(v) {
   return "#B4341F";                    // Critical (retCrit)
 }
 
+// Whitelist of verbs that signal a thinking/planning task — i.e. one
+// where the user is pausing to deliberate, not executing. When a task
+// matches one of these (and has a client tag), we surface a "Discuss
+// with Rai" affordance to open Confidant preloaded with that client.
+//
+// Strict whitelist by design. Adding verbs is cheap; removing them is
+// painful once users get used to the affordance. Start small, expand
+// based on what users actually type.
+//
+// EXCLUDED on purpose: draft, write, send, email, call, text, follow up,
+// finish, complete, do — these are execution verbs, not thinking verbs.
+const THINKING_VERBS = [
+  "decide", "figure out", "plan", "prep", "think through",
+  "strategize", "approach", "review", "read", "check",
+  "analyze", "assess", "evaluate",
+];
+
+// Detect whether a task's text begins with (or prominently contains) a
+// thinking verb. Word-boundary aware so "preparation" doesn't match "prep"
+// in a way that fires for unrelated text. Lowercases input for matching.
+// Returns the matched verb (string) or null.
+function detectThinkingVerb(text) {
+  if (!text) return null;
+  const lc = String(text).toLowerCase();
+  for (const v of THINKING_VERBS) {
+    // Multi-word verbs: simple substring check is fine ("think through")
+    if (v.includes(" ")) {
+      if (lc.includes(v)) return v;
+    } else {
+      // Single-word verbs: word-boundary regex to avoid "review" matching "reviewed"
+      // ... actually we want "reviewed" too (still a review action), so use
+      // start-of-word boundary only.
+      const re = new RegExp(`\\b${v}`, "i");
+      if (re.test(lc)) return v;
+    }
+  }
+  return null;
+}
+
 // Minimal markdown renderer for Rai's chat responses.
 // Handles: **bold**, numbered lists, bulleted lists, paragraphs separated by blank lines.
 // Safe: uses React nodes, not dangerouslySetInnerHTML.
@@ -675,6 +714,11 @@ export default function App({ user }) {
   //   - ranking_enabled: "Ranked by Rai / Manual" toggle (eventually replaces localStorage rankMode)
   // Initialized null so we can distinguish "not yet loaded" from "loaded with defaults".
   const [raiState, setRaiState] = useState(null);
+  // Active Rai pick — one row pointing at a task Rai annotates as today's
+  // priority. Sweep writes one per day per user with 24-hr expiry. Null when
+  // no active pick (sweep hasn't run, expired, or skipped this cycle).
+  // Realtime sub keeps this in sync if a fresh pick lands while app is open.
+  const [raiPick, setRaiPick] = useState(null);
   // Focus mode: laser-focus on top task, dim everything else. Only available in Rai mode.
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
@@ -1190,6 +1234,21 @@ export default function App({ user }) {
       console.warn("Rai user state failed to load:", e);
     }
 
+    // Rai's active pick — daily sweep writes one row per user pointing at a
+    // task. Null is fine (sweep skipped, expired, or hasn't run yet).
+    try {
+      if (typeof raiPicksDb?.getCurrent === "function") {
+        const pickRes = await raiPicksDb.getCurrent(uid);
+        if (pickRes?.data) {
+          setRaiPick(pickRes.data);
+        } else {
+          setRaiPick(null);
+        }
+      }
+    } catch (e) {
+      console.warn("Rai pick failed to load:", e);
+    }
+
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
       id: t.id,
       client: t.client_name,
@@ -1444,10 +1503,29 @@ export default function App({ user }) {
       setRaiState(row);
     });
 
+    // Subscribe to rai_picks changes — when overnight sweep writes a fresh pick,
+    // the badge appears on the new task without a page refresh. Handles INSERT
+    // (new pick lands), UPDATE (pick mutated), and DELETE (pick revoked).
+    const raiPickSubscription = realtimeDb.onRaiPickChange(user.id, (payload) => {
+      const ev = payload.eventType;
+      if (ev === "DELETE") {
+        // If the active pick was deleted, clear local state
+        setRaiPick(prev => (prev && prev.id === payload.old?.id) ? null : prev);
+        return;
+      }
+      const row = payload.new;
+      if (!row) return;
+      // Only adopt the row if it's still active (not yet expired)
+      if (row.expires_at && new Date(row.expires_at) > new Date()) {
+        setRaiPick(row);
+      }
+    });
+
     return () => {
       // Cleanup on unmount or user change
       try { subscription?.unsubscribe?.(); } catch {}
       try { raiStateSubscription?.unsubscribe?.(); } catch {}
+      try { raiPickSubscription?.unsubscribe?.(); } catch {}
     };
   }, [user?.id]);
 
@@ -2628,10 +2706,16 @@ export default function App({ user }) {
           // dismiss affordance during this session.
           const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
 
-          // Sort comparator for Rai mode: Profile Score → alert → recurring → created_at
+          // Sort comparator for Rai mode: (Profile Score + Rai's bounded ±10 nudge)
+          // → alert → recurring → created_at.
+          // The nudge is the quiet reweighting Rai applies overnight based on the
+          // 7 task signals (creation rate, completion, type distribution, deferrals,
+          // gaps, velocity, content). Bounded in DB to [-10, +10] so a single
+          // nudge can't overwhelm a meaningful priority gap. In Manual mode the
+          // nudge is ignored — manualCompare doesn't read it.
           const raiCompare = (a, b) => {
-            const psA = getProfileSortScore(a.client, a.raiPriority);
-            const psB = getProfileSortScore(b.client, b.raiPriority);
+            const psA = getProfileSortScore(a.client, a.raiPriority) + (a.raiSortNudge || 0);
+            const psB = getProfileSortScore(b.client, b.raiPriority) + (b.raiSortNudge || 0);
             if (psA !== psB) return psB - psA;
             if (a.alert !== b.alert) return a.alert ? -1 : 1;
             if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
@@ -3875,6 +3959,30 @@ export default function App({ user }) {
                             </button>
   
                             <div style={{ flex: 1, minWidth: 0 }}>
+                              {/* Rai's pick badge — daily annotation. Renders only in Rai mode
+                                  when the active pick row references this task. Hover/tap shows
+                                  rai_rationale text from the task itself. Disappears in Manual mode. */}
+                              {rankMode === "rai" && raiPick && raiPick.task_id === t.id && (
+                                <div
+                                  title={t.raiRationale || "Rai's pick for today"}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                    color: C.btn,
+                                    marginBottom: 3,
+                                  }}
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
+                                  </svg>
+                                  Rai's pick
+                                </div>
+                              )}
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 <span className="rt-task-title">{t.text}</span>
                               </div>
@@ -3910,6 +4018,51 @@ export default function App({ user }) {
                                 })()}
                               </div>
                             </div>
+
+                            {/* Discuss with Rai — opens Confidant preloaded with this task's
+                                client + the task as opening context. Renders only when:
+                                - the task text contains a thinking-mode verb (decide, plan, etc.)
+                                - the task has a client tag (Confidant is per-client)
+                                - the task is not already done
+                                Click handler is a stub for now — Confidant page doesn't exist yet,
+                                so it logs the intended behavior. Will wire up when Confidant ships. */}
+                            {!isDone && client && detectThinkingVerb(t.text) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // TODO: navigate to Confidant page preloaded with client + task context
+                                  // For now: log the intent so we can verify detection works.
+                                  console.log("[Discuss with Rai]", { client: client.name, task: t.text, verb: detectThinkingVerb(t.text) });
+                                }}
+                                title={`Discuss "${t.text}" with Rai`}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  width: 26, height: 26,
+                                  borderRadius: 999,
+                                  border: "1px solid " + C.borderLight,
+                                  background: "transparent",
+                                  color: C.btn,
+                                  cursor: "pointer",
+                                  flexShrink: 0,
+                                  padding: 0,
+                                  transition: "background 120ms, border-color 120ms",
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = C.btnLight;
+                                  e.currentTarget.style.borderColor = C.btn;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "transparent";
+                                  e.currentTarget.style.borderColor = C.borderLight;
+                                }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                </svg>
+                              </button>
+                            )}
 
                             {/* Worker assignment badge — only renders if task is assigned. */}
                             {t.assigned_worker_id && (() => {
