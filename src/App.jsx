@@ -1586,48 +1586,65 @@ export default function App({ user }) {
   //
   // (C) The check is debounced with a 5-second timer so we don't spam
   //     supabase on every tasks/clients change.
+  // ─── BADGE STATE MANAGER ──────────────────────────────────────────
+  // Manages rai_user_state.todays_badged_task_id. Three rules, locked:
+  //
+  //   1. Once the badge lands, it stays on that task forever — through
+  //      completion, even if the task gets dismissed or moved. The badge
+  //      is permanent for the day.
+  //   2. Tomorrow / Later tasks NEVER get the badge. Annotation is a
+  //      today-only event.
+  //   3. The badge is single-use per day. If `todays_badge_set_at` is
+  //      already set, the day is over — we never write a new badge.
+  //
+  // The effect only writes a badge when ALL of these are true:
+  //   - rankMode === "rai"
+  //   - raiState exists and todays_badge_set_at is null (never been set today)
+  //   - At least one picked client has a TODAY task that has settled >60s
+  //
+  // After the badge is written, the effect becomes a no-op for the rest
+  // of the day. The DB FK (ON DELETE SET NULL) is the ONLY mechanism
+  // that can clear todays_badged_task_id — and only when the user
+  // outright deletes the task row, which removes the badge alongside it.
   useEffect(() => {
     if (!user) return;
     if (rankMode !== "rai") return;
     if (!raiState) return; // not loaded yet
     if (!raiPicks || raiPicks.length === 0) return; // no picks today
 
+    // Day is over: badge has been set at some point today. Never re-badge.
+    if (raiState.todays_badge_set_at) return;
+    if (raiState.todays_badged_task_id) return;
+
     let timeoutId;
 
     const evaluate = async () => {
-      const badgedId = raiState.todays_badged_task_id || null;
-      const pickedClientIds = new Set(raiPicks.map(p => p.client_id));
-
-      // (A) Auto-clear: badge is set, but the task is gone or done
-      if (badgedId) {
-        const t = tasks.find(x => x.id === badgedId);
-        const stillValid = t && !t.done && !todayDismissed[badgedId];
-        if (!stillValid) {
-          try {
-            await raiUserStateDb.setBadgeTask(user.id, null);
-          } catch (e) {
-            console.warn("Failed to clear stale badge:", e);
-          }
-        }
-        return; // either still valid (do nothing) or just cleared (next tick will re-evaluate)
-      }
-
-      // (B) Waiting → look for a settled task to badge
-      // For each picked client, find the candidate task to badge (highest-priority
-      // open task), then check if it's been around >60s. Pick the FIRST eligible
-      // one we find walking ranks 1, 2, 3.
       const SETTLE_MS = 60 * 1000;
       const now = Date.now();
+      const todayIso = new Date().toISOString().slice(0, 10);
+
       for (const pick of raiPicks) {
         const c = clients.find(x => x.id === pick.client_id);
         if (!c) continue;
-        const clientOpenTasks = tasks.filter(t =>
-          !t.done && !todayDismissed[t.id] && t.client === c.name
-        );
-        if (clientOpenTasks.length === 0) continue;
-        // Eligible = at least one of these tasks has been around >60s
-        const settled = clientOpenTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
+
+        // Only TODAY tasks are eligible. Tomorrow / Later never get badged.
+        const clientTodayTasks = tasks.filter(t => {
+          if (t.done) return false;
+          if (todayDismissed[t.id]) return false;
+          if (t.client !== c.name) return false;
+          // Only today's bucket: due_date is today (recurring tasks count
+          // as today by convention since they have no due_date but render
+          // in the today bucket).
+          if (t.recurring) return true;
+          if (!t.due_date) return false;
+          return String(t.due_date).slice(0, 10) === todayIso;
+        });
+        if (clientTodayTasks.length === 0) continue;
+
+        // Eligible = at least one of these tasks has settled >60s
+        const settled = clientTodayTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
         if (settled.length === 0) continue;
+
         // Pick highest-priority among settled
         const sorted = [...settled].sort((a, b) => {
           const psA = getProfileSortScore(a.client, a.raiPriority, 0);
@@ -1646,8 +1663,6 @@ export default function App({ user }) {
         }
         return;
       }
-      // No eligible candidate found — silence keeps. Suppress lint warning.
-      void pickedClientIds;
     };
 
     // Debounce: re-evaluate after 5 seconds of no changes
@@ -2870,21 +2885,16 @@ export default function App({ user }) {
           const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
 
           // ─── RAI'S ACTIVE PICKED TASK ────────────────────────────────────
-          // Resolve which task currently carries the "Rai's pick" badge.
+          // Resolve which task carries the "Rai's pick" badge today.
           //
-          // Source of truth: rai_user_state.todays_badged_task_id (mirrored
-          // into raiState in app state). Once set, badge is locked to that
-          // task until it's completed/dismissed/moved/deleted. No promotion,
-          // no jumping.
+          // Source of truth: rai_user_state.todays_badged_task_id. Once set
+          // for the day, this NEVER changes — through completion, dismissal,
+          // or moves. The badge is permanent for the day on whatever task
+          // it landed on. The only way it clears is if the user outright
+          // deletes the task row (FK ON DELETE SET NULL handles that).
           //
-          // The state can be in one of three modes:
-          //   A. Set + task still open → badge renders on that task.
-          //   B. Set but task is gone (completed/cleared/dismissed/moved) →
-          //      clear the badge state. Badge is done for the day.
-          //   C. Null (waiting) → Rai chose to wait. If any picked client has
-          //      a settled task (created >60s ago, with at least 5 min cap on
-          //      the burst), badge that client's highest-priority open task.
-          //      Triggered by an effect below; here we just resolve state.
+          // Tomorrow / Later tasks are never badged. The settle effect that
+          // writes the badge gates on due_date == today.
           const activeBadgeTaskId = (rankMode === "rai" && raiState?.todays_badged_task_id) || null;
           const activeBadgePick = activeBadgeTaskId
             ? raiPicks.find(p => {
