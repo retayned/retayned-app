@@ -4134,28 +4134,46 @@ export default function App({ user }) {
                               {/* Rai's pick badge — daily annotation. The system selects which
                                   task gets the badge from Rai's ranked client picks (primary,
                                   backup1, backup2) using priority_score + the 60s burst rule.
-                                  Hover/tap shows the active pick's reason text. Disappears in
-                                  Manual mode (activeBadgeTaskId is null there). */}
+                                  Reason renders inline below the badge so users see Rai's
+                                  rationale without needing to hover (also works on mobile).
+                                  Disappears in Manual mode (activeBadgeTaskId is null there). */}
                               {activeBadgeTaskId === t.id && activeBadgePick && (
-                                <div
-                                  title={activeBadgePick.reason || "Rai's pick for today"}
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: C.btn,
-                                    marginBottom: 3,
-                                  }}
-                                >
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                    <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
-                                  </svg>
-                                  Rai's pick
-                                </div>
+                                <>
+                                  <div
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      letterSpacing: "0.04em",
+                                      textTransform: "uppercase",
+                                      color: C.btn,
+                                      marginBottom: 3,
+                                    }}
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                      <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
+                                    </svg>
+                                    Rai's pick
+                                  </div>
+                                  {activeBadgePick.reason && (
+                                    <div
+                                      style={{
+                                        fontFamily: "'Fraunces', Georgia, serif",
+                                        fontStyle: "italic",
+                                        fontSize: 13,
+                                        lineHeight: 1.4,
+                                        color: C.textSec,
+                                        marginBottom: 4,
+                                        whiteSpace: "normal",
+                                        wordBreak: "break-word",
+                                      }}
+                                    >
+                                      {activeBadgePick.reason}
+                                    </div>
+                                  )}
+                                </>
                               )}
                               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 <span className="rt-task-title">{t.text}</span>
