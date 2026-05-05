@@ -1268,6 +1268,12 @@ export default function App({ user }) {
       referrals: 0,
       profileScores: c.profile_scores || {},
       qualifyingFlags: c.qualifying_flags || {},
+      // Rai's daily reweighting + reasoning (per-client). Sweep writes these
+      // overnight. Sort comparator reads raiNudge to influence task ordering.
+      // raiRationale is the user-facing reason text for the "Rai's pick" badge.
+      raiNudge: c.rai_nudge != null ? Number(c.rai_nudge) : 0,
+      raiSignal: c.rai_signal || null,
+      raiRationale: c.rai_rationale || null,
     })));
 
     if (taskRes.data) {
@@ -1323,13 +1329,10 @@ export default function App({ user }) {
           worker_completed_at: t.worker_completed_at || null,
           sort_order: t.sort_order,
           raiPriority: t.is_rai_priority || false,
-          // Rai annotator fields. raiSignal is short label of what Rai detected
-          // (e.g. "deferral_pattern"). raiRationale is the user-facing reason
-          // shown on hover/tap of the "Rai's pick" badge. raiSortNudge is the
-          // bounded ±10 reweighting Rai applies to this task's sort score.
-          raiSignal: t.rai_signal || null,
-          raiRationale: t.rai_rationale || null,
-          raiSortNudge: t.rai_sort_nudge != null ? Number(t.rai_sort_nudge) : 0,
+          // Note: Rai's nudge + reasoning lives on the CLIENT, not the task.
+          // Sort comparator looks up the client by t.client and reads raiNudge
+          // from there. This way new tasks added during the day inherit the
+          // client's nudge automatically (sweep ran overnight on the client).
           created_at: t.created_at ? new Date(t.created_at).getTime() : 0,
         };
       }));
@@ -1459,9 +1462,6 @@ export default function App({ user }) {
         client: row.client_name || null,
         client_id: row.client_id || null,
         done: !!row.is_done,
-        raiSignal: row.rai_signal || null,
-        raiRationale: row.rai_rationale || null,
-        raiSortNudge: row.rai_sort_nudge != null ? Number(row.rai_sort_nudge) : 0,
         recurring: !!row.is_recurring,
         due_date: row.due_date || null,
         raiPriority: !!row.is_rai_priority,
@@ -1521,11 +1521,50 @@ export default function App({ user }) {
       }
     });
 
+    // Subscribe to clients changes — overnight sweep writes nudges to
+    // clients.rai_nudge, and we need the sort to update without a refresh.
+    // Also handles general client edits (name change, score change, etc.)
+    // made from another tab.
+    const clientSubscription = realtimeDb.onClientChange(user.id, (payload) => {
+      const ev = payload.eventType;
+      if (ev === "DELETE") {
+        const oldId = payload.old?.id;
+        if (oldId) setClients(prev => prev.filter(c => c.id !== oldId));
+        return;
+      }
+      const row = payload.new;
+      if (!row?.id) return;
+      // Map DB row → UI shape (matches the loadData client mapping)
+      const mapped = {
+        ...row,
+        ret: row.retention_score || 0,
+        contact: row.contact || "",
+        role: row.role || "",
+        months: row.months || 0,
+        revenue: row.revenue || 0,
+        tag: row.tag || "",
+        lastHC: row.last_hc_date || null,
+        lastContact: row.last_task_date ? "recent" : "—",
+        referrals: 0,
+        profileScores: row.profile_scores || {},
+        qualifyingFlags: row.qualifying_flags || {},
+        raiNudge: row.rai_nudge != null ? Number(row.rai_nudge) : 0,
+        raiSignal: row.rai_signal || null,
+        raiRationale: row.rai_rationale || null,
+      };
+      if (ev === "INSERT") {
+        setClients(prev => prev.some(c => c.id === mapped.id) ? prev : [...prev, mapped]);
+      } else if (ev === "UPDATE") {
+        setClients(prev => prev.map(c => c.id === mapped.id ? { ...c, ...mapped } : c));
+      }
+    });
+
     return () => {
       // Cleanup on unmount or user change
       try { subscription?.unsubscribe?.(); } catch {}
       try { raiStateSubscription?.unsubscribe?.(); } catch {}
       try { raiPickSubscription?.unsubscribe?.(); } catch {}
+      try { clientSubscription?.unsubscribe?.(); } catch {}
     };
   }, [user?.id]);
 
@@ -1644,7 +1683,7 @@ export default function App({ user }) {
     return 25;
   };
 
-  const getProfileSortScore = (clientName, hasRaiBoost = false, raiNudge = 0) => {
+  const getProfileSortScore = (clientName, hasRaiBoost = false) => {
     if (!clientName || clientName === "All Clients") return 200; // All Clients tasks first
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
@@ -1653,13 +1692,12 @@ export default function App({ user }) {
     const revPct = totalRev > 0 ? (c.revenue || 0) / totalRev : 0;
     const boost = calcNewClientBoost(c.ret || 50, revPct, c.daysOld != null ? c.daysOld : 999);
     const raiBoost = hasRaiBoost ? getRaiBoost(ps) : 0;
-    // raiNudge: Rai's daily reweighting (-10..+10 normal, +10..+20 for the
-    // annotated daily pick). Added to the same score chain as profile_score
-    // and flows into the same final clamp at 99 so it can't crown an emergency.
-    // The soft clamp inside calcProfileScore already protects high-score tasks
-    // from being trivially crowned — nudge can push a 60 to 80 (full move) but
-    // only push a 90 to ~93 (compressed by clamp).
-    return Math.min(99, ps + boost + raiBoost + (raiNudge || 0));
+    // Rai's daily nudge lives on the client (set by overnight sweep). Every
+    // task for this client inherits the same nudge — including new tasks
+    // created during the day. Range -10..+10 normal, up to +20 for the
+    // client whose task is the daily annotated pick. Final score clamps at 99.
+    const raiNudge = c.raiNudge || 0;
+    return Math.min(99, ps + boost + raiBoost + raiNudge);
   };
 
 
@@ -2716,8 +2754,13 @@ export default function App({ user }) {
           //   profile_score (with soft-clamp inside)
           //   + new_client_boost
           //   + rai_priority_boost (older is_rai_priority flag)
-          //   + raiSortNudge (NEW: Rai's daily ±10 reweighting, +10..+20 for annotated pick)
+          //   + client.raiNudge (NEW: Rai's daily ±10 reweighting per CLIENT,
+          //     +10..+20 for the client whose task is the daily pick)
           //   → clamped to 99
+          //
+          // Nudge lives on the client, not the task. Every task for that client
+          // inherits the same nudge — including tasks added during the day after
+          // the overnight sweep ran.
           //
           // Tiebreakers, in order:
           //   1. final score desc
@@ -2725,14 +2768,19 @@ export default function App({ user }) {
           //   3. alert (true wins)
           //   4. recurring (true wins)
           //   5. created_at desc (newer wins)
+          const nudgeForClient = (clientName) => {
+            if (!clientName) return 0;
+            const c = clients.find(x => x.name === clientName);
+            return c ? (c.raiNudge || 0) : 0;
+          };
           const raiCompare = (a, b) => {
-            const psA = getProfileSortScore(a.client, a.raiPriority, a.raiSortNudge || 0);
-            const psB = getProfileSortScore(b.client, b.raiPriority, b.raiSortNudge || 0);
+            const psA = getProfileSortScore(a.client, a.raiPriority);
+            const psB = getProfileSortScore(b.client, b.raiPriority);
             if (psA !== psB) return psB - psA;
             // Rai's tiebreak: larger nudge magnitude wins (positive = stronger
             // surface signal, negative = stronger demote signal — both meaningful).
-            const nudgeA = Math.abs(a.raiSortNudge || 0);
-            const nudgeB = Math.abs(b.raiSortNudge || 0);
+            const nudgeA = Math.abs(nudgeForClient(a.client));
+            const nudgeB = Math.abs(nudgeForClient(b.client));
             if (nudgeA !== nudgeB) return nudgeB - nudgeA;
             if (a.alert !== b.alert) return a.alert ? -1 : 1;
             if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
@@ -4006,10 +4054,11 @@ export default function App({ user }) {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               {/* Rai's pick badge — daily annotation. Renders only in Rai mode
                                   when the active pick row references this task. Hover/tap shows
-                                  rai_rationale text from the task itself. Disappears in Manual mode. */}
+                                  rai_rationale text from the task's CLIENT (Rai's reasoning is
+                                  per-client now). Disappears in Manual mode. */}
                               {rankMode === "rai" && raiPick && raiPick.task_id === t.id && (
                                 <div
-                                  title={t.raiRationale || "Rai's pick for today"}
+                                  title={(client && client.raiRationale) || "Rai's pick for today"}
                                   style={{
                                     display: "inline-flex",
                                     alignItems: "center",
@@ -4043,7 +4092,7 @@ export default function App({ user }) {
                                   const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
                                   const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
                                   const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
-                                  const nudge = t.raiSortNudge || 0;
+                                  const nudge = client.raiNudge || 0;
                                   const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge);
                                   return (
                                     <span style={{
