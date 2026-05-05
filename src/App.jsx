@@ -1644,7 +1644,7 @@ export default function App({ user }) {
     return 25;
   };
 
-  const getProfileSortScore = (clientName, hasRaiBoost = false) => {
+  const getProfileSortScore = (clientName, hasRaiBoost = false, raiNudge = 0) => {
     if (!clientName || clientName === "All Clients") return 200; // All Clients tasks first
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
@@ -1653,7 +1653,13 @@ export default function App({ user }) {
     const revPct = totalRev > 0 ? (c.revenue || 0) / totalRev : 0;
     const boost = calcNewClientBoost(c.ret || 50, revPct, c.daysOld != null ? c.daysOld : 999);
     const raiBoost = hasRaiBoost ? getRaiBoost(ps) : 0;
-    return Math.min(99, ps + boost + raiBoost);
+    // raiNudge: Rai's daily reweighting (-10..+10 normal, +10..+20 for the
+    // annotated daily pick). Added to the same score chain as profile_score
+    // and flows into the same final clamp at 99 so it can't crown an emergency.
+    // The soft clamp inside calcProfileScore already protects high-score tasks
+    // from being trivially crowned — nudge can push a 60 to 80 (full move) but
+    // only push a 90 to ~93 (compressed by clamp).
+    return Math.min(99, ps + boost + raiBoost + (raiNudge || 0));
   };
 
 
@@ -2706,17 +2712,28 @@ export default function App({ user }) {
           // dismiss affordance during this session.
           const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
 
-          // Sort comparator for Rai mode: (Profile Score + Rai's bounded ±10 nudge)
-          // → alert → recurring → created_at.
-          // The nudge is the quiet reweighting Rai applies overnight based on the
-          // 7 task signals (creation rate, completion, type distribution, deferrals,
-          // gaps, velocity, content). Bounded in DB to [-10, +10] so a single
-          // nudge can't overwhelm a meaningful priority gap. In Manual mode the
-          // nudge is ignored — manualCompare doesn't read it.
+          // Sort comparator for Rai mode. Final score chain:
+          //   profile_score (with soft-clamp inside)
+          //   + new_client_boost
+          //   + rai_priority_boost (older is_rai_priority flag)
+          //   + raiSortNudge (NEW: Rai's daily ±10 reweighting, +10..+20 for annotated pick)
+          //   → clamped to 99
+          //
+          // Tiebreakers, in order:
+          //   1. final score desc
+          //   2. nudge magnitude desc — Rai breaks ties (per RANKER-SPEC-v3)
+          //   3. alert (true wins)
+          //   4. recurring (true wins)
+          //   5. created_at desc (newer wins)
           const raiCompare = (a, b) => {
-            const psA = getProfileSortScore(a.client, a.raiPriority) + (a.raiSortNudge || 0);
-            const psB = getProfileSortScore(b.client, b.raiPriority) + (b.raiSortNudge || 0);
+            const psA = getProfileSortScore(a.client, a.raiPriority, a.raiSortNudge || 0);
+            const psB = getProfileSortScore(b.client, b.raiPriority, b.raiSortNudge || 0);
             if (psA !== psB) return psB - psA;
+            // Rai's tiebreak: larger nudge magnitude wins (positive = stronger
+            // surface signal, negative = stronger demote signal — both meaningful).
+            const nudgeA = Math.abs(a.raiSortNudge || 0);
+            const nudgeB = Math.abs(b.raiSortNudge || 0);
+            if (nudgeA !== nudgeB) return nudgeB - nudgeA;
             if (a.alert !== b.alert) return a.alert ? -1 : 1;
             if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
             return (b.created_at || 0) - (a.created_at || 0);
@@ -2734,11 +2751,39 @@ export default function App({ user }) {
 
           const activeCompare = rankMode === "manual" ? manualCompare : raiCompare;
 
-          const openTasks = visibleTasks.filter(t => !t.done).sort(activeCompare);
+          // Client clustering pass: fix immediate A,B,A interleaving by swapping
+          // so it becomes A,A,B. Single forward pass. Only applies in Rai mode
+          // (Manual mode = explicit user order, never reorder).
+          //
+          // Rule (per RANKER-SPEC-v3, Rule 4):
+          //   if tasks[i].client === tasks[i+2].client AND
+          //      tasks[i].client !== tasks[i+1].client:
+          //     swap tasks[i+1] and tasks[i+2]
+          //
+          // Does NOT cluster across larger gaps. A low-priority task at rank 12
+          // does NOT jump to rank 2 just because rank 1 shares its client.
+          const clusterAdjacent = (arr) => {
+            if (rankMode === "manual" || !arr || arr.length < 3) return arr;
+            const out = [...arr];
+            for (let i = 0; i < out.length - 2; i++) {
+              const cA = out[i].client;
+              const cB = out[i + 1].client;
+              const cC = out[i + 2].client;
+              if (cA && cA === cC && cA !== cB) {
+                // swap i+1 and i+2 to make A,A,B
+                const tmp = out[i + 1];
+                out[i + 1] = out[i + 2];
+                out[i + 2] = tmp;
+              }
+            }
+            return out;
+          };
+
+          const openTasks = clusterAdjacent(visibleTasks.filter(t => !t.done).sort(activeCompare));
           const completedTasks = visibleTasks.filter(t => t.done);
           // Render order: same active comparator applied to ALL tasks (done included).
           // Tasks stay in place when toggled — done state is visual only, no reordering.
-          const renderTasks = [...visibleTasks].sort(activeCompare);
+          const renderTasks = clusterAdjacent([...visibleTasks].sort(activeCompare));
           // ── DEBUG: log Matte Collection + Motley Fool sort breakdown ──
           if (typeof window !== "undefined" && !window.__rt_sort_logged) {
             window.__rt_sort_logged = true;
@@ -3998,7 +4043,8 @@ export default function App({ user }) {
                                   const revPct = totalRev > 0 ? (client.revenue || 0) / totalRev : 0;
                                   const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
                                   const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
-                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost);
+                                  const nudge = t.raiSortNudge || 0;
+                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge);
                                   return (
                                     <span style={{
                                       fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
@@ -4012,7 +4058,7 @@ export default function App({ user }) {
                                       flexShrink: 0,
                                       whiteSpace: "nowrap",
                                     }}>
-                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} → <b>{finalScore.toFixed(1)}</b>
+                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} nudge:{nudge >= 0 ? "+" : ""}{nudge} → <b>{finalScore.toFixed(1)}</b>
                                     </span>
                                   );
                                 })()}
