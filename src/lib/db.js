@@ -707,6 +707,35 @@ export const raiConversations = {
 
 
 // ============================================================
+// RAI PICKS — daily "Rai's pick" annotation (one task highlighted)
+//
+// The daily sweep Edge Function writes one row per user per day,
+// pointing at an existing task. Frontend reads the current active
+// pick (expires_at > now) and renders a badge on the matching task.
+//
+// Reason text lives on tasks.rai_rationale (no join needed for badge hover).
+// Service role writes; users only read their own.
+// ============================================================
+
+export const raiPicks = {
+  // Get this user's currently active pick (if any).
+  // Returns null if no active pick (sweep hasn't run, or pick expired,
+  // or no task was worth picking this cycle).
+  getCurrent: async (userId) => {
+    const { data, error } = await supabase
+      .from('rai_picks')
+      .select('*')
+      .eq('user_id', userId)
+      .gt('expires_at', new Date().toISOString())
+      .order('picked_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return { data, error };
+  },
+};
+
+
+// ============================================================
 // REALTIME SUBSCRIPTIONS
 // ============================================================
 
@@ -734,6 +763,20 @@ export const realtime = {
         event: '*',
         schema: 'public',
         table: 'rai_user_state',
+        filter: `user_id=eq.${userId}`
+      }, callback)
+      .subscribe();
+  },
+
+  // Subscribe to rai_picks changes. When the overnight sweep writes a new
+  // pick, this tab updates without refresh — the badge moves to the new task.
+  onRaiPickChange: (userId, callback) => {
+    return supabase
+      .channel('rai-picks-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'rai_picks',
         filter: `user_id=eq.${userId}`
       }, callback)
       .subscribe();
