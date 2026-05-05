@@ -707,30 +707,31 @@ export const raiConversations = {
 
 
 // ============================================================
-// RAI PICKS — daily "Rai's pick" annotation (one task highlighted)
+// RAI PICKS — daily ranked client picks (annotation surface)
 //
-// The daily sweep Edge Function writes one row per user per day,
-// pointing at an existing task. Frontend reads the current active
-// pick (expires_at > now) and renders a badge on the matching task.
+// The daily sweep writes 1-3 rows per user per day:
+//   rank 1 = primary
+//   rank 2 = backup1 (used when primary's client has no active tasks)
+//   rank 3 = backup2 (used when both primary AND backup1 are exhausted)
 //
-// Reason text lives on tasks.rai_rationale (no join needed for badge hover).
-// Service role writes; users only read their own.
+// Each pick references a CLIENT (not a task). Frontend selects which task
+// of that client gets the badge using priority_score + the 60s burst rule.
+//
+// Reason text lives on the pick row itself (each pick has its own reason
+// fitting its client). Service role writes; users only read their own.
 // ============================================================
 
 export const raiPicks = {
-  // Get this user's currently active pick (if any).
-  // Returns null if no active pick (sweep hasn't run, or pick expired,
-  // or no task was worth picking this cycle).
+  // Get this user's active picks, ordered by rank (1 first, then 2, 3).
+  // Returns [] if no active picks (sweep hasn't run, expired, or skipped).
   getCurrent: async (userId) => {
     const { data, error } = await supabase
       .from('rai_picks')
       .select('*')
       .eq('user_id', userId)
       .gt('expires_at', new Date().toISOString())
-      .order('picked_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return { data, error };
+      .order('rank', { ascending: true });
+    return { data: data || [], error };
   },
 };
 
