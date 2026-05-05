@@ -1614,7 +1614,7 @@ export default function App({ user }) {
       // (A) Auto-clear: badge is set, but the task is gone or done
       if (badgedId) {
         const t = tasks.find(x => x.id === badgedId);
-        const stillValid = t && !t.done && !dismissedIds[badgedId];
+        const stillValid = t && !t.done && !todayDismissed[badgedId];
         if (!stillValid) {
           try {
             await raiUserStateDb.setBadgeTask(user.id, null);
@@ -1635,7 +1635,7 @@ export default function App({ user }) {
         const c = clients.find(x => x.id === pick.client_id);
         if (!c) continue;
         const clientOpenTasks = tasks.filter(t =>
-          !t.done && !dismissedIds[t.id] && t.client === c.name
+          !t.done && !todayDismissed[t.id] && t.client === c.name
         );
         if (clientOpenTasks.length === 0) continue;
         // Eligible = at least one of these tasks has been around >60s
@@ -1666,7 +1666,7 @@ export default function App({ user }) {
     // Debounce: re-evaluate after 5 seconds of no changes
     timeoutId = setTimeout(evaluate, 5000);
     return () => { clearTimeout(timeoutId); };
-  }, [user, rankMode, raiState, raiPicks, tasks, clients, dismissedIds]);
+  }, [user, rankMode, raiState, raiPicks, tasks, clients, todayDismissed]);
 
 
   // Sync user's IANA timezone to the profiles table once per session.
