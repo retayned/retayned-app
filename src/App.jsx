@@ -1581,6 +1581,94 @@ export default function App({ user }) {
     };
   }, [user?.id]);
 
+  // ─── BADGE STATE MANAGER ──────────────────────────────────────────
+  // Manages rai_user_state.todays_badged_task_id (the source of truth for
+  // which task currently carries the "Rai's pick" badge).
+  //
+  // Three things happen here:
+  //
+  // (A) Auto-clear: if the badge is set on a task that's now completed,
+  //     dismissed, deleted, moved out of today, or no longer visible,
+  //     clear the badge state. Once cleared, badge is done for the day.
+  //
+  // (B) 60s settle: if badge state is null (Rai chose to wait), watch for
+  //     tasks that exist for any picked client AND have been in the list
+  //     for at least 60 seconds. When that's true, set the badge and mark
+  //     that pick was_annotated = true. First-come-first-served across
+  //     ranks (no rank-priority override; once the badge lands, it stays).
+  //
+  // (C) The check is debounced with a 5-second timer so we don't spam
+  //     supabase on every tasks/clients change.
+  useEffect(() => {
+    if (!user) return;
+    if (rankMode !== "rai") return;
+    if (!raiState) return; // not loaded yet
+    if (!raiPicks || raiPicks.length === 0) return; // no picks today
+
+    let timeoutId;
+
+    const evaluate = async () => {
+      const badgedId = raiState.todays_badged_task_id || null;
+      const pickedClientIds = new Set(raiPicks.map(p => p.client_id));
+
+      // (A) Auto-clear: badge is set, but the task is gone or done
+      if (badgedId) {
+        const t = tasks.find(x => x.id === badgedId);
+        const stillValid = t && !t.done && !dismissedIds[badgedId];
+        if (!stillValid) {
+          try {
+            await raiUserStateDb.setBadgeTask(user.id, null);
+          } catch (e) {
+            console.warn("Failed to clear stale badge:", e);
+          }
+        }
+        return; // either still valid (do nothing) or just cleared (next tick will re-evaluate)
+      }
+
+      // (B) Waiting → look for a settled task to badge
+      // For each picked client, find the candidate task to badge (highest-priority
+      // open task), then check if it's been around >60s. Pick the FIRST eligible
+      // one we find walking ranks 1, 2, 3.
+      const SETTLE_MS = 60 * 1000;
+      const now = Date.now();
+      for (const pick of raiPicks) {
+        const c = clients.find(x => x.id === pick.client_id);
+        if (!c) continue;
+        const clientOpenTasks = tasks.filter(t =>
+          !t.done && !dismissedIds[t.id] && t.client === c.name
+        );
+        if (clientOpenTasks.length === 0) continue;
+        // Eligible = at least one of these tasks has been around >60s
+        const settled = clientOpenTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
+        if (settled.length === 0) continue;
+        // Pick highest-priority among settled
+        const sorted = [...settled].sort((a, b) => {
+          const psA = getProfileSortScore(a.client, a.raiPriority, 0);
+          const psB = getProfileSortScore(b.client, b.raiPriority, 0);
+          if (psA !== psB) return psB - psA;
+          if (a.alert !== b.alert) return a.alert ? -1 : 1;
+          if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+          return (b.created_at || 0) - (a.created_at || 0);
+        });
+        const winnerId = sorted[0].id;
+        try {
+          await raiUserStateDb.setBadgeTask(user.id, winnerId);
+          await raiPicksDb.markAnnotated(user.id, c.id);
+        } catch (e) {
+          console.warn("Failed to write badge state:", e);
+        }
+        return;
+      }
+      // No eligible candidate found — silence keeps. Suppress lint warning.
+      void pickedClientIds;
+    };
+
+    // Debounce: re-evaluate after 5 seconds of no changes
+    timeoutId = setTimeout(evaluate, 5000);
+    return () => { clearTimeout(timeoutId); };
+  }, [user, rankMode, raiState, raiPicks, tasks, clients, dismissedIds]);
+
+
   // Sync user's IANA timezone to the profiles table once per session.
   // Used by the Observer cron and any future server-side scheduling that
   // needs to anchor "today" / "this week" to the user's local clock instead
@@ -2270,6 +2358,36 @@ export default function App({ user }) {
         .rt-row.is-done .rt-task-title::after { width: 100%; }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
+        /* On mobile, the push and dismiss buttons are hidden — swipe gestures
+           replace them entirely. Right swipe pushes to next bucket, left swipe
+           deletes. Backgrounds reveal during swipe so the action is intuitive. */
+        @media (max-width: 767px) {
+          .rt-row .rt-push,
+          .rt-row .rt-dismiss {
+            display: none !important;
+          }
+        }
+        /* Dotted purple underline on task titles whose text contains a thinking
+           verb. Indicates "click me to discuss with Rai." Doesn't change color
+           by default — stays in the natural visual hierarchy of the list.
+           Hovers to solid + Rai purple. Done tasks lose the affordance entirely. */
+        .rt-row .rt-task-title.is-discussable {
+          text-decoration: underline dotted;
+          text-decoration-color: ${C.btnLight};
+          text-decoration-thickness: 1.5px;
+          text-underline-offset: 4px;
+          cursor: pointer;
+          transition: color 160ms ease, text-decoration-color 160ms ease, text-decoration-style 160ms ease;
+        }
+        .rt-row .rt-task-title.is-discussable:hover {
+          color: ${C.btn};
+          text-decoration-style: solid;
+          text-decoration-color: ${C.btn};
+        }
+        .rt-row.is-done .rt-task-title.is-discussable {
+          text-decoration: none;
+          cursor: default;
+        }
         .rt-row.is-done .rt-row-tag { opacity: 0.45; transition: opacity 320ms ease; }
         .rt-row.is-done .rt-dismiss { opacity: 0.4 !important; }
         @keyframes rt-glow-pulse {
@@ -2766,68 +2884,31 @@ export default function App({ user }) {
           const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
 
           // ─── RAI'S ACTIVE PICKED TASK ────────────────────────────────────
-          // Resolve which single task currently carries the "Rai's pick" badge.
+          // Resolve which task currently carries the "Rai's pick" badge.
           //
-          // Rai picks 1-3 CLIENTS (ranked: primary, backup1, backup2). The
-          // system selects which TASK of the picked client gets the badge,
-          // using priority_score with a 60-second burst rule (5-min cap).
+          // Source of truth: rai_user_state.todays_badged_task_id (mirrored
+          // into raiState in app state). Once set, badge is locked to that
+          // task until it's completed/dismissed/moved/deleted. No promotion,
+          // no jumping.
           //
-          // Algorithm:
-          //   1. Walk picks in rank order (1, 2, 3).
-          //   2. For each pick, find that client's open visible tasks.
-          //   3. If the client has tasks AND we're past the burst window for
-          //      that client, badge the highest-priority task. Done.
-          //   4. If the client is in an active burst (recent task creation
-          //      within 60s, but firstCreatedAt is within last 5 min), don't
-          //      commit yet — fall through to the next pick.
-          //   5. If client has zero tasks, fall through to the next pick.
-          //   6. If no pick yields a valid task, no badge today.
-          const activeBadge = (() => {
-            if (rankMode !== "rai" || !raiPicks || raiPicks.length === 0) return null;
-            const now = Date.now();
-            const BURST_MS = 60 * 1000;       // 60s settle window
-            const BURST_CAP_MS = 5 * 60 * 1000; // 5-min hard cap
-
-            for (const pick of raiPicks) {
-              const c = clients.find(x => x.id === pick.client_id);
-              if (!c) continue; // client may have been moved to rolodex / archived
-
-              const clientTasks = visibleTasks.filter(t => !t.done && t.client === c.name);
-              if (clientTasks.length === 0) continue; // exhausted, try next rank
-
-              // 60s burst rule: if a task was created for this client within
-              // the last 60s AND the burst started within the last 5 min,
-              // hold off until the burst settles.
-              const burst = raiBurstTrackerRef.current[c.name];
-              if (burst) {
-                const sinceLast = now - burst.lastCreatedAt;
-                const sinceFirst = now - burst.firstCreatedAt;
-                if (sinceLast < BURST_MS && sinceFirst < BURST_CAP_MS) {
-                  // Still bursting — try next rank's pick
-                  continue;
-                }
-              }
-
-              // Find the highest-priority task for this client. Use raw
-              // getProfileSortScore (no pick boost yet — that's what we're
-              // computing) plus tiebreakers consistent with raiCompare.
-              const sortedClientTasks = [...clientTasks].sort((a, b) => {
-                const psA = getProfileSortScore(a.client, a.raiPriority, 0);
-                const psB = getProfileSortScore(b.client, b.raiPriority, 0);
-                if (psA !== psB) return psB - psA;
-                if (a.alert !== b.alert) return a.alert ? -1 : 1;
-                if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
-                return (b.created_at || 0) - (a.created_at || 0);
-              });
-              return {
-                taskId: sortedClientTasks[0].id,
-                pick,
-              };
-            }
-            return null;
-          })();
-          const activeBadgeTaskId = activeBadge ? activeBadge.taskId : null;
-          const activeBadgePick = activeBadge ? activeBadge.pick : null;
+          // The state can be in one of three modes:
+          //   A. Set + task still open → badge renders on that task.
+          //   B. Set but task is gone (completed/cleared/dismissed/moved) →
+          //      clear the badge state. Badge is done for the day.
+          //   C. Null (waiting) → Rai chose to wait. If any picked client has
+          //      a settled task (created >60s ago, with at least 5 min cap on
+          //      the burst), badge that client's highest-priority open task.
+          //      Triggered by an effect below; here we just resolve state.
+          const activeBadgeTaskId = (rankMode === "rai" && raiState?.todays_badged_task_id) || null;
+          const activeBadgePick = activeBadgeTaskId
+            ? raiPicks.find(p => {
+                // Match the picked client to the badged task
+                const t = tasks.find(x => x.id === activeBadgeTaskId);
+                if (!t) return false;
+                const c = clients.find(x => x.name === t.client);
+                return c && p.client_id === c.id;
+              })
+            : null;
 
           // Sort comparator for Rai mode. Layered final score:
           //   priority_score (deterministic, with soft clamp inside)
@@ -4004,16 +4085,25 @@ export default function App({ user }) {
                           const startX = swipeStartX[t.id];
                           if (startX == null) return;
                           const deltaX = e.touches[0].clientX - startX;
-                          // Only allow leftward swipe (negative deltaX); clamp to SWIPE_MAX
-                          const clamped = Math.max(-SWIPE_MAX, Math.min(0, deltaX));
+                          // Bidirectional swipe: left (negative) = delete, right (positive) = push to next bucket.
+                          // Clamp to [-SWIPE_MAX, +SWIPE_MAX].
+                          const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, deltaX));
                           setSwipeOffset(prev => ({ ...prev, [t.id]: clamped }));
                         };
                         const handleTouchEnd = () => {
                           const off = swipeOffset[t.id] || 0;
                           if (off <= -SWIPE_THRESHOLD) {
-                            // Commit bucket move based on bucketKey
-                            // Animate the row off-screen briefly, then reset
+                            // Left swipe past threshold → DELETE the task. Slide off-screen left, then remove.
                             setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
+                            setTimeout(() => {
+                              setTasks(prev => prev.filter(t2 => t2.id !== t.id));
+                              tasksDb.delete(t.id);
+                              setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                              setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                            }, 180);
+                          } else if (off >= SWIPE_THRESHOLD) {
+                            // Right swipe past threshold → PUSH to next bucket.
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: SWIPE_MAX }));
                             setTimeout(() => {
                               if (bucketKey === "today") pushToTomorrow(t.id);
                               else if (bucketKey === "tomorrow") pushToLater(t.id);
@@ -4028,7 +4118,7 @@ export default function App({ user }) {
                           }
                         };
 
-                        // Action label per bucket
+                        // Action label per bucket — shown when swiping right (push)
                         const swipeActionLabel = bucketKey === "today" ? "Tomorrow"
                           : bucketKey === "tomorrow" ? "Later"
                           : "Today";
@@ -4038,13 +4128,15 @@ export default function App({ user }) {
 
                         return (
                           <div key={t.id} className={isFocusTop && focusMode ? "rt-row-wrap rt-focus-top-wrap" : "rt-row-wrap"} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
-                            {/* Swipe action background — purple bg with the destination bucket label.
-                                Reveals as the row slides left. Only renders when actively swiping. */}
+                            {/* Swipe action background. Two directions:
+                                - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
+                                - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
+                                Only renders when actively swiping. */}
                             {swipeable && offset < 0 && (
                               <div style={{
                                 position: "absolute",
                                 inset: 0,
-                                background: C.btn,
+                                background: C.danger,
                                 borderRadius: 12,
                                 display: "flex",
                                 alignItems: "center",
@@ -4056,10 +4148,29 @@ export default function App({ user }) {
                                 fontWeight: 600,
                                 pointerEvents: "none",
                               }}>
-                                <span>{swipeActionLabel}</span>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                <span>Delete</span>
+                              </div>
+                            )}
+                            {swipeable && offset > 0 && (
+                              <div style={{
+                                position: "absolute",
+                                inset: 0,
+                                background: C.btn,
+                                borderRadius: 12,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "flex-start",
+                                paddingLeft: 22,
+                                gap: 8,
+                                color: "#fff",
+                                fontSize: 13,
+                                fontWeight: 600,
+                                pointerEvents: "none",
+                              }}>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transform: "scaleX(-1)" }}>
                                   <path d="M3 8h9M9 5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
+                                <span>{swipeActionLabel}</span>
                               </div>
                             )}
                           <div
@@ -4138,45 +4249,52 @@ export default function App({ user }) {
                                   rationale without needing to hover (also works on mobile).
                                   Disappears in Manual mode (activeBadgeTaskId is null there). */}
                               {activeBadgeTaskId === t.id && activeBadgePick && (
-                                <>
-                                  <div
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: 4,
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      letterSpacing: "0.04em",
-                                      textTransform: "uppercase",
-                                      color: C.btn,
-                                      marginBottom: 3,
-                                    }}
-                                  >
-                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                      <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
-                                    </svg>
-                                    Rai's pick
-                                  </div>
-                                  {activeBadgePick.reason && (
-                                    <div
-                                      style={{
-                                        fontFamily: "'Fraunces', Georgia, serif",
-                                        fontStyle: "italic",
-                                        fontSize: 13,
-                                        lineHeight: 1.4,
-                                        color: C.textSec,
-                                        marginBottom: 4,
-                                        whiteSpace: "normal",
-                                        wordBreak: "break-word",
-                                      }}
-                                    >
-                                      {activeBadgePick.reason}
-                                    </div>
-                                  )}
-                                </>
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                    color: C.btn,
+                                    marginBottom: 3,
+                                  }}
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
+                                  </svg>
+                                  Rai's pick
+                                </div>
                               )}
-                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                <span className="rt-task-title">{t.text}</span>
+                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {(() => {
+                                  // Title is interactive when the text contains a thinking
+                                  // verb AND has a client tag AND task isn't done. Click
+                                  // opens the Rai chat page with task + client preloaded.
+                                  const isDiscussable = !isDone && client && detectThinkingVerb(t.text);
+                                  if (isDiscussable) {
+                                    return (
+                                      <span
+                                        className="rt-task-title is-discussable"
+                                        title={`Talk this through with Rai`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setAiConvoId(null);
+                                          setAiMessages([{
+                                            role: "ai",
+                                            text: `You're looking at "${t.text}" for ${client.name}. What's the part you're chewing on?`,
+                                          }]);
+                                          setPage("coach");
+                                        }}
+                                      >
+                                        {t.text}
+                                      </span>
+                                    );
+                                  }
+                                  return <span className="rt-task-title">{t.text}</span>;
+                                })()}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink500, marginTop: 4, minWidth: 0 }}>
                                 {client
@@ -4212,60 +4330,49 @@ export default function App({ user }) {
                                   );
                                 })()}
                               </div>
+                              {/* Rai's reason renders at the bottom of the tile, below the
+                                  client name. Italic Fraunces. We strip a leading "ClientName: "
+                                  prefix from the reason because the client name is already shown
+                                  in the meta row above — repeating it is noise. */}
+                              {activeBadgeTaskId === t.id && activeBadgePick && activeBadgePick.reason && (
+                                <div
+                                  style={{
+                                    fontFamily: "'Fraunces', Georgia, serif",
+                                    fontStyle: "italic",
+                                    fontSize: 13,
+                                    lineHeight: 1.4,
+                                    color: C.textSec,
+                                    marginTop: 6,
+                                    whiteSpace: "normal",
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {(() => {
+                                    let reason = activeBadgePick.reason;
+                                    // Strip leading "ClientName: " or "ClientName — " or "ClientName, " prefix
+                                    if (client && client.name) {
+                                      const prefixes = [
+                                        client.name + ": ",
+                                        client.name + " — ",
+                                        client.name + " - ",
+                                        client.name + ", ",
+                                        client.name + ". ",
+                                      ];
+                                      for (const p of prefixes) {
+                                        if (reason.startsWith(p)) {
+                                          reason = reason.slice(p.length);
+                                          if (reason.length > 0) {
+                                            reason = reason.charAt(0).toUpperCase() + reason.slice(1);
+                                          }
+                                          break;
+                                        }
+                                      }
+                                    }
+                                    return reason;
+                                  })()}
+                                </div>
+                              )}
                             </div>
-
-                            {/* Discuss with Rai — opens the Rai chat page (page="coach")
-                                with a fresh conversation. Rai's opening turn references the
-                                specific task + client so the conversation starts with context.
-                                Renders only when:
-                                - the task text contains a thinking-mode verb (decide, plan, etc.)
-                                - the task has a client tag
-                                - the task is not already done */}
-                            {!isDone && client && detectThinkingVerb(t.text) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  // Reset chat state for a fresh conversation. Setting
-                                  // aiConvoId to null means sendAi() will create a new
-                                  // rai_conversations row on first user reply (matches
-                                  // the existing "Talk to Rai About This" pattern in
-                                  // referrals/retros).
-                                  setAiConvoId(null);
-                                  setAiMessages([{
-                                    role: "ai",
-                                    text: `You're looking at "${t.text}" for ${client.name}. What's the part you're chewing on?`,
-                                  }]);
-                                  setPage("coach");
-                                }}
-                                title={`Discuss "${t.text}" with Rai`}
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  width: 26, height: 26,
-                                  borderRadius: 999,
-                                  border: "1px solid " + C.borderLight,
-                                  background: "transparent",
-                                  color: C.btn,
-                                  cursor: "pointer",
-                                  flexShrink: 0,
-                                  padding: 0,
-                                  transition: "background 120ms, border-color 120ms",
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.background = C.btnLight;
-                                  e.currentTarget.style.borderColor = C.btn;
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.background = "transparent";
-                                  e.currentTarget.style.borderColor = C.borderLight;
-                                }}
-                              >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                </svg>
-                              </button>
-                            )}
 
                             {/* Worker assignment badge — only renders if task is assigned. */}
                             {t.assigned_worker_id && (() => {
@@ -4358,9 +4465,9 @@ export default function App({ user }) {
                                 }}
                                 className="rt-push"
                                 style={{
-                                  width: 26, height: 26, borderRadius: 6,
+                                  width: 28, height: 28, borderRadius: 6,
                                   display: "flex", alignItems: "center", justifyContent: "center",
-                                  color: C.textMuted, opacity: 0.3,
+                                  color: C.textMuted, opacity: 0.4,
                                   background: "none", border: "none", cursor: "pointer",
                                   flexShrink: 0,
                                   transition: "opacity 120ms ease, background 120ms ease, color 120ms ease",
@@ -4371,7 +4478,7 @@ export default function App({ user }) {
                                   e.currentTarget.style.color = C.btn;
                                 }}
                                 onMouseLeave={e => {
-                                  e.currentTarget.style.opacity = "0.3";
+                                  e.currentTarget.style.opacity = "0.4";
                                   e.currentTarget.style.background = "none";
                                   e.currentTarget.style.color = C.textMuted;
                                 }}
@@ -4386,7 +4493,7 @@ export default function App({ user }) {
 
                             <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
-                              style={{ width: 26, height: 26, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0.3, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
+                              style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0.4, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
                               aria-label="dismiss">
                               <Icon name="x" size={12} />
                             </button>
