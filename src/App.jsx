@@ -4196,20 +4196,28 @@ export default function App({ user }) {
                               </div>
                             </div>
 
-                            {/* Discuss with Rai — opens Confidant preloaded with this task's
-                                client + the task as opening context. Renders only when:
+                            {/* Discuss with Rai — opens the Rai chat page (page="coach")
+                                with a fresh conversation. Rai's opening turn references the
+                                specific task + client so the conversation starts with context.
+                                Renders only when:
                                 - the task text contains a thinking-mode verb (decide, plan, etc.)
-                                - the task has a client tag (Confidant is per-client)
-                                - the task is not already done
-                                Click handler is a stub for now — Confidant page doesn't exist yet,
-                                so it logs the intended behavior. Will wire up when Confidant ships. */}
+                                - the task has a client tag
+                                - the task is not already done */}
                             {!isDone && client && detectThinkingVerb(t.text) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // TODO: navigate to Confidant page preloaded with client + task context
-                                  // For now: log the intent so we can verify detection works.
-                                  console.log("[Discuss with Rai]", { client: client.name, task: t.text, verb: detectThinkingVerb(t.text) });
+                                  // Reset chat state for a fresh conversation. Setting
+                                  // aiConvoId to null means sendAi() will create a new
+                                  // rai_conversations row on first user reply (matches
+                                  // the existing "Talk to Rai About This" pattern in
+                                  // referrals/retros).
+                                  setAiConvoId(null);
+                                  setAiMessages([{
+                                    role: "ai",
+                                    text: `You're looking at "${t.text}" for ${client.name}. What's the part you're chewing on?`,
+                                  }]);
+                                  setPage("coach");
                                 }}
                                 title={`Discuss "${t.text}" with Rai`}
                                 style={{
