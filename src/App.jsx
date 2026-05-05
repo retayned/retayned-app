@@ -1173,7 +1173,7 @@ export default function App({ user }) {
     if (!user) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -1186,7 +1186,20 @@ export default function App({ user }) {
       (typeof convoDb.list === "function")
         ? convoDb.list(uid, 250)
         : Promise.resolve({ data: [], error: null }),
+      // Rai badge state + picks fetched in parallel with the rest. Previously
+      // these ran sequentially AFTER the main Promise.all, which made the
+      // "Rai's pick" badge appear several seconds late (cascading layout shift).
+      // Failures here are non-fatal — defaults are sensible and the realtime
+      // sub will catch up if a sweep lands while the app is open.
+      (typeof raiUserStateDb?.get === "function")
+        ? raiUserStateDb.get(uid).catch(() => ({ data: null, error: null }))
+        : Promise.resolve({ data: null, error: null }),
+      (typeof raiPicksDb?.getCurrent === "function")
+        ? raiPicksDb.getCurrent(uid).catch(() => ({ data: [], error: null }))
+        : Promise.resolve({ data: [], error: null }),
     ]);
+    if (raiStateRes?.data) setRaiState(raiStateRes.data);
+    setRaiPicks(raiPicksRes?.data || []);
 
     // Cadence data — loaded separately with fallback so a missing db function
     // degrades cadence only, doesn't nuke the whole page
@@ -1224,32 +1237,6 @@ export default function App({ user }) {
       }
     } catch (e) {
       console.warn("Daybook failed to load:", e);
-    }
-
-    // Rai user state — toggles and adaptive frequency state.
-    // If row missing (legacy user pre-trigger), state stays null and toggles
-    // fall back to permissive defaults until a sweep creates the row.
-    try {
-      if (typeof raiUserStateDb?.get === "function") {
-        const raiRes = await raiUserStateDb.get(uid);
-        if (raiRes?.data) {
-          setRaiState(raiRes.data);
-        }
-      }
-    } catch (e) {
-      console.warn("Rai user state failed to load:", e);
-    }
-
-    // Rai's active picks — daily sweep writes 1-3 ranked rows pointing at
-    // clients. Empty array is fine (sweep skipped, expired, or hasn't run).
-    try {
-      if (typeof raiPicksDb?.getCurrent === "function") {
-        const pickRes = await raiPicksDb.getCurrent(uid);
-        setRaiPicks(pickRes?.data || []);
-      }
-    } catch (e) {
-      console.warn("Rai picks failed to load:", e);
-      setRaiPicks([]);
     }
 
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
@@ -2380,7 +2367,6 @@ export default function App({ user }) {
           transition: color 160ms ease, text-decoration-color 160ms ease, text-decoration-style 160ms ease;
         }
         .rt-row .rt-task-title.is-discussable:hover {
-          color: ${C.btn};
           text-decoration-style: solid;
           text-decoration-color: ${C.btn};
         }
