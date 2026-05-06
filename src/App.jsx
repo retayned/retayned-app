@@ -2370,16 +2370,19 @@ export default function App({ user }) {
           }
         }
         /* Dotted purple underline on task titles whose text contains a thinking
-           verb. Indicates "click me to discuss with Rai." Doesn't change color
-           by default — stays in the natural visual hierarchy of the list.
-           Hovers to solid + Rai purple. Done tasks lose the affordance entirely. */
+           verb. Indicates "click me to discuss with Rai." Title text stays black;
+           only the underline goes from dotted-light to solid-purple on hover.
+           Done tasks lose the affordance entirely.
+           Note: text-underline-offset is small (1px) because the parent div has
+           overflow:hidden — large offsets clip the dotted line out of view. */
         .rt-row .rt-task-title.is-discussable {
-          text-decoration: underline dotted;
-          text-decoration-color: ${C.btnLight};
-          text-decoration-thickness: 1.5px;
-          text-underline-offset: 4px;
+          text-decoration: underline;
+          text-decoration-style: dotted;
+          text-decoration-color: ${C.btn};
+          text-decoration-thickness: 2px;
+          text-underline-offset: 2px;
           cursor: pointer;
-          transition: color 160ms ease, text-decoration-color 160ms ease, text-decoration-style 160ms ease;
+          transition: text-decoration-color 160ms ease, text-decoration-style 160ms ease;
         }
         .rt-row .rt-task-title.is-discussable:hover {
           text-decoration-style: solid;
@@ -4264,7 +4267,7 @@ export default function App({ user }) {
                                   Rai's pick
                                 </div>
                               )}
-                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.3, paddingBottom: 4, overflow: "hidden" }}>
                                 {(() => {
                                   // Title is interactive when the text contains a thinking
                                   // verb AND has a client tag AND task isn't done. Click
@@ -4284,12 +4287,13 @@ export default function App({ user }) {
                                           }]);
                                           setPage("coach");
                                         }}
+                                        style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                       >
                                         {t.text}
                                       </span>
                                     );
                                   }
-                                  return <span className="rt-task-title">{t.text}</span>;
+                                  return <span className="rt-task-title" style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{t.text}</span>;
                                 })()}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink500, marginTop: 4, minWidth: 0 }}>
