@@ -359,16 +359,13 @@ export const raiUserState = {
     return { data, error };
   },
 
-  // Set the active "Rai's pick" badge to a specific task. Called by frontend
-  // when 60s settle window passes for a picked client and the badge transitions
-  // from waiting to active. Pass null taskId to clear the badge.
-  setBadgeTask: async (userId, taskId) => {
+  // Mark today's Pick of the Day as read/dismissed. Sets the timestamp
+  // so the frontend hides the card for the rest of the day. The sweep
+  // (3am local) clears this back to null when it writes a fresh pick.
+  dismissTodaysPick: async (userId) => {
     const { data, error } = await supabase
       .from('rai_user_state')
-      .update({
-        todays_badged_task_id: taskId,
-        todays_badge_set_at: taskId ? new Date().toISOString() : null,
-      })
+      .update({ todays_pick_dismissed_at: new Date().toISOString() })
       .eq('user_id', userId)
       .select()
       .single();
@@ -738,29 +735,17 @@ export const raiConversations = {
 // ============================================================
 
 export const raiPicks = {
-  // Get this user's active picks, ordered by rank (1 first, then 2, 3).
-  // Returns [] if no active picks (sweep hasn't run, expired, or skipped).
+  // Get the user's current Pick of the Day (or null if none).
+  // The sweep wipes the previous day's row before writing today's, so any
+  // row that exists IS today's. Returns the single most recent row.
   getCurrent: async (userId) => {
     const { data, error } = await supabase
       .from('rai_picks')
       .select('*')
       .eq('user_id', userId)
-      .gt('expires_at', new Date().toISOString())
-      .order('rank', { ascending: true });
-    return { data: data || [], error };
-  },
-
-  // Mark a pick as actually-annotated (badge landed on it). Called by
-  // frontend after the 60s settle fires for a picked client. Used by the
-  // next sweep's variety guidance — Rai sees which picks became badges
-  // and prefers not to repeat them too often.
-  markAnnotated: async (userId, clientId) => {
-    const { data, error } = await supabase
-      .from('rai_picks')
-      .update({ was_annotated: true })
-      .eq('user_id', userId)
-      .eq('client_id', clientId)
-      .select();
+      .order('picked_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     return { data, error };
   },
 };
