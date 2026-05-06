@@ -1412,6 +1412,12 @@ export default function App({ user }) {
   const [newTaskDueDate, setNewTaskDueDate] = useState(null);
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
+  // Calendar grid: which month is currently shown in the date picker.
+  // Stored as YYYY-MM string. Defaults to current month; resets on picker open.
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   // ─── Workers state ──
   const [workersList, setWorkersList] = useState([]);
@@ -1587,7 +1593,7 @@ export default function App({ user }) {
       // Build local task list excluding cleared IDs and applying recurring resets
       const clearedIds = new Set(toClear.map(t => t.id));
       // Also exclude any task already cleared on a previous load
-      setTasks(taskRes.data.filter(t => !clearedIds.has(t.id) && !t.cleared_at).map(t => {
+      const loadedTasks = taskRes.data.filter(t => !clearedIds.has(t.id) && !t.cleared_at).map(t => {
         const reset = toReset.find(r => r.id === t.id);
         return {
           id: t.id,
@@ -1610,7 +1616,16 @@ export default function App({ user }) {
           // client's nudge automatically (sweep ran overnight on the client).
           created_at: t.created_at ? new Date(t.created_at).getTime() : 0,
         };
-      }));
+      });
+      setTasks(loadedTasks);
+      // Tasks that were already completed before this page load skip the
+      // 5-second satisfaction window and go straight into the collapsed log.
+      // (User wasn't here to see the celebration — no point preserving it.)
+      const preCollapsed = {};
+      for (const t of loadedTasks) {
+        if (t.done) preCollapsed[t.id] = true;
+      }
+      setCollapsedDoneIds(preCollapsed);
     }
 
     if (refRes.data) setRefs(refRes.data.map(r => ({
@@ -3874,6 +3889,27 @@ export default function App({ user }) {
                             <Icon name="clients" size={12} color={selectedWorker ? C.btn : C.textMuted} />
                             <span>{selectedWorker ? selectedWorker.name.split(' ')[0] : "Worker"}</span>
                           </button>
+                          {selectedWorker && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setNewTaskWorkerId(null); }}
+                              style={{
+                                position: "absolute",
+                                top: -3, right: -3,
+                                width: 16, height: 16,
+                                borderRadius: 8,
+                                background: C.card,
+                                border: "1px solid " + C.borderLight,
+                                color: C.textMuted,
+                                cursor: "pointer",
+                                display: "grid", placeItems: "center",
+                                padding: 0,
+                              }}
+                              aria-label="Clear worker"
+                              title="Clear worker"
+                            >
+                              <Icon name="x" size={9} />
+                            </button>
+                          )}
                           {workerPickerOpen && (
                             <>
                               <div onClick={() => setWorkerPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
@@ -3969,6 +4005,28 @@ export default function App({ user }) {
                         <Icon name={newTaskRecurring ? "infinity" : "calendar"} size={newTaskRecurring ? 14 : 12} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
                         <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
                       </button>
+                      {(newTaskDueDate || newTaskRecurring) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setNewTaskDueDate(null); setNewTaskRecurring(false); setNewTaskRecurrencePattern({ kind: "daily" }); }}
+                          style={{
+                            position: "absolute",
+                            top: -3, right: -3,
+                            width: 16, height: 16,
+                            borderRadius: 8,
+                            background: C.card,
+                            border: "1px solid " + C.borderLight,
+                            color: C.textMuted,
+                            cursor: "pointer",
+                            display: "grid", placeItems: "center",
+                            padding: 0,
+                            zIndex: 1,
+                          }}
+                          aria-label="Clear due date"
+                          title="Clear due date"
+                        >
+                          <Icon name="x" size={9} />
+                        </button>
+                      )}
                       {duePickerOpen && (
                         <>
                         <div
@@ -3985,7 +4043,7 @@ export default function App({ user }) {
                           padding: 8,
                           boxShadow: "0 4px 16px rgba(20,30,22,0.12), 0 1px 3px rgba(20,30,22,0.06)",
                           zIndex: 50,
-                          minWidth: 180,
+                          minWidth: 240,
                           display: "flex",
                           flexDirection: "column",
                           gap: 2,
@@ -4028,6 +4086,80 @@ export default function App({ user }) {
                                     </button>
                                   );
                                 })}
+                                {/* CALENDAR GRID — pick any date. Hidden in recurring mode. */}
+                                {!newTaskRecurring && (() => {
+                                  const [yr, mo] = calendarMonth.split("-").map(Number);
+                                  const firstOfMonth = new Date(yr, mo - 1, 1);
+                                  const startDow = firstOfMonth.getDay();
+                                  const daysInMonth = new Date(yr, mo, 0).getDate();
+                                  const monthLabel = firstOfMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                                  const cells = [];
+                                  // pad with empty cells until first day-of-month aligns with weekday column
+                                  for (let i = 0; i < startDow; i++) cells.push(null);
+                                  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                                  // pad to multiple of 7
+                                  while (cells.length % 7 !== 0) cells.push(null);
+                                  const goPrev = () => {
+                                    let nyr = yr, nmo = mo - 1;
+                                    if (nmo < 1) { nmo = 12; nyr--; }
+                                    setCalendarMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
+                                  };
+                                  const goNext = () => {
+                                    let nyr = yr, nmo = mo + 1;
+                                    if (nmo > 12) { nmo = 1; nyr++; }
+                                    setCalendarMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
+                                  };
+                                  return (
+                                    <div style={{ padding: "6px 4px 2px" }}>
+                                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, padding: "0 6px" }}>
+                                        <button
+                                          onClick={goPrev}
+                                          style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textSec, cursor: "pointer", borderRadius: 4, fontSize: 14, lineHeight: 1, padding: 0 }}
+                                          onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
+                                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                        >‹</button>
+                                        <span style={{ fontSize: 11.5, color: C.text, fontWeight: 600, letterSpacing: 0.2 }}>{monthLabel}</span>
+                                        <button
+                                          onClick={goNext}
+                                          style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textSec, cursor: "pointer", borderRadius: 4, fontSize: 14, lineHeight: 1, padding: 0 }}
+                                          onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
+                                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                        >›</button>
+                                      </div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, padding: "0 4px 4px" }}>
+                                        {["S","M","T","W","T","F","S"].map((d,i) => (
+                                          <div key={i} style={{ fontSize: 9, color: C.textMuted, textAlign: "center", fontWeight: 600, padding: "2px 0" }}>{d}</div>
+                                        ))}
+                                        {cells.map((d, i) => {
+                                          if (d === null) return <div key={i} />;
+                                          const dateStr = `${yr}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                                          const isSel = newTaskDueDate === dateStr && !newTaskRecurring;
+                                          const isToday = dateStr === _todayStr;
+                                          return (
+                                            <button
+                                              key={i}
+                                              onClick={() => { setNewTaskDueDate(dateStr); setNewTaskRecurring(false); setDuePickerOpen(false); }}
+                                              style={{
+                                                width: "100%", height: 24,
+                                                border: "none",
+                                                background: isSel ? C.btn : "transparent",
+                                                color: isSel ? "#fff" : (isToday ? C.btn : C.text),
+                                                borderRadius: 4,
+                                                fontSize: 11,
+                                                fontWeight: isToday || isSel ? 700 : 500,
+                                                cursor: "pointer",
+                                                fontFamily: "inherit",
+                                                padding: 0,
+                                              }}
+                                              onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(0,0,0,0.06)"; }}
+                                              onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+                                            >{d}</button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                                 {/* Recurring option — bottom of menu, divider above. */}
                                 <div style={{ height: 1, background: C.borderLight, margin: "4px 6px" }} />
                                 {!newTaskRecurring && (
