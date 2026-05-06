@@ -952,8 +952,10 @@ export default function App({ user }) {
   // Active Rai picks — array of 1-3 rows pointing at clients, ordered by rank
   // (1=primary, 2=backup1, 3=backup2). Sweep writes them with 24-hr expiry.
   // Empty array when no active picks (sweep hasn't run, expired, or skipped).
-  // Realtime sub keeps this in sync if a fresh sweep lands while app is open.
-  const [raiPicks, setRaiPicks] = useState([]);
+  // The Pick of the Day. Either a row from rai_picks (today's pick) or null
+  // (no pick today, or sweep hasn't run yet). Realtime sub keeps this in
+  // sync if a fresh sweep lands while app is open.
+  const [raiPicks, setRaiPicks] = useState(null);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -1484,11 +1486,11 @@ export default function App({ user }) {
         ? raiUserStateDb.get(uid).catch(() => ({ data: null, error: null }))
         : Promise.resolve({ data: null, error: null }),
       (typeof raiPicksDb?.getCurrent === "function")
-        ? raiPicksDb.getCurrent(uid).catch(() => ({ data: [], error: null }))
-        : Promise.resolve({ data: [], error: null }),
+        ? raiPicksDb.getCurrent(uid).catch(() => ({ data: null, error: null }))
+        : Promise.resolve({ data: null, error: null }),
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
-    setRaiPicks(raiPicksRes?.data || []);
+    setRaiPicks(raiPicksRes?.data || null);
 
     // Cadence data — loaded separately with fallback so a missing db function
     // degrades cadence only, doesn't nuke the whole page
@@ -1808,15 +1810,15 @@ export default function App({ user }) {
       setRaiState(row);
     });
 
-    // Subscribe to rai_picks changes — when overnight sweep writes fresh picks,
-    // refetch the full ranked list (1-3 rows). Simpler than maintaining the
-    // ranked array in-place across INSERT/UPDATE/DELETE events.
+    // Subscribe to rai_picks changes — when overnight sweep writes a fresh
+    // pick, refetch the current row (or null if cleared). Simpler than
+    // tracking individual INSERT/UPDATE/DELETE events.
     const raiPickSubscription = realtimeDb.onRaiPickChange(user.id, async () => {
       try {
         const pickRes = await raiPicksDb.getCurrent(user.id);
-        setRaiPicks(pickRes?.data || []);
+        setRaiPicks(pickRes?.data || null);
       } catch (e) {
-        console.warn("Failed to refetch rai picks after change:", e);
+        console.warn("Failed to refetch rai pick after change:", e);
       }
     });
 
@@ -4712,7 +4714,21 @@ export default function App({ user }) {
                     );
                     // Tasks that were completed and have collapsed out of the active list.
                     // They appear in the "Completed today" group below all buckets.
-                    const _collapsedDoneTasks = renderTasks.filter(t => collapsedDoneIds[t.id]);
+                    // Tasks that were completed and have collapsed out of the active list.
+                    // Sorted newest-completed first — the log answers "what did I just do?"
+                    // so the most recent action belongs at the top. Falls back to completed_at
+                    // from the DB for tasks that were already done before this session loaded
+                    // (the seeded ones from initial load); falls back to ID order for legacy
+                    // tasks with no timestamp at all.
+                    const _collapsedDoneTasks = renderTasks
+                      .filter(t => collapsedDoneIds[t.id])
+                      .sort((a, b) => {
+                        const aTime = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+                        const bTime = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+                        if (aTime !== bTime) return bTime - aTime;
+                        // Tie-breaker: stable by id so render order doesn't shuffle on every render
+                        return String(b.id).localeCompare(String(a.id));
+                      });
 
                     // Inline row renderer — captures bucketKey so the push button knows direction.
                     const renderRow = (t, bucketKey) => {
@@ -5204,8 +5220,162 @@ export default function App({ user }) {
                       </div>
                     );
 
+                    // Rai's Pick of the Day card. Shows the day's primary pick from
+                    // rai_picks (one client per day). Hidden when:
+                    //   - rankMode is "manual" (user opted out of Rai ranking)
+                    //   - no pick row exists for today (sweep skipped or low-signal day)
+                    //   - the picked client isn't in the user's roster anymore
+                    //   - todays_pick_dismissed_at is set (user already read it)
+                    // The tab bobs gently for ~12s on first session of the day, then
+                    // settles. Tracked via sessionStorage keyed by local date.
+                    const RaisPickCard = () => {
+                      // Gate: Rai mode + pick exists + not dismissed today
+                      if (rankMode !== "rai") return null;
+                      if (!raiPicks || !raiPicks.client_id) return null;
+                      if (raiState?.todays_pick_dismissed_at) return null;
+                      const pickClient = clients.find(c => c.id === raiPicks.client_id);
+                      if (!pickClient) return null;
+
+                      // First-session-of-day animation gate. Bob runs only once per
+                      // local-date per browser session. After that the tab is still.
+                      const bobKey = `rai_pick_bob_${_todayStr}`;
+                      const shouldBob = typeof window !== "undefined" && !window.sessionStorage.getItem(bobKey);
+                      if (shouldBob && typeof window !== "undefined") {
+                        try { window.sessionStorage.setItem(bobKey, "1"); } catch {}
+                      }
+
+                      const handleDismiss = async () => {
+                        // Optimistic local update — hide immediately
+                        setRaiState(prev => prev ? { ...prev, todays_pick_dismissed_at: new Date().toISOString() } : prev);
+                        try {
+                          await raiUserStateDb.dismissTodaysPick(user.id);
+                        } catch (e) {
+                          console.warn("Failed to dismiss Rai pick:", e);
+                        }
+                      };
+
+                      const handleOpenProfile = () => {
+                        setSelectedClient(pickClient);
+                      };
+
+                      const handleTalkToRai = () => {
+                        setAiConvoId(null);
+                        setAiMessages([{
+                          role: "ai",
+                          text: `Let's talk about ${pickClient.name}. ${raiPicks.reason}`,
+                        }]);
+                        setPage("coach");
+                      };
+
+                      return (
+                        <div style={{ position: "relative", margin: "0 0 14px" }}>
+                          <style>{`
+                            @keyframes raiTabFloat {
+                              0%, 100% { transform: translateY(0); }
+                              50% { transform: translateY(-3px); }
+                            }
+                            .rt-rai-pick-tab {
+                              position: absolute;
+                              top: -10px;
+                              left: 16px;
+                              background: ${C.card};
+                              border: 0.5px solid ${C.border};
+                              padding: 2px 10px;
+                              border-radius: 4px;
+                              font-size: 10px;
+                              color: ${C.btn};
+                              letter-spacing: 0.08em;
+                              font-weight: 500;
+                              display: inline-flex;
+                              align-items: center;
+                              gap: 5px;
+                              z-index: 2;
+                            }
+                            .rt-rai-pick-tab.bob {
+                              animation: raiTabFloat 2.4s ease-in-out 5;
+                            }
+                            @media (prefers-reduced-motion: reduce) {
+                              .rt-rai-pick-tab.bob { animation: none; }
+                            }
+                          `}</style>
+                          <div className={shouldBob ? "rt-rai-pick-tab bob" : "rt-rai-pick-tab"}>
+                            <Icon name="sparkles" size={11} color={C.btn} />
+                            RAI'S PICK
+                          </div>
+                          <div style={{
+                            background: C.card,
+                            border: `0.5px solid ${C.border}`,
+                            borderRadius: 8,
+                            padding: "18px 18px 16px",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
+                              <div style={{ fontSize: 16, fontWeight: 500, color: C.text }}>{pickClient.name}</div>
+                              <button
+                                onClick={handleDismiss}
+                                style={{
+                                  width: 18,
+                                  height: 18,
+                                  border: `1.5px solid ${C.border}`,
+                                  borderRadius: 4,
+                                  background: "transparent",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                  flexShrink: 0,
+                                }}
+                                aria-label="Mark Rai's pick read"
+                                title="Mark read"
+                              />
+                            </div>
+                            <div style={{
+                              fontSize: 14,
+                              lineHeight: 1.55,
+                              fontFamily: "Fraunces, Georgia, serif",
+                              fontStyle: "italic",
+                              color: C.textSec,
+                              marginBottom: 12,
+                            }}>
+                              {raiPicks.reason}
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button
+                                onClick={handleOpenProfile}
+                                style={{
+                                  fontSize: 12,
+                                  padding: "5px 11px",
+                                  background: "transparent",
+                                  border: `0.5px solid ${C.border}`,
+                                  color: C.textSec,
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Open profile
+                              </button>
+                              <button
+                                onClick={handleTalkToRai}
+                                style={{
+                                  fontSize: 12,
+                                  padding: "5px 11px",
+                                  background: "transparent",
+                                  border: `0.5px solid ${C.border}`,
+                                  color: C.textSec,
+                                  borderRadius: 6,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Talk to Rai
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    };
+
                     return (
                       <>
+                        {/* RAI'S PICK OF THE DAY — gated on rank mode, fresh pick, not dismissed */}
+                        <RaisPickCard />
+
                         {/* TODAY bucket */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {_todayBucket.map(t => renderRow(t, "today"))}
