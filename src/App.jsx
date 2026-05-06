@@ -437,11 +437,20 @@ function parseComposer(rawText, clients, workers) {
   let matchedClient = null;
   if (clients && clients.length > 0) {
     const sortedClients = [...clients].sort((a, b) => b.name.length - a.name.length);
+    // Articles to skip when picking candidate tokens — "The Motley Fool"
+    // should match on "Motley" or "Fool", not on "The".
+    const STOP_WORDS = new Set(["the", "a", "an", "and", "of", "&"]);
     for (const c of sortedClients) {
       const candidates = [c.name];
-      const firstToken = c.name.split(/\s+/)[0];
-      if (firstToken && firstToken !== c.name && firstToken.length >= 4) {
-        candidates.push(firstToken);
+      // Add each individual token (4+ chars, not a stop word) as a fallback.
+      // E.g. "The Motley Fool" → adds "Motley", "Fool". "Lemon Law Assist" →
+      // adds "Lemon", "Assist" (skips "Law" — too short).
+      const tokens = c.name.split(/\s+/);
+      for (const tok of tokens) {
+        const clean = tok.replace(/[^\w]/g, "").toLowerCase();
+        if (clean.length >= 4 && !STOP_WORDS.has(clean) && !candidates.includes(tok)) {
+          candidates.push(tok);
+        }
       }
       for (const cand of candidates) {
         const re = new RegExp(`\\b${escapeRegexChars(cand.toLowerCase())}(?:'s)?\\b`, "i");
@@ -510,7 +519,13 @@ function parseComposer(rawText, clients, workers) {
   title = title.replace(/\s{2,}/g, " ").trim();
   title = title.replace(/\s+'s\b/g, "");
   title = title.replace(/^'s\s+/, "");
-  title = title.replace(/\s+(for|with|by|to)\s*$/i, "");
+  // Strip trailing prepositions repeatedly — handles cases like
+  // "ads for matte for tomorrow" where stripping leaves two trailing "for"s.
+  let prev;
+  do {
+    prev = title;
+    title = title.replace(/\s+(for|with|by|to)\s*$/i, "").trim();
+  } while (title !== prev);
   title = title.trim();
   if (title.length > 0) {
     title = title.charAt(0).toUpperCase() + title.slice(1);
@@ -876,6 +891,27 @@ export default function App({ user }) {
   const [focusMode, setFocusMode] = useState(false);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   const [focusFlash, setFocusFlash] = useState(false);
+  // Auto-exit focus mode when no eligible focus task exists (today bucket empty
+  // or all today tasks completed). Without this, focus mode dims every row and
+  // the page looks broken because there's nothing to focus on. We re-evaluate
+  // whenever tasks change (completion, deletion, swipe).
+  useEffect(() => {
+    if (!focusMode) return;
+    // Compute eligibility: any non-done task whose due_date is today, has no
+    // due_date, or is recurring.
+    const today = new Date();
+    if (today.getHours() < 2) today.setDate(today.getDate() - 1);
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const hasFocusable = tasks.some(t => {
+      if (t.done) return false;
+      if (t.recurring) return true;
+      if (!t.due_date) return true;
+      return String(t.due_date).slice(0, 10) <= todayStr;
+    });
+    if (!hasFocusable) {
+      setFocusMode(false);
+    }
+  }, [focusMode, tasks]);
   // Debug overlay — shows priority score breakdown inline on each task row.
   // Toggle with Cmd+Shift+D (Mac) or Ctrl+Shift+D (Windows). Internal tool;
   // not user-facing.
@@ -3469,10 +3505,15 @@ export default function App({ user }) {
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
-                            <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
+                            <span
+                              className="rt-task-title is-discussable"
+                              onClick={() => setPage("settings")}
+                              style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
+                            >
+                              Connect to activate
+                            </span>
                           </div>
                         </div>
-                        <button style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 12px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Connect</button>
                       </div>
                       <div style={{ marginTop: 4 }}>
                         {[
@@ -3543,7 +3584,7 @@ export default function App({ user }) {
                         if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
                         else if (e.key === "Escape") { setComposerMenuOpen(false); }
                       }}
-                      placeholder="Add a task. Use natural language for lightning fast assignment."
+                      placeholder="Add a task. Natural language = magic."
                       style={{
                         flex: 1, minWidth: 100,
                         border: "none", outline: "none", background: "transparent",
@@ -4146,11 +4187,14 @@ export default function App({ user }) {
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
-                            <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
+                            <span
+                              className="rt-task-title is-discussable"
+                              onClick={() => setPage("settings")}
+                              style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
+                            >
+                              Connect to activate
+                            </span>
                           </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                          <button style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 12px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Connect</button>
                         </div>
                       </div>
                       <div style={{ marginTop: 4 }}>
@@ -4724,11 +4768,14 @@ export default function App({ user }) {
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
-                        <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>Connect to activate</div>
+                        <span
+                          className="rt-task-title is-discussable"
+                          onClick={() => setPage("settings")}
+                          style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
+                        >
+                          Connect to activate
+                        </span>
                       </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      <button style={{ fontSize: 11.5, fontWeight: 600, padding: "6px 12px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 7, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Connect</button>
                     </div>
                   </div>
                   <div style={{ opacity: 0.55 }}>
