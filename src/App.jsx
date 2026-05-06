@@ -382,6 +382,152 @@ function detectThinkingVerb(text) {
   return null;
 }
 
+// ────────────────────────────────────────────────────────────────────
+// SMART COMPOSER PARSER
+//
+// Reads a free-form task sentence and infers:
+//   - which client it's about    (fuzzy match against client names)
+//   - which worker is assigned   (fuzzy match against worker names; null = self)
+//   - which date it falls on     (today / tomorrow / weekday names / "later" / "in N days")
+//
+// Key data assumption: clients are companies (multi-word, capitalized), workers
+// are humans (single first name). The parser exploits this — workers must match
+// a human first name from the workersList; clients match anywhere else.
+//
+// "later" → today + 6 days (intentionally — leaves a day before next meeting)
+//
+// The parser also returns the cleaned title (with matched words stripped) and
+// span ranges so the input field can highlight matches inline as the user types.
+// ────────────────────────────────────────────────────────────────────
+
+function escapeRegexChars(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function addDays(d, n) {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
+}
+
+function nextWeekdayDate(name) {
+  const lookup = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  const target = lookup[name.toLowerCase()];
+  if (target === undefined) return null;
+  const today = new Date();
+  const cur = today.getDay();
+  let delta = target - cur;
+  if (delta <= 0) delta += 7;
+  return addDays(today, delta);
+}
+
+function dateToYmd(d) {
+  if (!d) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function parseComposer(rawText, clients, workers) {
+  const text = rawText || "";
+  const lower = text.toLowerCase();
+  const matches = []; // {start, end, kind: 'client'|'worker'|'date'}
+
+  // ─── client match ──────────────────────────────────────────────
+  // Try full client name first (longest match wins). Then try first-token match
+  // ("Matte Collection" → "matte"). Case-insensitive substring with word boundaries.
+  let matchedClient = null;
+  if (clients && clients.length > 0) {
+    const sortedClients = [...clients].sort((a, b) => b.name.length - a.name.length);
+    for (const c of sortedClients) {
+      const candidates = [c.name];
+      const firstToken = c.name.split(/\s+/)[0];
+      if (firstToken && firstToken !== c.name && firstToken.length >= 4) {
+        candidates.push(firstToken);
+      }
+      for (const cand of candidates) {
+        const re = new RegExp(`\\b${escapeRegexChars(cand.toLowerCase())}(?:'s)?\\b`, "i");
+        const m = lower.match(re);
+        if (m && m.index !== undefined) {
+          matchedClient = c;
+          matches.push({ start: m.index, end: m.index + m[0].length, kind: "client" });
+          break;
+        }
+      }
+      if (matchedClient) break;
+    }
+  }
+
+  // ─── worker match ──────────────────────────────────────────────
+  // Workers are humans → match on first name.
+  let matchedWorker = null;
+  if (workers && workers.length > 0) {
+    const clientSpans = matches.filter(m => m.kind === "client");
+    for (const w of workers) {
+      const firstName = (w.name || w.display_name || "").trim().split(/\s+/)[0];
+      if (!firstName || firstName.length < 2) continue;
+      const re = new RegExp(`\\b${escapeRegexChars(firstName.toLowerCase())}\\b`, "i");
+      const m = lower.match(re);
+      if (m && m.index !== undefined) {
+        const start = m.index, end = m.index + m[0].length;
+        const overlaps = clientSpans.some(c => start < c.end && end > c.start);
+        if (overlaps) continue;
+        matchedWorker = w;
+        matches.push({ start, end, kind: "worker" });
+        break;
+      }
+    }
+  }
+
+  // ─── date match ────────────────────────────────────────────────
+  let matchedDate = null;
+  const datePatterns = [
+    { re: /\btoday\b/i, value: () => addDays(new Date(), 0), kind: "today" },
+    { re: /\btomorrow\b/i, value: () => addDays(new Date(), 1), kind: "tomorrow" },
+    { re: /\blater\b/i, value: () => addDays(new Date(), 6), kind: "later" },
+    { re: /\bnext week\b/i, value: () => addDays(new Date(), 7), kind: "later" },
+    { re: /\bin (\d+) days?\b/i, value: (m) => addDays(new Date(), parseInt(m[1], 10)), kind: "later" },
+    { re: /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, value: (m) => nextWeekdayDate(m[1]), kind: "weekday" },
+  ];
+  for (const p of datePatterns) {
+    const m = lower.match(p.re);
+    if (m && m.index !== undefined) {
+      matchedDate = { date: p.value(m), kind: p.kind };
+      matches.push({ start: m.index, end: m.index + m[0].length, kind: "date" });
+      break;
+    }
+  }
+
+  // ─── build cleaned title ────────────────────────────────────────
+  let title = text;
+  const sortedMatches = [...matches].sort((a, b) => b.start - a.start);
+  for (const m of sortedMatches) {
+    let endIdx = m.end;
+    if (m.kind === "client" && lower.slice(endIdx, endIdx + 2) === "'s") {
+      endIdx += 2;
+    }
+    title = title.slice(0, m.start) + title.slice(endIdx);
+  }
+  title = title.replace(/^\s*(have|for|with|by|tell)\s+/i, "");
+  title = title.replace(/\s{2,}/g, " ").trim();
+  title = title.replace(/\s+'s\b/g, "");
+  title = title.replace(/^'s\s+/, "");
+  title = title.replace(/\s+(for|with|by|to)\s*$/i, "");
+  title = title.trim();
+  if (title.length > 0) {
+    title = title.charAt(0).toUpperCase() + title.slice(1);
+  }
+  if (title.length > 0 && !/[.!?]$/.test(title)) {
+    title += ".";
+  }
+
+  return {
+    matchedClient,
+    matchedWorker,
+    matchedDate,
+    title,
+    matches,
+  };
+}
+
 // Minimal markdown renderer for Rai's chat responses.
 // Handles: **bold**, numbered lists, bulleted lists, paragraphs separated by blank lines.
 // Safe: uses React nodes, not dangerouslySetInnerHTML.
@@ -3203,7 +3349,10 @@ export default function App({ user }) {
 
           const submitComposer = async () => {
             if (!newTask.trim()) return;
-            const text = newTask.trim();
+            // Parse one final time to get the cleaned title (matched names stripped,
+            // sentence-cased, ending punctuation auto-applied).
+            const finalParse = parseComposer(newTask, clients, workersList);
+            const text = finalParse.title || newTask.trim();
             const clientName = composerClient || "";
             const clientObj = clients.find(c => c.name === clientName);
             // Recurring tasks cannot have a due_date — they reset daily at 2am local.
@@ -3364,18 +3513,103 @@ export default function App({ user }) {
                     <Icon name="plus" size={14} color={C.btn} />
                   </div>
                   <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <input
-                      id="rt-composer-input"
-                      value={newTask}
-                      onChange={e => setNewTask(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "/" && !composerClient) { e.preventDefault(); setComposerMenuOpen(true); setComposerQuery(""); }
-                        else if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
-                        else if (e.key === "Escape") { setComposerMenuOpen(false); }
-                      }}
-                      placeholder={composerClient ? "What needs to happen?" : "Add a task. Use / to select a client."}
-                      style={{ flex: 1, minWidth: 100, border: "none", outline: "none", background: "transparent", fontSize: 14.5, padding: "4px 0", fontFamily: "inherit", color: C.text }}
-                    />
+                    {/*
+                      Smart composer input. As the user types, parseComposer() runs and:
+                        - lights up Client / Worker / Date chips below
+                        - highlights matched names in purple via a mirror layer
+                      Manual chip clicks still override parser output.
+
+                      Implementation: The input has transparent text but a visible caret.
+                      A read-only mirror div sits BEHIND it showing the same text, with
+                      parser-matched ranges colored purple/bold. The user sees the mirror;
+                      they type into the (invisible-text) input. Caret is visible because
+                      `caret-color` is set explicitly.
+                    */}
+                    <div style={{ flex: 1, minWidth: 100, position: "relative" }}>
+                      {(() => {
+                        const parsed = parseComposer(newTask, clients, workersList);
+                        if (!newTask) return null;
+                        const segments = [];
+                        let cursor = 0;
+                        const sortedSpans = [...parsed.matches].sort((a, b) => a.start - b.start);
+                        for (const span of sortedSpans) {
+                          if (span.start > cursor) {
+                            segments.push({ text: newTask.slice(cursor, span.start), highlight: false });
+                          }
+                          segments.push({ text: newTask.slice(span.start, span.end), highlight: true });
+                          cursor = span.end;
+                        }
+                        if (cursor < newTask.length) {
+                          segments.push({ text: newTask.slice(cursor), highlight: false });
+                        }
+                        return (
+                          <div
+                            aria-hidden="true"
+                            style={{
+                              position: "absolute",
+                              top: 0, left: 0,
+                              width: "100%",
+                              padding: "4px 0",
+                              fontSize: 14.5,
+                              fontFamily: "inherit",
+                              lineHeight: "normal",
+                              whiteSpace: "pre",
+                              overflow: "hidden",
+                              pointerEvents: "none",
+                              color: C.text,
+                            }}
+                          >
+                            {segments.map((s, i) => (
+                              <span
+                                key={i}
+                                style={s.highlight ? { color: C.btn, fontWeight: 600 } : undefined}
+                              >
+                                {s.text}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                      <input
+                        id="rt-composer-input"
+                        value={newTask}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setNewTask(v);
+                          const parsed = parseComposer(v, clients, workersList);
+                          if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
+                            setComposerClient(parsed.matchedClient.name);
+                          }
+                          if (parsed.matchedWorker && newTaskWorkerId !== parsed.matchedWorker.id) {
+                            setNewTaskWorkerId(parsed.matchedWorker.id);
+                          }
+                          if (parsed.matchedDate && parsed.matchedDate.date) {
+                            const ymd = dateToYmd(parsed.matchedDate.date);
+                            if (ymd && newTaskDueDate !== ymd) {
+                              setNewTaskDueDate(ymd);
+                              setNewTaskRecurring(false);
+                            }
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
+                          else if (e.key === "Escape") { setComposerMenuOpen(false); }
+                        }}
+                        placeholder="Add a task. Use natural language for lightning fast assignment."
+                        style={{
+                          width: "100%",
+                          position: "relative",
+                          border: "none", outline: "none", background: "transparent",
+                          fontSize: 14.5, padding: "4px 0", fontFamily: "inherit",
+                          // Make the input's own text invisible — mirror provides the visible text.
+                          // Caret stays visible via caret-color. Selection bg via ::selection in CSS.
+                          color: newTask ? "transparent" : C.textMuted,
+                          caretColor: C.text,
+                          fontStyle: newTask ? "normal" : "italic",
+                          lineHeight: "normal",
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -3626,13 +3860,13 @@ export default function App({ user }) {
                           gap: 2,
                         }}>
                           {(() => {
-                            const _later7 = new Date(_now);
-                            _later7.setDate(_later7.getDate() + 7);
-                            const _later7Str = `${_later7.getFullYear()}-${String(_later7.getMonth() + 1).padStart(2, "0")}-${String(_later7.getDate()).padStart(2, "0")}`;
+                            const _later6 = new Date(_now);
+                            _later6.setDate(_later6.getDate() + 6);
+                            const _later6Str = `${_later6.getFullYear()}-${String(_later6.getMonth() + 1).padStart(2, "0")}-${String(_later6.getDate()).padStart(2, "0")}`;
                             const opts = [
                               { label: "Today", value: _todayStr },
                               { label: "Tomorrow", value: _tomorrowStr },
-                              { label: "Later", value: _later7Str },
+                              { label: "Later", value: _later6Str },
                             ];
                             return (
                               <>
@@ -3704,12 +3938,12 @@ export default function App({ user }) {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
-                        padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
-                        height: 28,
+                        padding: newTask.trim() ? "0 12px 0 18px" : "0 18px",
+                        height: 36,
                         background: newTask.trim() ? C.btn : "#DBD0EF",
                         color: "#fff",
-                        borderRadius: 7,
-                        fontSize: 12,
+                        borderRadius: 9,
+                        fontSize: 14,
                         fontWeight: 600,
                         border: "none",
                         cursor: newTask.trim() ? "pointer" : "default",
