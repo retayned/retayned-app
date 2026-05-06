@@ -3516,100 +3516,42 @@ export default function App({ user }) {
                     {/*
                       Smart composer input. As the user types, parseComposer() runs and:
                         - lights up Client / Worker / Date chips below
-                        - highlights matched names in purple via a mirror layer
                       Manual chip clicks still override parser output.
-
-                      Implementation: The input has transparent text but a visible caret.
-                      A read-only mirror div sits BEHIND it showing the same text, with
-                      parser-matched ranges colored purple/bold. The user sees the mirror;
-                      they type into the (invisible-text) input. Caret is visible because
-                      `caret-color` is set explicitly.
                     */}
-                    <div style={{ flex: 1, minWidth: 100, position: "relative" }}>
-                      {(() => {
-                        const parsed = parseComposer(newTask, clients, workersList);
-                        if (!newTask) return null;
-                        const segments = [];
-                        let cursor = 0;
-                        const sortedSpans = [...parsed.matches].sort((a, b) => a.start - b.start);
-                        for (const span of sortedSpans) {
-                          if (span.start > cursor) {
-                            segments.push({ text: newTask.slice(cursor, span.start), highlight: false });
-                          }
-                          segments.push({ text: newTask.slice(span.start, span.end), highlight: true });
-                          cursor = span.end;
+                    <input
+                      id="rt-composer-input"
+                      value={newTask}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setNewTask(v);
+                        const parsed = parseComposer(v, clients, workersList);
+                        if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
+                          setComposerClient(parsed.matchedClient.name);
                         }
-                        if (cursor < newTask.length) {
-                          segments.push({ text: newTask.slice(cursor), highlight: false });
+                        if (parsed.matchedWorker && newTaskWorkerId !== parsed.matchedWorker.id) {
+                          setNewTaskWorkerId(parsed.matchedWorker.id);
                         }
-                        return (
-                          <div
-                            aria-hidden="true"
-                            style={{
-                              position: "absolute",
-                              top: 0, left: 0,
-                              width: "100%",
-                              padding: "4px 0",
-                              fontSize: 14.5,
-                              fontFamily: "inherit",
-                              lineHeight: "normal",
-                              whiteSpace: "pre",
-                              overflow: "hidden",
-                              pointerEvents: "none",
-                              color: C.text,
-                            }}
-                          >
-                            {segments.map((s, i) => (
-                              <span
-                                key={i}
-                                style={s.highlight ? { color: C.btn, fontWeight: 600 } : undefined}
-                              >
-                                {s.text}
-                              </span>
-                            ))}
-                          </div>
-                        );
-                      })()}
-                      <input
-                        id="rt-composer-input"
-                        value={newTask}
-                        onChange={e => {
-                          const v = e.target.value;
-                          setNewTask(v);
-                          const parsed = parseComposer(v, clients, workersList);
-                          if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
-                            setComposerClient(parsed.matchedClient.name);
+                        if (parsed.matchedDate && parsed.matchedDate.date) {
+                          const ymd = dateToYmd(parsed.matchedDate.date);
+                          if (ymd && newTaskDueDate !== ymd) {
+                            setNewTaskDueDate(ymd);
+                            setNewTaskRecurring(false);
                           }
-                          if (parsed.matchedWorker && newTaskWorkerId !== parsed.matchedWorker.id) {
-                            setNewTaskWorkerId(parsed.matchedWorker.id);
-                          }
-                          if (parsed.matchedDate && parsed.matchedDate.date) {
-                            const ymd = dateToYmd(parsed.matchedDate.date);
-                            if (ymd && newTaskDueDate !== ymd) {
-                              setNewTaskDueDate(ymd);
-                              setNewTaskRecurring(false);
-                            }
-                          }
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
-                          else if (e.key === "Escape") { setComposerMenuOpen(false); }
-                        }}
-                        placeholder="Add a task. Use natural language for lightning fast assignment."
-                        style={{
-                          width: "100%",
-                          position: "relative",
-                          border: "none", outline: "none", background: "transparent",
-                          fontSize: 14.5, padding: "4px 0", fontFamily: "inherit",
-                          // Make the input's own text invisible — mirror provides the visible text.
-                          // Caret stays visible via caret-color. Selection bg via ::selection in CSS.
-                          color: newTask ? "transparent" : C.textMuted,
-                          caretColor: C.text,
-                          fontStyle: newTask ? "normal" : "italic",
-                          lineHeight: "normal",
-                        }}
-                      />
-                    </div>
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
+                        else if (e.key === "Escape") { setComposerMenuOpen(false); }
+                      }}
+                      placeholder="Add a task. Use natural language for lightning fast assignment."
+                      style={{
+                        flex: 1, minWidth: 100,
+                        border: "none", outline: "none", background: "transparent",
+                        fontSize: 14.5, padding: "4px 0", fontFamily: "inherit",
+                        color: C.text,
+                        fontStyle: newTask ? "normal" : "italic",
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -3938,12 +3880,12 @@ export default function App({ user }) {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
-                        padding: newTask.trim() ? "0 12px 0 18px" : "0 18px",
-                        height: 36,
+                        padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
+                        height: 28,
                         background: newTask.trim() ? C.btn : "#DBD0EF",
                         color: "#fff",
-                        borderRadius: 9,
-                        fontSize: 14,
+                        borderRadius: 7,
+                        fontSize: 12,
                         fontWeight: 600,
                         border: "none",
                         cursor: newTask.trim() ? "pointer" : "default",
