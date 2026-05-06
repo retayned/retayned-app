@@ -3533,6 +3533,25 @@ export default function App({ user }) {
             const wasAssigned = !!currentTask?.assigned_worker_id;
             const dateChanged = String(oldDateStr || "").slice(0,10) !== String(newDateStr || "").slice(0,10);
 
+            // If this task is currently the active Rai badge AND it's being
+            // pushed off today (tomorrow / later), clear the badge. The badge
+            // is for ONE day — when the user defers a badged task, they're
+            // deciding "not today," and the crown should not follow it forward.
+            // Also clears the task's is_rai_priority flag so it doesn't return
+            // tomorrow still labeled as a priority.
+            const isBadged = raiState?.todays_badged_task_id === taskId;
+            const newDateIsTodayOrEarlier = newDateStr ? String(newDateStr).slice(0, 10) <= _todayStr : true;
+            if (isBadged && !newDateIsTodayOrEarlier) {
+              try {
+                await raiUserStateDb.setBadgeTask(user.id, null);
+                setRaiState(prev => prev ? { ...prev, todays_badged_task_id: null, todays_badge_set_at: null } : prev);
+              } catch (e) { console.warn("Failed to clear badge:", e); }
+              try {
+                await supabase.from("tasks").update({ is_rai_priority: false }).eq("id", taskId);
+              } catch (e) { console.warn("Failed to clear is_rai_priority:", e); }
+              setTasks(prev => prev.map(t => t.id === taskId ? { ...t, raiPriority: false } : t));
+            }
+
             // Update local first for snappy UI; DB write is async
             setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: newDateStr } : t));
             try { await tasksDb.setDueDate(taskId, newDateStr); } catch (e) { console.warn("setDueDate failed:", e); }
