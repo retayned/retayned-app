@@ -5236,14 +5236,6 @@ export default function App({ user }) {
                       const pickClient = clients.find(c => c.id === raiPicks.client_id);
                       if (!pickClient) return null;
 
-                      // First-session-of-day animation gate. Bob runs only once per
-                      // local-date per browser session. After that the tab is still.
-                      const bobKey = `rai_pick_bob_${_todayStr}`;
-                      const shouldBob = typeof window !== "undefined" && !window.sessionStorage.getItem(bobKey);
-                      if (shouldBob && typeof window !== "undefined") {
-                        try { window.sessionStorage.setItem(bobKey, "1"); } catch {}
-                      }
-
                       const handleDismiss = async () => {
                         // Optimistic local update — hide immediately
                         setRaiState(prev => prev ? { ...prev, todays_pick_dismissed_at: new Date().toISOString() } : prev);
@@ -5267,105 +5259,94 @@ export default function App({ user }) {
                         setPage("coach");
                       };
 
+                      // Cream-purple surface — softest possible AI color.
+                      // The label sits inside the card (not as a tab) so it
+                      // doesn't compete with the "Ranked by Rai" toggle above.
+                      const RAI_BG = "#FAF8FE";
+                      const RAI_BORDER = "#E0DEFA";
+                      const RAI_PURPLE = "#5B21B6";
+                      const RAI_TEXT_PRIMARY = "#1E261F";
+                      const RAI_TEXT_REASON = "#534AB7";
+                      const RAI_CHECKBOX_BORDER = "#C7C2E0";
+
                       return (
-                        <div style={{ position: "relative", margin: "0 0 14px" }}>
-                          <style>{`
-                            @keyframes raiTabFloat {
-                              0%, 100% { transform: translateY(0); }
-                              50% { transform: translateY(-3px); }
-                            }
-                            .rt-rai-pick-tab {
-                              position: absolute;
-                              top: -10px;
-                              left: 16px;
-                              background: ${C.card};
-                              border: 0.5px solid ${C.border};
-                              padding: 2px 10px;
-                              border-radius: 4px;
-                              font-size: 10px;
-                              color: ${C.btn};
-                              letter-spacing: 0.08em;
-                              font-weight: 500;
-                              display: inline-flex;
-                              align-items: center;
-                              gap: 5px;
-                              z-index: 2;
-                            }
-                            .rt-rai-pick-tab.bob {
-                              animation: raiTabFloat 2.4s ease-in-out 5;
-                            }
-                            @media (prefers-reduced-motion: reduce) {
-                              .rt-rai-pick-tab.bob { animation: none; }
-                            }
-                          `}</style>
-                          <div className={shouldBob ? "rt-rai-pick-tab bob" : "rt-rai-pick-tab"}>
-                            <Icon name="sparkles" size={11} color={C.btn} />
-                            RAI'S PICK
+                        <div style={{
+                          background: RAI_BG,
+                          border: `0.5px solid ${RAI_BORDER}`,
+                          borderRadius: 8,
+                          padding: "18px",
+                          margin: "0 0 14px",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <Icon name="sparkles" size={13} color={RAI_PURPLE} />
+                            <span style={{ fontSize: 11, color: RAI_PURPLE, letterSpacing: "0.08em", fontWeight: 500 }}>CLIENT OF THE DAY</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+                            <div style={{ fontSize: 16, fontWeight: 500, color: RAI_TEXT_PRIMARY }}>{pickClient.name}</div>
+                            <button
+                              onClick={handleDismiss}
+                              style={{
+                                width: 18,
+                                height: 18,
+                                border: `1.5px solid ${RAI_CHECKBOX_BORDER}`,
+                                borderRadius: 4,
+                                background: "transparent",
+                                cursor: "pointer",
+                                padding: 0,
+                                flexShrink: 0,
+                              }}
+                              aria-label="Mark Client of the Day read"
+                              title="Mark read"
+                            />
                           </div>
                           <div style={{
-                            background: C.card,
-                            border: `0.5px solid ${C.border}`,
-                            borderRadius: 8,
-                            padding: "18px 18px 16px",
+                            fontSize: 14,
+                            lineHeight: 1.55,
+                            fontFamily: "Fraunces, Georgia, serif",
+                            fontStyle: "italic",
+                            color: RAI_TEXT_REASON,
+                            marginBottom: 4,
                           }}>
-                            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
-                              <div style={{ fontSize: 16, fontWeight: 500, color: C.text }}>{pickClient.name}</div>
-                              <button
-                                onClick={handleDismiss}
-                                style={{
-                                  width: 18,
-                                  height: 18,
-                                  border: `1.5px solid ${C.border}`,
-                                  borderRadius: 4,
-                                  background: "transparent",
-                                  cursor: "pointer",
-                                  padding: 0,
-                                  flexShrink: 0,
-                                }}
-                                aria-label="Mark Rai's pick read"
-                                title="Mark read"
-                              />
-                            </div>
-                            <div style={{
-                              fontSize: 14,
-                              lineHeight: 1.55,
-                              fontFamily: "Fraunces, Georgia, serif",
-                              fontStyle: "italic",
-                              color: C.textSec,
-                              marginBottom: 12,
-                            }}>
-                              {raiPicks.reason}
-                            </div>
-                            <div style={{ display: "flex", gap: 8 }}>
-                              <button
-                                onClick={handleOpenProfile}
-                                style={{
-                                  fontSize: 12,
-                                  padding: "5px 11px",
-                                  background: "transparent",
-                                  border: `0.5px solid ${C.border}`,
-                                  color: C.textSec,
-                                  borderRadius: 6,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Open profile
-                              </button>
-                              <button
-                                onClick={handleTalkToRai}
-                                style={{
-                                  fontSize: 12,
-                                  padding: "5px 11px",
-                                  background: "transparent",
-                                  border: `0.5px solid ${C.border}`,
-                                  color: C.textSec,
-                                  borderRadius: 6,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Talk to Rai
-                              </button>
-                            </div>
+                            &ldquo;{raiPicks.reason}&rdquo;
+                          </div>
+                          <div style={{
+                            fontSize: 12,
+                            color: "#8782B0",
+                            marginBottom: 14,
+                            fontFamily: "Fraunces, Georgia, serif",
+                            fontStyle: "italic",
+                          }}>
+                            &mdash; Rai
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              onClick={handleOpenProfile}
+                              style={{
+                                fontSize: 12,
+                                padding: "5px 11px",
+                                background: "rgba(255,255,255,0.6)",
+                                border: `0.5px solid ${RAI_BORDER}`,
+                                color: C.textSec,
+                                borderRadius: 6,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Open profile
+                            </button>
+                            <button
+                              onClick={handleTalkToRai}
+                              style={{
+                                fontSize: 12,
+                                padding: "5px 11px",
+                                background: "rgba(255,255,255,0.6)",
+                                border: `0.5px solid ${RAI_BORDER}`,
+                                color: C.textSec,
+                                borderRadius: 6,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Talk to Rai
+                            </button>
                           </div>
                         </div>
                       );
