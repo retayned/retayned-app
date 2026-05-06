@@ -410,11 +410,23 @@ function addDays(d, n) {
   return out;
 }
 
+// Returns "today" anchored to 2am local — between midnight and 2am, "today" is
+// still yesterday's calendar date. This matches the bucket logic in the today
+// page so parseComposer's "tomorrow" lands in the same bucket the UI calls
+// "tomorrow", not in "later" by being one day off.
+function todayAnchored() {
+  const d = new Date();
+  if (d.getHours() < 2) d.setDate(d.getDate() - 1);
+  // Reset time-of-day to start of day so addDays() math is clean
+  d.setHours(12, 0, 0, 0);
+  return d;
+}
+
 function nextWeekdayDate(name) {
   const lookup = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
   const target = lookup[name.toLowerCase()];
   if (target === undefined) return null;
-  const today = new Date();
+  const today = todayAnchored();
   const cur = today.getDay();
   let delta = target - cur;
   if (delta <= 0) delta += 7;
@@ -489,11 +501,11 @@ function parseComposer(rawText, clients, workers) {
   // ─── date match ────────────────────────────────────────────────
   let matchedDate = null;
   const datePatterns = [
-    { re: /\btoday\b/i, value: () => addDays(new Date(), 0), kind: "today" },
-    { re: /\btomorrow\b/i, value: () => addDays(new Date(), 1), kind: "tomorrow" },
-    { re: /\blater\b/i, value: () => addDays(new Date(), 6), kind: "later" },
-    { re: /\bnext week\b/i, value: () => addDays(new Date(), 7), kind: "later" },
-    { re: /\bin (\d+) days?\b/i, value: (m) => addDays(new Date(), parseInt(m[1], 10)), kind: "later" },
+    { re: /\btoday\b/i, value: () => addDays(todayAnchored(), 0), kind: "today" },
+    { re: /\btomorrow\b/i, value: () => addDays(todayAnchored(), 1), kind: "tomorrow" },
+    { re: /\blater\b/i, value: () => addDays(todayAnchored(), 6), kind: "later" },
+    { re: /\bnext week\b/i, value: () => addDays(todayAnchored(), 7), kind: "later" },
+    { re: /\bin (\d+) days?\b/i, value: (m) => addDays(todayAnchored(), parseInt(m[1], 10)), kind: "later" },
     { re: /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, value: (m) => nextWeekdayDate(m[1]), kind: "weekday" },
   ];
   for (const p of datePatterns) {
