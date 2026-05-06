@@ -891,27 +891,6 @@ export default function App({ user }) {
   const [focusMode, setFocusMode] = useState(false);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   const [focusFlash, setFocusFlash] = useState(false);
-  // Auto-exit focus mode when no eligible focus task exists (today bucket empty
-  // or all today tasks completed). Without this, focus mode dims every row and
-  // the page looks broken because there's nothing to focus on. We re-evaluate
-  // whenever tasks change (completion, deletion, swipe).
-  useEffect(() => {
-    if (!focusMode) return;
-    // Compute eligibility: any non-done task whose due_date is today, has no
-    // due_date, or is recurring.
-    const today = new Date();
-    if (today.getHours() < 2) today.setDate(today.getDate() - 1);
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const hasFocusable = tasks.some(t => {
-      if (t.done) return false;
-      if (t.recurring) return true;
-      if (!t.due_date) return true;
-      return String(t.due_date).slice(0, 10) <= todayStr;
-    });
-    if (!hasFocusable) {
-      setFocusMode(false);
-    }
-  }, [focusMode, tasks]);
   // Debug overlay — shows priority score breakdown inline on each task row.
   // Toggle with Cmd+Shift+D (Mac) or Ctrl+Shift+D (Windows). Internal tool;
   // not user-facing.
@@ -1298,6 +1277,27 @@ export default function App({ user }) {
 
   // Today — task manager
   const [tasks, setTasks] = useState([]);
+
+  // Auto-exit focus mode when no eligible focus task exists (today bucket empty
+  // or all today tasks completed). Without this, focus mode dims every row and
+  // the page looks broken because there's nothing to focus on. Re-evaluates
+  // whenever tasks change (completion, deletion, swipe).
+  useEffect(() => {
+    if (!focusMode) return;
+    const today = new Date();
+    if (today.getHours() < 2) today.setDate(today.getDate() - 1);
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const hasFocusable = tasks.some(t => {
+      if (t.done) return false;
+      if (t.recurring) return true;
+      if (!t.due_date) return true;
+      return String(t.due_date).slice(0, 10) <= todayStr;
+    });
+    if (!hasFocusable) {
+      setFocusMode(false);
+    }
+  }, [focusMode, tasks]);
+
   // Tracks tasks just completed within the last ~700ms so the pulse animation only fires
   // on the actual click, not on every re-render where t.done is true.
   const [justCompletedIds, setJustCompletedIds] = useState({});
