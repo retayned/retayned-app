@@ -439,6 +439,67 @@ function dateToYmd(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// ────────────────────────────────────────────────────────────────────
+// RECURRENCE PATTERN HELPERS
+//
+// A recurring task has a pattern that says when it should appear in the
+// today bucket and reset to incomplete. Patterns are stored as JSON in the
+// `recurrence_pattern` column. See state declaration above for the shape.
+//
+// `recurrenceMatchesDate(pattern, date)` answers: should this task appear
+// today? `formatRecurrenceLabel(pattern)` returns a short human-readable
+// label like "Mon/Wed/Fri" or "1st of month" for display on the task tile.
+// ────────────────────────────────────────────────────────────────────
+
+function recurrenceMatchesDate(pattern, date) {
+  if (!pattern || !pattern.kind) return true; // legacy daily — always shows
+  const dow = date.getDay(); // 0=Sun, 6=Sat
+  const dom = date.getDate();
+  switch (pattern.kind) {
+    case "daily":
+      return true;
+    case "weekdays":
+      return dow >= 1 && dow <= 5;
+    case "weekly":
+      return Array.isArray(pattern.days) && pattern.days.includes(dow);
+    case "monthly_date":
+      return dom === (pattern.day || 1);
+    case "monthly_weekday": {
+      // "Nth weekday of month" — week is 1..5, day is 0..6
+      if (date.getDay() !== pattern.day) return false;
+      const occurrence = Math.ceil(dom / 7);
+      return occurrence === pattern.week;
+    }
+    default:
+      return true;
+  }
+}
+
+function formatRecurrenceLabel(pattern) {
+  if (!pattern || !pattern.kind) return "Recurring";
+  const dayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const ordinal = (n) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+  const weekOrd = ["", "1st", "2nd", "3rd", "4th", "5th"];
+  switch (pattern.kind) {
+    case "daily": return "Daily";
+    case "weekdays": return "Mon–Fri";
+    case "weekly": {
+      const days = pattern.days || [];
+      if (days.length === 0) return "Weekly";
+      if (days.length === 7) return "Daily";
+      if (days.length === 5 && [1,2,3,4,5].every(d => days.includes(d))) return "Mon–Fri";
+      return days.sort().map(d => dayShort[d]).join("/");
+    }
+    case "monthly_date": return `${ordinal(pattern.day || 1)} of month`;
+    case "monthly_weekday": return `${weekOrd[pattern.week]} ${dayShort[pattern.day]} of month`;
+    default: return "Recurring";
+  }
+}
+
 function parseComposer(rawText, clients, workers) {
   const text = rawText || "";
   const lower = text.toLowerCase();
@@ -1337,6 +1398,14 @@ export default function App({ user }) {
   const [newTask, setNewTask] = useState("");
   const [newTaskClient, setNewTaskClient] = useState("");
   const [newTaskRecurring, setNewTaskRecurring] = useState(false);
+  // Recurrence pattern shape (when newTaskRecurring is true):
+  //   { kind: "daily" }
+  //   { kind: "weekdays" }                        — Mon-Fri only
+  //   { kind: "weekly", days: [1,3,5] }           — 0=Sun, 1=Mon, ..., 6=Sat (multi-select)
+  //   { kind: "monthly_date", day: 15 }           — "On the 15th of each month"
+  //   { kind: "monthly_weekday", week: 3, day: 2 } — "On the 3rd Tuesday of each month"
+  // Defaults to daily for backward-compat with existing tasks created before this column.
+  const [newTaskRecurrencePattern, setNewTaskRecurrencePattern] = useState({ kind: "daily" });
   // Composer Due chip — null means no due date (renders in Today bucket).
   // Stores YYYY-MM-DD string. Mutually exclusive with newTaskRecurring (selecting
   // recurring clears due date; selecting due date clears recurring).
@@ -1529,6 +1598,7 @@ export default function App({ user }) {
           completed_at: reset ? null : t.completed_at,
           alert: t.is_alert,
           recurring: t.is_recurring,
+          recurrence_pattern: t.recurrence_pattern || null,
           due_date: t.due_date || null,
           assigned_worker_id: t.assigned_worker_id || null,
           share_client_context: t.share_client_context !== false,
@@ -2653,7 +2723,7 @@ export default function App({ user }) {
            Done tasks lose the affordance entirely.
            Note: text-underline-offset is small (1px) because the parent div has
            overflow:hidden — large offsets clip the dotted line out of view. */
-        .rt-row .rt-task-title.is-discussable {
+        .rt-task-title.is-discussable {
           text-decoration: underline;
           text-decoration-style: dotted;
           text-decoration-color: ${C.btn};
@@ -2662,7 +2732,7 @@ export default function App({ user }) {
           cursor: pointer;
           transition: text-decoration-color 160ms ease, text-decoration-style 160ms ease;
         }
-        .rt-row .rt-task-title.is-discussable:hover {
+        .rt-task-title.is-discussable:hover {
           text-decoration-style: solid;
           text-decoration-color: ${C.btn};
         }
@@ -3406,7 +3476,11 @@ export default function App({ user }) {
           const _tomorrowStr = `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
 
           const bucketOf = (t) => {
-            if (t.recurring) return "today";
+            // Recurring tasks: only show in today bucket if today matches the pattern.
+            // Otherwise hide entirely (returns "hidden" — buckets filter that out).
+            if (t.recurring) {
+              return recurrenceMatchesDate(t.recurrence_pattern, _now) ? "today" : "hidden";
+            }
             if (!t.due_date) return "today";
             const dateStr = String(t.due_date).slice(0, 10);
             if (dateStr <= _todayStr) return "today";
@@ -3505,11 +3579,13 @@ export default function App({ user }) {
             const dueDateForCreate = newTaskRecurring
               ? null
               : (newTaskDueDate || _todayStr);
+            const recurrencePatternForCreate = newTaskRecurring ? newTaskRecurrencePattern : null;
             const { data: created } = await tasksDb.create(user.id, {
               text,
               client_name: clientName,
               client_id: clientObj?.id || null,
               is_recurring: newTaskRecurring,
+              recurrence_pattern: recurrencePatternForCreate,
               due_date: dueDateForCreate,
               assigned_worker_id: newTaskWorkerId || null,
               share_client_context: newTaskShareCtx,
@@ -3520,6 +3596,7 @@ export default function App({ user }) {
               client: clientName || null,
               done: false, ai: false,
               recurring: newTaskRecurring,
+              recurrence_pattern: recurrencePatternForCreate,
               due_date: dueDateForCreate,
               raiPriority: false, alert: false,
               created_at: Date.now(),
@@ -3546,6 +3623,7 @@ export default function App({ user }) {
             setNewTask("");
             setComposerClient("");
             setNewTaskRecurring(false);
+            setNewTaskRecurrencePattern({ kind: "daily" });
             setNewTaskDueDate(null);
             setNewTaskWorkerId(null);
             setNewTaskShareCtx(true);
@@ -3927,7 +4005,7 @@ export default function App({ user }) {
                         onMouseLeave={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "transparent"; }}
                       >
                         <Icon name={newTaskRecurring ? "infinity" : "calendar"} size={newTaskRecurring ? 14 : 12} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
-                        <span>{newTaskRecurring ? "Recurring" : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
+                        <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
                       </button>
                       {duePickerOpen && (
                         <>
@@ -3988,32 +4066,193 @@ export default function App({ user }) {
                                     </button>
                                   );
                                 })}
-                                {/* Recurring option — bottom of menu, divider above */}
+                                {/* Recurring option — bottom of menu, divider above. */}
                                 <div style={{ height: 1, background: C.borderLight, margin: "4px 6px" }} />
-                                <button
-                                  onClick={() => { setNewTaskRecurring(true); setNewTaskDueDate(null); setDuePickerOpen(false); }}
-                                  style={{
-                                    textAlign: "left",
-                                    padding: "8px 10px",
-                                    background: newTaskRecurring ? C.btnLight : "transparent",
-                                    border: "none",
-                                    borderRadius: 6,
-                                    fontSize: 13,
-                                    color: newTaskRecurring ? C.btn : C.text,
-                                    fontWeight: newTaskRecurring ? 600 : 500,
-                                    cursor: "pointer",
-                                    fontFamily: "inherit",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 7,
-                                    width: "100%",
-                                  }}
-                                  onMouseEnter={e => { if (!newTaskRecurring) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                                  onMouseLeave={e => { if (!newTaskRecurring) e.currentTarget.style.background = "transparent"; }}
-                                >
-                                  <Icon name="infinity" size={14} color={newTaskRecurring ? C.btn : C.textMuted} />
-                                  Recurring
-                                </button>
+                                {!newTaskRecurring && (
+                                  <button
+                                    onClick={() => { setNewTaskRecurring(true); setNewTaskDueDate(null); }}
+                                    style={{
+                                      textAlign: "left",
+                                      padding: "8px 10px",
+                                      background: "transparent",
+                                      border: "none",
+                                      borderRadius: 6,
+                                      fontSize: 13,
+                                      color: C.text,
+                                      fontWeight: 500,
+                                      cursor: "pointer",
+                                      fontFamily: "inherit",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 7,
+                                      width: "100%",
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
+                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                  >
+                                    <Icon name="infinity" size={14} color={C.textMuted} />
+                                    Recurring
+                                  </button>
+                                )}
+                                {newTaskRecurring && (
+                                  <div style={{ padding: "8px 10px 4px", display: "flex", flexDirection: "column", gap: 8 }}>
+                                    <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+                                      <Icon name="infinity" size={12} color={C.btn} />
+                                      Recurring
+                                    </div>
+                                    {/* Frequency chips */}
+                                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                      {[
+                                        { key: "daily", label: "Daily" },
+                                        { key: "weekdays", label: "Weekdays" },
+                                        { key: "weekly", label: "Weekly" },
+                                        { key: "monthly_date", label: "Monthly" },
+                                      ].map(opt => {
+                                        const isSel = newTaskRecurrencePattern.kind === opt.key
+                                          || (opt.key === "monthly_date" && newTaskRecurrencePattern.kind === "monthly_weekday");
+                                        return (
+                                          <button
+                                            key={opt.key}
+                                            onClick={() => {
+                                              if (opt.key === "daily") setNewTaskRecurrencePattern({ kind: "daily" });
+                                              else if (opt.key === "weekdays") setNewTaskRecurrencePattern({ kind: "weekdays" });
+                                              else if (opt.key === "weekly") setNewTaskRecurrencePattern({ kind: "weekly", days: [(_now.getDay())] });
+                                              else if (opt.key === "monthly_date") setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() });
+                                            }}
+                                            style={{
+                                              padding: "5px 10px",
+                                              background: isSel ? C.btnLight : "transparent",
+                                              color: isSel ? C.btn : C.textSec,
+                                              border: "1px solid " + (isSel ? C.btn : C.borderLight),
+                                              borderRadius: 7,
+                                              fontSize: 11.5,
+                                              fontWeight: 600,
+                                              cursor: "pointer",
+                                              fontFamily: "inherit",
+                                            }}
+                                          >
+                                            {opt.label}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                    {/* Weekly: day-of-week multi-select */}
+                                    {newTaskRecurrencePattern.kind === "weekly" && (
+                                      <div style={{ display: "flex", gap: 3 }}>
+                                        {["S", "M", "T", "W", "T", "F", "S"].map((label, dow) => {
+                                          const days = newTaskRecurrencePattern.days || [];
+                                          const isSel = days.includes(dow);
+                                          return (
+                                            <button
+                                              key={dow}
+                                              onClick={() => {
+                                                const newDays = isSel
+                                                  ? days.filter(d => d !== dow)
+                                                  : [...days, dow];
+                                                if (newDays.length === 0) return; // require at least one
+                                                setNewTaskRecurrencePattern({ kind: "weekly", days: newDays });
+                                              }}
+                                              style={{
+                                                width: 26, height: 26,
+                                                background: isSel ? C.btn : "transparent",
+                                                color: isSel ? "#fff" : C.textSec,
+                                                border: "1px solid " + (isSel ? C.btn : C.borderLight),
+                                                borderRadius: 13,
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                cursor: "pointer",
+                                                fontFamily: "inherit",
+                                                padding: 0,
+                                              }}
+                                            >{label}</button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                    {/* Monthly: date OR weekday-of-month */}
+                                    {(newTaskRecurrencePattern.kind === "monthly_date" || newTaskRecurrencePattern.kind === "monthly_weekday") && (
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                        <div style={{ display: "flex", gap: 4 }}>
+                                          <button
+                                            onClick={() => setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() })}
+                                            style={{
+                                              flex: 1, padding: "5px 8px",
+                                              background: newTaskRecurrencePattern.kind === "monthly_date" ? C.btnLight : "transparent",
+                                              color: newTaskRecurrencePattern.kind === "monthly_date" ? C.btn : C.textSec,
+                                              border: "1px solid " + (newTaskRecurrencePattern.kind === "monthly_date" ? C.btn : C.borderLight),
+                                              borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                                            }}
+                                          >Date of month</button>
+                                          <button
+                                            onClick={() => {
+                                              const week = Math.ceil(_now.getDate() / 7);
+                                              setNewTaskRecurrencePattern({ kind: "monthly_weekday", week, day: _now.getDay() });
+                                            }}
+                                            style={{
+                                              flex: 1, padding: "5px 8px",
+                                              background: newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btnLight : "transparent",
+                                              color: newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btn : C.textSec,
+                                              border: "1px solid " + (newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btn : C.borderLight),
+                                              borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                                            }}
+                                          >Day of week</button>
+                                        </div>
+                                        {newTaskRecurrencePattern.kind === "monthly_date" && (
+                                          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textSec }}>
+                                            On the
+                                            <select
+                                              value={newTaskRecurrencePattern.day}
+                                              onChange={e => setNewTaskRecurrencePattern({ kind: "monthly_date", day: parseInt(e.target.value, 10) })}
+                                              style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid " + C.borderLight, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                            >
+                                              {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
+                                            </select>
+                                            of each month
+                                          </div>
+                                        )}
+                                        {newTaskRecurrencePattern.kind === "monthly_weekday" && (
+                                          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textSec, flexWrap: "wrap" }}>
+                                            The
+                                            <select
+                                              value={newTaskRecurrencePattern.week}
+                                              onChange={e => setNewTaskRecurrencePattern(p => ({ ...p, week: parseInt(e.target.value, 10) }))}
+                                              style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid " + C.borderLight, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                            >
+                                              <option value={1}>1st</option>
+                                              <option value={2}>2nd</option>
+                                              <option value={3}>3rd</option>
+                                              <option value={4}>4th</option>
+                                              <option value={5}>5th</option>
+                                            </select>
+                                            <select
+                                              value={newTaskRecurrencePattern.day}
+                                              onChange={e => setNewTaskRecurrencePattern(p => ({ ...p, day: parseInt(e.target.value, 10) }))}
+                                              style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid " + C.borderLight, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                            >
+                                              <option value={0}>Sunday</option>
+                                              <option value={1}>Monday</option>
+                                              <option value={2}>Tuesday</option>
+                                              <option value={3}>Wednesday</option>
+                                              <option value={4}>Thursday</option>
+                                              <option value={5}>Friday</option>
+                                              <option value={6}>Saturday</option>
+                                            </select>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                      <button
+                                        onClick={() => { setNewTaskRecurring(false); setNewTaskRecurrencePattern({ kind: "daily" }); }}
+                                        style={{ padding: "5px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                      >Cancel</button>
+                                      <button
+                                        onClick={() => setDuePickerOpen(false)}
+                                        style={{ padding: "5px 12px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginLeft: "auto" }}
+                                      >Done</button>
+                                    </div>
+                                  </div>
+                                )}
                               </>
                             );
                           })()}
@@ -4759,9 +4998,9 @@ export default function App({ user }) {
                                 color: C.textMuted,
                                 border: "1px solid " + C.borderLight,
                                 background: "transparent",
-                              }} title="Recurring">
+                              }} title={formatRecurrenceLabel(t.recurrence_pattern)}>
                                 <Icon name="infinity" size={12} color={C.textMuted} />
-                                <span className="rt-row-text">Recurring</span>
+                                <span className="rt-row-text">{formatRecurrenceLabel(t.recurrence_pattern)}</span>
                               </span>
                             ) : t.due_date ? (() => {
                               const isToday = String(t.due_date).slice(0,10) === _todayStr;
