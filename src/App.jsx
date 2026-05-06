@@ -1417,7 +1417,6 @@ export default function App({ user }) {
   const [workersList, setWorkersList] = useState([]);
   const [workerCounts, setWorkerCounts] = useState({}); // { worker_id: { pending, done } }
   const [newTaskWorkerId, setNewTaskWorkerId] = useState(null);   // composer: assigned worker for new task
-  const [newTaskShareCtx, setNewTaskShareCtx] = useState(true);    // composer: share client context, default ON
   const [workerPickerOpen, setWorkerPickerOpen] = useState(false); // composer popover
   const [addWorkerOpen, setAddWorkerOpen] = useState(false);       // add-worker modal
   const [newWorkerName, setNewWorkerName] = useState("");
@@ -3588,7 +3587,6 @@ export default function App({ user }) {
               recurrence_pattern: recurrencePatternForCreate,
               due_date: dueDateForCreate,
               assigned_worker_id: newTaskWorkerId || null,
-              share_client_context: newTaskShareCtx,
             });
             const task = {
               id: created?.id || "u" + Date.now(),
@@ -3601,7 +3599,6 @@ export default function App({ user }) {
               raiPriority: false, alert: false,
               created_at: Date.now(),
               assigned_worker_id: newTaskWorkerId || null,
-              share_client_context: newTaskShareCtx,
             };
             setTasks(prev => [task, ...prev]);
 
@@ -3626,7 +3623,6 @@ export default function App({ user }) {
             setNewTaskRecurrencePattern({ kind: "daily" });
             setNewTaskDueDate(null);
             setNewTaskWorkerId(null);
-            setNewTaskShareCtx(true);
             setDuePickerOpen(false);
             setWorkerPickerOpen(false);
             setComposerMenuOpen(false);
@@ -3942,40 +3938,6 @@ export default function App({ user }) {
                                     </div>
                                   </button>
                                 ))}
-                                {/* Share client context toggle (only meaningful when a worker is picked) */}
-                                {newTaskWorkerId && (
-                                  <div style={{
-                                    marginTop: 6,
-                                    padding: "9px 11px 8px",
-                                    borderTop: "1px solid " + C.borderLight,
-                                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                                    fontSize: 12, color: C.textSec,
-                                  }}>
-                                    <span>Share client context</span>
-                                    <button
-                                      onClick={() => setNewTaskShareCtx(!newTaskShareCtx)}
-                                      style={{
-                                        width: 30, height: 16,
-                                        background: newTaskShareCtx ? C.btn : C.borderLight,
-                                        borderRadius: 999,
-                                        border: "none",
-                                        position: "relative",
-                                        cursor: "pointer",
-                                        padding: 0,
-                                      }}
-                                      aria-label="Toggle share client context"
-                                    >
-                                      <span style={{
-                                        position: "absolute",
-                                        top: 2,
-                                        [newTaskShareCtx ? "right" : "left"]: 2,
-                                        width: 12, height: 12,
-                                        background: "#fff",
-                                        borderRadius: 6,
-                                      }} />
-                                    </button>
-                                  </div>
-                                )}
                               </div>
                             </>
                           )}
@@ -4878,7 +4840,7 @@ export default function App({ user }) {
                                   return <span className="rt-task-title" style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{t.text}</span>;
                                 })()}
                               </div>
-                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.ink500, marginTop: 2, minWidth: 0 }}>
+                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
                                 {client
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
