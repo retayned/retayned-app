@@ -79,28 +79,29 @@ const THEME_CSS = `
     --rt-shadow-md: 0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05);
   }
   :root[data-theme="dark"] {
-    --rt-bg: #1A1612;
-    --rt-card: #221C16;
-    --rt-surface: #2A231C;
-    --rt-surface-warm: #2A231C;
-    --rt-deep-cream: #3A2F22;
-    --rt-sidebar: #1A1612;
-    --rt-text: #E8E2D5;
-    --rt-text-sec: #C4BAA5;
-    --rt-text-muted: #8A8276;
-    --rt-ink-900: #E8E2D5;
-    --rt-ink-700: #C4BAA5;
-    --rt-ink-500: #8A8276;
-    --rt-ink-400: #6F675A;
+    /* Editorial Black — cream and gold on near-black. The journal at midnight. */
+    --rt-bg: #0D0D0B;
+    --rt-card: #18170E;
+    --rt-surface: #1F1E15;
+    --rt-surface-warm: #1F1E15;
+    --rt-deep-cream: #2A2820;
+    --rt-sidebar: #0D0D0B;
+    --rt-text: #EDE6D6;
+    --rt-text-sec: #B5A788;
+    --rt-text-muted: #807766;
+    --rt-ink-900: #EDE6D6;
+    --rt-ink-700: #B5A788;
+    --rt-ink-500: #807766;
+    --rt-ink-400: #6B6452;
     --rt-ink-300: #4A4338;
-    --rt-border: #3A3027;
-    --rt-border-light: #2A231C;
-    --rt-border-soft: #2A231C;
-    --rt-surface-selected: #2C2620;
+    --rt-border: rgba(237, 230, 214, 0.10);
+    --rt-border-light: rgba(237, 230, 214, 0.06);
+    --rt-border-soft: rgba(237, 230, 214, 0.06);
+    --rt-surface-selected: #2C2820;
     --rt-btn-light: rgba(91,33,182,0.22);
-    --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.40), 0 4px 16px rgba(0,0,0,0.30);
-    --rt-shadow-sm: 0 1px 2px rgba(0,0,0,0.30), 0 1px 3px rgba(0,0,0,0.20);
-    --rt-shadow-md: 0 2px 4px rgba(0,0,0,0.40), 0 4px 12px rgba(0,0,0,0.35);
+    --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.50), 0 4px 16px rgba(0,0,0,0.40);
+    --rt-shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 1px 3px rgba(0,0,0,0.30);
+    --rt-shadow-md: 0 2px 4px rgba(0,0,0,0.50), 0 4px 12px rgba(0,0,0,0.45);
   }
   html, body { background: var(--rt-bg); }
 `;
@@ -1290,22 +1291,32 @@ export default function App({ user }) {
   // Today — task manager
   const [tasks, setTasks] = useState([]);
 
-  // Auto-exit focus mode when no eligible focus task exists (today bucket empty
-  // or all today tasks completed). Without this, focus mode dims every row and
-  // the page looks broken because there's nothing to focus on. Re-evaluates
-  // whenever tasks change (completion, deletion, swipe).
+  // 30s priority hold tick: when a new task is added in Rai mode, it floats
+  // to top for 30 seconds (see raiCompare). Once that window expires we need
+  // a re-render so it sorts naturally. This effect schedules a tick at the
+  // exact expiry moment of the most recent task.
+  const [, forceRerender] = useState(0);
+  useEffect(() => {
+    const now = Date.now();
+    const HOLD_MS = 30000;
+    const heldTasks = tasks.filter(t => t.created_at && (now - t.created_at) < HOLD_MS);
+    if (heldTasks.length === 0) return;
+    // Find the soonest expiry
+    const soonestExpiry = Math.min(...heldTasks.map(t => t.created_at + HOLD_MS));
+    const delay = Math.max(50, soonestExpiry - now);
+    const timer = setTimeout(() => forceRerender(n => n + 1), delay);
+    return () => clearTimeout(timer);
+  }, [tasks]);
+
+  // Auto-exit focus mode when there are zero incomplete tasks ANYWHERE in the
+  // list (today + tomorrow + later all complete or empty). Without this, focus
+  // mode dims every row and the page looks broken. Only fires when tasks are
+  // actually loaded (length > 0) to avoid running during initial fetch.
   useEffect(() => {
     if (!focusMode) return;
-    const today = new Date();
-    if (today.getHours() < 2) today.setDate(today.getDate() - 1);
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const hasFocusable = tasks.some(t => {
-      if (t.done) return false;
-      if (t.recurring) return true;
-      if (!t.due_date) return true;
-      return String(t.due_date).slice(0, 10) <= todayStr;
-    });
-    if (!hasFocusable) {
+    if (tasks.length === 0) return; // still loading, don't trigger
+    const hasIncomplete = tasks.some(t => !t.done);
+    if (!hasIncomplete) {
       setFocusMode(false);
     }
   }, [focusMode, tasks]);
@@ -1313,6 +1324,16 @@ export default function App({ user }) {
   // Tracks tasks just completed within the last ~700ms so the pulse animation only fires
   // on the actual click, not on every re-render where t.done is true.
   const [justCompletedIds, setJustCompletedIds] = useState({});
+  // Tasks that have been completed and are now hidden from the active bucket
+  // list (they live in the "Completed today" expandable group below all
+  // buckets). 5 seconds after a task is checked off, it gets added to this set.
+  // Keyed by task id → true.
+  const [collapsedDoneIds, setCollapsedDoneIds] = useState({});
+  // Brief intermediate state between "completed" and "collapsed" — the task is
+  // playing its exit animation (max-height shrink + fade). Lives ~360ms.
+  const [exitingDoneIds, setExitingDoneIds] = useState({});
+  // Whether the "Completed today" log is expanded. Defaults to collapsed.
+  const [completedLogOpen, setCompletedLogOpen] = useState(false);
   const [newTask, setNewTask] = useState("");
   const [newTaskClient, setNewTaskClient] = useState("");
   const [newTaskRecurring, setNewTaskRecurring] = useState(false);
@@ -1938,6 +1959,43 @@ export default function App({ user }) {
           return next;
         });
       }, 720);
+      // 3.5 seconds after completion, animate the task out of the active bucket
+      // and into the "Completed today" log below. The smooth exit is two-phase:
+      //   phase 1: add an "exiting" class that triggers max-height shrink + fade
+      //   phase 2: 360ms later, mark the task as collapsed (which removes it from
+      //            the bucket entirely and surfaces it in the completed log).
+      // If the user un-checks the task before the timer fires, both phases cancel.
+      setTimeout(() => {
+        setTasks(prev => {
+          const stillDone = prev.find(t => t.id === id)?.done;
+          if (!stillDone) return prev;
+          // Phase 1: trigger exit animation
+          setExitingDoneIds(prevSet => ({ ...prevSet, [id]: true }));
+          return prev;
+        });
+        // Phase 2: after the animation completes, remove from bucket
+        setTimeout(() => {
+          setTasks(prev => {
+            const stillDone = prev.find(t => t.id === id)?.done;
+            if (!stillDone) return prev;
+            setCollapsedDoneIds(prevSet => ({ ...prevSet, [id]: true }));
+            setExitingDoneIds(prevSet => {
+              const next = { ...prevSet };
+              delete next[id];
+              return next;
+            });
+            return prev;
+          });
+        }, 360);
+      }, 3500);
+    } else {
+      // Un-completing: if it was collapsed, bring it back out of the log
+      setCollapsedDoneIds(prev => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
     const countable = updated;
     // Fireworks fire only when ALL of TODAY's tasks are complete.
@@ -2543,6 +2601,9 @@ export default function App({ user }) {
         .rt-row .rt-task-title {
           position: relative;
           display: inline-block;
+          font-size: 14px;
+          font-weight: 500;
+          line-height: 1.3;
           transition: color 320ms ease;
         }
         .rt-row .rt-task-title::after {
@@ -2554,6 +2615,29 @@ export default function App({ user }) {
         .rt-row.is-done .rt-task-title::after { width: 100%; }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
+
+        /* Elegant exit: when a completed task transitions to the "completed today"
+           log, it shrinks vertically (max-height collapse), fades to invisible,
+           and the gap below it disappears as the bucket below slides up. The
+           negative margin pulls the next sibling up by exactly the gap (8px) so
+           there's no remaining empty slot mid-animation. */
+        .rt-row-wrap {
+          max-height: 200px;
+          opacity: 1;
+          transition:
+            max-height 360ms cubic-bezier(.4, 0, .2, 1),
+            opacity 280ms ease,
+            margin 360ms cubic-bezier(.4, 0, .2, 1),
+            transform 360ms cubic-bezier(.4, 0, .2, 1);
+        }
+        .rt-row-wrap.is-exiting {
+          max-height: 0 !important;
+          opacity: 0;
+          margin-bottom: -8px;
+          transform: translateY(-4px);
+          pointer-events: none;
+          overflow: hidden !important;
+        }
         /* On mobile, the push and dismiss buttons are hidden — swipe gestures
            replace them entirely. Right swipe pushes to next bucket, left swipe
            deletes. Backgrounds reveal during swipe so the action is intuitive. */
@@ -2712,7 +2796,7 @@ export default function App({ user }) {
           .rt-band-right .rt-pct-num { font-size: 24px !important; }
           .rt-band-right .rt-pct-num span { font-size: 13px !important; }
           .rt-band-right .rt-pct-lbl { display: block !important; font-size: 9px !important; }
-          .rt-band-right .rt-pct-bar { width: 110px; height: 4px !important; margin-top: 6px !important; }
+          .rt-band-right .rt-pct-bar { width: 100% !important; height: 4px !important; margin-top: 6px !important; }
           .rt-band-sub-pct { display: none !important; }
           .rt-band-sub-bar { display: none !important; }
           .rt-band-sub { width: 100% !important; }
@@ -2893,7 +2977,7 @@ export default function App({ user }) {
       <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 2px 6px rgba(10,10,10,0.04)" }}>
         {/* Logo — fixed at top */}
         <div style={{ padding: "20px 18px 18px", flexShrink: 0 }}>
-          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? C.text : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
 
         {/* Nav items — fixed, always visible */}
@@ -3058,7 +3142,7 @@ export default function App({ user }) {
       {/* MOBILE TOP */}
       <div className="r-mob-top" style={{ justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: C.card, borderBottom: "1px solid " + C.borderLight }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? C.text : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
         <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{(() => { const n = user?.user_metadata?.full_name; if (n) return n.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase(); return (user?.email || "U")[0].toUpperCase(); })()}</div>
       </div>
@@ -3127,6 +3211,18 @@ export default function App({ user }) {
             return Number(activeBadgePick.pick_boost) || 0;
           };
           const raiCompare = (a, b) => {
+            // 30-second priority hold: tasks created in the last 30 seconds
+            // float to the top regardless of priority score, so when the user
+            // adds a task they can act on it immediately without scrolling. Once
+            // the hold expires, the task settles into its real priority position
+            // on the next render. The hold only applies in Rai mode (Manual mode
+            // already pins new tasks to the top via manualTaskOrder).
+            const now = Date.now();
+            const HOLD_MS = 30000;
+            const aHeld = a.created_at && (now - a.created_at) < HOLD_MS;
+            const bHeld = b.created_at && (now - b.created_at) < HOLD_MS;
+            if (aHeld !== bHeld) return aHeld ? -1 : 1;
+            if (aHeld && bHeld) return (b.created_at || 0) - (a.created_at || 0);
             const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForTask(a.id));
             const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForTask(b.id));
             if (psA !== psB) return psB - psA;
@@ -4253,15 +4349,18 @@ export default function App({ user }) {
                       const assigned = arr.filter(t => !!t.assigned_worker_id);
                       return [...unassigned, ...assigned];
                     };
-                    const _todayBucket = partitionByAssignment(renderTasks.filter(t => bucketOf(t) === "today"));
+                    const _todayBucket = partitionByAssignment(renderTasks.filter(t => bucketOf(t) === "today" && !collapsedDoneIds[t.id]));
                     const _tomorrowBucket = partitionByAssignment(
-                      renderTasks.filter(t => bucketOf(t) === "tomorrow")
+                      renderTasks.filter(t => bucketOf(t) === "tomorrow" && !collapsedDoneIds[t.id])
                         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
                     );
                     const _laterBucket = partitionByAssignment(
-                      renderTasks.filter(t => bucketOf(t) === "later")
+                      renderTasks.filter(t => bucketOf(t) === "later" && !collapsedDoneIds[t.id])
                         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
                     );
+                    // Tasks that were completed and have collapsed out of the active list.
+                    // They appear in the "Completed today" group below all buckets.
+                    const _collapsedDoneTasks = renderTasks.filter(t => collapsedDoneIds[t.id]);
 
                     // Inline row renderer — captures bucketKey so the push button knows direction.
                     const renderRow = (t, bucketKey) => {
@@ -4271,10 +4370,17 @@ export default function App({ user }) {
                         const isManual = rankMode === "manual";
                         const isDragging = draggingTaskId === t.id;
                         const isDragOver = dragOverTaskId === t.id && draggingTaskId !== t.id;
-                        // Focus target: first NON-done task in the TODAY bucket only.
-                        // Previously this looked at all of renderTasks which included Tomorrow/Later
-                        // and would mis-anchor if a future task happened to sort first.
-                        const focusTopId = renderTasks.find(rt => !rt.done && bucketOf(rt) === "today")?.id;
+                        // Focus target: first incomplete task in priority order, falling
+                        // through buckets. Today first, then Tomorrow, then Later. This way
+                        // focus mode always has something to lock onto if any incomplete
+                        // task exists anywhere — even if today's bucket is empty (all done).
+                        const focusTopId = (() => {
+                          for (const bucket of ["today", "tomorrow", "later"]) {
+                            const t = renderTasks.find(rt => !rt.done && bucketOf(rt) === bucket);
+                            if (t) return t.id;
+                          }
+                          return null;
+                        })();
                         const isFocusTop = focusMode && t.id === focusTopId;
                         const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "");
   
@@ -4316,9 +4422,12 @@ export default function App({ user }) {
                           const startX = swipeStartX[t.id];
                           if (startX == null) return;
                           const deltaX = e.touches[0].clientX - startX;
-                          // Bidirectional swipe: left (negative) = delete, right (positive) = push to next bucket.
-                          // Clamp to [-SWIPE_MAX, +SWIPE_MAX].
-                          const clamped = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, deltaX));
+                          // Recurring tasks can be deleted (left swipe) but not pushed
+                          // to another bucket (right swipe blocked — they have no due_date
+                          // and the bucket concept doesn't apply).
+                          const minDelta = t.recurring ? -SWIPE_MAX : -SWIPE_MAX;
+                          const maxDelta = t.recurring ? 0 : SWIPE_MAX;
+                          const clamped = Math.max(minDelta, Math.min(maxDelta, deltaX));
                           setSwipeOffset(prev => ({ ...prev, [t.id]: clamped }));
                         };
                         const handleTouchEnd = () => {
@@ -4332,8 +4441,9 @@ export default function App({ user }) {
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                             }, 180);
-                          } else if (off >= SWIPE_THRESHOLD) {
-                            // Right swipe past threshold → PUSH to next bucket.
+                          } else if (off >= SWIPE_THRESHOLD && !t.recurring) {
+                            // Right swipe past threshold → PUSH to next bucket. Recurring tasks
+                            // skip this branch — they don't move between buckets.
                             setSwipeOffset(prev => ({ ...prev, [t.id]: SWIPE_MAX }));
                             setTimeout(() => {
                               if (bucketKey === "today") pushToTomorrow(t.id);
@@ -4354,11 +4464,15 @@ export default function App({ user }) {
                           : bucketKey === "tomorrow" ? "Later"
                           : "Today";
 
-                        // Don't enable swipe on done tasks or recurring (no due_date)
-                        const swipeable = !isDone && !t.recurring;
+                        // Swipeable = any task that's not done. Recurring is allowed
+                        // (left-swipe delete works); right-swipe push is gated separately
+                        // in handleTouchEnd.
+                        const swipeable = !isDone;
+
+                        const isExiting = !!exitingDoneIds[t.id];
 
                         return (
-                          <div key={t.id} className={isFocusTop && focusMode ? "rt-row-wrap rt-focus-top-wrap" : "rt-row-wrap"} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
+                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
                             {/* Swipe action background. Two directions:
                                 - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
                                 - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
@@ -4398,9 +4512,6 @@ export default function App({ user }) {
                                 fontWeight: 600,
                                 pointerEvents: "none",
                               }}>
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ transform: "scaleX(-1)" }}>
-                                  <path d="M3 8h9M9 5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
                                 <span>{swipeActionLabel}</span>
                               </div>
                             )}
@@ -4429,7 +4540,7 @@ export default function App({ user }) {
                             onTouchCancel={swipeable ? handleTouchEnd : undefined}
                             style={{
                               display: "flex", alignItems: "center", gap: 12,
-                              padding: "12px 14px",
+                              padding: "9px 14px",
                               background: C.card,
                               border: isDragOver ? "1px solid " + C.btn : "1px solid " + C.borderSoft,
                               borderRadius: 12,
@@ -4499,7 +4610,7 @@ export default function App({ user }) {
                                   Rai's pick
                                 </div>
                               )}
-                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.3, paddingBottom: 4, overflow: "hidden" }}>
+                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden" }}>
                                 {(() => {
                                   // Title is interactive when the text contains a thinking
                                   // verb AND has a client tag AND task isn't done. Click
@@ -4528,7 +4639,7 @@ export default function App({ user }) {
                                   return <span className="rt-task-title" style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{t.text}</span>;
                                 })()}
                               </div>
-                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.ink500, marginTop: 4, minWidth: 0 }}>
+                              <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: C.ink500, marginTop: 2, minWidth: 0 }}>
                                 {client
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
@@ -4763,6 +4874,57 @@ export default function App({ user }) {
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
                         </>)}
+
+                        {/* COMPLETED TODAY log — sits at the bottom, below all
+                            active buckets. Active work gets prime real estate;
+                            completed work is reference, not action. Collapsed
+                            by default; the line doubles as the toggle button. */}
+                        {_collapsedDoneTasks.length > 0 && (
+                          <div style={{ marginTop: 24 }}>
+                            <button
+                              onClick={() => setCompletedLogOpen(!completedLogOpen)}
+                              style={{
+                                width: "100%",
+                                display: "flex", alignItems: "center", justifyContent: "space-between",
+                                padding: "12px 14px",
+                                background: "transparent",
+                                border: "1px dashed " + C.border,
+                                borderRadius: 10,
+                                color: C.textSec,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                transition: "background 120ms ease",
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >
+                              <span>
+                                <span style={{ color: C.textMuted, marginRight: 4 }}>{_collapsedDoneTasks.length}</span>
+                                completed today
+                              </span>
+                              <svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                style={{ transform: completedLogOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 200ms ease" }}
+                              >
+                                <path d="M9 6l6 6-6 6" />
+                              </svg>
+                            </button>
+                            <div
+                              style={{
+                                maxHeight: completedLogOpen ? 2000 : 0,
+                                overflow: "hidden",
+                                transition: "max-height 320ms ease",
+                                marginTop: completedLogOpen ? 8 : 0,
+                              }}
+                            >
+                              <div style={{ display: "flex", flexDirection: "column", gap: 6, opacity: 0.7 }}>
+                                {_collapsedDoneTasks.map(t => renderRow(t, "today"))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </>
                     );
                   })()}
@@ -8689,6 +8851,31 @@ export default function App({ user }) {
         {page === "settings" && (
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
+
+            {/* Appearance — theme toggle. Lives here because mobile has no
+                sidebar where the desktop toggle button lives, so this is
+                the only theme control reachable on phones. */}
+            <div className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Appearance</div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>{theme === "dark" ? "Dark mode" : "Light mode"}</div>
+              </div>
+              <button
+                onClick={toggleTheme}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "6px 12px",
+                  background: C.btnLight, color: C.btn,
+                  border: "none", borderRadius: 7,
+                  fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <Icon name={theme === "dark" ? "sun" : "moon"} size={12} color={C.btn} />
+                {theme === "dark" ? "Switch to light" : "Switch to dark"}
+              </button>
+            </div>
+
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
               <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
