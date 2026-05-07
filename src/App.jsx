@@ -6166,7 +6166,12 @@ export default function App({ user }) {
                       <input value={newClient.role} onChange={e => setNewClient({...newClient, role: e.target.value})} placeholder="Their role" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
                       <input value={newClient.tag} onChange={e => setNewClient({...newClient, tag: e.target.value})} placeholder="Industry (e.g. Fitness, Real Estate)" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
                       <input value={newClient.months} onChange={e => setNewClient({...newClient, months: e.target.value})} placeholder="Months working together" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
-                      <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Current monthly rate ($)" type="number" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+                      <div>
+                        <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Current monthly rate ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+                          Your best estimate of monthly revenue. Changing this will not affect prior months.
+                        </div>
+                      </div>
                       <div>
                         <input value={newClient.lifetime_revenue_at_entry} onChange={e => setNewClient({...newClient, lifetime_revenue_at_entry: e.target.value})} placeholder="Lifetime revenue earned before today ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
@@ -6270,9 +6275,9 @@ export default function App({ user }) {
                         {sortOptions.map(s => (
                           <button key={s.id} onClick={() => setClientsSort(s.id)} className={s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : ""} style={{
                             padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                            background: sortId === s.id ? C.deepCream : "transparent",
-                            color: sortId === s.id ? C.text : C.textMuted,
-                            border: "1px solid " + (sortId === s.id ? C.deepCream : C.borderLight),
+                            background: "transparent",
+                            color: sortId === s.id ? "#274230" : C.textMuted,
+                            border: "1px solid " + (sortId === s.id ? "#93AC9D" : C.borderLight),
                           }}>{s.label}</button>
                         ))}
                       </div>
@@ -9798,7 +9803,7 @@ export default function App({ user }) {
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Current monthly rate ($)</label>
                             <input type="number" value={overviewEditData.revenue || 0} onChange={e => setOverviewEditData({ ...overviewEditData, revenue: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
                             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
-                              Changing this records a rate-change in history. Past months stay valued at their old rate.
+                              Your best estimate of monthly revenue. Changing this will not affect prior months.
                             </div>
                           </div>
                           {!showBaselineEdit ? (
@@ -10032,7 +10037,24 @@ export default function App({ user }) {
 
                   const toggleRecurring = (itemId) => {
                     const prev = clientBilling[sc.id] || { items: [] };
-                    setClientBilling({ ...clientBilling, [sc.id]: { ...prev, items: prev.items.map(i => i.id === itemId ? { ...i, recurring: !i.recurring } : i) } });
+                    const item = prev.items.find(i => i.id === itemId);
+                    if (!item) return;
+                    const turningOn = !item.recurring;
+                    let newItems = prev.items.map(i => i.id === itemId ? { ...i, recurring: !i.recurring } : i);
+                    // When toggling ON post-creation, mirror the at-create behavior:
+                    // duplicate this line item into the OTHER active month so it shows
+                    // up there too. Skipped if a same-description row already exists
+                    // in the other month (avoid duplicates if the user manually added it).
+                    // Toggling OFF leaves both rows alone — predictable, user can delete
+                    // manually if they want.
+                    if (turningOn) {
+                      const otherMonth = item.month === currentMonth ? nextMonth : currentMonth;
+                      const alreadyExists = prev.items.some(i => i.description === item.description && i.month === otherMonth);
+                      if (!alreadyExists) {
+                        newItems = [...newItems, { ...item, id: Date.now(), month: otherMonth, recurring: true }];
+                      }
+                    }
+                    setClientBilling({ ...clientBilling, [sc.id]: { ...prev, items: newItems } });
                   };
 
                   const renderMonth = (month, isNext) => {
