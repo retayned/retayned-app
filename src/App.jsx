@@ -944,6 +944,12 @@ export default function App({ user }) {
   // Resets when client modal opens (handled by the selectedClient reset effect).
   const [showBaselineEdit, setShowBaselineEdit] = useState(false);
 
+  // Sidebar tasks-completed widget state. Counts hydrate on app load via
+  // tasksDb.getCompletedCounts. Period toggles between week/month/year and
+  // is local state — resets to 'week' on each session.
+  const [taskCompletedCounts, setTaskCompletedCounts] = useState({ week: 0, month: 0, year: 0 });
+  const [taskCompletedPeriod, setTaskCompletedPeriod] = useState("week");
+
   // Reset modal edit state when the selected client changes (or closes).
   // Without this, opening client B after editing client A leaves B's modal
   // showing A's stale edit form data — the inputs don't refresh because
@@ -1559,6 +1565,15 @@ export default function App({ user }) {
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
 
+    // Sidebar tasks-completed widget — fire-and-forget, doesn't block render.
+    // Up to ~1k completion rows over 12 months for active users; query is fast
+    // but no need to gate the page on it. If it fails, widget shows zeros.
+    if (typeof tasksDb.getCompletedCounts === "function") {
+      tasksDb.getCompletedCounts(uid)
+        .then(r => { if (r?.data) setTaskCompletedCounts(r.data); })
+        .catch(e => console.warn("task completion counts failed:", e));
+    }
+
     // Build per-client revenue history map: client_id → [history rows]
     const revHistoryByClient = {};
     for (const row of (revHistoryRes?.data || [])) {
@@ -2131,6 +2146,23 @@ export default function App({ user }) {
     // Optimistic update
     const updated = tasks.map(t => t.id === id ? { ...t, done: newDone, completed_at: newDone ? nowIso : null } : t);
     setTasks(updated);
+    // Bump sidebar tasks-completed counts optimistically. Going-done adds 1
+    // across all three windows (it's by definition within "this week"). Going-
+    // undone subtracts 1, but only if completed_at was within each window
+    // (which it almost always is for a recent toggle — but we check anyway
+    // since users can re-open old tasks). Server is source of truth on next
+    // hydration.
+    if (newDone) {
+      setTaskCompletedCounts(c => ({ week: c.week + 1, month: c.month + 1, year: c.year + 1 }));
+    } else if (task.completed_at) {
+      const completed = new Date(task.completed_at);
+      const now = Date.now();
+      setTaskCompletedCounts(c => ({
+        week: Math.max(0, c.week - (now - completed.getTime() < 7 * 86400000 ? 1 : 0)),
+        month: Math.max(0, c.month - (now - completed.getTime() < 30 * 86400000 ? 1 : 0)),
+        year: Math.max(0, c.year - (now - completed.getTime() < 365 * 86400000 ? 1 : 0)),
+      }));
+    }
     // ASMR completion pulse — only fire when transitioning to done, clear after 720ms
     if (newDone) {
       setJustCompletedIds(prev => ({ ...prev, [id]: true }));
@@ -3233,7 +3265,10 @@ export default function App({ user }) {
           /* Non-coach pages: empty spacer pushes Portfolio widget to bottom */
           <div style={{ flex: 1, minHeight: 0 }} />
         )}
-        {/* Portfolio widget — G: bar + counts only, scale demoted to eyebrow */}
+        {/* Combined sidebar widget — tasks completed (top) + portfolio (bottom),
+            single surface, hairline divider. Tasks section uses a Week/Month/Year
+            toggle whose period state lives at app level so it persists across
+            sidebar re-renders. Portfolio bar/counts unchanged. */}
         {(() => {
           const total = clients.length;
           if (total === 0) return null;
@@ -3253,8 +3288,37 @@ export default function App({ user }) {
             { n: buckets.atRisk,   label: "At risk",  color: C.retWarn  },
             { n: buckets.critical, label: "Critical", color: C.retCrit  },
           ].filter(s => s.n > 0);
+          const periodCount = taskCompletedCounts[taskCompletedPeriod] || 0;
           return (
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)" }}>
+              {/* TASKS COMPLETED section */}
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
+                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
+                <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
+                  {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
+                    const active = taskCompletedPeriod === p.id;
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => setTaskCompletedPeriod(p.id)}
+                        style={{
+                          padding: "5px 0",
+                          fontSize: 10.5,
+                          fontWeight: active ? 600 : 500,
+                          color: active ? C.text : C.textMuted,
+                          cursor: "pointer",
+                          borderBottom: active ? "1px solid " + C.primaryDeep : "1px solid transparent",
+                        }}
+                      >
+                        {p.label}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums", marginBottom: 6 }}>{periodCount.toLocaleString()}</div>
+                <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
+              </div>
+              {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
                 <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 400, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
