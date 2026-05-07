@@ -752,6 +752,171 @@ export const raiPicks = {
 
 
 // ============================================================
+// REVENUE HISTORY
+// ============================================================
+//
+// Tracks every monthly_rate period for every client. Used to compute honest
+// LTV when rates change mid-contract. Invariant: exactly one row per client
+// with ended_at IS NULL — that's the active rate.
+//
+// LTV math (computed on the fly, not stored):
+//   total_ltv = client.lifetime_revenue_at_entry + sum(monthly_rate * months_in_period)
+//
+// `months_in_period` uses 30.44 days/month — true calendar average. The math is a
+// few cents off compared to integer-month calculations, in the user's favor for
+// accuracy.
+//
+// Public API:
+//   getHistory(userId, clientId)         → [{ monthly_rate, started_at, ended_at, ... }]
+//   getCurrentRate(userId, clientId)     → { monthly_rate, started_at, ... } | null
+//   changeRate(userId, clientId, newRate) → closes the active row, opens a new one
+//   computeLTV(userId, clientId)         → number (total honest LTV including pre-entry baseline)
+//
+// changeRate is the only mutation that should be used from the frontend. It runs
+// the close-old-row + open-new-row pair atomically (well, sequentially with error
+// handling — Supabase doesn't expose multi-statement transactions to the client).
+
+export const revenueHistoryDb = {
+  // Get all history rows for a client, newest first.
+  getHistory: async (userId, clientId) => {
+    const { data, error } = await supabase
+      .from('client_revenue_history')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .order('started_at', { ascending: false });
+    return { data: data || [], error };
+  },
+
+  // Get the active rate row (the one with ended_at IS NULL).
+  getCurrentRate: async (userId, clientId) => {
+    const { data, error } = await supabase
+      .from('client_revenue_history')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .is('ended_at', null)
+      .maybeSingle();
+    return { data, error };
+  },
+
+  // Change the rate. Closes the current active row (sets ended_at = now())
+  // and opens a new row at the new rate (started_at = now(), ended_at = null).
+  // Also updates clients.revenue to the new rate (denormalized for fast reads).
+  //
+  // If newRate equals the current active rate, this is a no-op and returns
+  // the existing row untouched — avoids creating noise history rows when the
+  // user opens an edit form, doesn't change the rate, and saves.
+  changeRate: async (userId, clientId, newRate) => {
+    const numericRate = Number(newRate) || 0;
+    if (numericRate < 0) return { data: null, error: new Error('Rate must be non-negative') };
+
+    // Find the active row
+    const { data: active, error: fetchErr } = await supabase
+      .from('client_revenue_history')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .is('ended_at', null)
+      .maybeSingle();
+    if (fetchErr) return { data: null, error: fetchErr };
+
+    // Idempotency: same rate? no-op.
+    if (active && Number(active.monthly_rate) === numericRate) {
+      return { data: active, error: null };
+    }
+
+    const now = new Date().toISOString();
+
+    // Close the existing active row, if any
+    if (active) {
+      const { error: closeErr } = await supabase
+        .from('client_revenue_history')
+        .update({ ended_at: now })
+        .eq('id', active.id);
+      if (closeErr) return { data: null, error: closeErr };
+    }
+
+    // Open new active row
+    const { data: newRow, error: insertErr } = await supabase
+      .from('client_revenue_history')
+      .insert({
+        user_id: userId,
+        client_id: clientId,
+        monthly_rate: numericRate,
+        started_at: now,
+        ended_at: null,
+      })
+      .select()
+      .single();
+    if (insertErr) return { data: null, error: insertErr };
+
+    // Update clients.revenue (denormalized cache of the active rate)
+    const { error: clientErr } = await supabase
+      .from('clients')
+      .update({ revenue: numericRate, updated_at: now })
+      .eq('id', clientId);
+    if (clientErr) return { data: newRow, error: clientErr };
+
+    return { data: newRow, error: null };
+  },
+
+  // Compute total LTV for a client.
+  // Returns: pre_entry_baseline + sum(monthly_rate * months_in_period across history)
+  //
+  // months_in_period uses 30.44 days/month (true calendar average).
+  computeLTV: async (userId, clientId) => {
+    // Need both the client's pre-entry baseline AND the history rows
+    const [clientRes, historyRes] = await Promise.all([
+      supabase
+        .from('clients')
+        .select('lifetime_revenue_at_entry')
+        .eq('user_id', userId)
+        .eq('id', clientId)
+        .maybeSingle(),
+      supabase
+        .from('client_revenue_history')
+        .select('monthly_rate, started_at, ended_at')
+        .eq('user_id', userId)
+        .eq('client_id', clientId),
+    ]);
+    if (clientRes.error) return { data: null, error: clientRes.error };
+    if (historyRes.error) return { data: null, error: historyRes.error };
+
+    const preEntry = Number(clientRes.data?.lifetime_revenue_at_entry || 0);
+    const history = historyRes.data || [];
+
+    const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const historyTotal = history.reduce((sum, row) => {
+      const startMs = new Date(row.started_at).getTime();
+      const endMs = row.ended_at ? new Date(row.ended_at).getTime() : now;
+      const months = Math.max(0, (endMs - startMs) / MS_PER_MONTH);
+      return sum + (Number(row.monthly_rate) * months);
+    }, 0);
+
+    return { data: preEntry + historyTotal, error: null };
+  },
+
+  // Update just the pre-entry baseline (lifetime_revenue_at_entry on clients).
+  // Used by the client profile edit form for "money the user earned from this
+  // client BEFORE Retayned existed."
+  setPreEntryBaseline: async (userId, clientId, amount) => {
+    const numeric = Number(amount) || 0;
+    if (numeric < 0) return { data: null, error: new Error('Amount must be non-negative') };
+    const { data, error } = await supabase
+      .from('clients')
+      .update({ lifetime_revenue_at_entry: numeric, updated_at: new Date().toISOString() })
+      .eq('id', clientId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
+
+// ============================================================
 // REALTIME SUBSCRIPTIONS
 // ============================================================
 
