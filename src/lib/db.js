@@ -282,16 +282,22 @@ export const tasks = {
     return { data, error };
   },
 
-  // Get count of completed tasks for week/month/year windows.
+  // Get count of completed tasks for week/month/year windows + history buckets.
   // Used for the sidebar tasks-completed widget. Single query returns just
-  // completed_at timestamps; we bucket on the client. Cheaper than 3 separate
+  // completed_at timestamps; we bucket on the client. Cheaper than separate
   // count queries since most users have <1k completed tasks/year.
   //
   // Counts include both regular tasks and recurring tasks (each completion
   // is a separate row in completion history once the recurring task has been
   // reset and re-completed). Excludes still-incomplete tasks.
   //
-  // Returns: { week, month, year } counts.
+  // Returns:
+  //   week, month, year — current period counts (rolling 7/30/365 days from now)
+  //   weekHistory[12]   — counts per rolling 7-day bucket, oldest → newest
+  //                       (index 11 = current week, index 10 = last week, etc.)
+  //   monthHistory[12]  — counts per rolling 30-day bucket, oldest → newest
+  //                       (index 11 = current month, index 10 = last month, etc.)
+  //   dayStreak         — consecutive days ending today with at least 1 completion
   getCompletedCounts: async (userId) => {
     const oneYearAgo = new Date();
     oneYearAgo.setDate(oneYearAgo.getDate() - 365);
@@ -301,20 +307,74 @@ export const tasks = {
       .eq('user_id', userId)
       .not('completed_at', 'is', null)
       .gte('completed_at', oneYearAgo.toISOString());
-    if (error) return { data: { week: 0, month: 0, year: 0 }, error };
+    if (error) return {
+      data: { week: 0, month: 0, year: 0, weekHistory: Array(12).fill(0), monthHistory: Array(12).fill(0), dayStreak: 0 },
+      error,
+    };
 
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const nowMs = now.getTime();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const sevenDaysAgo  = new Date(nowMs - 7  * DAY_MS);
+    const thirtyDaysAgo = new Date(nowMs - 30 * DAY_MS);
 
+    // Roll-up counts for the active toggle
     let week = 0, month = 0, year = 0;
+
+    // 12 rolling weekly buckets — index 0 = oldest (84 days ago → 77 days ago),
+    // index 11 = current (7 days ago → now). Each bucket spans 7 days.
+    const weekHistory = Array(12).fill(0);
+    // 12 rolling monthly buckets — index 0 = oldest (~360 days ago), index 11 = current.
+    // Each bucket spans 30 days. We use 30-day windows (not calendar months) so the
+    // boundaries line up with the rolling "this month" count and the user's mental
+    // model of "last 30 days."
+    const monthHistory = Array(12).fill(0);
+
+    // For the streak: collect set of YYYY-MM-DD strings where at least one task
+    // was completed. Then walk backwards from today.
+    const daysWithCompletions = new Set();
+
     for (const row of (data || [])) {
       const t = new Date(row.completed_at);
+      const tMs = t.getTime();
+
       year++;
       if (t >= thirtyDaysAgo) month++;
-      if (t >= sevenDaysAgo) week++;
+      if (t >= sevenDaysAgo)  week++;
+
+      // Weekly bucket: how many full 7-day windows ago?
+      const daysAgo = (nowMs - tMs) / DAY_MS;
+      const weekIdx = 11 - Math.floor(daysAgo / 7);
+      if (weekIdx >= 0 && weekIdx < 12) weekHistory[weekIdx]++;
+
+      // Monthly bucket: how many full 30-day windows ago?
+      const monthIdx = 11 - Math.floor(daysAgo / 30);
+      if (monthIdx >= 0 && monthIdx < 12) monthHistory[monthIdx]++;
+
+      // Day key for streak
+      daysWithCompletions.add(t.toISOString().slice(0, 10));
     }
-    return { data: { week, month, year }, error: null };
+
+    // Compute day streak — walk back from today as long as each day has ≥1 completion.
+    // If today has no completions yet, start from yesterday (so the streak doesn't
+    // break just because the user hasn't worked yet today).
+    let dayStreak = 0;
+    const todayKey = now.toISOString().slice(0, 10);
+    let cursor = new Date(now);
+    if (!daysWithCompletions.has(todayKey)) {
+      cursor = new Date(nowMs - DAY_MS);
+    }
+    while (true) {
+      const key = cursor.toISOString().slice(0, 10);
+      if (daysWithCompletions.has(key)) {
+        dayStreak++;
+        cursor = new Date(cursor.getTime() - DAY_MS);
+      } else {
+        break;
+      }
+    }
+
+    return { data: { week, month, year, weekHistory, monthHistory, dayStreak }, error: null };
   },
 
   // Assign a task to a worker (or unassign by passing null).
