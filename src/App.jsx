@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -1047,7 +1047,7 @@ export default function App({ user }) {
   const [importPaste, setImportPaste] = useState("");
   const [importPreview, setImportPreview] = useState([]);
   const [importFile, setImportFile] = useState(null);
-  const [newClient, setNewClient] = useState({ name: "", contact: "", role: "", tag: "", revenue: "", months: "", latePayments: false, prevTerminated: false, otherVendors: false, fromReferral: false });
+  const [newClient, setNewClient] = useState({ name: "", contact: "", role: "", tag: "", revenue: "", months: "", lifetime_revenue_at_entry: "", latePayments: false, prevTerminated: false, otherVendors: false, fromReferral: false });
   const [profileStep, setProfileStep] = useState(0);
   const [profileScores, setProfileScores] = useState({});
 
@@ -1269,21 +1269,43 @@ export default function App({ user }) {
   const submitNewClient = async () => {
     const qualFlags = { latePayments: newClient.latePayments, prevTerminated: newClient.prevTerminated, otherVendors: newClient.otherVendors, fromReferral: newClient.fromReferral };
     const baseline = calcRetentionScore(profileScores, null, qualFlags, parseInt(newClient.months) || 0);
-    
+    const monthlyRate = parseInt(newClient.revenue) || 0;
+    const preEntryBaseline = parseFloat(newClient.lifetime_revenue_at_entry) || 0;
+    const tenureMonths = parseInt(newClient.months) || 0;
+
     // Insert into Supabase first
     const { data: created, error } = await clientsDb.create(user.id, {
       name: newClient.name,
       contact: newClient.contact,
       role: newClient.role || "",
       tag: newClient.tag || "",
-      revenue: parseInt(newClient.revenue) || 0,
-      months: parseInt(newClient.months) || 0,
+      revenue: monthlyRate,
+      months: tenureMonths,
+      lifetime_revenue_at_entry: preEntryBaseline,
       retention_score: baseline || 50,
       profile_scores: { ...profileScores },
       qualifying_flags: qualFlags,
     });
-    
+
     if (error) { console.error("Failed to create client:", error); return; }
+
+    // Open initial revenue history row. started_at is now() — going forward,
+    // Retayned tracks the truth. Pre-Retayned earnings live in
+    // lifetime_revenue_at_entry as the user's reported baseline.
+    if (created?.id && monthlyRate > 0) {
+      try {
+        await supabase.from('client_revenue_history').insert({
+          user_id: user.id,
+          client_id: created.id,
+          monthly_rate: monthlyRate,
+          started_at: new Date().toISOString(),
+          ended_at: null,
+        });
+      } catch (e) {
+        console.warn("Failed to seed revenue history for new client:", e);
+        // Non-fatal — client is created. Revenue history can be added later.
+      }
+    }
 
     const client = {
       id: created?.id || Date.now(),
@@ -1291,8 +1313,13 @@ export default function App({ user }) {
       contact: newClient.contact,
       role: newClient.role,
       tag: newClient.tag,
-      revenue: parseInt(newClient.revenue) || 0,
-      months: parseInt(newClient.months) || 0,
+      revenue: monthlyRate,
+      months: tenureMonths,
+      lifetime_revenue_at_entry: preEntryBaseline,
+      // Initial LTV: just the pre-entry baseline. The history row was just
+      // opened so months_in_period ≈ 0 → contributes ~$0 today, grows from
+      // here. Re-hydration on next load picks up the real history-based math.
+      ltv: preEntryBaseline,
       velocity: "normal",
       lastHC: null,
       lastContact: "today",
@@ -1354,7 +1381,7 @@ export default function App({ user }) {
     // ──────────────────────────────────────────────────────────────────────
 
     setShowAddClient(false);
-    setNewClient({ name: "", contact: "", role: "", tag: "", revenue: "", months: "" });
+    setNewClient({ name: "", contact: "", role: "", tag: "", revenue: "", months: "", lifetime_revenue_at_entry: "" });
     setProfileStep(0);
     setProfileScores({});
   };
@@ -6116,7 +6143,13 @@ export default function App({ user }) {
                       <input value={newClient.role} onChange={e => setNewClient({...newClient, role: e.target.value})} placeholder="Their role" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
                       <input value={newClient.tag} onChange={e => setNewClient({...newClient, tag: e.target.value})} placeholder="Industry (e.g. Fitness, Real Estate)" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
                       <input value={newClient.months} onChange={e => setNewClient({...newClient, months: e.target.value})} placeholder="Months working together" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
-                      <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Estimated monthly revenue ($)" type="number" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+                      <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Current monthly rate ($)" type="number" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+                      <div>
+                        <input value={newClient.lifetime_revenue_at_entry} onChange={e => setNewClient({...newClient, lifetime_revenue_at_entry: e.target.value})} placeholder="Lifetime revenue earned before today ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+                          Optional. Total you've earned from this client before adding them to Retayned. Leave blank for new clients.
+                        </div>
+                      </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
                       <button className="r-btn" onClick={() => { if (newClient.name && newClient.contact) setProfileStep(1); }} style={{ flex: 1, padding: "10px", background: newClient.name && newClient.contact ? C.btn : C.surface, color: newClient.name && newClient.contact ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: newClient.name && newClient.contact ? "pointer" : "default", fontFamily: "inherit" }}>Next: Relationship Profile</button>
@@ -9722,7 +9755,7 @@ export default function App({ user }) {
                             </>
                           );
                         })()}
-                        <button onClick={() => { setEditingOverview(true); setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, renewal_date: sc.renewal_date || "" }); }} style={{ width: "100%", padding: "11px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 14, boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)" }}>Edit Details</button>
+                        <button onClick={() => { setEditingOverview(true); setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" }); }} style={{ width: "100%", padding: "11px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 14, boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)" }}>Edit Details</button>
                       </>
                     ) : (
                       <>
@@ -9739,8 +9772,18 @@ export default function App({ user }) {
                             <input type="number" value={overviewEditData.months || 0} onChange={e => setOverviewEditData({ ...overviewEditData, months: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
                           </div>
                           <div>
-                            <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Estimated monthly revenue ($)</label>
+                            <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Current monthly rate ($)</label>
                             <input type="number" value={overviewEditData.revenue || 0} onChange={e => setOverviewEditData({ ...overviewEditData, revenue: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+                              Changing this records a rate-change in history. Past months stay valued at their old rate.
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Lifetime revenue earned before today ($)</label>
+                            <input type="number" value={overviewEditData.lifetime_revenue_at_entry || 0} onChange={e => setOverviewEditData({ ...overviewEditData, lifetime_revenue_at_entry: parseFloat(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+                              What you earned from this client BEFORE Retayned tracked them. Adds to LTV. Set to 0 for clients onboarded fresh.
+                            </div>
                           </div>
                           <div>
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Renewal date <span style={{ color: C.textMuted, fontWeight: 400 }}>· optional</span></label>
@@ -9750,11 +9793,51 @@ export default function App({ user }) {
                         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                           <button onClick={() => setEditingOverview(false)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                           <button onClick={async () => {
-                            const updated = { ...sc, contact: overviewEditData.contact, role: overviewEditData.role, tag: overviewEditData.tag, months: overviewEditData.months, revenue: overviewEditData.revenue, renewal_date: overviewEditData.renewal_date || null };
+                            const newRate = Number(overviewEditData.revenue) || 0;
+                            const newBaseline = Number(overviewEditData.lifetime_revenue_at_entry) || 0;
+                            const rateChanged = newRate !== Number(sc.revenue || 0);
+
+                            // Always save the non-revenue fields via clientsDb.update.
+                            // Revenue specifically goes through revenueHistoryDb.changeRate
+                            // when it changed — that closes the active history row, opens
+                            // a new one, AND updates clients.revenue. Calling clientsDb.update
+                            // first with the new revenue would race with that.
+                            const baseUpdates = {
+                              contact: overviewEditData.contact,
+                              role: overviewEditData.role,
+                              tag: overviewEditData.tag,
+                              months: overviewEditData.months,
+                              renewal_date: overviewEditData.renewal_date || null,
+                              lifetime_revenue_at_entry: newBaseline,
+                            };
+                            // If revenue did NOT change, include it in the update so we
+                            // don't make an extra call.
+                            if (!rateChanged) baseUpdates.revenue = newRate;
+
+                            // Optimistic local update
+                            const updated = {
+                              ...sc,
+                              ...baseUpdates,
+                              revenue: newRate,
+                              // ltv recompute: pre-entry baseline + history. Since rate
+                              // change just happened (or didn't), the current row's
+                              // contribution stays roughly the same. The new pre-entry
+                              // baseline shifts the total directly.
+                              ltv: newBaseline + (Number(sc.ltv || 0) - Number(sc.lifetime_revenue_at_entry || 0)),
+                            };
                             setClients(prev => prev.map(c => c.id === sc.id ? updated : c));
                             setSelectedClient(updated);
                             setEditingOverview(false);
-                            clientsDb.update(sc.id, { contact: overviewEditData.contact, role: overviewEditData.role, tag: overviewEditData.tag, months: overviewEditData.months, revenue: overviewEditData.revenue, renewal_date: overviewEditData.renewal_date || null });
+
+                            // Persist
+                            try {
+                              await clientsDb.update(sc.id, baseUpdates);
+                              if (rateChanged) {
+                                await revenueHistoryDb.changeRate(user.id, sc.id, newRate);
+                              }
+                            } catch (e) {
+                              console.error("Failed to save client edits:", e);
+                            }
                           }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
                         </div>
                       </>
