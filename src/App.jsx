@@ -5278,110 +5278,102 @@ export default function App({ user }) {
 
                       return (
                         <div style={{
-                          background: RAI_BG,
-                          border: `0.5px solid ${RAI_BORDER}`,
-                          borderRadius: 8,
-                          padding: "24px 28px 22px",
+                          borderTop: `0.5px solid ${RAI_BORDER}`,
+                          borderBottom: `0.5px solid ${RAI_BORDER}`,
+                          padding: "24px 4px",
                           margin: "0 0 14px",
                           position: "relative",
                         }}>
-                          {/* Dismiss X — top-right corner. No border, stroke-only.
-                              Marks today's pick read so it hides for the rest of
-                              the day. */}
+                          {/* "Not today" — top-right text link. Soft dismiss.
+                              Marks today's pick read so it hides for the rest
+                              of the day. */}
                           <button
                             onClick={handleDismiss}
-                            aria-label="Dismiss Client of the Day"
-                            title="Dismiss"
                             style={{
                               position: "absolute",
-                              top: 14,
-                              right: 14,
-                              width: 22,
-                              height: 22,
-                              border: "none",
-                              background: "transparent",
-                              padding: 0,
+                              top: 22,
+                              right: 4,
+                              fontSize: 12,
                               color: RAI_ATTRIBUTION,
+                              background: "transparent",
+                              border: "none",
+                              padding: 0,
                               cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
+                              fontFamily: "inherit",
                             }}
                           >
-                            <Icon name="x" size={14} color={RAI_ATTRIBUTION} />
+                            Not today
                           </button>
 
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-                            <Icon name="sparkles" size={14} color={RAI_LABEL} />
+                          {/* Branding: bullet dot + label. No card chrome. */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+                            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: RAI_LABEL }} />
                             <span style={{ fontSize: 11, color: RAI_LABEL, letterSpacing: "0.08em", fontWeight: 500 }}>
-                              CLIENT OF THE DAY · {pickClient.name.toUpperCase()}
+                              CLIENT OF THE DAY
                             </span>
                           </div>
 
+                          {/* Client name — the headline. Bigger than usual. */}
+                          <div style={{ fontSize: 24, fontWeight: 500, margin: "0 0 14px", color: RAI_TEXT_PRIMARY }}>
+                            {pickClient.name}
+                          </div>
+
+                          {/* The read. */}
                           <div style={{
-                            fontSize: 18,
-                            lineHeight: 1.45,
-                            margin: "0 0 6px",
+                            fontSize: 16,
+                            lineHeight: 1.55,
+                            margin: "0 0 4px",
                             fontFamily: "Fraunces, Georgia, serif",
                             fontStyle: "italic",
                             color: RAI_TEXT_PRIMARY,
-                            fontWeight: 400,
                           }}>
                             &ldquo;{raiPicks.reason}&rdquo;
                           </div>
                           <div style={{
                             fontSize: 13,
                             color: RAI_ATTRIBUTION,
-                            margin: "0 0 18px",
+                            margin: "0 0 16px",
                             fontFamily: "Fraunces, Georgia, serif",
                             fontStyle: "italic",
                           }}>
                             &mdash; Rai
                           </div>
 
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          {/* Underlined text-links instead of buttons. Editorial. */}
+                          <div style={{ display: "flex", gap: 18 }}>
                             <button
-                              className="r-btn"
                               onClick={handleEditProfile}
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                height: 28,
-                                padding: "0 12px",
-                                background: "transparent",
+                                fontSize: 13,
                                 color: RAI_TEXT_REASON,
-                                border: `1px solid ${RAI_CHECKBOX_BORDER}`,
-                                borderRadius: 7,
-                                fontSize: 12,
-                                fontWeight: 500,
+                                textDecoration: "underline",
+                                textDecorationColor: RAI_CHECKBOX_BORDER,
+                                textUnderlineOffset: 3,
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
                               }}
                             >
-                              Edit Profile
+                              Open profile &rarr;
                             </button>
                             <button
-                              className="r-btn"
                               onClick={handleAddTask}
                               style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                height: 28,
-                                padding: "0 12px",
-                                background: C.btn,
-                                color: "#fff",
+                                fontSize: 13,
+                                color: RAI_TEXT_REASON,
+                                textDecoration: "underline",
+                                textDecorationColor: RAI_CHECKBOX_BORDER,
+                                textUnderlineOffset: 3,
+                                background: "transparent",
                                 border: "none",
-                                borderRadius: 7,
-                                fontSize: 12,
-                                fontWeight: 600,
+                                padding: 0,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
-                                boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)",
                               }}
                             >
-                              Add a Task
+                              Add task
                             </button>
                           </div>
                         </div>
