@@ -939,6 +939,29 @@ export default function App({ user }) {
   const [overviewEditData, setOverviewEditData] = useState({});
   const [editingProfile, setEditingProfile] = useState(false);
   const [editScores, setEditScores] = useState({});
+  // Toggle for the "edit historical baseline" disclosure inside the edit-client
+  // modal. Hidden by default — most users will never need to touch this.
+  // Resets when client modal opens (handled by the selectedClient reset effect).
+  const [showBaselineEdit, setShowBaselineEdit] = useState(false);
+
+  // Reset modal edit state when the selected client changes (or closes).
+  // Without this, opening client B after editing client A leaves B's modal
+  // showing A's stale edit form data — the inputs don't refresh because
+  // overviewEditData persists across modal open/close cycles. Same pattern
+  // for the relationship-profile edit form. Triggered on selectedClient.id
+  // change specifically so re-renders within the same client (eg. saving
+  // edits) don't bounce the form.
+  //
+  // Confirm dialogs (rolodexConfirm, removeConfirm) are reset by the click
+  // handlers themselves on each tile open — they're declared further down
+  // and aren't safe to reference here.
+  useEffect(() => {
+    setEditingOverview(false);
+    setOverviewEditData({});
+    setEditingProfile(false);
+    setEditScores({});
+    setShowBaselineEdit(false);
+  }, [selectedClient?.id]);
   // ═══ DATA LOADING ═══
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
@@ -6147,7 +6170,7 @@ export default function App({ user }) {
                       <div>
                         <input value={newClient.lifetime_revenue_at_entry} onChange={e => setNewClient({...newClient, lifetime_revenue_at_entry: e.target.value})} placeholder="Lifetime revenue earned before today ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
-                          Optional. Total you've earned from this client before adding them to Retayned. Leave blank for new clients.
+                          Optional. Backfill what you earned from this client before Retayned tracked them. Skip this and Retayned will calculate LTV from today forward, using current rate × tenure.
                         </div>
                       </div>
                     </div>
@@ -9778,13 +9801,36 @@ export default function App({ user }) {
                               Changing this records a rate-change in history. Past months stay valued at their old rate.
                             </div>
                           </div>
-                          <div>
-                            <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Lifetime revenue earned before today ($)</label>
-                            <input type="number" value={overviewEditData.lifetime_revenue_at_entry || 0} onChange={e => setOverviewEditData({ ...overviewEditData, lifetime_revenue_at_entry: parseFloat(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
-                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
-                              What you earned from this client BEFORE Retayned tracked them. Adds to LTV. Set to 0 for clients onboarded fresh.
+                          {!showBaselineEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowBaselineEdit(true)}
+                              style={{
+                                fontSize: 12,
+                                color: C.textMuted,
+                                background: "transparent",
+                                border: "none",
+                                padding: "4px 0",
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                textAlign: "left",
+                                textDecoration: "underline",
+                                textDecorationColor: C.borderLight,
+                                textUnderlineOffset: 3,
+                                alignSelf: "flex-start",
+                              }}
+                            >
+                              Adjust historical revenue baseline
+                            </button>
+                          ) : (
+                            <div>
+                              <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Lifetime revenue earned before today ($)</label>
+                              <input type="number" value={overviewEditData.lifetime_revenue_at_entry || 0} onChange={e => setOverviewEditData({ ...overviewEditData, lifetime_revenue_at_entry: parseFloat(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+                                What you earned from this client BEFORE Retayned tracked them. Only edit this if you skipped it during onboarding or got the number wrong.
+                              </div>
                             </div>
-                          </div>
+                          )}
                           <div>
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Renewal date <span style={{ color: C.textMuted, fontWeight: 400 }}>· optional</span></label>
                             <input type="date" value={overviewEditData.renewal_date ? String(overviewEditData.renewal_date).split("T")[0] : ""} onChange={e => setOverviewEditData({ ...overviewEditData, renewal_date: e.target.value || null })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, colorScheme: "light" }} />
