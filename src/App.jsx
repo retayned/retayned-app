@@ -3063,7 +3063,7 @@ export default function App({ user }) {
       <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 2px 6px rgba(10,10,10,0.04)" }}>
         {/* Logo — fixed at top */}
         <div style={{ padding: "20px 18px 18px", flexShrink: 0 }}>
-          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? C.text : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FFFFFF" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
 
         {/* Nav items — fixed, always visible */}
@@ -3228,7 +3228,7 @@ export default function App({ user }) {
       {/* MOBILE TOP */}
       <div className="r-mob-top" style={{ justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: C.card, borderBottom: "1px solid " + C.borderLight }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? C.text : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FFFFFF" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
         <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{(() => { const n = user?.user_metadata?.full_name; if (n) return n.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase(); return (user?.email || "U")[0].toUpperCase(); })()}</div>
       </div>
@@ -5369,16 +5369,15 @@ export default function App({ user }) {
                               className="r-btn"
                               onClick={handleAddTask}
                               style={{
-                                padding: "5px 11px",
-                                background: C.btn,
-                                color: "#fff",
-                                border: "none",
+                                padding: "5px 12px",
+                                background: "transparent",
+                                color: C.textMuted,
+                                border: "1px solid " + C.borderLight,
                                 borderRadius: 6,
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: 600,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
-                                boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)",
                               }}
                             >
                               Add Task
