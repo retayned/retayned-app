@@ -5246,28 +5246,34 @@ export default function App({ user }) {
                         }
                       };
 
-                      const handleOpenProfile = () => {
+                      const handleEditProfile = () => {
                         setSelectedClient(pickClient);
                       };
 
-                      const handleTalkToRai = () => {
-                        setAiConvoId(null);
-                        setAiMessages([{
-                          role: "ai",
-                          text: `Let's talk about ${pickClient.name}. ${raiPicks.reason}`,
-                        }]);
-                        setPage("coach");
+                      const handleAddTask = () => {
+                        // Preload the composer with this client and focus the input.
+                        // Composer takes a client NAME (string).
+                        setTodayComposerClient(pickClient.name);
+                        // Defer focus to next tick so the chip render lands first
+                        setTimeout(() => {
+                          const el = document.getElementById("rt-composer-input");
+                          if (el) {
+                            el.focus();
+                            // Scroll into view in case user is below the fold
+                            el.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }
+                        }, 0);
                       };
 
-                      // Cream-purple surface — softest possible AI color.
-                      // The label sits inside the card (not as a tab) so it
-                      // doesn't compete with the "Ranked by Rai" toggle above.
-                      const RAI_BG = "#FAF8FE";
-                      const RAI_BORDER = "#E0DEFA";
-                      const RAI_PURPLE = "#5B21B6";
-                      const RAI_TEXT_PRIMARY = "#1E261F";
-                      const RAI_TEXT_REASON = "#534AB7";
-                      const RAI_CHECKBOX_BORDER = "#C7C2E0";
+                      // Brand green field — uses primarySoft. Cohesive with
+                      // the rest of the product; reads as Retayned, not as a
+                      // generic AI feature stuck on top.
+                      const RAI_BG = "#E6EFE9";
+                      const RAI_BORDER = "#C7D6CC";
+                      const RAI_PURPLE = "#1C3224";
+                      const RAI_TEXT_PRIMARY = "#1C3224";
+                      const RAI_TEXT_REASON = "#274230";
+                      const RAI_CHECKBOX_BORDER = "#93AC9D";
 
                       return (
                         <div style={{
@@ -5305,22 +5311,14 @@ export default function App({ user }) {
                             fontFamily: "Fraunces, Georgia, serif",
                             fontStyle: "italic",
                             color: RAI_TEXT_REASON,
-                            marginBottom: 4,
+                            marginBottom: 14,
                           }}>
                             &ldquo;{raiPicks.reason}&rdquo;
-                          </div>
-                          <div style={{
-                            fontSize: 12,
-                            color: "#8782B0",
-                            marginBottom: 14,
-                            fontFamily: "Fraunces, Georgia, serif",
-                            fontStyle: "italic",
-                          }}>
-                            &mdash; Rai
+                            <span style={{ color: "#5C7166", marginLeft: 6 }}>&mdash; Rai</span>
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button
-                              onClick={handleOpenProfile}
+                              onClick={handleEditProfile}
                               style={{
                                 fontSize: 12,
                                 padding: "5px 11px",
@@ -5331,10 +5329,10 @@ export default function App({ user }) {
                                 cursor: "pointer",
                               }}
                             >
-                              Open profile
+                              Edit Profile
                             </button>
                             <button
-                              onClick={handleTalkToRai}
+                              onClick={handleAddTask}
                               style={{
                                 fontSize: 12,
                                 padding: "5px 11px",
@@ -5345,7 +5343,7 @@ export default function App({ user }) {
                                 cursor: "pointer",
                               }}
                             >
-                              Talk to Rai
+                              Add a Task
                             </button>
                           </div>
                         </div>
