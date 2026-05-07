@@ -5998,7 +5998,7 @@ export default function App({ user }) {
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: 19, fontWeight: 700, color: C.text, letterSpacing: -0.3, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-                          ${(activeClients.reduce((a, c) => a + (c.revenue || 0) * (c.months || 1), 0) / 1000000).toFixed(1)}M
+                          ${(activeClients.reduce((a, c) => a + Number(c.ltv || 0), 0) / 1000000).toFixed(1)}M
                         </div>
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, letterSpacing: 0.1 }}>Lifetime rev</div>
                       </div>
@@ -6456,8 +6456,15 @@ export default function App({ user }) {
                               </div>
                               <div style={{ width: 74 }}>
                                 {(() => {
-                                  const lcv = (c.revenue || 0) * (c.months || 0);
-                                  const display = lcv >= 1000000 ? `$${(lcv / 1000000).toFixed(1)}M` : lcv >= 1000 ? `$${Math.round(lcv / 1000)}k` : `$${lcv}`;
+                                  // Read honest LTV computed at hydration time from the
+                                  // revenue history table + lifetime_revenue_at_entry.
+                                  // OLD math (c.revenue × c.months) is wrong after rate
+                                  // changes — it pretends the current rate has always been
+                                  // the rate. The helper text under the rate field promises
+                                  // "changing this will not affect prior months", and that
+                                  // promise lives in c.ltv.
+                                  const lcv = Number(c.ltv || 0);
+                                  const display = lcv >= 1000000 ? `$${(lcv / 1000000).toFixed(1)}M` : lcv >= 1000 ? `$${Math.round(lcv / 1000)}k` : `$${Math.round(lcv)}`;
                                   return <div style={{ fontSize: 13, fontWeight: 500, color: C.text, fontVariantNumeric: "tabular-nums" }}>{display}</div>;
                                 })()}
                               </div>
