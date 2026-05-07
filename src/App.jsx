@@ -3276,9 +3276,9 @@ export default function App({ user }) {
           // Sort comparator for Rai mode. Layered final score:
           //   priority_score (deterministic, with soft clamp inside)
           //   + new_client_boost
-          //   + rai_priority_boost (older is_rai_priority flag)
           //   + client.raiNudge   (-10..+10) — applies to ALL tasks of that client
-          //   + pick_boost        (+10..+20) — only the badged task, layered on top
+          //   + pick_boost        (+10..+20) — applies to ALL tasks of the
+          //     Client of the Day, layered on top of the nudge
           //   → clamped to 99
           //
           // Tiebreakers, in order:
@@ -3292,9 +3292,19 @@ export default function App({ user }) {
             const c = clients.find(x => x.name === clientName);
             return c ? (c.raiNudge || 0) : 0;
           };
-          const pickBoostForTask = (taskId) => {
-            if (taskId !== activeBadgeTaskId || !activeBadgePick) return 0;
-            return Number(activeBadgePick.pick_boost) || 0;
+          // Pick boost: applies to every task of the Client of the Day, by
+          // client name. Returns 0 if there's no pick today, the picked
+          // client isn't in the roster, or the user already dismissed the
+          // pick (we still keep the boost active even after dismissal so
+          // their tasks stay surfaced — dismissal only hides the card, not
+          // the underlying signal).
+          const pickBoostForClient = (clientName) => {
+            if (!clientName) return 0;
+            if (!raiPicks || !raiPicks.client_id) return 0;
+            const pickClient = clients.find(c => c.id === raiPicks.client_id);
+            if (!pickClient) return 0;
+            if (clientName !== pickClient.name) return 0;
+            return Number(raiPicks.pick_boost) || 0;
           };
           const raiCompare = (a, b) => {
             // 30-second priority hold: tasks created in the last 30 seconds
@@ -3309,8 +3319,8 @@ export default function App({ user }) {
             const bHeld = b.created_at && (now - b.created_at) < HOLD_MS;
             if (aHeld !== bHeld) return aHeld ? -1 : 1;
             if (aHeld && bHeld) return (b.created_at || 0) - (a.created_at || 0);
-            const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForTask(a.id));
-            const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForTask(b.id));
+            const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForClient(a.client));
+            const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForClient(b.client));
             if (psA !== psB) return psB - psA;
             // Rai's tiebreak: larger nudge magnitude wins (positive = stronger
             // surface signal, negative = stronger demote signal — both meaningful).
@@ -3683,6 +3693,62 @@ export default function App({ user }) {
                   <h1 className="rt-band-greet" style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
                     {greeting}{firstName ? ", " + firstName : ""}.
                   </h1>
+
+                  {/* Rai's Pick of the Day — editorial sentence directly under
+                      the greeting. Hidden when: rankMode is manual, no pick row
+                      exists, picked client isn't in roster, or user dismissed
+                      it today. The pick boost stays active even after dismiss
+                      (boost rides on tasks, not on the card). */}
+                  {(() => {
+                    if (rankMode !== "rai") return null;
+                    if (!raiPicks || !raiPicks.client_id) return null;
+                    if (raiState?.todays_pick_dismissed_at) return null;
+                    const pickClient = clients.find(c => c.id === raiPicks.client_id);
+                    if (!pickClient) return null;
+
+                    const handleDismiss = async () => {
+                      setRaiState(prev => prev ? { ...prev, todays_pick_dismissed_at: new Date().toISOString() } : prev);
+                      try { await raiUserStateDb.dismissTodaysPick(user.id); } catch (e) { console.warn("Failed to dismiss Rai pick:", e); }
+                    };
+                    const handleEditProfile = () => { setSelectedClient(pickClient); };
+                    const handleAddTask = () => {
+                      setTodayComposerClient(pickClient.name);
+                      setTimeout(() => {
+                        const el = document.getElementById("rt-composer-input");
+                        if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+                      }, 0);
+                    };
+
+                    return (
+                      <div style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: C.textSec, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic" }}>
+                        <span style={{ display: "inline-block", fontSize: 10.5, letterSpacing: "0.12em", fontWeight: 600, color: "#1C3224", fontFamily: "inherit", fontStyle: "normal", marginRight: 10, verticalAlign: 1 }}>
+                          RAI
+                        </span>
+                        Today,{" "}
+                        <span
+                          onClick={handleEditProfile}
+                          style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontStyle: "normal", fontFamily: "inherit", fontWeight: 500 }}
+                        >
+                          {pickClient.name}
+                        </span>{" "}
+                        is on her mind &mdash; {raiPicks.reason ? raiPicks.reason.replace(/^["']|["']$/g, "").replace(/\.$/, "").toLowerCase() : "worth a check-in"}.
+                        <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal" }}>
+                          <button onClick={handleAddTask} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textSec, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
+                            Add a task
+                          </button>
+                          <span style={{ margin: "0 6px", color: C.borderLight }}>&middot;</span>
+                          <button onClick={handleEditProfile} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textSec, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
+                            refresh profile
+                          </button>
+                          <span style={{ margin: "0 6px", color: C.borderLight }}>&middot;</span>
+                          <button onClick={handleDismiss} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textMuted, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
+                            not today
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })()}
+
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <button
                       className="rt-band-sub-events"
@@ -5020,8 +5086,8 @@ export default function App({ user }) {
                                   const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
                                   const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
                                   const nudge = client.raiNudge || 0;
-                                  const isPicked = activeBadgeTaskId === t.id;
-                                  const pickBoost = isPicked && activeBadgePick ? (Number(activeBadgePick.pick_boost) || 0) : 0;
+                                  const isPicked = raiPicks && raiPicks.client_id === client.id;
+                                  const pickBoost = isPicked ? (Number(raiPicks.pick_boost) || 0) : 0;
                                   const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge + pickBoost);
                                   return (
                                     <span style={{
@@ -5220,178 +5286,9 @@ export default function App({ user }) {
                       </div>
                     );
 
-                    // Rai's Pick of the Day card. Shows the day's primary pick from
-                    // rai_picks (one client per day). Hidden when:
-                    //   - rankMode is "manual" (user opted out of Rai ranking)
-                    //   - no pick row exists for today (sweep skipped or low-signal day)
-                    //   - the picked client isn't in the user's roster anymore
-                    //   - todays_pick_dismissed_at is set (user already read it)
-                    // The tab bobs gently for ~12s on first session of the day, then
-                    // settles. Tracked via sessionStorage keyed by local date.
-                    const RaisPickCard = () => {
-                      // Gate: Rai mode + pick exists + not dismissed today
-                      if (rankMode !== "rai") return null;
-                      if (!raiPicks || !raiPicks.client_id) return null;
-                      if (raiState?.todays_pick_dismissed_at) return null;
-                      const pickClient = clients.find(c => c.id === raiPicks.client_id);
-                      if (!pickClient) return null;
-
-                      const handleDismiss = async () => {
-                        // Optimistic local update — hide immediately
-                        setRaiState(prev => prev ? { ...prev, todays_pick_dismissed_at: new Date().toISOString() } : prev);
-                        try {
-                          await raiUserStateDb.dismissTodaysPick(user.id);
-                        } catch (e) {
-                          console.warn("Failed to dismiss Rai pick:", e);
-                        }
-                      };
-
-                      const handleEditProfile = () => {
-                        setSelectedClient(pickClient);
-                      };
-
-                      const handleAddTask = () => {
-                        // Preload the composer with this client and focus the input.
-                        // Composer takes a client NAME (string).
-                        setTodayComposerClient(pickClient.name);
-                        // Defer focus to next tick so the chip render lands first
-                        setTimeout(() => {
-                          const el = document.getElementById("rt-composer-input");
-                          if (el) {
-                            el.focus();
-                            // Scroll into view in case user is below the fold
-                            el.scrollIntoView({ behavior: "smooth", block: "center" });
-                          }
-                        }, 0);
-                      };
-
-                      // Brand green field — uses primarySoft. Cohesive with
-                      // the rest of the product; reads as Retayned, not as a
-                      // generic AI feature stuck on top.
-                      const RAI_BG = "#E6EFE9";
-                      const RAI_BORDER = "#C7D6CC";
-                      const RAI_LABEL = "#1C3224";
-                      const RAI_TEXT_PRIMARY = "#1C3224";
-                      const RAI_TEXT_REASON = "#274230";
-                      const RAI_CHECKBOX_BORDER = "#93AC9D";
-                      const RAI_ATTRIBUTION = "#5C7166";
-
-                      return (
-                        <div style={{
-                          background: RAI_BG,
-                          border: `0.5px solid ${RAI_BORDER}`,
-                          borderRadius: 8,
-                          padding: "22px 24px 0",
-                          margin: "0 0 14px",
-                          position: "relative",
-                        }}>
-                          {/* "Not today" — top-right text link. Soft dismiss. */}
-                          <button
-                            onClick={handleDismiss}
-                            style={{
-                              position: "absolute",
-                              top: 18,
-                              right: 18,
-                              fontSize: 12,
-                              color: RAI_ATTRIBUTION,
-                              background: "transparent",
-                              border: "none",
-                              padding: 0,
-                              cursor: "pointer",
-                              fontFamily: "inherit",
-                            }}
-                          >
-                            Not today
-                          </button>
-
-                          {/* Branding line: sparkles + small caps */}
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                            <Icon name="sparkles" size={13} color={RAI_LABEL} />
-                            <span style={{ fontSize: 11, color: RAI_LABEL, letterSpacing: "0.08em", fontWeight: 500 }}>
-                              CLIENT OF THE DAY &middot; {pickClient.name.toUpperCase()}
-                            </span>
-                          </div>
-
-                          {/* The quote */}
-                          <div style={{
-                            fontSize: 17,
-                            lineHeight: 1.5,
-                            margin: "0 0 4px",
-                            fontFamily: "Fraunces, Georgia, serif",
-                            fontStyle: "italic",
-                            color: RAI_TEXT_PRIMARY,
-                          }}>
-                            &ldquo;{raiPicks.reason}&rdquo;
-                          </div>
-                          <div style={{
-                            fontSize: 13,
-                            color: RAI_ATTRIBUTION,
-                            margin: "0 0 18px",
-                            fontFamily: "Fraunces, Georgia, serif",
-                            fontStyle: "italic",
-                          }}>
-                            &mdash; Rai
-                          </div>
-
-                          {/* Bottom strip: metrics + profile-update on left, Add Task on right.
-                              Hairline rule separates the read above from the context below.
-                              Negative margins extend the rule full-width. */}
-                          <div style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "12px 0",
-                            borderTop: `0.5px solid ${RAI_BORDER}`,
-                            margin: "0 -24px",
-                            paddingLeft: 24,
-                            paddingRight: 24,
-                          }}>
-                            <div>
-                              <div style={{ fontSize: 11.5, color: RAI_ATTRIBUTION, margin: "0 0 2px", letterSpacing: "0.04em" }}>
-                                retention 68 &middot; last task 12 days ago
-                              </div>
-                              <div style={{ fontSize: 11.5, color: RAI_ATTRIBUTION, fontStyle: "italic" }}>
-                                Profile last updated 47 days ago &middot;{" "}
-                                <span
-                                  onClick={handleEditProfile}
-                                  style={{
-                                    color: C.btn,
-                                    cursor: "pointer",
-                                    borderBottom: `1px dotted ${C.btn}`,
-                                    paddingBottom: 1,
-                                  }}
-                                >
-                                  refresh
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              className="r-btn"
-                              onClick={handleAddTask}
-                              style={{
-                                padding: "5px 12px",
-                                background: "transparent",
-                                color: C.textMuted,
-                                border: "1px solid " + C.borderLight,
-                                borderRadius: 6,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                            >
-                              Add Task
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    };
 
                     return (
                       <>
-                        {/* RAI'S PICK OF THE DAY — gated on rank mode, fresh pick, not dismissed */}
-                        <RaisPickCard />
-
                         {/* TODAY bucket */}
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           {_todayBucket.map(t => renderRow(t, "today"))}
@@ -6304,15 +6201,14 @@ export default function App({ user }) {
                   {/* COMPARE SURFACE — 3 variants */}
 
                   {/* Mobile card list — always rendered, CSS reveals only <=768px */}
-                  <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", gap: 8 }}>
-                    {filteredClients.map(c => {
+                  <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
+                    {filteredClients.map((c, i, arr) => {
                       const delta = stubDelta(c.name);
                       const scoreColor = retColor(c.ret || 0);
                       const months = c.months || 0;
                       const tenureDisplay = months < 12 ? `${months}mo` : `${(months / 12).toFixed(1)}yr`;
                       return (
-                        <div key={c.id} onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); }} style={{ position: "relative", background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12, boxShadow: C.shadowSm, padding: "12px 14px", cursor: "pointer", overflow: "hidden" }}>
-                          <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
+                        <div key={c.id} onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); }} style={{ padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             <ScoreRing2 client={c} size={32} />
                             <div style={{ flex: 1, minWidth: 0 }}>
