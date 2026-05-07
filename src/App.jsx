@@ -3291,30 +3291,27 @@ export default function App({ user }) {
           const periodCount = taskCompletedCounts[taskCompletedPeriod] || 0;
           return (
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, position: "relative" }}>
-              {/* Floating "note on top" overlay — UI-only for now, no logic gating
-                  it. Once we confirm the visual works in production, we'll wire
-                  the trigger rule (best-week-in-N-months, etc) and dynamic copy. */}
+              {/* Handwritten callout — UI-only for now. Once we confirm the
+                  visual works, we'll wire the trigger rule (best-week-in-N-months,
+                  longest-streak, etc) and dynamic copy. Hidden until logic is in. */}
               <div
                 style={{
                   position: "absolute",
-                  top: -8,
-                  right: 14,
-                  background: "#FFFCF5",
-                  padding: "10px 12px",
-                  width: 130,
-                  boxShadow: "0 1px 1px rgba(28,50,36,0.08), 0 4px 8px rgba(28,50,36,0.10), 0 12px 20px rgba(28,50,36,0.06)",
-                  transform: "rotate(-2deg)",
-                  border: "0.5px solid #E8DDC7",
-                  zIndex: 2,
+                  top: -16,
+                  right: -2,
                   fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
-                  fontSize: 16,
+                  fontSize: 18,
                   color: C.primaryDeep,
-                  lineHeight: 1.15,
+                  transform: "rotate(-6deg)",
                   pointerEvents: "none",
+                  lineHeight: 1.05,
+                  fontWeight: 600,
                 }}
               >
-                best week<br />
-                <span style={{ fontSize: 14, color: "#4A6256" }}>in 3 months</span>
+                best week
+                <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
+                  in 3 months ↘
+                </span>
               </div>
 
               {/* TASKS COMPLETED section */}
@@ -3341,7 +3338,13 @@ export default function App({ user }) {
                     );
                   })}
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums", marginBottom: 6 }}>{periodCount.toLocaleString()}</div>
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums", marginBottom: 6 }}>{periodCount.toLocaleString()}</div>
+                  {/* Hand-drawn underline scribble. Width adapts to the number length. */}
+                  <svg style={{ position: "absolute", left: -4, top: 22, pointerEvents: "none" }} width="60" height="10" viewBox="0 0 60 10">
+                    <path d="M 2 6 Q 12 2, 28 5 Q 44 8, 58 4" stroke={C.danger} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.85" />
+                  </svg>
+                </div>
                 <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
