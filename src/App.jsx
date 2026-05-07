@@ -1192,17 +1192,25 @@ export default function App({ user }) {
   // ─── PROFILE SCORE (invisible sort layer) ───
   const percentileRank = (arr, val) => { if (arr.length <= 1) return 0.5; const s = [...arr].sort((a, b) => a - b); return s.indexOf(val) / (s.length - 1); };
 
-  // Referral-adjusted LTV: client's own LTV + 50% of revenue from clients they referred
+  // Referral-adjusted LTV: client's own honest LTV + 50% of revenue from
+  // clients they referred. Honest LTV = lifetime_revenue_at_entry +
+  // sum(monthly_rate × time_in_period) across the client_revenue_history table.
+  // Computed at hydration time and stored as `client.ltv`. Rate changes go
+  // through revenueHistoryDb.changeRate which triggers a fresh hydration.
+  //
+  // Referrals stay on the same model — they're an estimate of attribution
+  // value, not historical revenue. We pull the referred client's honest LTV
+  // from their `ltv` field too, falling back to a 12-month estimate for
+  // referrals where the referred-to is not yet a Retayned client.
   const getAdjustedLTV = (client) => {
-    const ownLTV = (client.revenue || 0) * (client.months || 0);
+    const ownLTV = Number(client.ltv || 0);
     const referralRevenue = refs
       .filter(r => r.from === client.name && (r.status === "converted" || r.converted))
       .reduce((sum, r) => {
-        // Find the referred client's total revenue
         const referredClient = clients.find(c => c.name === r.to);
-        const refLTV = referredClient 
-          ? (referredClient.revenue || 0) * (referredClient.months || 0)
-          : (r.revenue || 0) * 12; // estimate if not a client yet
+        const refLTV = referredClient
+          ? Number(referredClient.ltv || 0)
+          : (r.revenue || 0) * 12;
         return sum + refLTV;
       }, 0);
     return ownLTV + (referralRevenue * 0.50);
@@ -1464,7 +1472,7 @@ export default function App({ user }) {
     if (!user) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -1488,9 +1496,25 @@ export default function App({ user }) {
       (typeof raiPicksDb?.getCurrent === "function")
         ? raiPicksDb.getCurrent(uid).catch(() => ({ data: null, error: null }))
         : Promise.resolve({ data: null, error: null }),
+      // Revenue history — one batch fetch for ALL the user's clients. Used to
+      // compute honest LTV (lifetime_revenue_at_entry + sum of monthly_rate
+      // × time across history rows). Synchronous getAdjustedLTV reads from a
+      // map built below, so this hydrate is the round-trip.
+      supabase
+        .from('client_revenue_history')
+        .select('client_id, monthly_rate, started_at, ended_at')
+        .eq('user_id', uid)
+        .then(r => r, () => ({ data: [], error: null })),
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
+
+    // Build per-client revenue history map: client_id → [history rows]
+    const revHistoryByClient = {};
+    for (const row of (revHistoryRes?.data || [])) {
+      if (!revHistoryByClient[row.client_id]) revHistoryByClient[row.client_id] = [];
+      revHistoryByClient[row.client_id].push(row);
+    }
 
     // Cadence data — loaded separately with fallback so a missing db function
     // degrades cadence only, doesn't nuke the whole page
@@ -1536,27 +1560,49 @@ export default function App({ user }) {
       channel: t.channel,
     })));
 
-    if (clientRes.data) setClients(clientRes.data.map(c => ({
-      ...c,
-      ret: c.retention_score || 0,
-      contact: c.contact || "",
-      role: c.role || "",
-      months: c.months || 0,
-      revenue: c.revenue || 0,
-      tag: c.tag || "",
-      lastHC: c.last_hc_date || null,
-      lastContact: c.last_task_date ? "recent" : "—",
-      referrals: 0,
-      profileScores: c.profile_scores || {},
-      qualifyingFlags: c.qualifying_flags || {},
-      // Rai's daily reweighting + reasoning (per-client). Sweep writes raiNudge
-      // overnight. Sort comparator reads raiNudge to influence task ordering.
-      // raiSignal/raiRationale at client-level are debug fields; the pick badge
-      // hover text comes from rai_picks.reason (per-pick), not the client.
-      raiNudge: c.rai_nudge != null ? Number(c.rai_nudge) : 0,
-      raiSignal: c.rai_signal || null,
-      raiRationale: c.rai_rationale || null,
-    })));
+    if (clientRes.data) {
+      // Compute honest LTV per client from history + pre-entry baseline.
+      // months_in_period = (ended_at_or_now - started_at) / 30.44 days
+      const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
+      const nowMs = Date.now();
+      const computeLTV = (clientId, preEntry) => {
+        const history = revHistoryByClient[clientId] || [];
+        const historyTotal = history.reduce((sum, row) => {
+          const startMs = new Date(row.started_at).getTime();
+          const endMs = row.ended_at ? new Date(row.ended_at).getTime() : nowMs;
+          const months = Math.max(0, (endMs - startMs) / MS_PER_MONTH);
+          return sum + (Number(row.monthly_rate) * months);
+        }, 0);
+        return Number(preEntry || 0) + historyTotal;
+      };
+      setClients(clientRes.data.map(c => ({
+        ...c,
+        ret: c.retention_score || 0,
+        contact: c.contact || "",
+        role: c.role || "",
+        months: c.months || 0,
+        revenue: c.revenue || 0,
+        tag: c.tag || "",
+        lastHC: c.last_hc_date || null,
+        lastContact: c.last_task_date ? "recent" : "—",
+        referrals: 0,
+        profileScores: c.profile_scores || {},
+        qualifyingFlags: c.qualifying_flags || {},
+        // Honest LTV: lifetime_revenue_at_entry + sum across history rows.
+        // Stored as a number on the client object so synchronous render code
+        // (getAdjustedLTV, profile score math) can read it without async hops.
+        // Recomputed on every clients hydration — no stale values.
+        lifetime_revenue_at_entry: Number(c.lifetime_revenue_at_entry || 0),
+        ltv: computeLTV(c.id, c.lifetime_revenue_at_entry),
+        // Rai's daily reweighting + reasoning (per-client). Sweep writes raiNudge
+        // overnight. Sort comparator reads raiNudge to influence task ordering.
+        // raiSignal/raiRationale at client-level are debug fields; the pick badge
+        // hover text comes from rai_picks.reason (per-pick), not the client.
+        raiNudge: c.rai_nudge != null ? Number(c.rai_nudge) : 0,
+        raiSignal: c.rai_signal || null,
+        raiRationale: c.rai_rationale || null,
+      })));
+    }
 
     if (taskRes.data) {
       // Auto-cleanup at the most recent 2 AM local time:
