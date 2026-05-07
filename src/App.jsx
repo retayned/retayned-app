@@ -2694,7 +2694,7 @@ export default function App({ user }) {
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap');
         ${THEME_CSS}
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: var(--rt-bg); overscroll-behavior: none; }
@@ -3290,7 +3290,33 @@ export default function App({ user }) {
           ].filter(s => s.n > 0);
           const periodCount = taskCompletedCounts[taskCompletedPeriod] || 0;
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)" }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, position: "relative" }}>
+              {/* Floating "note on top" overlay — UI-only for now, no logic gating
+                  it. Once we confirm the visual works in production, we'll wire
+                  the trigger rule (best-week-in-N-months, etc) and dynamic copy. */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: -8,
+                  right: 14,
+                  background: "#FFFCF5",
+                  padding: "10px 12px",
+                  width: 130,
+                  boxShadow: "0 1px 1px rgba(28,50,36,0.08), 0 4px 8px rgba(28,50,36,0.10), 0 12px 20px rgba(28,50,36,0.06)",
+                  transform: "rotate(-2deg)",
+                  border: "0.5px solid #E8DDC7",
+                  zIndex: 2,
+                  fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
+                  fontSize: 16,
+                  color: C.primaryDeep,
+                  lineHeight: 1.15,
+                  pointerEvents: "none",
+                }}
+              >
+                best week<br />
+                <span style={{ fontSize: 14, color: "#4A6256" }}>in 3 months</span>
+              </div>
+
               {/* TASKS COMPLETED section */}
               <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
