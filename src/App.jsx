@@ -947,7 +947,12 @@ export default function App({ user }) {
   // Sidebar tasks-completed widget state. Counts hydrate on app load via
   // tasksDb.getCompletedCounts. Period toggles between week/month/year and
   // is local state — resets to 'week' on each session.
-  const [taskCompletedCounts, setTaskCompletedCounts] = useState({ week: 0, month: 0, year: 0 });
+  const [taskCompletedCounts, setTaskCompletedCounts] = useState({
+    week: 0, month: 0, year: 0,
+    weekHistory: Array(12).fill(0),
+    monthHistory: Array(12).fill(0),
+    dayStreak: 0,
+  });
   const [taskCompletedPeriod, setTaskCompletedPeriod] = useState("week");
 
   // Reset modal edit state when the selected client changes (or closes).
@@ -2153,15 +2158,33 @@ export default function App({ user }) {
     // since users can re-open old tasks). Server is source of truth on next
     // hydration.
     if (newDone) {
-      setTaskCompletedCounts(c => ({ week: c.week + 1, month: c.month + 1, year: c.year + 1 }));
+      setTaskCompletedCounts(c => {
+        const wh = [...(c.weekHistory || Array(12).fill(0))];
+        const mh = [...(c.monthHistory || Array(12).fill(0))];
+        wh[11] = (wh[11] || 0) + 1;
+        mh[11] = (mh[11] || 0) + 1;
+        return { ...c, week: c.week + 1, month: c.month + 1, year: c.year + 1, weekHistory: wh, monthHistory: mh };
+      });
     } else if (task.completed_at) {
       const completed = new Date(task.completed_at);
       const now = Date.now();
-      setTaskCompletedCounts(c => ({
-        week: Math.max(0, c.week - (now - completed.getTime() < 7 * 86400000 ? 1 : 0)),
-        month: Math.max(0, c.month - (now - completed.getTime() < 30 * 86400000 ? 1 : 0)),
-        year: Math.max(0, c.year - (now - completed.getTime() < 365 * 86400000 ? 1 : 0)),
-      }));
+      const inWeek  = now - completed.getTime() < 7  * 86400000;
+      const inMonth = now - completed.getTime() < 30 * 86400000;
+      const inYear  = now - completed.getTime() < 365 * 86400000;
+      setTaskCompletedCounts(c => {
+        const wh = [...(c.weekHistory || Array(12).fill(0))];
+        const mh = [...(c.monthHistory || Array(12).fill(0))];
+        if (inWeek)  wh[11] = Math.max(0, (wh[11] || 0) - 1);
+        if (inMonth) mh[11] = Math.max(0, (mh[11] || 0) - 1);
+        return {
+          ...c,
+          week:  Math.max(0, c.week  - (inWeek  ? 1 : 0)),
+          month: Math.max(0, c.month - (inMonth ? 1 : 0)),
+          year:  Math.max(0, c.year  - (inYear  ? 1 : 0)),
+          weekHistory: wh,
+          monthHistory: mh,
+        };
+      });
     }
     // ASMR completion pulse — only fire when transitioning to done, clear after 720ms
     if (newDone) {
@@ -3289,30 +3312,117 @@ export default function App({ user }) {
             { n: buckets.critical, label: "Critical", color: C.retCrit  },
           ].filter(s => s.n > 0);
           const periodCount = taskCompletedCounts[taskCompletedPeriod] || 0;
+
+          // Compute the callout — positive only, period-aware, prioritized.
+          //
+          // Priority order (only first matching rule fires):
+          //   1. Year milestones (round numbers like 100, 250, 500, 1000…)
+          //   2. Records ("fastest in N weeks/months") — N must be ≥ 6
+          //   3. Comparisons ("+N vs last") — week ≥ 3, month ≥ 10
+          //   4. Streaks (≥ 3 days)
+          //   5. Recovery (last week was 0, this week is non-zero)
+          //
+          // Each branch returns { line1, line2 } or null. If null, no callout
+          // shows. The circle around the number is gated on the same condition.
+          const computeCallout = () => {
+            const wh = taskCompletedCounts.weekHistory || [];
+            const mh = taskCompletedCounts.monthHistory || [];
+            const streak = taskCompletedCounts.dayStreak || 0;
+
+            if (taskCompletedPeriod === "year") {
+              // Year milestones — fire when current year count >= a milestone.
+              // We don't know if user already saw it (no persistence yet), so
+              // it shows continuously while the count sits in that band.
+              // Floor: 100 (anything below feels like the system is grasping).
+              const year = taskCompletedCounts.year || 0;
+              const milestones = [5000, 4000, 3000, 2500, 2000, 1500, 1000, 500, 250, 100];
+              const hit = milestones.find(m => year >= m);
+              if (hit) {
+                return { line1: hit.toLocaleString() + "+ tasks", line2: "this year ↘" };
+              }
+              return null;
+            }
+
+            if (taskCompletedPeriod === "week") {
+              const current = wh[11] || 0;
+              const lastWeek = wh[10] || 0;
+              if (current === 0) return null;
+
+              // "Fastest in N weeks" — current must be strictly greater than
+              // every prior bucket, and N must be ≥ 6 to feel earned.
+              let n = 0;
+              for (let i = 10; i >= 0; i--) {
+                if ((wh[i] || 0) >= current) break;
+                n++;
+              }
+              if (n >= 6) return { line1: "fastest week", line2: "in " + n + " weeks ↘" };
+
+              // "+N vs last week" — only when delta ≥ 3.
+              const delta = current - lastWeek;
+              if (delta >= 3) return { line1: "+" + delta + " this week", line2: "vs last ↗" };
+
+              // Streak — ≥ 3 days
+              if (streak >= 3) return { line1: streak + " days straight", line2: "keep going ↘" };
+
+              // Recovery — last week 0, this week non-zero
+              if (lastWeek === 0 && current > 0) return { line1: "back at it", line2: current + " this week ↗" };
+
+              return null;
+            }
+
+            if (taskCompletedPeriod === "month") {
+              const current = mh[11] || 0;
+              const lastMonth = mh[10] || 0;
+              if (current === 0) return null;
+
+              // "Biggest month in N months" — current must be strictly greater
+              // than every prior bucket, and N must be ≥ 6.
+              let n = 0;
+              for (let i = 10; i >= 0; i--) {
+                if ((mh[i] || 0) >= current) break;
+                n++;
+              }
+              if (n >= 6) return { line1: "biggest month", line2: "in " + n + " months ↘" };
+
+              // "+N vs last month" — delta ≥ 10
+              const delta = current - lastMonth;
+              if (delta >= 10) return { line1: "+" + delta + " this month", line2: "vs last ↗" };
+
+              return null;
+            }
+
+            return null;
+          };
+
+          const callout = computeCallout();
+
           return (
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, position: "relative" }}>
-              {/* Handwritten callout — UI-only for now. Once we confirm the
-                  visual works, we'll wire the trigger rule (best-week-in-N-months,
-                  longest-streak, etc) and dynamic copy. Hidden until logic is in. */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: -16,
-                  right: -2,
-                  fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
-                  fontSize: 18,
-                  color: C.primaryDeep,
-                  transform: "rotate(-6deg)",
-                  pointerEvents: "none",
-                  lineHeight: 1.05,
-                  fontWeight: 600,
-                }}
-              >
-                best week
-                <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
-                  in 3 months ↘
-                </span>
-              </div>
+              {/* Handwritten callout — only renders when computeCallout returns
+                  a signal. Otherwise the widget is silent. The circle around
+                  the number is gated on the same condition (they belong
+                  together — circle without callout is decoration). */}
+              {callout && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: -16,
+                    right: -2,
+                    fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
+                    fontSize: 18,
+                    color: C.primaryDeep,
+                    transform: "rotate(-6deg)",
+                    pointerEvents: "none",
+                    lineHeight: 1.05,
+                    fontWeight: 600,
+                  }}
+                >
+                  {callout.line1}
+                  <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
+                    {callout.line2}
+                  </span>
+                </div>
+              )}
 
               {/* TASKS COMPLETED section */}
               <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
@@ -3338,12 +3448,19 @@ export default function App({ user }) {
                     );
                   })}
                 </div>
-                <div style={{ position: "relative", display: "inline-block" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums", marginBottom: 6 }}>{periodCount.toLocaleString()}</div>
-                  {/* Hand-drawn underline scribble. Width adapts to the number length. */}
-                  <svg style={{ position: "absolute", left: -4, top: 22, pointerEvents: "none" }} width="60" height="10" viewBox="0 0 60 10">
-                    <path d="M 2 6 Q 12 2, 28 5 Q 44 8, 58 4" stroke={C.danger} strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.85" />
-                  </svg>
+                <div style={{ position: "relative", display: "inline-block", padding: callout ? "4px 10px 8px" : "0 0 6px" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  {/* Hand-drawn circle around the number — only when callout is
+                      active. Without callout, circle becomes decoration; with
+                      callout, the circle points at the celebrated number.
+                      Path: starts top-right, goes around counter-clockwise,
+                      comes back past start, stops short — V2 "marked in pen". */}
+                  {callout && (
+                    <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
+                      <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
+                            stroke={C.danger} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
+                    </svg>
+                  )}
                 </div>
                 <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
