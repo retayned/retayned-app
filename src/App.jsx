@@ -5281,13 +5281,11 @@ export default function App({ user }) {
                           background: RAI_BG,
                           border: `0.5px solid ${RAI_BORDER}`,
                           borderRadius: 8,
-                          padding: "22px 24px 20px",
+                          padding: "22px 24px 0",
                           margin: "0 0 14px",
                           position: "relative",
                         }}>
-                          {/* "Not today" — top-right text link. Soft dismiss.
-                              Marks today's pick read so it hides for the rest
-                              of the day. */}
+                          {/* "Not today" — top-right text link. Soft dismiss. */}
                           <button
                             onClick={handleDismiss}
                             style={{
@@ -5306,31 +5304,19 @@ export default function App({ user }) {
                             Not today
                           </button>
 
-                          {/* Branding: sparkles + small-caps label */}
+                          {/* Branding line: sparkles + small caps */}
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
                             <Icon name="sparkles" size={13} color={RAI_LABEL} />
                             <span style={{ fontSize: 11, color: RAI_LABEL, letterSpacing: "0.08em", fontWeight: 500 }}>
-                              CLIENT OF THE DAY
+                              CLIENT OF THE DAY &middot; {pickClient.name.toUpperCase()}
                             </span>
-                          </div>
-
-                          {/* Client name */}
-                          <div style={{ fontSize: 19, fontWeight: 500, margin: "0 0 4px", color: RAI_TEXT_PRIMARY }}>
-                            {pickClient.name}
-                          </div>
-
-                          {/* Light context: retention + last task days. Placeholder
-                              static values — the data wiring is pending the next
-                              step. Update once data confirmed. */}
-                          <div style={{ fontSize: 11, color: RAI_ATTRIBUTION, margin: "0 0 14px", letterSpacing: "0.06em" }}>
-                            RETENTION 68 &middot; LAST TASK 12 DAYS AGO
                           </div>
 
                           {/* The quote */}
                           <div style={{
                             fontSize: 17,
                             lineHeight: 1.5,
-                            margin: "0 0 6px",
+                            margin: "0 0 4px",
                             fontFamily: "Fraunces, Georgia, serif",
                             fontStyle: "italic",
                             color: RAI_TEXT_PRIMARY,
@@ -5340,42 +5326,55 @@ export default function App({ user }) {
                           <div style={{
                             fontSize: 13,
                             color: RAI_ATTRIBUTION,
-                            margin: "0 0 16px",
+                            margin: "0 0 18px",
                             fontFamily: "Fraunces, Georgia, serif",
                             fontStyle: "italic",
                           }}>
                             &mdash; Rai
                           </div>
 
-                          {/* Bottom row: ghost + primary buttons, profile-update nag pushed right */}
-                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                            <button
-                              className="r-btn"
-                              onClick={handleEditProfile}
-                              style={{
-                                padding: "6px 12px",
-                                background: "transparent",
-                                color: RAI_TEXT_REASON,
-                                border: `1px solid ${RAI_CHECKBOX_BORDER}`,
-                                borderRadius: 7,
-                                fontSize: 12.5,
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                            >
-                              Open {pickClient.name}
-                            </button>
+                          {/* Bottom strip: metrics + profile-update on left, Add Task on right.
+                              Hairline rule separates the read above from the context below.
+                              Negative margins extend the rule full-width. */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "12px 0",
+                            borderTop: `0.5px solid ${RAI_BORDER}`,
+                            margin: "0 -24px",
+                            paddingLeft: 24,
+                            paddingRight: 24,
+                          }}>
+                            <div>
+                              <div style={{ fontSize: 11.5, color: RAI_ATTRIBUTION, margin: "0 0 2px", letterSpacing: "0.04em" }}>
+                                retention 68 &middot; last task 12 days ago
+                              </div>
+                              <div style={{ fontSize: 11.5, color: RAI_ATTRIBUTION, fontStyle: "italic" }}>
+                                Profile last updated 47 days ago &middot;{" "}
+                                <span
+                                  onClick={handleEditProfile}
+                                  style={{
+                                    color: C.btn,
+                                    cursor: "pointer",
+                                    borderBottom: `1px dotted ${C.btn}`,
+                                    paddingBottom: 1,
+                                  }}
+                                >
+                                  refresh
+                                </span>
+                              </div>
+                            </div>
                             <button
                               className="r-btn"
                               onClick={handleAddTask}
                               style={{
-                                padding: "6px 12px",
+                                padding: "5px 11px",
                                 background: C.btn,
                                 color: "#fff",
                                 border: "none",
-                                borderRadius: 7,
-                                fontSize: 12.5,
+                                borderRadius: 6,
+                                fontSize: 12,
                                 fontWeight: 600,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
@@ -5384,14 +5383,6 @@ export default function App({ user }) {
                             >
                               Add Task
                             </button>
-                            <span style={{
-                              marginLeft: "auto",
-                              fontSize: 11.5,
-                              color: RAI_ATTRIBUTION,
-                              fontStyle: "italic",
-                            }}>
-                              Profile last updated 47 days ago
-                            </span>
                           </div>
                         </div>
                       );
