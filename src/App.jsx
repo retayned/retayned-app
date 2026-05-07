@@ -5270,10 +5270,11 @@ export default function App({ user }) {
                       // generic AI feature stuck on top.
                       const RAI_BG = "#E6EFE9";
                       const RAI_BORDER = "#C7D6CC";
-                      const RAI_PURPLE = "#1C3224";
+                      const RAI_LABEL = "#1C3224";
                       const RAI_TEXT_PRIMARY = "#1C3224";
                       const RAI_TEXT_REASON = "#274230";
                       const RAI_CHECKBOX_BORDER = "#93AC9D";
+                      const RAI_ATTRIBUTION = "#5C7166";
 
                       return (
                         <div style={{
@@ -5284,8 +5285,8 @@ export default function App({ user }) {
                           margin: "0 0 14px",
                         }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                            <Icon name="sparkles" size={13} color={RAI_PURPLE} />
-                            <span style={{ fontSize: 11, color: RAI_PURPLE, letterSpacing: "0.08em", fontWeight: 500 }}>CLIENT OF THE DAY</span>
+                            <Icon name="sparkles" size={13} color={RAI_LABEL} />
+                            <span style={{ fontSize: 11, color: RAI_LABEL, letterSpacing: "0.08em", fontWeight: 500 }}>CLIENT OF THE DAY</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
                             <div style={{ fontSize: 16, fontWeight: 500, color: RAI_TEXT_PRIMARY }}>{pickClient.name}</div>
@@ -5314,33 +5315,40 @@ export default function App({ user }) {
                             marginBottom: 14,
                           }}>
                             &ldquo;{raiPicks.reason}&rdquo;
-                            <span style={{ color: "#5C7166", marginLeft: 6 }}>&mdash; Rai</span>
+                            <span style={{ color: RAI_ATTRIBUTION, marginLeft: 6 }}>&mdash; Rai</span>
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button
+                              className="r-btn"
                               onClick={handleEditProfile}
                               style={{
-                                fontSize: 12,
-                                padding: "5px 11px",
-                                background: "rgba(255,255,255,0.6)",
-                                border: `0.5px solid ${RAI_BORDER}`,
-                                color: C.textSec,
-                                borderRadius: 6,
+                                padding: "8px 14px",
+                                background: "transparent",
+                                color: RAI_TEXT_REASON,
+                                border: `1px solid ${RAI_CHECKBOX_BORDER}`,
+                                borderRadius: 8,
+                                fontSize: 13,
+                                fontWeight: 500,
                                 cursor: "pointer",
+                                fontFamily: "inherit",
                               }}
                             >
                               Edit Profile
                             </button>
                             <button
+                              className="r-btn"
                               onClick={handleAddTask}
                               style={{
-                                fontSize: 12,
-                                padding: "5px 11px",
-                                background: "rgba(255,255,255,0.6)",
-                                border: `0.5px solid ${RAI_BORDER}`,
-                                color: C.textSec,
-                                borderRadius: 6,
+                                padding: "8px 14px",
+                                background: C.btn,
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: 8,
+                                fontSize: 13,
+                                fontWeight: 600,
                                 cursor: "pointer",
+                                fontFamily: "inherit",
+                                boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)",
                               }}
                             >
                               Add a Task
