@@ -282,6 +282,41 @@ export const tasks = {
     return { data, error };
   },
 
+  // Get count of completed tasks for week/month/year windows.
+  // Used for the sidebar tasks-completed widget. Single query returns just
+  // completed_at timestamps; we bucket on the client. Cheaper than 3 separate
+  // count queries since most users have <1k completed tasks/year.
+  //
+  // Counts include both regular tasks and recurring tasks (each completion
+  // is a separate row in completion history once the recurring task has been
+  // reset and re-completed). Excludes still-incomplete tasks.
+  //
+  // Returns: { week, month, year } counts.
+  getCompletedCounts: async (userId) => {
+    const oneYearAgo = new Date();
+    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('completed_at')
+      .eq('user_id', userId)
+      .not('completed_at', 'is', null)
+      .gte('completed_at', oneYearAgo.toISOString());
+    if (error) return { data: { week: 0, month: 0, year: 0 }, error };
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    let week = 0, month = 0, year = 0;
+    for (const row of (data || [])) {
+      const t = new Date(row.completed_at);
+      year++;
+      if (t >= thirtyDaysAgo) month++;
+      if (t >= sevenDaysAgo) week++;
+    }
+    return { data: { week, month, year }, error: null };
+  },
+
   // Assign a task to a worker (or unassign by passing null).
   // shareClientContext defaults true — controls whether the Worker
   // sees the task's client_name on their magic-link dashboard.
