@@ -13,7 +13,8 @@ import WorkerDashboard from "./WorkerDashboard";
 //
 // The CSS variable definitions live in a <style> block injected at App
 // mount-time so they're available before any component reads them.
-const C = {aprimaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
+const C = {
+  primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
 
   // Surfaces — themed
   bg: "var(--rt-bg)",
@@ -4129,8 +4130,8 @@ export default function App({ user }) {
                     </span>
                     <span className="rt-pct-lbl" style={{ fontSize: 11, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>of today done</span>
                   </div>
-                  <div className="rt-pct-bar" style={{ height: 4, background: C.borderLight, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct * 100}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
+                  <div className="rt-pct-bar" style={{ position: "relative", height: 4, background: C.borderLight, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(pct) * 100))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
                   </div>
                 </div>
               </div>
@@ -10157,8 +10158,8 @@ export default function App({ user }) {
                                     <span style={{ fontSize: 14, fontWeight: 600 }}>{labels[0]}</span>
                                     <span style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{val}</span>
                                   </div>
-                                  <div style={{ height: 4, background: C.borderLight, borderRadius: 2, marginBottom: 4 }}>
-                                    <div style={{ height: "100%", width: `${val * 10}%`, background: C.primary, borderRadius: 2 }} />
+                                  <div style={{ position: "relative", height: 4, background: C.borderLight, borderRadius: 2, marginBottom: 4, overflow: "hidden" }}>
+                                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(val) * 10))}%`, background: C.primary, borderRadius: 2 }} />
                                   </div>
                                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textMuted }}>
                                     <span>{labels[1]}</span><span>{labels[2]}</span>
