@@ -13,8 +13,7 @@ import WorkerDashboard from "./WorkerDashboard";
 //
 // The CSS variable definitions live in a <style> block injected at App
 // mount-time so they're available before any component reads them.
-const C = {
-  primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
+const C = {aprimaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
 
   // Surfaces — themed
   bg: "var(--rt-bg)",
@@ -3338,7 +3337,7 @@ export default function App({ user }) {
               const milestones = [5000, 4000, 3000, 2500, 2000, 1500, 1000, 500, 250, 100];
               const hit = milestones.find(m => year >= m);
               if (hit) {
-                return { line1: hit.toLocaleString() + "+ tasks", line2: "this year ↘" };
+                return { line1: hit.toLocaleString() + "+ tasks", line2: "this year ↙" };
               }
               return null;
             }
@@ -3355,17 +3354,17 @@ export default function App({ user }) {
                 if ((wh[i] || 0) >= current) break;
                 n++;
               }
-              if (n >= 6) return { line1: "fastest week", line2: "in " + n + " weeks ↘" };
+              if (n >= 6) return { line1: "fastest week", line2: "in " + n + " weeks ↙" };
 
               // "+N vs last week" — only when delta ≥ 3.
               const delta = current - lastWeek;
-              if (delta >= 3) return { line1: "+" + delta + " this week", line2: "vs last ↗" };
+              if (delta >= 3) return { line1: "+" + delta + " this week", line2: "vs last ↙" };
 
               // Streak — ≥ 3 days
-              if (streak >= 3) return { line1: streak + " days straight", line2: "keep going ↘" };
+              if (streak >= 3) return { line1: streak + " days straight", line2: "keep going ↙" };
 
               // Recovery — last week 0, this week non-zero
-              if (lastWeek === 0 && current > 0) return { line1: "back at it", line2: current + " this week ↗" };
+              if (lastWeek === 0 && current > 0) return { line1: "back at it", line2: current + " this week ↙" };
 
               return null;
             }
@@ -3382,11 +3381,11 @@ export default function App({ user }) {
                 if ((mh[i] || 0) >= current) break;
                 n++;
               }
-              if (n >= 6) return { line1: "biggest month", line2: "in " + n + " months ↘" };
+              if (n >= 6) return { line1: "biggest month", line2: "in " + n + " months ↙" };
 
               // "+N vs last month" — delta ≥ 10
               const delta = current - lastMonth;
-              if (delta >= 10) return { line1: "+" + delta + " this month", line2: "vs last ↗" };
+              if (delta >= 10) return { line1: "+" + delta + " this month", line2: "vs last ↙" };
 
               return null;
             }
@@ -3448,19 +3447,19 @@ export default function App({ user }) {
                     );
                   })}
                 </div>
-                <div style={{ position: "relative", display: "inline-block", padding: callout ? "4px 10px 8px" : "0 0 6px" }}>
+                <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
-                  {/* Hand-drawn circle around the number — only when callout is
-                      active. Without callout, circle becomes decoration; with
-                      callout, the circle points at the celebrated number.
-                      Path: starts top-right, goes around counter-clockwise,
-                      comes back past start, stops short — V2 "marked in pen". */}
-                  {callout && (
-                    <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
-                      <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
-                            stroke={C.danger} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
-                    </svg>
-                  )}
+                  {/* Hand-drawn circle around the number — permanent, every period.
+                      Reads as "your work, marked." Not tied to the callout — the
+                      callout sits on top and is the conditional celebratory layer.
+                      preserveAspectRatio=none stretches the SVG to fill the parent
+                      box, which is sized by the number text itself — so a 1-digit
+                      "7" gets a tight circle and a 4-digit "1,983" gets a wider
+                      circle, both proportionally enclosing the number. */}
+                  <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
+                    <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
+                          stroke={C.danger} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
+                  </svg>
                 </div>
                 <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
