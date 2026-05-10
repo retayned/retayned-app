@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -1577,6 +1577,15 @@ export default function App({ user }) {
       tasksDb.getCompletedCounts(uid)
         .then(r => { if (r?.data) setTaskCompletedCounts(r.data); })
         .catch(e => console.warn("task completion counts failed:", e));
+    }
+
+    // Billing items — fire-and-forget. Hydrates clientBilling state with all
+    // line items grouped by client_id. If it fails, billing tab starts empty
+    // (user can re-add items; the table just doesn't have data yet).
+    if (typeof clientBillingDb?.listAll === "function") {
+      clientBillingDb.listAll(uid)
+        .then(r => { if (r?.data) setClientBilling(r.data); })
+        .catch(e => console.warn("billing items hydrate failed:", e));
     }
 
     // Build per-client revenue history map: client_id → [history rows]
@@ -10230,48 +10239,144 @@ export default function App({ user }) {
                   const getMonthTotal = (month) => getMonthItems(month).reduce((a, i) => a + i.amount, 0);
                   const pastMonths = [...new Set(billing.items.map(i => i.month))].filter(m => !activeMonths.includes(m));
 
-                  const addItem = (month) => {
+                  // ─── DB-backed billing handlers ──────────────────────────
+                  // All three handlers update local state optimistically (so the
+                  // UI feels snappy), then persist to Supabase. On DB error we
+                  // roll back to the previous state and warn — the user sees
+                  // their change revert and can try again.
+
+                  const addItem = async (month) => {
                     if (!billingNewItem.description.trim() || !billingNewItem.amount) return;
                     const prev = clientBilling[sc.id] || { items: [] };
-                    const item = { id: Date.now(), description: billingNewItem.description.trim(), amount: parseFloat(billingNewItem.amount) || 0, recurring: billingNewItem.recurring, month };
-                    const newItems = [...prev.items, item];
-                    if (billingNewItem.recurring) {
+                    const description = billingNewItem.description.trim();
+                    const amount = parseFloat(billingNewItem.amount) || 0;
+                    const recurring = !!billingNewItem.recurring;
+
+                    // Build the rows we'll insert. Recurring items mirror into the
+                    // other active month (unless a same-description row already
+                    // exists there — avoids dupes if the user manually added it).
+                    const rowsToInsert = [{ description, amount, recurring, month }];
+                    if (recurring) {
                       const otherMonth = month === currentMonth ? nextMonth : currentMonth;
-                      const alreadyExists = prev.items.some(i => i.description === item.description && i.month === otherMonth);
+                      const alreadyExists = prev.items.some(i => i.description === description && i.month === otherMonth);
                       if (!alreadyExists) {
-                        newItems.push({ ...item, id: Date.now() + 1, month: otherMonth });
+                        rowsToInsert.push({ description, amount, recurring: true, month: otherMonth });
                       }
                     }
+
+                    // Optimistic update — temporary local IDs (negative numbers)
+                    // are replaced with real DB IDs once the insert returns.
+                    const tempBase = -Date.now();
+                    const optimisticRows = rowsToInsert.map((r, idx) => ({ ...r, id: tempBase - idx }));
+                    const newItems = [...prev.items, ...optimisticRows];
                     setClientBilling({ ...clientBilling, [sc.id]: { ...prev, items: newItems } });
                     setBillingNewItem({ description: "", amount: "", recurring: false });
                     setBillingAddOpen(false);
+
+                    // Persist
+                    try {
+                      const { data: created, error } = await clientBillingDb.createBatch(user.id, sc.id, rowsToInsert);
+                      if (error) throw error;
+                      // Swap optimistic IDs for real IDs from the DB
+                      const tempIds = new Set(optimisticRows.map(r => r.id));
+                      const finalRows = (created || []).map(r => ({
+                        id: r.id,
+                        description: r.description,
+                        amount: Number(r.amount),
+                        recurring: r.recurring,
+                        month: r.month,
+                      }));
+                      setClientBilling(curr => {
+                        const c = curr[sc.id] || { items: [] };
+                        const kept = c.items.filter(i => !tempIds.has(i.id));
+                        return { ...curr, [sc.id]: { ...c, items: [...kept, ...finalRows] } };
+                      });
+                    } catch (e) {
+                      console.warn("Billing item create failed:", e);
+                      // Roll back to the pre-optimistic state
+                      setClientBilling({ ...clientBilling, [sc.id]: prev });
+                    }
                   };
 
-                  const removeItem = (itemId) => {
+                  const removeItem = async (itemId) => {
                     const prev = clientBilling[sc.id] || { items: [] };
-                    setClientBilling({ ...clientBilling, [sc.id]: { ...prev, items: prev.items.filter(i => i.id !== itemId) } });
+                    // Optimistic remove
+                    setClientBilling({
+                      ...clientBilling,
+                      [sc.id]: { ...prev, items: prev.items.filter(i => i.id !== itemId) },
+                    });
+                    // Persist (skip if it's still an optimistic temp ID — those
+                    // never made it to the DB, so nothing to delete).
+                    if (typeof itemId === "string" || itemId >= 0) {
+                      try {
+                        const { error } = await clientBillingDb.remove(itemId);
+                        if (error) throw error;
+                      } catch (e) {
+                        console.warn("Billing item remove failed:", e);
+                        setClientBilling({ ...clientBilling, [sc.id]: prev });
+                      }
+                    }
                   };
 
-                  const toggleRecurring = (itemId) => {
+                  const toggleRecurring = async (itemId) => {
                     const prev = clientBilling[sc.id] || { items: [] };
                     const item = prev.items.find(i => i.id === itemId);
                     if (!item) return;
                     const turningOn = !item.recurring;
+
+                    // Build the new local state first (same logic as before).
                     let newItems = prev.items.map(i => i.id === itemId ? { ...i, recurring: !i.recurring } : i);
-                    // When toggling ON post-creation, mirror the at-create behavior:
-                    // duplicate this line item into the OTHER active month so it shows
-                    // up there too. Skipped if a same-description row already exists
-                    // in the other month (avoid duplicates if the user manually added it).
-                    // Toggling OFF leaves both rows alone — predictable, user can delete
-                    // manually if they want.
+                    let mirrorRow = null; // populated if we add a mirror line
                     if (turningOn) {
                       const otherMonth = item.month === currentMonth ? nextMonth : currentMonth;
                       const alreadyExists = prev.items.some(i => i.description === item.description && i.month === otherMonth);
                       if (!alreadyExists) {
-                        newItems = [...newItems, { ...item, id: Date.now(), month: otherMonth, recurring: true }];
+                        const tempId = -Date.now();
+                        mirrorRow = {
+                          id: tempId,
+                          description: item.description,
+                          amount: item.amount,
+                          recurring: true,
+                          month: otherMonth,
+                        };
+                        newItems = [...newItems, mirrorRow];
                       }
                     }
+
+                    // Optimistic update
                     setClientBilling({ ...clientBilling, [sc.id]: { ...prev, items: newItems } });
+
+                    // Persist: update the toggled row, and insert the mirror if needed.
+                    try {
+                      const { error: updateErr } = await clientBillingDb.update(itemId, { recurring: !item.recurring });
+                      if (updateErr) throw updateErr;
+                      if (mirrorRow) {
+                        const { data: created, error: insertErr } = await clientBillingDb.create(user.id, sc.id, {
+                          description: mirrorRow.description,
+                          amount: mirrorRow.amount,
+                          recurring: true,
+                          month: mirrorRow.month,
+                        });
+                        if (insertErr) throw insertErr;
+                        if (created) {
+                          // Swap the temp ID for the real one
+                          setClientBilling(curr => {
+                            const c = curr[sc.id] || { items: [] };
+                            const swapped = c.items.map(i => i.id === mirrorRow.id ? {
+                              id: created.id,
+                              description: created.description,
+                              amount: Number(created.amount),
+                              recurring: created.recurring,
+                              month: created.month,
+                            } : i);
+                            return { ...curr, [sc.id]: { ...c, items: swapped } };
+                          });
+                        }
+                      }
+                    } catch (e) {
+                      console.warn("Billing item toggle failed:", e);
+                      setClientBilling({ ...clientBilling, [sc.id]: prev });
+                    }
                   };
 
                   const renderMonth = (month, isNext) => {
