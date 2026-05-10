@@ -4374,9 +4374,7 @@ export default function App({ user }) {
                     <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <div style={{ width: 26, height: 26, borderRadius: 7, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <Icon name="calendar" size={13} color={C.primary} />
-                          </div>
+                          <Icon name="due" size={26} />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
                             <span
@@ -4676,7 +4674,7 @@ export default function App({ user }) {
                         onMouseEnter={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
                         onMouseLeave={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "transparent"; }}
                       >
-                        <Icon name={newTaskRecurring ? "infinity" : "calendar"} size={newTaskRecurring ? 14 : 12} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
+                        <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
                         <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
                       </button>
                       {(newTaskDueDate || newTaskRecurring) && (
@@ -5297,9 +5295,7 @@ export default function App({ user }) {
                     <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <div style={{ width: 26, height: 26, borderRadius: 7, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <Icon name="calendar" size={13} color={C.primary} />
-                          </div>
+                          <Icon name="due" size={26} />
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
                             <span
@@ -6016,9 +6012,7 @@ export default function App({ user }) {
                 <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                      <div style={{ width: 26, height: 26, borderRadius: 7, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <Icon name="calendar" size={13} color={C.primary} />
-                      </div>
+                      <Icon name="due" size={26} />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
                         <span
