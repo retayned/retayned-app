@@ -77,6 +77,11 @@ const THEME_CSS = `
     --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
     --rt-shadow-sm: 0 1px 2px rgba(10,10,10,0.04), 0 1px 3px rgba(10,10,10,0.03);
     --rt-shadow-md: 0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05);
+    /* Editorial nav-icon palette. Light mode: cream paper, near-black ink,
+       primary-light green accent (matches the SVG art's hand-drawn style). */
+    --rt-icon-fill: #FCFCFE;
+    --rt-icon-stroke: #2F2F31;
+    --rt-icon-accent: #558B68;
   }
   :root[data-theme="dark"] {
     /* Editorial Black — cream and gold on near-black. The journal at midnight. */
@@ -102,19 +107,106 @@ const THEME_CSS = `
     --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.50), 0 4px 16px rgba(0,0,0,0.40);
     --rt-shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 1px 3px rgba(0,0,0,0.30);
     --rt-shadow-md: 0 2px 4px rgba(0,0,0,0.50), 0 4px 12px rgba(0,0,0,0.45);
+    /* Editorial nav-icon palette — dark mode. Fill flips from white to a
+       deep warm-black, stroke flips to cream so the line work stays visible
+       against the dark sidebar. Green accent stays — it reads identically
+       on either theme. */
+    --rt-icon-fill: #1F1E15;
+    --rt-icon-stroke: #B5A788;
+    --rt-icon-accent: #558B68;
   }
   html, body { background: var(--rt-bg); }
 `;
 
 const Icon = ({ name, size = 18, color = "currentColor" }) => {
+  // Editorial nav icons — 32x32 viewBox, multi-color (cream paper + ink stroke
+  // + green accent). Color tokens come from CSS variables so they flip in dark
+  // mode. The `color` prop is intentionally ignored for these icons — they
+  // don't recolor on active state; the active state is signalled by the
+  // surrounding row's background fill.
+  const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers"]);
+  const isEditorial = editorialNames.has(name);
+
   const paths = {
-    today: (<><circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="3.5" fill={color}/></>),
-    clients: (<><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/><path d="M23 21v-2a4 4 0 00-3-3.87" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><path d="M16 3.13a4 4 0 010 7.75" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/></>),
+    today: (<>
+      <rect x="5" y="8" width="22" height="20" rx="3" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M5 11 Q5 8 8 8 L24 8 Q27 8 27 11 L27 13 L5 13 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <line x1="11" y1="5" x2="11" y2="10" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <line x1="21" y1="5" x2="21" y2="10" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <circle cx="16" cy="20" r="4.2" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+    </>),
+    clients: (<>
+      <g transform="translate(8 17)">
+        <circle cx="0" cy="0" r="6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <circle cx="0" cy="-1.6" r="1.8" fill="var(--rt-icon-stroke)"/>
+        <path d="M-3.5 4 Q0 1.5 3.5 4" fill="var(--rt-icon-stroke)" stroke="none"/>
+      </g>
+      <g transform="translate(24 17)">
+        <circle cx="0" cy="0" r="6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <circle cx="0" cy="-1.6" r="1.8" fill="var(--rt-icon-stroke)"/>
+        <path d="M-3.5 4 Q0 1.5 3.5 4" fill="var(--rt-icon-stroke)" stroke="none"/>
+      </g>
+      <g transform="translate(16 14)">
+        <circle cx="0" cy="0" r="7.5" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
+        <circle cx="0" cy="-2" r="2.2" fill="var(--rt-icon-fill)"/>
+        <path d="M-4 5 Q0 2 4 5" fill="var(--rt-icon-fill)" stroke="none"/>
+      </g>
+      <path d="M9 26 Q16 30 23 26" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
+      <circle cx="16" cy="28.5" r="1.2" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.2"/>
+    </>),
+    health: (<>
+      <rect x="6" y="8" width="20" height="20" rx="2.5" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <rect x="11" y="4" width="10" height="6" rx="1.5" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M9 19 L13 19 L14.5 15.5 L16.5 22.5 L18.5 16 L20 19 L23 19" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </>),
+    rai: (<>
+      <line x1="16" y1="8" x2="16" y2="3.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <circle cx="16" cy="3" r="1.6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
+      <path d="M5 11 Q5 8 8 8 L24 8 Q27 8 27 11 L27 21 Q27 24 24 24 L14 24 L9 28 L10 24 Q5 24 5 21 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <circle cx="13" cy="16" r="1.4" fill="var(--rt-icon-stroke)"/>
+      <circle cx="19" cy="16" r="1.4" fill="var(--rt-icon-stroke)"/>
+      <path d="M12 19 Q16 21 20 19" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
+    </>),
+    rolodex: (<>
+      <rect x="3" y="22" width="26" height="5" rx="1.5" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+      <circle cx="6" cy="14" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
+      <circle cx="26" cy="14" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
+      <line x1="6" y1="14" x2="26" y2="14" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
+      <path d="M9 14 Q12 5 16 7 Q20 9 23 14 L20 14 L20 22 L12 22 L12 14 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinejoin="round"/>
+      <line x1="14" y1="16" x2="20" y2="16" stroke="var(--rt-icon-fill)" strokeWidth="1.2" strokeLinecap="round"/>
+    </>),
+    referrals: (<>
+      <g stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round">
+        <line x1="11" y1="16" x2="24" y2="6"/>
+        <line x1="11" y1="16" x2="26" y2="16"/>
+        <line x1="11" y1="16" x2="24" y2="26"/>
+      </g>
+      <circle cx="25" cy="6" r="2.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+      <circle cx="27" cy="16" r="2.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+      <circle cx="25" cy="26" r="2.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+      <circle cx="9" cy="16" r="4.6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
+      <circle cx="9" cy="16" r="1.4" fill="var(--rt-icon-fill)"/>
+    </>),
+    workers: (<>
+      <path d="M10 4 Q16 8 22 4" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
+      <rect x="14.5" y="6" width="3" height="3" rx="0.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.2"/>
+      <rect x="6" y="9" width="20" height="19" rx="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <rect x="9" y="13" width="8" height="9" rx="1" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
+      <circle cx="13" cy="16.5" r="1.6" fill="var(--rt-icon-fill)"/>
+      <path d="M10.5 21 Q13 19 15.5 21" fill="var(--rt-icon-fill)" stroke="none"/>
+      <line x1="19" y1="14" x2="24" y2="14" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="19" y1="17" x2="23" y2="17" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round" opacity="0.7"/>
+      <line x1="19" y1="20" x2="23" y2="20" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round" opacity="0.7"/>
+      <g stroke="var(--rt-icon-stroke)" strokeWidth="1.2" strokeLinecap="round">
+        <line x1="9" y1="25" x2="9" y2="26.5"/>
+        <line x1="11" y1="25" x2="11" y2="26.5"/>
+        <line x1="13" y1="25" x2="13" y2="26.5"/>
+        <line x1="15" y1="25" x2="15" y2="26.5"/>
+        <line x1="17" y1="25" x2="17" y2="26.5"/>
+        <line x1="19" y1="25" x2="19" y2="26.5"/>
+      </g>
+    </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
-    health: (<><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
-    rai: (<><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
-    rolodex: (<><rect x="2" y="5" width="20" height="14" rx="2" stroke={color} strokeWidth="1.8" fill="none"/><path d="M2 10h20" stroke={color} strokeWidth="1.8"/><circle cx="12" cy="14.5" r="1.5" fill={color}/></>),
-    referrals: (<><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/><path d="M19 8v6M22 11h-6" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     settings: (<><circle cx="12" cy="12" r="3" stroke={color} strokeWidth="1.8" fill="none"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke={color} strokeWidth="1.8" fill="none"/></>),
     sun: (<><circle cx="12" cy="12" r="4.5" stroke={color} strokeWidth="1.8" fill="none"/><path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" stroke={color} strokeWidth="1.8" strokeLinecap="round"/></>),
     moon: (<><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
@@ -153,7 +245,17 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
   };
 
 
-  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">{paths[name]}</svg>);
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={isEditorial ? "0 0 32 32" : "0 0 24 24"}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {paths[name]}
+    </svg>
+  );
 };
 
 
@@ -692,11 +794,11 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 
 const navItemsCore = [
   { id: "today", icon: "today", label: "Today" },
-  { id: "clients", icon: "user", label: "Clients" },
+  { id: "clients", icon: "clients", label: "Clients" },
   { id: "health", icon: "health", label: "Health" },
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
-  { id: "workers", icon: "clients", label: "Workers" },
+  { id: "workers", icon: "workers", label: "Workers" },
   { id: "coach", icon: "rai", label: "Rai" },
 ];
 const navItemsEnterprise = [
@@ -707,28 +809,33 @@ const navItemsEnterprise = [
   { id: "referral_intel", icon: "target", label: "Referral Intel" },
   { id: "coach", icon: "rai", label: "Rai" },
 ];
+// Mobile bottom nav — single horizontally-scrollable strip instead of a "More"
+// popup. All destinations sit inline; user swipes the strip left/right to
+// reveal additional items. The strip auto-scrolls to keep the active item in
+// view when navigation happens. Order matters — primary destinations first
+// (Today, Clients, Rai, Health) so they're visible without scrolling on
+// typical phone widths.
 const mobileNavCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
   { id: "coach", icon: "rai", label: "Rai" },
   { id: "health", icon: "health", label: "Health" },
-  { id: "more", icon: "bento", label: "More" },
+  { id: "retros", icon: "rolodex", label: "Rolodex" },
+  { id: "referrals", icon: "referrals", label: "Referrals" },
+  { id: "workers", icon: "workers", label: "Workers" },
+  { id: "settings", icon: "settings", label: "Settings" },
 ];
 const mobileNavEnterprise = [
   { id: "today", icon: "today", label: "Today" },
   { id: "sweeps", icon: "sweeps", label: "Sweeps" },
   { id: "clients", icon: "clients", label: "Clients" },
   { id: "coach", icon: "rai", label: "Rai" },
-  { id: "more", icon: "bento", label: "More" },
-];
-const moreItemsCore = [
-  { id: "retros", icon: "rolodex", label: "Rolodex" },
-  { id: "referrals", icon: "referrals", label: "Referrals" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
-const moreItemsEnterprise = [
-  { id: "settings", icon: "settings", label: "Settings" },
-];
+// Legacy "More" item lists — kept (empty-ish) so any straggler reference doesn't
+// crash. The mobile More popup has been removed in favor of the swipeable strip.
+const moreItemsCore = [];
+const moreItemsEnterprise = [];
 
 const coachOpeners = {
   "Northvane Studios": "Let's talk about Northvane. Sarah's been with you almost 3 years. What's on your mind?",
@@ -897,6 +1004,19 @@ export default function App({ user }) {
   // window.scrollTo needed.
   useEffect(() => {
     document.querySelectorAll(".r-main, .r-rai-scroll").forEach(el => { el.scrollTop = 0; });
+    // Mobile nav: scroll the active item into view inside the horizontal strip
+    // so destinations that scroll off-screen are reachable. We use scrollIntoView
+    // with inline:"center" so the active pill sits roughly mid-strip, leaving
+    // peeks of neighbors on either side.
+    const navEl = mobileNavRef.current;
+    if (navEl) {
+      const activeItem = navEl.querySelector(`[data-nav-id="${page}"]`);
+      if (activeItem && typeof activeItem.scrollIntoView === "function") {
+        try {
+          activeItem.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        } catch (e) { /* older browsers ignore options arg silently */ }
+      }
+    }
   }, [page]);
   // iOS Safari viewport fix — when the address bar collapses/expands, 100vh doesn't update,
   // leaving fixed-positioned elements (like the bottom nav) anchored to the wrong bottom.
@@ -1011,6 +1131,10 @@ export default function App({ user }) {
   // picked client. Lives in a ref so updates don't trigger renders.
   // Shape: { [clientName]: { firstCreatedAt: ms, lastCreatedAt: ms } }
   const raiBurstTrackerRef = useRef({});
+  // Mobile bottom nav strip — horizontally scrollable. We auto-scroll the
+  // active item into view whenever `page` changes, so navigating to a
+  // destination off-screen pulls it into the visible window.
+  const mobileNavRef = useRef(null);
   // Focus mode: laser-focus on top task, dim everything else. Only available in Rai mode.
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
@@ -2824,6 +2948,11 @@ export default function App({ user }) {
         .r-desk { display: none; }
         .r-mob-top { display: flex; }
         .r-mob-bot { display: flex; }
+        /* Mobile bottom nav strip is horizontally scrollable. Hide the
+           native scrollbar across all browsers — affordance is the icon
+           overflow itself plus the inertia/snap behavior. */
+        .rt-mob-nav-scroll::-webkit-scrollbar { display: none; }
+        .rt-mob-nav-scroll { -ms-overflow-style: none; }
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
@@ -9787,6 +9916,21 @@ export default function App({ user }) {
               </button>
             </div>
 
+            {/* Account tier — Core / Enterprise toggle. Used to live in the
+                mobile More popup; surfaced here as a regular Settings card now
+                that the More popup is gone. Switches the navigation surface
+                between consumer (Core) and enterprise (Sweeps + Referral Intel)
+                feature sets. */}
+            <div className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Account tier</div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>{tier === "enterprise" ? "Enterprise" : "Core"}</div>
+              </div>
+              <div onClick={() => setTier(tier === "core" ? "enterprise" : "core")} style={{ width: 44, height: 24, borderRadius: 12, background: tier === "enterprise" ? C.btn : C.borderLight, position: "relative", transition: "background 0.2s", cursor: "pointer", flexShrink: 0 }}>
+                <div style={{ width: 20, height: 20, borderRadius: 10, background: "#fff", position: "absolute", top: 2, left: tier === "enterprise" ? 22 : 2, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
+              </div>
+            </div>
+
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
               <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
@@ -11220,39 +11364,67 @@ export default function App({ user }) {
       })()}
 
 
-      {/* MOBILE BOTTOM NAV — hidden when keyboard is up so inputs aren't covered */}
-      <div className="r-mob-bot" style={{ position: "fixed", top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 82px)", left: 12, right: 12, background: C.surfaceWarm, borderRadius: 18, boxShadow: "0 2px 6px rgba(10,10,10,0.04), 0 4px 14px rgba(10,10,10,0.07)", justifyContent: "space-around", padding: "10px 6px 12px", zIndex: 40, display: keyboardOpen ? "none" : undefined }}>
+      {/* MOBILE BOTTOM NAV — horizontally-scrollable strip.
+          Replaces the old "More" popup pattern. All pages live inline; the
+          user swipes left/right within the strip to access ones that scroll
+          off-screen. Active item auto-scrolls into view via the ref hook
+          below. The right-edge fade is a visual hint that there's more
+          content scrollable beyond. Hidden when keyboard is up so inputs
+          aren't covered. */}
+      <div
+        ref={mobileNavRef}
+        className="r-mob-bot rt-mob-nav-scroll"
+        style={{
+          position: "fixed",
+          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 82px)",
+          left: 12,
+          right: 12,
+          background: C.surfaceWarm,
+          borderRadius: 18,
+          boxShadow: "0 2px 6px rgba(10,10,10,0.04), 0 4px 14px rgba(10,10,10,0.07)",
+          padding: "10px 6px 12px",
+          zIndex: 40,
+          display: keyboardOpen ? "none" : "flex",
+          alignItems: "center",
+          gap: 4,
+          overflowX: "auto",
+          overflowY: "hidden",
+          scrollSnapType: "x proximity",
+          WebkitOverflowScrolling: "touch",
+          scrollbarWidth: "none",
+        }}
+      >
         {(tier === "enterprise" ? mobileNavEnterprise : mobileNavCore).map(n => {
           const dot = hasDot(n.id);
-          const active = page === n.id || (n.id === "more" && showMore);
+          const active = page === n.id;
           return (
-            <div key={n.id} onClick={() => n.id === "more" ? setShowMore(!showMore) : goTo(n.id)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", padding: "5px 10px", borderRadius: 10, background: active ? C.deepCream : "transparent", boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", position: "relative" }}>
-              <Icon name={n.icon} size={20} color={active ? C.primary : C.ink500} />
+            <div
+              key={n.id}
+              data-nav-id={n.id}
+              onClick={() => goTo(n.id)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+                cursor: "pointer",
+                padding: "5px 12px",
+                borderRadius: 10,
+                background: active ? C.deepCream : "transparent",
+                boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none",
+                position: "relative",
+                flexShrink: 0,
+                scrollSnapAlign: "center",
+                minWidth: 60,
+              }}
+            >
+              <Icon name={n.icon} size={22} color={active ? C.primary : C.ink500} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.text : C.ink500 }}>{n.label}</span>
               {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.deepCream : C.surfaceWarm) }} />}
             </div>
           );
         })}
       </div>
-      {showMore && (
-        <>
-          <div onClick={() => setShowMore(false)} style={{ position: "fixed", inset: 0, zIndex: 45 }} />
-          <div style={{ position: "fixed", top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 94px)", right: 20, transform: "translateY(-100%)", background: C.card, borderRadius: "12px 12px 12px 12px", border: "1px solid " + C.border, boxShadow: "0 -4px 24px rgba(0,0,0,0.08)", zIndex: 46, overflow: "hidden", minWidth: 180, animation: "fadeIn 0.15s ease" }}>
-            {(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore).map((m, i, arr) => (
-              <div key={m.id} onClick={() => goTo(m.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", cursor: "pointer", borderBottom: "1px solid " + C.borderLight, background: page === m.id ? C.bg : "transparent" }}>
-                <span style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={m.icon} size={18} color={page === m.id ? C.text : C.textMuted} /></span><span style={{ fontSize: 13, fontWeight: page === m.id ? 700 : 500, color: page === m.id ? C.text : C.text, flex: 1 }}>{m.label}</span>
-                {hasDot(m.id) && <Dot />}
-              </div>
-            ))}
-            <div onClick={() => { setTier(tier === "core" ? "enterprise" : "core"); setShowMore(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", cursor: "pointer" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>{tier === "enterprise" ? "Enterprise" : "Core"}</span>
-              <div style={{ width: 36, height: 20, borderRadius: 10, background: tier === "enterprise" ? C.btn : C.borderLight, position: "relative", transition: "background 0.2s" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 2, left: tier === "enterprise" ? 18 : 2, transition: "left 0.2s" }} />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
