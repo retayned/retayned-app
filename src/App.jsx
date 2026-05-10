@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
- 
+
 // ============================================================
 // PALETTE
 // ============================================================
@@ -171,6 +171,170 @@ const ScoreRing = ({ score, size = 44, strokeWidth = 3.5 }) => {
   );
 };
 
+const clientsBase = [
+  { id: 1, name: "Northvane Studios", ret: 91, contact: "Sarah Chen", role: "Head of Marketing", months: 34, revenue: 6200, velocity: "fast", lastHC: "Mar 1", lastContact: "today", tag: "Creative", referrals: 2 },
+  { id: 2, name: "Oakline Outdoors", ret: 82, contact: "James Park", role: "CMO", months: 18, revenue: 4200, velocity: "normal", lastHC: "Mar 5", lastContact: "2d ago", tag: "DTC", referrals: 0 },
+  { id: 3, name: "Ridgeline Supply", ret: 73, contact: "Marcus Webb", role: "Founder & CEO", months: 11, revenue: 4900, velocity: "normal", lastHC: "Mar 15", lastContact: "3d ago", tag: "Ecommerce", referrals: 0 },
+  { id: 4, name: "Broadleaf Media", ret: 67, contact: "Rachel Torres", role: "VP Marketing", months: 8, revenue: 7500, velocity: "normal", lastHC: "Mar 10", lastContact: "1d ago", tag: "Media", referrals: 0 },
+  { id: 5, name: "Copper & Sage", ret: 55, contact: "Elena Moss", role: "Marketing Director", months: 6, revenue: 2800, velocity: "slowing", lastHC: "Mar 20", lastContact: "5d ago", tag: "Wellness", referrals: 0 },
+  { id: 6, name: "Velvet & Co", ret: 44, contact: "Priya Sharma", role: "Brand Manager", months: 4, revenue: 3100, velocity: "slowing", lastHC: "Mar 22", lastContact: "8d ago", tag: "Fashion", referrals: 0 },
+  { id: 7, name: "Foxglove Partners", ret: 38, contact: "Tom Aldrich", role: "Director of Ops", months: 3, revenue: 8200, velocity: "cold", lastHC: "Mar 18", lastContact: "14d ago", tag: "B2B", referrals: 0 },
+  { id: 8, name: "Evergreen Games", ret: 18, contact: "Derek Holt", role: "VP of Growth", months: 5, revenue: 5800, velocity: "cold", lastHC: "Mar 15", lastContact: "11d ago", tag: "Gaming", referrals: 0 },
+];
+
+const healthQueue = [
+  { client: "Copper & Sage", ret: 55, due: "Today", overdue: 0 },
+  { client: "Velvet & Co", ret: 44, due: "Overdue", overdue: 5 },
+  { client: "Foxglove Partners", ret: 38, due: "Overdue", overdue: 9 },
+  { client: "Evergreen Games", ret: 18, due: "Overdue", overdue: 12 },
+  { client: "Ridgeline Supply", ret: 73, due: "Apr 15", overdue: 0 },
+  { client: "Broadleaf Media", ret: 67, due: "Apr 10", overdue: 0 },
+  { client: "Oakline Outdoors", ret: 82, due: "Apr 5", overdue: 0 },
+  { client: "Northvane Studios", ret: 91, due: "Apr 1", overdue: 0 },
+];
+
+const referralsData = [
+  { from: "Northvane Studios", to: "Pinehill Collective", date: "Feb 15", converted: true, revenue: 3200 },
+  { from: "Northvane Studios", to: "Driftwood Creative", date: "Nov 10", converted: true, revenue: 4100 },
+  { from: "Oakline Outdoors", to: "Summit Gear Co", date: "Mar 20", converted: false, revenue: 0 },
+];
+
+// Enterprise Data
+const enterpriseClients = clientsBase.map(c => ({
+  ...c,
+  enterprise: {
+    automated_scores: {
+      loyaltySignal: Math.round(c.ret * 0.08 + Math.random() * 2),
+      trustLevel: Math.round(c.ret * 0.07 + Math.random() * 2),
+      commFreq: c.velocity === "fast" ? 7 : c.velocity === "normal" ? 5 : c.velocity === "slowing" ? 3 : 2,
+      stressResponse: 5 + Math.round((Math.random() - 0.5) * 4),
+      expectLevel: 5 + Math.round((Math.random() - 0.5) * 4),
+      reportNeed: Math.round(3 + Math.random() * 4),
+      relationDepth: Math.round(c.months > 12 ? 7 + Math.random() * 2 : 4 + Math.random() * 3),
+      commTone: Math.round(4 + Math.random() * 4),
+      decisionSpeed: Math.round(4 + Math.random() * 4),
+      feedbackStyle: Math.round(3 + Math.random() * 4),
+      metricFocus: Math.round(5 + Math.random() * 4),
+      changeAppetite: Math.round(3 + Math.random() * 4),
+    },
+    baseline_score: c.ret,
+    prior_baseline: c.ret + Math.round((Math.random() - 0.4) * 6),
+    drift: 0,
+    confidence: c.months > 6 ? "high" : "medium",
+    archetype: c.ret >= 80 ? null : c.ret >= 60 ? (c.velocity === "slowing" ? "slow_fade" : null) : c.velocity === "cold" ? "silent_exit" : c.ret < 40 ? "budget_squeeze" : "tone_shift",
+    retention_outlook: c.ret >= 80 ? "long_term" : c.ret >= 65 ? "strong" : c.ret >= 50 ? "uncertain" : c.ret >= 30 ? "at_risk" : "critical",
+    active_signals: [],
+    rai_summary: "",
+    score_history: Array.from({length: 7}, (_, i) => ({ date: `Apr ${9-i}`, score: c.ret + Math.round((Math.random()-0.5) * 4 * (i+1)/3) })),
+    last_sweep: "2026-04-09T06:02:00Z",
+  }
+}));
+
+// Add signals and summaries
+enterpriseClients.forEach(c => {
+  const e = c.enterprise;
+  e.drift = e.baseline_score - e.prior_baseline;
+  if (c.velocity === "cold") e.active_signals.push({ type: "warning", text: `No response in ${Math.round(5 + Math.random()*10)} days` });
+  if (c.velocity === "slowing") e.active_signals.push({ type: "warning", text: "Response time increased 40% over 2 weeks" });
+  if (c.ret < 50) e.active_signals.push({ type: "warning", text: "Communication frequency declining" });
+  if (c.months >= 11 && c.months <= 13) e.active_signals.push({ type: "info", text: "Approaching 1-year anniversary" });
+  if (c.ret >= 80) e.active_signals.push({ type: "positive", text: "Engagement strong across all channels" });
+  
+  const names = { "Northvane Studios": "Sarah", "Oakline Outdoors": "James", "Ridgeline Supply": "Marcus", "Broadleaf Media": "Rachel", "Copper & Sage": "Elena", "Velvet & Co": "Priya", "Foxglove Partners": "Tom", "Evergreen Games": "Derek" };
+  const n = names[c.name] || c.contact.split(" ")[0];
+  if (c.ret >= 80) e.rai_summary = `${n} is locked in. Strong trust signals, consistent communication. Keep doing what you're doing.`;
+  else if (c.ret >= 60) e.rai_summary = `${n} is solid but watch the edges. ${c.velocity === "slowing" ? "Response patterns are shifting — could be seasonal or could be the start of something." : "No red flags yet, but don't coast."}`;
+  else if (c.ret >= 40) e.rai_summary = `${n} is pulling back. ${c.velocity === "cold" ? "They've gone quiet — that's never just busy." : "The energy has shifted. This needs a direct conversation, not another email."}`;
+  else e.rai_summary = `${n} is at real risk. Multiple signals converging. Call today — not email, not Slack. A real conversation.`;
+});
+
+
+// Referral Intelligence (Enterprise)
+const referralReadiness = enterpriseClients.map(c => {
+  const e = c.enterprise;
+  const scores = e.automated_scores;
+  const loyalty = (scores.loyaltySignal || 5) / 10;
+  const trust = (scores.trustLevel || 5) / 10;
+  const depth = (scores.relationDepth || 5) / 10;
+  const readiness = (loyalty * 0.35) + (trust * 0.25) + (depth * 0.20) + (c.ret / 100 * 0.15) + (c.referrals > 0 ? 0.05 : 0);
+  const reasons = [];
+  if (loyalty >= 0.7) reasons.push("Strong loyalty signals");
+  if (trust >= 0.7) reasons.push("High trust level");
+  if (depth >= 0.7) reasons.push("Deep personal relationship");
+  if (c.months >= 12) reasons.push("Long-standing partnership (" + c.months + " months)");
+  if (c.referrals > 0) reasons.push("Has referred before (" + c.referrals + ")");
+  if (c.ret >= 80) reasons.push("Excellent retention score");
+  if (c.velocity === "fast") reasons.push("Highly engaged right now");
+  
+  const names = { "Northvane Studios": "Sarah", "Oakline Outdoors": "James", "Ridgeline Supply": "Marcus", "Broadleaf Media": "Rachel", "Copper & Sage": "Elena", "Velvet & Co": "Priya", "Foxglove Partners": "Tom", "Evergreen Games": "Derek" };
+  const n = names[c.name] || c.contact.split(" ")[0];
+  let approach = "";
+  if (readiness >= 0.6) approach = `${n} trusts you and the relationship is deep enough to ask directly. Bring it up casually — "Know anyone who could use what we do?" works better than a formal ask.`;
+  else if (readiness >= 0.4) approach = `${n} is getting there but the relationship needs more depth first. Focus on delivering a win this month, then revisit.`;
+  else approach = `Not the right time. ${n} needs to feel more confident in the partnership before you ask for anything.`;
+  
+  return { ...c, readiness: Math.round(readiness * 100), reasons, approach, tier: readiness >= 0.6 ? "ready" : readiness >= 0.4 ? "building" : "not_yet" };
+}).sort((a, b) => b.readiness - a.readiness);
+
+const sweepData = {
+  id: "sweep_20260409",
+  timestamp: "2026-04-09T06:02:00Z",
+  type: "daily",
+  clients_analyzed: 8,
+  alerts_count: 2,
+  tasks_generated: 5,
+  portfolio_avg_score: Math.round(clientsBase.reduce((a, c) => a + c.ret, 0) / clientsBase.length),
+  prior_portfolio_avg: Math.round(clientsBase.reduce((a, c) => a + c.ret, 0) / clientsBase.length) - 2,
+  score_distribution: {
+    critical: clientsBase.filter(c => c.ret <= 30).length,
+    at_risk: clientsBase.filter(c => c.ret > 30 && c.ret <= 50).length,
+    watch: clientsBase.filter(c => c.ret > 50 && c.ret <= 65).length,
+    stable: clientsBase.filter(c => c.ret > 65 && c.ret <= 80).length,
+    strong: clientsBase.filter(c => c.ret > 80).length,
+  },
+};
+
+const sweepHistory = [
+  { date: "Apr 9", clients: 8, avg: 53, alerts: 2 },
+  { date: "Apr 8", clients: 8, avg: 52, alerts: 1 },
+  { date: "Apr 7", clients: 8, avg: 54, alerts: 0 },
+  { date: "Apr 6", clients: 8, avg: 53, alerts: 1 },
+  { date: "Apr 5", clients: 8, avg: 55, alerts: 3 },
+  { date: "Apr 4", clients: 8, avg: 54, alerts: 0 },
+  { date: "Apr 3", clients: 8, avg: 52, alerts: 1 },
+];
+
+const sweepTasks = [
+  { id: "st1", client: "Foxglove Partners", signal: "Budget Squeeze + Stakeholder Shift", action: "Call Tom today. His boss was cc'd on the last two emails and he requested a performance summary — that's pre-churn behavior. Don't email. Call.", priority: "urgent", timeframe: "Today" },
+  { id: "st2", client: "Evergreen Games", signal: "Silent Exit", action: "Derek hasn't responded in 11 days. Send a short, direct message: 'Hey — wanted to check in. Are we good?' Don't over-explain.", priority: "high", timeframe: "Today" },
+  { id: "st3", client: "Copper & Sage", signal: "Slow Fade", action: "Elena's response times are creeping up. Schedule a strategy call — reframe the value before she starts shopping.", priority: "high", timeframe: "This week" },
+  { id: "st4", client: "Ridgeline Supply", signal: "12-month approaching", action: "Marcus hits 12 months next month. Send a milestone note and open a conversation about next year's scope.", priority: "medium", timeframe: "This week" },
+  { id: "st5", client: "Northvane Studios", signal: "Referral opportunity", action: "Sarah's engagement is at an all-time high. Ask about referrals — she's your strongest advocate.", priority: "medium", timeframe: "This month" },
+];
+
+const integrations = [
+  { cat: "Communication", items: [
+    { name: "Slack", icon: "💬", connected: true, meta: "3 workspaces" },
+    { name: "Microsoft Teams", icon: "📱", connected: false },
+    { name: "Gmail / Google", icon: "📧", connected: true, meta: "2 accounts" },
+    { name: "Outlook / Microsoft", icon: "📨", connected: false },
+  ]},
+  { cat: "Meetings", items: [
+    { name: "Zoom", icon: "🎥", connected: true, meta: "Connected" },
+    { name: "Google Meet", icon: "📹", connected: false },
+    { name: "Microsoft Teams", icon: "📞", connected: false },
+  ]},
+  { cat: "CRM", items: [
+    { name: "HubSpot", icon: "🟠", connected: false },
+    { name: "Salesforce", icon: "☁️", connected: false },
+    { name: "Pipedrive", icon: "📊", connected: false },
+  ]},
+  { cat: "Billing", items: [
+    { name: "Stripe", icon: "💳", connected: false },
+    { name: "QuickBooks", icon: "📗", connected: false },
+    { name: "FreshBooks", icon: "📘", connected: false },
+  ]},
+];
 
 function retColor(v) {
   if (v >= 80) return "#0C3A2E";      // Elite (retElite)
@@ -535,6 +699,14 @@ const navItemsCore = [
   { id: "workers", icon: "clients", label: "Workers" },
   { id: "coach", icon: "rai", label: "Rai" },
 ];
+const navItemsEnterprise = [
+  { id: "today", icon: "today", label: "Today" },
+  { id: "sweeps", icon: "sweeps", label: "Sweeps" },
+  { id: "clients", icon: "clients", label: "Clients" },
+  { id: "health", icon: "health", label: "Health" },
+  { id: "referral_intel", icon: "target", label: "Referral Intel" },
+  { id: "coach", icon: "rai", label: "Rai" },
+];
 const mobileNavCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
@@ -542,12 +714,37 @@ const mobileNavCore = [
   { id: "health", icon: "health", label: "Health" },
   { id: "more", icon: "bento", label: "More" },
 ];
+const mobileNavEnterprise = [
+  { id: "today", icon: "today", label: "Today" },
+  { id: "sweeps", icon: "sweeps", label: "Sweeps" },
+  { id: "clients", icon: "clients", label: "Clients" },
+  { id: "coach", icon: "rai", label: "Rai" },
+  { id: "more", icon: "bento", label: "More" },
+];
 const moreItemsCore = [
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
+const moreItemsEnterprise = [
+  { id: "settings", icon: "settings", label: "Settings" },
+];
 
+const coachOpeners = {
+  "Northvane Studios": "Let's talk about Northvane. Sarah's been with you almost 3 years. What's on your mind?",
+  "Oakline Outdoors": "Oakline is solid. Anything specific, or just checking in?",
+  "Ridgeline Supply": "Ridgeline is at an inflection point. 1-year mark coming. What are you thinking?",
+  "Broadleaf Media": "Broadleaf is your highest revenue but stable, not growing. Want to change that?",
+  "Copper & Sage": "Copper & Sage has been declining. Elena's pulling back. What happened last call?",
+  "Velvet & Co": "Velvet is going vague. Priya used to give detail. What changed?",
+  "Foxglove Partners": "Foxglove has been cold 2 weeks. $8.2k/mo. Ready to make a call?",
+  "Evergreen Games": "Evergreen is done. Want to think through the Rolodex entry — could they come back or refer?",
+};
+const coachDemos = {
+  "Which clients should I ask for referrals?": "Sarah at Northvane (91%) already referred 2. James at Oakline (82%) hasn't been asked. Everyone below 70%: deepen first.",
+  "Who needs attention this week?": "This week: Ridgeline (1-year approaching), Copper & Sage (health check overdue), Foxglove (decision time).",
+  "What patterns do my best clients share?": "Your top clients share three traits: they give honest feedback early, they trust your judgment on strategy, and they've been with you long enough to see results compound. Northvane and Oakline both check all three.",
+};
 
 const Dot = () => <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, flexShrink: 0 }} />;
 
@@ -672,7 +869,7 @@ export default function App({ user }) {
     return <WorkerDashboard />;
   }
 
-
+  const [tier, setTier] = useState("core");  // "core" | "enterprise"
   const [page, setPage] = useState("today");
 
   // ─── Theme (light / dark) ───────────────────────────────────────────
@@ -879,6 +1076,11 @@ export default function App({ user }) {
   useEffect(() => {
     try { localStorage.setItem("clients-view", clientsView); } catch (e) {}
   }, [clientsView]);
+  const [showImport, setShowImport] = useState(false);
+  const [importTab, setImportTab] = useState("csv"); // "csv" | "paste"
+  const [importPaste, setImportPaste] = useState("");
+  const [importPreview, setImportPreview] = useState([]);
+  const [importFile, setImportFile] = useState(null);
   const [newClient, setNewClient] = useState({ name: "", contact: "", role: "", tag: "", revenue: "", months: "", lifetime_revenue_at_entry: "", latePayments: false, prevTerminated: false, otherVendors: false, fromReferral: false });
   const [profileStep, setProfileStep] = useState(0);
   const [profileScores, setProfileScores] = useState({});
@@ -1265,6 +1467,7 @@ export default function App({ user }) {
   // Whether the "Completed today" log is expanded. Defaults to collapsed.
   const [completedLogOpen, setCompletedLogOpen] = useState(false);
   const [newTask, setNewTask] = useState("");
+  const [newTaskClient, setNewTaskClient] = useState("");
   const [newTaskRecurring, setNewTaskRecurring] = useState(false);
   // Recurrence pattern shape (when newTaskRecurring is true):
   //   { kind: "daily" }
@@ -1296,6 +1499,7 @@ export default function App({ user }) {
   const [newWorkerName, setNewWorkerName] = useState("");
   const [newWorkerEmail, setNewWorkerEmail] = useState("");
   const [newWorkerRole, setNewWorkerRole] = useState("");
+  const [showClientPicker, setShowClientPicker] = useState(false);
   // Touchpoint data layer is intact (allTouchpoints + tpLogged still load from DB
   // for rhythm calc and history) — only the manual Log UI was removed.
   const [tpLogged, setTpLogged] = useState([]);
@@ -1780,6 +1984,108 @@ export default function App({ user }) {
       try { clientSubscription?.unsubscribe?.(); } catch {}
     };
   }, [user?.id]);
+
+  // ─── BADGE STATE MANAGER ──────────────────────────────────────────
+  // Manages rai_user_state.todays_badged_task_id (the source of truth for
+  // which task currently carries the "Rai's pick" badge).
+  //
+  // Three things happen here:
+  //
+  // (A) Auto-clear: if the badge is set on a task that's now completed,
+  //     dismissed, deleted, moved out of today, or no longer visible,
+  //     clear the badge state. Once cleared, badge is done for the day.
+  //
+  // (B) 60s settle: if badge state is null (Rai chose to wait), watch for
+  //     tasks that exist for any picked client AND have been in the list
+  //     for at least 60 seconds. When that's true, set the badge and mark
+  //     that pick was_annotated = true. First-come-first-served across
+  //     ranks (no rank-priority override; once the badge lands, it stays).
+  //
+  // (C) The check is debounced with a 5-second timer so we don't spam
+  //     supabase on every tasks/clients change.
+  // ─── BADGE STATE MANAGER ──────────────────────────────────────────
+  // Manages rai_user_state.todays_badged_task_id. Three rules, locked:
+  //
+  //   1. Once the badge lands, it stays on that task forever — through
+  //      completion, even if the task gets dismissed or moved. The badge
+  //      is permanent for the day.
+  //   2. Tomorrow / Later tasks NEVER get the badge. Annotation is a
+  //      today-only event.
+  //   3. The badge is single-use per day. If `todays_badge_set_at` is
+  //      already set, the day is over — we never write a new badge.
+  //
+  // The effect only writes a badge when ALL of these are true:
+  //   - rankMode === "rai"
+  //   - raiState exists and todays_badge_set_at is null (never been set today)
+  //   - At least one picked client has a TODAY task that has settled >60s
+  //
+  // After the badge is written, the effect becomes a no-op for the rest
+  // of the day. The DB FK (ON DELETE SET NULL) is the ONLY mechanism
+  // that can clear todays_badged_task_id — and only when the user
+  // outright deletes the task row, which removes the badge alongside it.
+  useEffect(() => {
+    if (!user) return;
+    if (rankMode !== "rai") return;
+    if (!raiState) return; // not loaded yet
+    if (!raiPicks || raiPicks.length === 0) return; // no picks today
+
+    // Day is over: badge has been set at some point today. Never re-badge.
+    if (raiState.todays_badge_set_at) return;
+    if (raiState.todays_badged_task_id) return;
+
+    let timeoutId;
+
+    const evaluate = async () => {
+      const SETTLE_MS = 60 * 1000;
+      const now = Date.now();
+      const todayIso = new Date().toISOString().slice(0, 10);
+
+      for (const pick of raiPicks) {
+        const c = clients.find(x => x.id === pick.client_id);
+        if (!c) continue;
+
+        // Only TODAY tasks are eligible. Tomorrow / Later never get badged.
+        const clientTodayTasks = tasks.filter(t => {
+          if (t.done) return false;
+          if (todayDismissed[t.id]) return false;
+          if (t.client !== c.name) return false;
+          // Only today's bucket: due_date is today (recurring tasks count
+          // as today by convention since they have no due_date but render
+          // in the today bucket).
+          if (t.recurring) return true;
+          if (!t.due_date) return false;
+          return String(t.due_date).slice(0, 10) === todayIso;
+        });
+        if (clientTodayTasks.length === 0) continue;
+
+        // Eligible = at least one of these tasks has settled >60s
+        const settled = clientTodayTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
+        if (settled.length === 0) continue;
+
+        // Pick highest-priority among settled
+        const sorted = [...settled].sort((a, b) => {
+          const psA = getProfileSortScore(a.client, a.raiPriority, 0);
+          const psB = getProfileSortScore(b.client, b.raiPriority, 0);
+          if (psA !== psB) return psB - psA;
+          if (a.alert !== b.alert) return a.alert ? -1 : 1;
+          if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+          return (b.created_at || 0) - (a.created_at || 0);
+        });
+        const winnerId = sorted[0].id;
+        try {
+          await raiUserStateDb.setBadgeTask(user.id, winnerId);
+          await raiPicksDb.markAnnotated(user.id, c.id);
+        } catch (e) {
+          console.warn("Failed to write badge state:", e);
+        }
+        return;
+      }
+    };
+
+    // Debounce: re-evaluate after 5 seconds of no changes
+    timeoutId = setTimeout(evaluate, 5000);
+    return () => { clearTimeout(timeoutId); };
+  }, [user, rankMode, raiState, raiPicks, tasks, clients, todayDismissed]);
 
 
   // Sync user's IANA timezone to the profiles table once per session.
@@ -2398,7 +2704,7 @@ export default function App({ user }) {
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
   const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } setPage(id); setShowMore(false); };
-  const allPages = [...navItemsCore, ...moreItemsCore];
+  const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
   const overdueChecks = hcQueue.filter(h => (h.overdue > 0 || h.due === "Today") && !hcDone[h.client]).length;
@@ -2776,6 +3082,7 @@ export default function App({ user }) {
           .rt-mob-strip { display: block !important; }
           .rc-sort-cadence { display: none !important; }
           .rc-sort-renewal { display: none !important; }
+          .rt-mob-cal-trigger { display: none !important; }
           .rt-mob-cal-sheet { display: none !important; }
           .rt-mob-cal-sheet-band { display: block !important; }
           .rt-today-v4 {
@@ -2912,7 +3219,7 @@ export default function App({ user }) {
 
         {/* Nav items — fixed, always visible */}
         <div style={{ padding: "0 10px", flexShrink: 0 }}>
-          {navItemsCore.map(n => {
+          {(tier === "enterprise" ? navItemsEnterprise : navItemsCore).map(n => {
             const active = page === n.id;
             return (
               <div key={n.id} className="nav-item" onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, marginBottom: 2, background: active ? C.deepCream : "transparent", color: active ? C.text : C.text, fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
@@ -3181,6 +3488,12 @@ export default function App({ user }) {
           );
         })()}
         <div style={{ padding: "4px 6px 8px" }}>
+          <div onClick={() => setTier(tier === "core" ? "enterprise" : "core")} className="nav-item" style={{ display: "none", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, color: C.textSec }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{tier === "enterprise" ? "Enterprise" : "Core"}</span>
+            <div style={{ width: 36, height: 20, borderRadius: 10, background: tier === "enterprise" ? C.btn : C.border, position: "relative", transition: "background 0.2s", cursor: "pointer" }}>
+              <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 2, left: tier === "enterprise" ? 18 : 2, transition: "left 0.2s" }} />
+            </div>
+          </div>
           {(() => {
             const active = page === "settings";
             return (
@@ -3243,6 +3556,28 @@ export default function App({ user }) {
           // Visible tasks = non-dismissed (locally). Dismissed = user used the
           // dismiss affordance during this session.
           const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
+
+          // ─── RAI'S ACTIVE PICKED TASK ────────────────────────────────────
+          // Resolve which task carries the "Rai's pick" badge today.
+          //
+          // Source of truth: rai_user_state.todays_badged_task_id. Once set
+          // for the day, this NEVER changes — through completion, dismissal,
+          // or moves. The badge is permanent for the day on whatever task
+          // it landed on. The only way it clears is if the user outright
+          // deletes the task row (FK ON DELETE SET NULL handles that).
+          //
+          // Tomorrow / Later tasks are never badged. The settle effect that
+          // writes the badge gates on due_date == today.
+          const activeBadgeTaskId = (rankMode === "rai" && raiState?.todays_badged_task_id) || null;
+          const activeBadgePick = activeBadgeTaskId
+            ? raiPicks.find(p => {
+                // Match the picked client to the badged task
+                const t = tasks.find(x => x.id === activeBadgeTaskId);
+                if (!t) return false;
+                const c = clients.find(x => x.name === t.client);
+                return c && p.client_id === c.id;
+              })
+            : null;
 
           // Sort comparator for Rai mode. Layered final score:
           //   priority_score (deterministic, with soft clamp inside)
@@ -3348,6 +3683,25 @@ export default function App({ user }) {
           // Render order: same active comparator applied to ALL tasks (done included).
           // Tasks stay in place when toggled — done state is visual only, no reordering.
           const renderTasks = clusterAdjacent([...visibleTasks].sort(activeCompare));
+          // ── DEBUG: log Matte Collection + Motley Fool sort breakdown ──
+          if (typeof window !== "undefined" && !window.__rt_sort_logged) {
+            window.__rt_sort_logged = true;
+            const targets = ["Matte Collection", "The Motley Fool", "Motley Fool"];
+            renderTasks
+              .filter(t => targets.includes(t.client))
+              .forEach((t, i) => {
+                const c = clients.find(x => x.name === t.client);
+                const psBase = c ? calcProfileScore(c.ret || 50, c, clients) : 0;
+                const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
+                const revPct = c && totalRev > 0 ? (c.revenue || 0) / totalRev : 0;
+                const newBoost = c ? calcNewClientBoost(c.ret || 50, revPct, c.daysOld != null ? c.daysOld : 999) : 0;
+                const raiBoost = t.raiPriority ? getRaiBoost(psBase) : 0;
+                const total = getProfileSortScore(t.client, t.raiPriority);
+                console.log(
+                  `🔍 SORT [${t.client}] ret=${c?.ret} ps=${psBase} newBoost=${newBoost} raiPri=${!!t.raiPriority} raiBoost=${raiBoost} FINAL=${total} alert=${!!t.alert} recurring=${!!t.recurring} created=${t.created_at}`
+                );
+              });
+          }
           const focusTask = openTasks.find(t => t.id === focusId) || openTasks[0] || null;
           const focusClient = focusTask ? clients.find(c => c.name === focusTask.client) : null;
 
@@ -3356,6 +3710,42 @@ export default function App({ user }) {
             if (!clientName) return 0;
             const h = clientName.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
             return (h % 11) - 5; // -5 to +5
+          };
+          // Relative time formatter — "Today" / "Yesterday" / "Nd ago" / "Nw ago" / "Nmo ago"
+          const relTime = (dateStr) => {
+            if (!dateStr) return "—";
+            const d = new Date(dateStr);
+            const diff = Date.now() - d.getTime();
+            const days = Math.floor(diff / 86400000);
+            if (days === 0) return "Today";
+            if (days === 1) return "Yesterday";
+            if (days < 7) return `${days}d ago`;
+            if (days < 30) return `${Math.floor(days / 7)}w ago`;
+            if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+            return `${Math.floor(days / 365)}y ago`;
+          };
+          // Real cadence calculation from touchpoint history
+          const calcCadence = (clientName) => {
+            // Cadence = days between contact events. Compare days-since-last
+            // against average interval from the last 10 touchpoints. Verdict:
+            //   <2 pts  →  "Building rhythm"   (not enough history yet)
+            //   ≤1.15× →  "On rhythm"
+            //   ≤1.5×  →  "Slipping"
+            //   >1.5×  →  "Overdue"
+            const points = allTouchpoints
+              .filter(t => t.client_name === clientName)
+              .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+            if (points.length < 2) return "Building rhythm";
+            const recent = points.slice(0, 10);
+            const intervals = [];
+            for (let i = 0; i < recent.length - 1; i++) {
+              intervals.push((new Date(recent[i].occurred_at) - new Date(recent[i+1].occurred_at)) / 86400000);
+            }
+            const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+            const daysSinceLast = (Date.now() - new Date(points[0].occurred_at).getTime()) / 86400000;
+            if (daysSinceLast > avgInterval * 1.5)  return "Overdue";
+            if (daysSinceLast > avgInterval * 1.15) return "Slipping";
+            return "On rhythm";
           };
 
           // ─── HANDLERS ────────────────────────────────────────────────────
@@ -4597,6 +4987,67 @@ export default function App({ user }) {
                         </span>
                       )}
                     </div>
+                    {/* Mobile-only calendar trigger (LEGACY — hidden, replaced by band-level trigger above) */}
+                    <button
+                      className="rt-mob-cal-trigger"
+                      onClick={() => setTodayStripOpen(!todayStripOpen)}
+                      style={{
+                        display: "none",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "5px 4px",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: C.textSec,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        fontFamily: "inherit"
+                      }}
+                    >
+                      <Icon name="calendar" size={13} color={C.textSec} />
+                      <span>3 events today</span>
+                      <Icon name="chevron-right" size={11} color={C.textSec} />
+                    </button>
+                  </div>
+
+                  {/* Mobile-only expanded calendar sheet (toggled by trigger above) */}
+                  {todayStripOpen && (
+                    <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: 7, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <Icon name="calendar" size={13} color={C.primary} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
+                            <span
+                              className="rt-task-title is-discussable"
+                              onClick={() => setPage("settings")}
+                              style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
+                            >
+                              Connect to activate
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        {(() => {
+                          const events = [
+                            { time: "2:30pm", title: "Backyard Discovery sync" },
+                            { time: "4:00pm", title: "Motley Fool review" },
+                            { time: "5:30pm", title: "Internal — weekly planning" },
+                          ];
+                          return events.map((e, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid " + C.borderLight }}>
+                              <span style={{ fontSize: 11.5, color: C.textMuted, fontVariantNumeric: "tabular-nums", fontWeight: 500, width: 48, flexShrink: 0 }}>{e.time}</span>
+                              <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
 
                   {dataLoaded && openTasks.length === 0 && completedTasks.length === 0 && (
                     <div style={{ padding: "28px 4px 20px", borderTop: "1px solid " + C.borderLight }}>
@@ -4873,6 +5324,32 @@ export default function App({ user }) {
                             </button>
   
                             <div style={{ flex: 1, minWidth: 0 }}>
+                              {/* Rai's pick badge — daily annotation. The system selects which
+                                  task gets the badge from Rai's ranked client picks (primary,
+                                  backup1, backup2) using priority_score + the 60s burst rule.
+                                  Reason renders inline below the badge so users see Rai's
+                                  rationale without needing to hover (also works on mobile).
+                                  Disappears in Manual mode (activeBadgeTaskId is null there). */}
+                              {activeBadgeTaskId === t.id && activeBadgePick && (
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                    color: C.btn,
+                                    marginBottom: 3,
+                                  }}
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
+                                  </svg>
+                                  Rai's pick
+                                </div>
+                              )}
                               <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden" }}>
                                 {(() => {
                                   // Title is interactive when the text contains a thinking
@@ -4936,6 +5413,48 @@ export default function App({ user }) {
                                   );
                                 })()}
                               </div>
+                              {/* Rai's reason renders at the bottom of the tile, below the
+                                  client name. Italic Fraunces. We strip a leading "ClientName: "
+                                  prefix from the reason because the client name is already shown
+                                  in the meta row above — repeating it is noise. */}
+                              {activeBadgeTaskId === t.id && activeBadgePick && activeBadgePick.reason && (
+                                <div
+                                  style={{
+                                    fontFamily: "'Fraunces', Georgia, serif",
+                                    fontStyle: "italic",
+                                    fontSize: 13,
+                                    lineHeight: 1.4,
+                                    color: C.textSec,
+                                    marginTop: 6,
+                                    whiteSpace: "normal",
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {(() => {
+                                    let reason = activeBadgePick.reason;
+                                    // Strip leading "ClientName: " or "ClientName — " or "ClientName, " prefix
+                                    if (client && client.name) {
+                                      const prefixes = [
+                                        client.name + ": ",
+                                        client.name + " — ",
+                                        client.name + " - ",
+                                        client.name + ", ",
+                                        client.name + ". ",
+                                      ];
+                                      for (const p of prefixes) {
+                                        if (reason.startsWith(p)) {
+                                          reason = reason.slice(p.length);
+                                          if (reason.length > 0) {
+                                            reason = reason.charAt(0).toUpperCase() + reason.slice(1);
+                                          }
+                                          break;
+                                        }
+                                      }
+                                    }
+                                    return reason;
+                                  })()}
+                                </div>
+                              )}
                             </div>
 
                             {/* Worker assignment badge — only renders if task is assigned. */}
@@ -5226,6 +5745,85 @@ export default function App({ user }) {
         })()}
 
         {/* ═══ SWEEPS (ENTERPRISE) ═══ */}
+        {page === "sweeps" && tier === "enterprise" && (
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>Sweeps</h1>
+            <p style={{ fontSize: 14, color: C.textMuted, marginBottom: 16 }}>Daily Sweep · April 9, 2026 · 6:02 AM · {sweepData.clients_analyzed} clients · {sweepData.alerts_count} alerts · {sweepData.tasks_generated} tasks generated</p>
+
+            {/* Alerts */}
+            {sweepTasks.filter(t => t.priority === "urgent").length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.danger, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🚨 Alerts ({sweepTasks.filter(t => t.priority === "urgent").length})</div>
+                {sweepTasks.filter(t => t.priority === "urgent").map(t => (
+                  <div key={t.id} style={{ background: "#FAE8E4", borderRadius: 12, border: "1px solid " + C.danger + "33", padding: "14px 16px", marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: C.danger }}>CRITICAL · {t.client}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>{t.signal}</div>
+                    <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5 }}>{t.action}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Priority Ranking */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Priority Ranking</div>
+            <div style={{ background: C.card, borderRadius: 14, border: "1px solid " + C.border, overflow: "hidden" }}>
+              {/* Header row */}
+              <div style={{ display: "flex", padding: "10px 16px", borderBottom: "1px solid " + C.border, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+                <span style={{ width: 28 }}>#</span>
+                <span style={{ flex: 1 }}>Client</span>
+                <span style={{ width: 50, textAlign: "right" }}>Score</span>
+                <span style={{ width: 50, textAlign: "right" }}>Drift</span>
+                <span style={{ width: 80, textAlign: "right" }}>Outlook</span>
+                <span style={{ width: 90, textAlign: "right", display: "none" }} className="r-desk-inline">Archetype</span>
+              </div>
+              {[...enterpriseClients].sort((a, b) => b.ret - a.ret).map((c, i) => {
+                const e = c.enterprise;
+                const drift = c.ret - e.prior_baseline;
+                const outlookLabel = { long_term: "Long-term", strong: "Strong", uncertain: "Uncertain", at_risk: "At Risk", critical: "Critical" }[e.retention_outlook] || "";
+                const archLabel = { slow_fade: "Slow Fade", tone_shift: "Tone Shift", silent_exit: "Silent Exit", budget_squeeze: "Budget Sq." }[e.archetype] || "";
+                const scoreColor = c.ret > 80 ? C.success : c.ret > 65 ? C.text : c.ret > 50 ? C.warning : c.ret > 30 ? "#D97706" : C.danger;
+                return (
+                  <div key={c.id} className="row-hover" onClick={() => { setSelectedClient(c); setClientTab("overview"); }} style={{ display: "flex", padding: "12px 16px", borderBottom: i < enterpriseClients.length - 1 ? "1px solid " + C.borderLight : "none", alignItems: "center" }}>
+                    <span style={{ width: 28, fontSize: 12, color: C.textMuted }}>{i + 1}</span>
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</span>
+                      <div style={{ fontSize: 12, color: C.textMuted }}>{c.contact}</div>
+                    </div>
+                    <span style={{ width: 50, textAlign: "right", fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: scoreColor }}>{c.ret}</span>
+                    <span style={{ width: 50, textAlign: "right", fontSize: 12, fontWeight: 600, color: drift > 0 ? C.success : drift < 0 ? C.danger : C.textMuted }}>{drift > 0 ? "+" : ""}{drift} {drift > 0 ? "↑" : drift < 0 ? "↓" : "—"}</span>
+                    <span style={{ width: 80, textAlign: "right", fontSize: 12, fontWeight: 600, color: scoreColor }}>{outlookLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tasks from Sweep */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, marginTop: 20 }}>Tasks Generated ({sweepTasks.length})</div>
+            {sweepTasks.filter(t => t.priority !== "urgent").map(t => (
+              <div key={t.id} style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "14px 16px", marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{t.client}</span>
+                  <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, fontWeight: 600, background: t.priority === "high" ? "#FEF3C7" : C.primarySoft, color: t.priority === "high" ? "#D97706" : C.primary }}>{t.priority === "high" ? "High" : "Medium"} · {t.timeframe}</span>
+                </div>
+                <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 6 }}>{t.signal}</div>
+                <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5 }}>{t.action}</p>
+              </div>
+            ))}
+
+            {/* Sweep History */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, marginTop: 20 }}>Previous Sweeps</div>
+            <div style={{ background: C.card, borderRadius: 14, border: "1px solid " + C.border, overflow: "hidden" }}>
+              {sweepHistory.map((s, i) => (
+                <div key={i} style={{ padding: "12px 16px", borderBottom: i < sweepHistory.length - 1 ? "1px solid " + C.borderLight : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{s.date}</span>
+                  <span style={{ fontSize: 12, color: C.textMuted }}>{s.clients} clients · Avg: {s.avg} · {s.alerts} alert{s.alerts !== 1 ? "s" : ""}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ═══ CLIENTS v2 — compare-first ═══ */}
         {page === "clients" && (() => {
@@ -5473,7 +6071,10 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <button className="r-btn" onClick={() => { setShowAddClient(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                  {tier === "enterprise" && (
+                    <button onClick={() => { setShowImport(!showImport); setShowAddClient(false); }} style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Import Clients</button>
+                  )}
+                  <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
                     Add client
                   </button>
                 </div>
@@ -5607,6 +6208,162 @@ export default function App({ user }) {
                 <div style={{ minWidth: 0 }}>
 
                   {/* Import & Add Client — unchanged blocks, preserved as-is */}
+            {showImport && tier === "enterprise" && (
+              <div style={{ background: C.card, borderRadius: 14, border: "1.5px solid " + C.primary, padding: "20px", marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Import Clients</div>
+                  <button onClick={() => { setShowImport(false); setImportPreview([]); setImportPaste(""); setImportFile(null); }} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.textMuted }}>×</button>
+                </div>
+
+                {/* Tab toggle */}
+                <div style={{ display: "flex", gap: 0, marginBottom: 16, background: C.surface, borderRadius: 8, padding: 3 }}>
+                  {[{ id: "csv", label: "Upload CSV" }, { id: "paste", label: "Paste from Spreadsheet" }].map(t => (
+                    <button key={t.id} onClick={() => { setImportTab(t.id); setImportPreview([]); }} style={{ flex: 1, padding: "8px", borderRadius: 6, border: "none", background: importTab === t.id ? C.card : "transparent", color: importTab === t.id ? C.text : C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: importTab === t.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>{t.label}</button>
+                  ))}
+                </div>
+
+                {/* CSV Upload */}
+                {importTab === "csv" && (
+                  <div>
+                    <div
+                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.primary; }}
+                      onDragLeave={e => { e.currentTarget.style.borderColor = C.border; }}
+                      onDrop={e => {
+                        e.preventDefault();
+                        e.currentTarget.style.borderColor = C.border;
+                        const file = e.dataTransfer.files[0];
+                        if (file && file.name.endsWith(".csv")) {
+                          setImportFile(file);
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const lines = ev.target.result.split("\n").filter(l => l.trim());
+                            const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
+                            const rows = lines.slice(1).map(line => {
+                              const cols = line.split(",").map(c => c.trim().replace(/"/g, ""));
+                              return { name: cols[0] || "", contact: cols[1] || "", email: cols[2] || "", role: cols[3] || "", tag: cols[4] || "", revenue: parseInt(cols[5]) || 0, months: parseInt(cols[6]) || 0, valid: !!(cols[0] && cols[1] && cols[2]) };
+                            });
+                            setImportPreview(rows);
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                      style={{ border: "2px dashed " + C.border, borderRadius: 10, padding: "32px 20px", textAlign: "center", marginBottom: 12, transition: "border-color 0.2s" }}
+                    >
+                      {importFile ? (
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>📄 {importFile.name}</div>
+                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{importPreview.length} rows found</div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: 24, marginBottom: 8 }}>📁</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Drag & drop your CSV here</div>
+                          <div style={{ fontSize: 12, color: C.textMuted }}>or <label style={{ color: C.primary, cursor: "pointer", fontWeight: 600 }}>browse files<input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              setImportFile(file);
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const lines = ev.target.result.split("\n").filter(l => l.trim());
+                                const rows = lines.slice(1).map(line => {
+                                  const cols = line.split(",").map(c => c.trim().replace(/"/g, ""));
+                                  return { name: cols[0] || "", contact: cols[1] || "", email: cols[2] || "", role: cols[3] || "", tag: cols[4] || "", revenue: parseInt(cols[5]) || 0, months: parseInt(cols[6]) || 0, valid: !!(cols[0] && cols[1] && cols[2]) };
+                                });
+                                setImportPreview(rows);
+                              };
+                              reader.readAsText(file);
+                            }
+                          }} /></label></div>
+                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>Expected columns: Business Name, Contact Name, Email, Role, Industry, Revenue, Months</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Paste from Spreadsheet */}
+                {importTab === "paste" && (
+                  <div>
+                    <textarea
+                      value={importPaste}
+                      onChange={e => {
+                        setImportPaste(e.target.value);
+                        const lines = e.target.value.split("\n").filter(l => l.trim());
+                        const rows = lines.map(line => {
+                          const cols = line.split(/\t|,/).map(c => c.trim().replace(/"/g, ""));
+                          return { name: cols[0] || "", contact: cols[1] || "", email: cols[2] || "", role: cols[3] || "", tag: cols[4] || "", revenue: parseInt(cols[5]) || 0, months: parseInt(cols[6]) || 0, valid: !!(cols[0] && cols[1] && cols[2]) };
+                        });
+                        setImportPreview(rows);
+                      }}
+                      placeholder={"Business Name\tContact Name\tEmail\tRole\tIndustry\tRevenue\tMonths\nAcme Corp\tJane Smith\tjane@acme.com\tCMO\tSaaS\t5000\t12"}
+                      rows={6}
+                      style={{ width: "100%", padding: "12px 14px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "monospace", outline: "none", background: C.bg, resize: "vertical", lineHeight: 1.6 }}
+                    />
+                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>Paste rows from Excel or Google Sheets. Tab or comma-separated. First 3 columns required.</div>
+                  </div>
+                )}
+
+                {/* Preview Table */}
+                {importPreview.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Preview ({importPreview.filter(r => r.valid).length} valid of {importPreview.length})</div>
+                    <div style={{ background: C.bg, borderRadius: 10, border: "1px solid " + C.border, overflow: "hidden" }}>
+                      {/* Header */}
+                      <div style={{ display: "flex", padding: "8px 12px", borderBottom: "1px solid " + C.border, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+                        <span style={{ width: 24 }}></span>
+                        <span style={{ flex: 2, minWidth: 0 }}>Business</span>
+                        <span style={{ flex: 2, minWidth: 0 }}>Contact</span>
+                        <span style={{ flex: 2, minWidth: 0 }}>Email</span>
+                        <span style={{ flex: 1, minWidth: 0 }}>Role</span>
+                      </div>
+                      {importPreview.slice(0, 10).map((r, i) => (
+                        <div key={i} style={{ display: "flex", padding: "8px 12px", borderBottom: i < Math.min(importPreview.length, 10) - 1 ? "1px solid " + C.borderLight : "none", fontSize: 12, alignItems: "center" }}>
+                          <span style={{ width: 24, color: r.valid ? C.success : C.danger, fontWeight: 700 }}>{r.valid ? "✓" : "✗"}</span>
+                          <span style={{ flex: 2, minWidth: 0, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name || "—"}</span>
+                          <span style={{ flex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.contact || "—"}</span>
+                          <span style={{ flex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.textMuted }}>{r.email || "—"}</span>
+                          <span style={{ flex: 1, minWidth: 0, color: C.textMuted }}>{r.role || "—"}</span>
+                        </div>
+                      ))}
+                      {importPreview.length > 10 && (
+                        <div style={{ padding: "8px 12px", fontSize: 12, color: C.textMuted, textAlign: "center" }}>+ {importPreview.length - 10} more rows</div>
+                      )}
+                    </div>
+                    {importPreview.some(r => !r.valid) && (
+                      <div style={{ fontSize: 12, color: C.danger, marginTop: 6 }}>{importPreview.filter(r => !r.valid).length} row{importPreview.filter(r => !r.valid).length > 1 ? "s" : ""} missing required fields (Business Name, Contact Name, Email) — will be skipped</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Actions */}
+                {importPreview.filter(r => r.valid).length > 0 && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                    <button className="r-btn" onClick={() => {
+                      const newClients = importPreview.filter(r => r.valid).map(r => ({
+                        id: Date.now() + Math.random(),
+                        name: r.name,
+                        contact: r.contact,
+                        role: r.role || "—",
+                        tag: r.tag || "—",
+                        months: r.months || 0,
+                        revenue: r.revenue || 0,
+                        velocity: "normal",
+                        lastHC: null,
+                        lastContact: "—",
+                        ret: 0,
+                        referrals: 0,
+                      }));
+                      setClients(prev => [...prev, ...newClients]);
+                      setShowImport(false);
+                      setImportPreview([]);
+                      setImportPaste("");
+                      setImportFile(null);
+                    }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import {importPreview.filter(r => r.valid).length} Client{importPreview.filter(r => r.valid).length > 1 ? "s" : ""}</button>
+                    <button onClick={() => { setShowImport(false); setImportPreview([]); setImportPaste(""); setImportFile(null); }} style={{ padding: "10px 16px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {showAddClient && (
               <div style={{ background: C.card, borderRadius: 14, border: "2px solid " + C.primary, padding: "20px", marginBottom: 16, boxShadow: C.cardShadow }}>
@@ -6977,6 +7734,112 @@ export default function App({ user }) {
         })()}
 
         {/* ═══ REFERRAL INTELLIGENCE (ENTERPRISE) ═══ */}
+        {page === "referral_intel" && tier === "enterprise" && (
+          <div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 4 }}>Referral Intelligence</h1>
+            <p style={{ fontSize: 14, color: C.textMuted, marginBottom: 16 }}>Rai analyzes your portfolio and ranks clients by referral readiness. No guessing — just data.</p>
+
+            {/* Summary stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 20 }}>
+              {[
+                { l: "Ready to Ask", v: referralReadiness.filter(r => r.tier === "ready").length, c: C.success },
+                { l: "Building", v: referralReadiness.filter(r => r.tier === "building").length, c: C.warning },
+                { l: "Not Yet", v: referralReadiness.filter(r => r.tier === "not_yet").length, c: C.textMuted },
+              ].map((s, i) => (
+                <div key={i} style={{ background: C.card, borderRadius: 10, padding: "12px 14px", border: "1px solid " + C.border, textAlign: "center" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: s.c }}>{s.v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Ready to Ask */}
+            {referralReadiness.filter(r => r.tier === "ready").length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.success, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🎯 Ready to Ask</div>
+                {referralReadiness.filter(r => r.tier === "ready").map(c => (
+                  <div key={c.id} style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px", marginBottom: 10, boxShadow: C.cardShadow }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <div>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
+                        <span style={{ fontSize: 12, color: C.textMuted, marginLeft: 8 }}>{c.contact} · {c.months}mo</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: C.success }}>{c.readiness}%</span>
+                        <span style={{ fontSize: 12, color: C.textMuted }}>ready</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                      {c.reasons.map((r, ri) => (
+                        <span key={ri} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: C.primarySoft, color: C.primary, fontWeight: 500 }}>{r}</span>
+                      ))}
+                    </div>
+                    <div style={{ background: C.raiGrad, borderRadius: 12, padding: "14px 16px", color: "#fff" }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Rai's Approach</div>
+                      <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,.7)" }}>{c.approach}</p>
+                    </div>
+                    <button className="r-btn" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: `Let's talk about getting a referral from ${c.contact} at ${c.name}. Here's what I'm thinking: ${c.approach}` }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai About This</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Building Toward It */}
+            {referralReadiness.filter(r => r.tier === "building").length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.warning, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🔄 Building Toward It</div>
+                {referralReadiness.filter(r => r.tier === "building").map(c => (
+                  <div key={c.id} style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px", marginBottom: 10, boxShadow: C.cardShadow }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                      <div>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
+                        <span style={{ fontSize: 12, color: C.textMuted, marginLeft: 8 }}>{c.contact} · {c.months}mo</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: C.warning }}>{c.readiness}%</span>
+                        <span style={{ fontSize: 12, color: C.textMuted }}>ready</span>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+                      {c.reasons.map((r, ri) => (
+                        <span key={ri} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, background: "#FEF3C7", color: "#92400E", fontWeight: 500 }}>{r}</span>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 14, color: C.textSec, lineHeight: 1.5 }}>{c.approach}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Not Yet */}
+            {referralReadiness.filter(r => r.tier === "not_yet").length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>⏳ Not Yet</div>
+                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, overflow: "hidden" }}>
+                  {referralReadiness.filter(r => r.tier === "not_yet").map((c, i, arr) => (
+                    <div key={c.id} style={{ padding: "12px 16px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</span>
+                        <span style={{ fontSize: 12, color: C.textMuted, marginLeft: 8 }}>{c.contact}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "monospace", color: C.textMuted }}>{c.readiness}%</span>
+                        <span style={{ fontSize: 12, color: C.textMuted }}>{c.approach.split(".")[0]}.</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Rai blanket */}
+            <div style={{ background: C.raiGrad, borderRadius: 14, padding: "16px 18px", color: "#fff", marginTop: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Rai</div>
+              <p style={{ fontSize: 14, color: "rgba(255,255,255,.7)", lineHeight: 1.55 }}>Referral readiness is recalculated with every sweep. As relationships deepen and trust builds, clients move up the list. The best time to ask is when they're riding a win.</p>
+              <button className="r-btn" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: "Let's talk referral strategy. Who are you thinking about asking? I can help you find the right moment and the right words." }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai</button>
+            </div>
+          </div>
+        )}
 
         {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
         {page === "workers" && (() => {
@@ -8778,6 +9641,170 @@ export default function App({ user }) {
               </div>
             ))}
 
+            {/* Enterprise: Integrations */}
+            {tier === "enterprise" && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }}>Integrations</div>
+                {integrations.map((cat, ci) => (
+                  <div key={ci} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 6 }}>{cat.cat}</div>
+                    <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, overflow: "hidden" }}>
+                      {cat.items.map((item, ii) => (
+                        <div key={ii} className="row-hover" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: ii < cat.items.length - 1 ? "1px solid " + C.borderLight : "none" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ fontSize: 14, width: 24, textAlign: "center" }}>{item.icon}</span>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {item.connected ? (
+                              <span style={{ fontSize: 12, color: C.success, fontWeight: 600 }}>🟢 {item.meta}</span>
+                            ) : (
+                              <button className="r-btn" style={{ padding: "5px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Connect</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Sweep Schedule */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>Automated Sweep</div>
+                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Frequency</span>
+                      <select style={{ padding: "6px 12px", border: "1.5px solid " + C.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.bg }}>
+                        <option>Daily</option><option>Twice daily</option><option>Weekly (Monday AM)</option>
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Time</span>
+                      <select style={{ padding: "6px 12px", border: "1.5px solid " + C.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.bg }}>
+                        <option>6:00 AM</option><option>7:00 AM</option><option>8:00 AM</option><option>9:00 AM</option>
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 14, fontWeight: 600 }}>Timezone</span>
+                      <select style={{ padding: "6px 12px", border: "1.5px solid " + C.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.bg }}>
+                        <option>Eastern</option><option>Central</option><option>Mountain</option><option>Pacific</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 12, fontSize: 12, color: C.textMuted }}>Last sweep: Today at 6:02 AM · {sweepData.clients_analyzed} clients</div>
+                  <div style={{ fontSize: 12, color: C.textMuted }}>Next sweep: Tomorrow at 6:00 AM</div>
+                  <button className="r-btn" style={{ width: "100%", marginTop: 12, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Run Sweep Now</button>
+                </div>
+
+                {/* Output Routing */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>Output Routing</div>
+                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                  {[
+                    { label: "Retayned Dashboard", checked: true, disabled: true, meta: "Always on" },
+                    { label: "Slack Channel", checked: false, meta: "#retention-alerts" },
+                    { label: "Webhook URL", checked: false, meta: "https://..." },
+                    { label: "Email Digest", checked: false, meta: "team@company.com" },
+                  ].map((r, ri) => (
+                    <div key={ri} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: ri < 3 ? "1px solid " + C.borderLight : "none" }}>
+                      <input type="checkbox" checked={r.checked} disabled={r.disabled} readOnly style={{ width: 16, height: 16 }} />
+                      <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{r.label}</span>
+                      <span style={{ fontSize: 12, color: C.textMuted }}>{r.meta}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* API Access */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>API Access</div>
+                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>API Key</div>
+                      <div style={{ fontSize: 12, color: C.textMuted }}>Use this key to authenticate API requests</div>
+                    </div>
+                    <button className="r-btn" style={{ padding: "6px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Regenerate</button>
+                  </div>
+                  <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: C.textSec, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>sk_live_ret_••••••••••••••••••••a4f2</span>
+                    <button style={{ background: "none", border: "none", fontSize: 12, color: C.primary, cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>Copy</button>
+                  </div>
+
+                  <div style={{ fontSize: 14, fontWeight: 700, marginTop: 16, marginBottom: 10 }}>Endpoints</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {[
+                      { method: "GET", path: "/api/sweeps/latest", desc: "Most recent sweep results" },
+                      { method: "POST", path: "/api/sweeps/trigger", desc: "Run a sweep now" },
+                      { method: "GET", path: "/api/clients/{id}/signals", desc: "Client automated analysis" },
+                      { method: "GET", path: "/api/tasks", desc: "All open tasks" },
+                      { method: "PATCH", path: "/api/tasks/{id}", desc: "Mark task complete" },
+                      { method: "POST", path: "/api/clients/{id}/analyze", desc: "Trigger analysis on one client" },
+                      { method: "GET", path: "/api/referrals/readiness", desc: "Referral readiness ranking" },
+                    ].map((ep, ei) => (
+                      <div key={ei} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: C.bg, borderRadius: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "monospace", padding: "2px 6px", borderRadius: 3, background: ep.method === "GET" ? C.primarySoft : ep.method === "POST" ? "#EDE9FE" : "#FEF3C7", color: ep.method === "GET" ? C.primary : ep.method === "POST" ? C.btn : "#92400E" }}>{ep.method}</span>
+                        <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: 600, flex: 1 }}>{ep.path}</span>
+                        <span style={{ fontSize: 12, color: C.textMuted }}>{ep.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ fontSize: 14, fontWeight: 700, marginTop: 16, marginBottom: 10 }}>Webhook Payload</div>
+                  <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>On every sweep completion, the configured webhook receives the full output schema:</p>
+                  <div style={{ background: "#1E261F", borderRadius: 8, padding: "14px", fontFamily: "monospace", fontSize: 11, color: "#A7C4B5", lineHeight: 1.6, overflow: "auto", maxHeight: 200 }}>
+                    <div style={{ color: "#558B68" }}>{"// POST to your webhook URL"}</div>
+                    <div>{"{"}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"sweep_id": "sweep_20260409",'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"timestamp": "2026-04-09T06:02:00Z",'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"portfolio_avg_score": 74,'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"clients_analyzed": 47,'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"alerts": [{ "client_id": "...", "level": "critical" }],'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"tasks": [{ "client_id": "...", "action": "..." }],'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"priority_ranking": [{ "client_id": "...", "score": 91, "drift": 2 }],'}</div>
+                    <div style={{ paddingLeft: 16 }}>{'"data_gaps": [{ "client_id": "...", "missing": ["billing"] }]'}</div>
+                    <div>{"}"}</div>
+                  </div>
+                </div>
+
+                {/* MCP Server */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>MCP Server</div>
+                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                  <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>Expose Retayned as a tool server for your AI agents. Any MCP-compatible agent can connect and call Retayned tools directly.</p>
+                  
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "10px 14px", background: C.bg, borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>Server URL</div>
+                      <div style={{ fontSize: 12, fontFamily: "monospace", color: C.text, marginTop: 2 }}>https://mcp.retayned.com/v1/your-org-id</div>
+                    </div>
+                    <button style={{ background: "none", border: "none", fontSize: 12, color: C.primary, cursor: "pointer", fontWeight: 600, fontFamily: "inherit" }}>Copy</button>
+                  </div>
+
+                  <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Available Tools</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {[
+                      { tool: "get_priority_ranking", desc: "Full client portfolio ranked by retention score" },
+                      { tool: "get_client_risk_assessment", desc: "Single client signals, archetype, and Rai summary" },
+                      { tool: "get_open_tasks", desc: "All pending tasks with priority and context" },
+                      { tool: "complete_task", desc: "Mark a task as done" },
+                      { tool: "trigger_sweep", desc: "Run an immediate portfolio analysis" },
+                      { tool: "get_referral_readiness", desc: "Clients ranked by referral readiness" },
+                      { tool: "get_sweep_history", desc: "Historical sweep results and trends" },
+                    ].map((t, ti) => (
+                      <div key={ti} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: C.bg, borderRadius: 6 }}>
+                        <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: 700, color: C.btn }}>{t.tool}</span>
+                        <span style={{ fontSize: 12, color: C.textMuted, flex: 1 }}>{t.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Sign Out */}
+            <button onClick={async () => { await supabase.auth.signOut(); }} style={{ width: "100%", padding: "14px", background: "transparent", border: "1.5px solid " + C.danger + "44", borderRadius: 10, fontSize: 14, fontWeight: 600, color: C.danger, cursor: "pointer", fontFamily: "inherit", marginBottom: 16 }}>Sign Out</button>
+
+            <div style={{ background: C.raiGrad, borderRadius: 12, padding: "14px 16px", color: "#fff", marginTop: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Coming Soon</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,.7)" }}>Your AI agents will be able to connect to Retayned the same way Rai connects to Slack and HubSpot. Retention intelligence as a tool, not just a dashboard.</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -9648,7 +10675,7 @@ export default function App({ user }) {
 
       {/* MOBILE BOTTOM NAV — hidden when keyboard is up so inputs aren't covered */}
       <div className="r-mob-bot" style={{ position: "fixed", top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 82px)", left: 12, right: 12, background: C.surfaceWarm, borderRadius: 18, boxShadow: "0 2px 6px rgba(10,10,10,0.04), 0 4px 14px rgba(10,10,10,0.07)", justifyContent: "space-around", padding: "10px 6px 12px", zIndex: 40, display: keyboardOpen ? "none" : undefined }}>
-        {mobileNavCore.map(n => {
+        {(tier === "enterprise" ? mobileNavEnterprise : mobileNavCore).map(n => {
           const dot = hasDot(n.id);
           const active = page === n.id || (n.id === "more" && showMore);
           return (
@@ -9664,12 +10691,18 @@ export default function App({ user }) {
         <>
           <div onClick={() => setShowMore(false)} style={{ position: "fixed", inset: 0, zIndex: 45 }} />
           <div style={{ position: "fixed", top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 94px)", right: 20, transform: "translateY(-100%)", background: C.card, borderRadius: "12px 12px 12px 12px", border: "1px solid " + C.border, boxShadow: "0 -4px 24px rgba(0,0,0,0.08)", zIndex: 46, overflow: "hidden", minWidth: 180, animation: "fadeIn 0.15s ease" }}>
-            {moreItemsCore.map((m, i, arr) => (
+            {(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore).map((m, i, arr) => (
               <div key={m.id} onClick={() => goTo(m.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", cursor: "pointer", borderBottom: "1px solid " + C.borderLight, background: page === m.id ? C.bg : "transparent" }}>
                 <span style={{ width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={m.icon} size={18} color={page === m.id ? C.text : C.textMuted} /></span><span style={{ fontSize: 13, fontWeight: page === m.id ? 700 : 500, color: page === m.id ? C.text : C.text, flex: 1 }}>{m.label}</span>
                 {hasDot(m.id) && <Dot />}
               </div>
             ))}
+            <div onClick={() => { setTier(tier === "core" ? "enterprise" : "core"); setShowMore(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", cursor: "pointer" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.textMuted }}>{tier === "enterprise" ? "Enterprise" : "Core"}</span>
+              <div style={{ width: 36, height: 20, borderRadius: 10, background: tier === "enterprise" ? C.btn : C.borderLight, position: "relative", transition: "background 0.2s" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 2, left: tier === "enterprise" ? 18 : 2, transition: "left 0.2s" }} />
+              </div>
+            </div>
           </div>
         </>
       )}
