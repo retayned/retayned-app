@@ -1012,6 +1012,120 @@ export const revenueHistoryDb = {
 
 
 // ============================================================
+// CLIENT BILLING ITEMS — line items per client per month
+// ============================================================
+//
+// One row per billing line item. Items can be one-time (recurring=false)
+// or recurring (recurring=true, mirrored into both active months at create
+// time and on toggle-on).
+//
+// Month format: "Month Year" string (e.g. "May 2026"). Matches the
+// frontend's currentMonth/nextMonth derivation in App.jsx.
+//
+// Public API:
+//   list(userId, clientId)              → items for one client, all months
+//   listAll(userId)                     → all items grouped by client_id (hydration)
+//   create(userId, clientId, item)      → add one item
+//   createBatch(userId, clientId, items) → add multiple (recurring mirror)
+//   update(itemId, fields)              → edit description/amount/recurring/month
+//   remove(itemId)                      → hard-delete one item
+
+export const clientBillingDb = {
+  list: async (userId, clientId) => {
+    const { data, error } = await supabase
+      .from('client_billing_items')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: true });
+    return { data: data || [], error };
+  },
+
+  // Hydrate ALL billing items for the user, grouped by client_id.
+  // Returns { [client_id]: { items: [...] } } — matches the existing
+  // clientBilling state shape in App.jsx exactly.
+  listAll: async (userId) => {
+    const { data, error } = await supabase
+      .from('client_billing_items')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+    if (error) return { data: {}, error };
+    const grouped = {};
+    (data || []).forEach(row => {
+      if (!grouped[row.client_id]) grouped[row.client_id] = { items: [] };
+      grouped[row.client_id].items.push({
+        id: row.id,
+        description: row.description,
+        amount: Number(row.amount),
+        recurring: row.recurring,
+        month: row.month,
+      });
+    });
+    return { data: grouped, error: null };
+  },
+
+  create: async (userId, clientId, item) => {
+    const { data, error } = await supabase
+      .from('client_billing_items')
+      .insert({
+        user_id: userId,
+        client_id: clientId,
+        description: item.description,
+        amount: Number(item.amount) || 0,
+        recurring: !!item.recurring,
+        month: item.month,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Batch insert. Used when creating a recurring item: we mirror the
+  // line into the other active month in the same round-trip. Returns
+  // the inserted rows.
+  createBatch: async (userId, clientId, items) => {
+    const rows = items.map(item => ({
+      user_id: userId,
+      client_id: clientId,
+      description: item.description,
+      amount: Number(item.amount) || 0,
+      recurring: !!item.recurring,
+      month: item.month,
+    }));
+    const { data, error } = await supabase
+      .from('client_billing_items')
+      .insert(rows)
+      .select();
+    return { data: data || [], error };
+  },
+
+  update: async (itemId, fields) => {
+    const updates = {};
+    if (fields.description !== undefined) updates.description = fields.description;
+    if (fields.amount !== undefined) updates.amount = Number(fields.amount) || 0;
+    if (fields.recurring !== undefined) updates.recurring = !!fields.recurring;
+    if (fields.month !== undefined) updates.month = fields.month;
+    const { data, error } = await supabase
+      .from('client_billing_items')
+      .update(updates)
+      .eq('id', itemId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  remove: async (itemId) => {
+    const { error } = await supabase
+      .from('client_billing_items')
+      .delete()
+      .eq('id', itemId);
+    return { error };
+  },
+};
+
+
+// ============================================================
 // REALTIME SUBSCRIPTIONS
 // ============================================================
 
