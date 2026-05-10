@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -933,6 +933,21 @@ export default function App({ user }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientTab, setClientTab] = useState("overview");
   const [clientBilling, setClientBilling] = useState({});
+  // Per-(client, month) invoiced/paid status, hydrated on load.
+  // Shape: { [client_id]: { [month]: { id, invoiced, paid, invoiced_at, paid_at } } }
+  const [billingMonthStatus, setBillingMonthStatus] = useState({});
+  // Per-client billing-terms log entries, newest first within each client.
+  // Shape: { [client_id]: [{ id, body, created_at, updated_at }, ...] }
+  const [billingTerms, setBillingTerms] = useState({});
+  // UI state for billing terms flap (in client modal Billing tab):
+  //   - termsHistoryOpen: { [client_id]: boolean }  expand history below current
+  //   - termsEditingId:   id of entry being edited (one at a time)
+  //   - termsEditDraft:   text content of the edit/new draft
+  //   - termsAddingNew:   { [client_id]: boolean }  show new-entry textarea
+  const [termsHistoryOpen, setTermsHistoryOpen] = useState({});
+  const [termsEditingId, setTermsEditingId] = useState(null);
+  const [termsEditDraft, setTermsEditDraft] = useState("");
+  const [termsAddingNew, setTermsAddingNew] = useState({});
   const [billingAddOpen, setBillingAddOpen] = useState(false);
   const [billingNewItem, setBillingNewItem] = useState({ description: "", amount: "", recurring: false });
   const [editingOverview, setEditingOverview] = useState(false);
@@ -1586,6 +1601,20 @@ export default function App({ user }) {
       clientBillingDb.listAll(uid)
         .then(r => { if (r?.data) setClientBilling(r.data); })
         .catch(e => console.warn("billing items hydrate failed:", e));
+    }
+
+    // Billing month status — invoiced/paid per (client, month).
+    if (typeof clientBillingMonthStatusDb?.listAll === "function") {
+      clientBillingMonthStatusDb.listAll(uid)
+        .then(r => { if (r?.data) setBillingMonthStatus(r.data); })
+        .catch(e => console.warn("billing month status hydrate failed:", e));
+    }
+
+    // Billing terms — log entries per client, newest first.
+    if (typeof clientBillingTermsDb?.listAll === "function") {
+      clientBillingTermsDb.listAll(uid)
+        .then(r => { if (r?.data) setBillingTerms(r.data); })
+        .catch(e => console.warn("billing terms hydrate failed:", e));
     }
 
     // Build per-client revenue history map: client_id → [history rows]
@@ -10233,11 +10262,155 @@ export default function App({ user }) {
                   const currentMonth = now.toLocaleString("default", { month: "long", year: "numeric" });
                   const nextDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
                   const nextMonth = nextDate.toLocaleString("default", { month: "long", year: "numeric" });
-                  const activeMonths = [currentMonth, nextMonth];
+                  // Previous month for read-only retrospective view.
+                  const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                  const prevMonth = prevDate.toLocaleString("default", { month: "long", year: "numeric" });
+                  // Active months = the three we render at full fidelity.
+                  // prev = read-only (status togglable but no item edits).
+                  // current/next = fully editable.
+                  const activeMonths = [prevMonth, currentMonth, nextMonth];
 
                   const getMonthItems = (month) => billing.items.filter(i => i.month === month);
                   const getMonthTotal = (month) => getMonthItems(month).reduce((a, i) => a + i.amount, 0);
+                  // pastMonths now means "older than previous month" — the deeper history list.
                   const pastMonths = [...new Set(billing.items.map(i => i.month))].filter(m => !activeMonths.includes(m));
+
+                  // Status lookup helper. Returns { invoiced, paid } for a given
+                  // month (defaults false/false if no row exists yet).
+                  const getStatus = (month) => {
+                    const clientStatus = billingMonthStatus[sc.id] || {};
+                    const row = clientStatus[month];
+                    return { invoiced: !!row?.invoiced, paid: !!row?.paid };
+                  };
+
+                  // Toggle invoiced/paid for a month. Optimistic update + DB write.
+                  const toggleInvoiced = async (month) => {
+                    const cur = getStatus(month);
+                    const next = !cur.invoiced;
+                    // Optimistic local update
+                    setBillingMonthStatus(prev => {
+                      const c = { ...(prev[sc.id] || {}) };
+                      c[month] = { ...(c[month] || {}), invoiced: next, invoiced_at: next ? new Date().toISOString() : null };
+                      return { ...prev, [sc.id]: c };
+                    });
+                    try {
+                      const { error } = await clientBillingMonthStatusDb.setInvoiced(user.id, sc.id, month, next);
+                      if (error) throw error;
+                    } catch (e) {
+                      console.warn("setInvoiced failed:", e);
+                      // Roll back
+                      setBillingMonthStatus(prev => {
+                        const c = { ...(prev[sc.id] || {}) };
+                        c[month] = { ...(c[month] || {}), invoiced: cur.invoiced, invoiced_at: cur.invoiced ? new Date().toISOString() : null };
+                        return { ...prev, [sc.id]: c };
+                      });
+                    }
+                  };
+                  const togglePaid = async (month) => {
+                    const cur = getStatus(month);
+                    const next = !cur.paid;
+                    setBillingMonthStatus(prev => {
+                      const c = { ...(prev[sc.id] || {}) };
+                      c[month] = { ...(c[month] || {}), paid: next, paid_at: next ? new Date().toISOString() : null };
+                      return { ...prev, [sc.id]: c };
+                    });
+                    try {
+                      const { error } = await clientBillingMonthStatusDb.setPaid(user.id, sc.id, month, next);
+                      if (error) throw error;
+                    } catch (e) {
+                      console.warn("setPaid failed:", e);
+                      setBillingMonthStatus(prev => {
+                        const c = { ...(prev[sc.id] || {}) };
+                        c[month] = { ...(c[month] || {}), paid: cur.paid, paid_at: cur.paid ? new Date().toISOString() : null };
+                        return { ...prev, [sc.id]: c };
+                      });
+                    }
+                  };
+
+                  // ─── Billing terms handlers ────────────────────────────────
+                  // Terms are an editable, append-able log per client. Newest entry
+                  // is "current" (sorted by created_at desc). All entries editable
+                  // and deletable.
+                  const termsForClient = billingTerms[sc.id] || [];
+                  const currentTerm = termsForClient[0] || null;
+                  const historyTerms = termsForClient.slice(1);
+
+                  const addTerm = async () => {
+                    const body = (termsEditDraft || "").trim();
+                    if (!body) return;
+                    const tempId = "temp-" + Date.now();
+                    // Optimistic prepend
+                    const optimistic = { id: tempId, body, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+                    setBillingTerms(prev => ({ ...prev, [sc.id]: [optimistic, ...(prev[sc.id] || [])] }));
+                    setTermsAddingNew(prev => ({ ...prev, [sc.id]: false }));
+                    setTermsEditDraft("");
+                    try {
+                      const { data, error } = await clientBillingTermsDb.create(user.id, sc.id, body);
+                      if (error) throw error;
+                      // Swap temp ID for real
+                      if (data) {
+                        setBillingTerms(prev => {
+                          const list = (prev[sc.id] || []).map(t => t.id === tempId ? {
+                            id: data.id, body: data.body, created_at: data.created_at, updated_at: data.updated_at,
+                          } : t);
+                          return { ...prev, [sc.id]: list };
+                        });
+                      }
+                    } catch (e) {
+                      console.warn("addTerm failed:", e);
+                      // Roll back
+                      setBillingTerms(prev => ({ ...prev, [sc.id]: (prev[sc.id] || []).filter(t => t.id !== tempId) }));
+                    }
+                  };
+
+                  const saveTermEdit = async (entryId) => {
+                    const body = (termsEditDraft || "").trim();
+                    if (!body) return;
+                    const prev = termsForClient.find(t => t.id === entryId);
+                    if (!prev) return;
+                    setBillingTerms(curr => {
+                      const list = (curr[sc.id] || []).map(t => t.id === entryId ? { ...t, body, updated_at: new Date().toISOString() } : t);
+                      return { ...curr, [sc.id]: list };
+                    });
+                    setTermsEditingId(null);
+                    setTermsEditDraft("");
+                    try {
+                      const { error } = await clientBillingTermsDb.update(entryId, body);
+                      if (error) throw error;
+                    } catch (e) {
+                      console.warn("saveTermEdit failed:", e);
+                      setBillingTerms(curr => {
+                        const list = (curr[sc.id] || []).map(t => t.id === entryId ? prev : t);
+                        return { ...curr, [sc.id]: list };
+                      });
+                    }
+                  };
+
+                  const removeTerm = async (entryId) => {
+                    if (!confirm("Delete this entry?")) return;
+                    const removed = termsForClient.find(t => t.id === entryId);
+                    setBillingTerms(curr => ({ ...curr, [sc.id]: (curr[sc.id] || []).filter(t => t.id !== entryId) }));
+                    try {
+                      const { error } = await clientBillingTermsDb.remove(entryId);
+                      if (error) throw error;
+                    } catch (e) {
+                      console.warn("removeTerm failed:", e);
+                      // Roll back
+                      if (removed) {
+                        setBillingTerms(curr => {
+                          const list = [...(curr[sc.id] || []), removed].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                          return { ...curr, [sc.id]: list };
+                        });
+                      }
+                    }
+                  };
+
+                  const formatTermDate = (iso) => {
+                    if (!iso) return "";
+                    const d = new Date(iso);
+                    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  };
+
 
                   // ─── DB-backed billing handlers ──────────────────────────
                   // All three handlers update local state optimistically (so the
@@ -10379,18 +10552,64 @@ export default function App({ user }) {
                     }
                   };
 
-                  const renderMonth = (month, isNext) => {
+                  // Pill toggle component for month-level invoiced/paid status.
+                  // Lives inline with the month total. Three states:
+                  //   off     — gray text, gray border, transparent fill
+                  //   on (invoiced)  — gold text/border, soft gold fill
+                  //   on (paid)      — green text/border, soft green fill
+                  const StatusPill = ({ kind, on, onClick, disabled = false }) => {
+                    const onColor = kind === "invoiced" ? C.warning : C.success;
+                    const onBg = kind === "invoiced" ? "#FAF0DF" : "#E8F3EC";
+                    return (
+                      <button
+                        type="button"
+                        onClick={disabled ? undefined : onClick}
+                        style={{
+                          padding: "3px 10px",
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          border: "1px solid " + (on ? onColor : C.border),
+                          background: on ? onBg : "transparent",
+                          color: on ? onColor : C.textMuted,
+                          cursor: disabled ? "default" : "pointer",
+                          fontFamily: "inherit",
+                          opacity: disabled ? 0.85 : 1,
+                          transition: "background 120ms, color 120ms, border-color 120ms",
+                        }}
+                      >
+                        {kind === "invoiced" ? "Invoiced" : "Paid"}
+                      </button>
+                    );
+                  };
+
+                  // renderMonth — handles current, next, and previous (read-only).
+                  // readOnly controls: hides × on rows, hides "+ Add line item",
+                  // hides recurring toggle button. Month-level invoiced/paid pills
+                  // remain togglable even on read-only months (you might mark a past
+                  // month paid after the fact).
+                  const renderMonth = (month, opts = {}) => {
+                    const { isNext = false, readOnly = false } = opts;
                     const items = getMonthItems(month);
                     const total = getMonthTotal(month);
                     const isAdding = billingAddOpen === month;
+                    const status = getStatus(month);
+
                     return (
-                      <div key={month} style={{ marginBottom: 20 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <div>
+                      <div key={month} style={{ marginBottom: 20, opacity: readOnly ? 0.85 : 1 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 12 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 14, fontWeight: 700 }}>{month}</div>
-                            {isNext && <div style={{ fontSize: 12, color: C.textMuted }}>Forward billing</div>}
+                            {isNext && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Forward billing</div>}
+                            {readOnly && <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Past · read-only</div>}
                           </div>
-                          {items.length > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>${total.toLocaleString()}</div>}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                            <StatusPill kind="invoiced" on={status.invoiced} onClick={() => toggleInvoiced(month)} />
+                            <StatusPill kind="paid" on={status.paid} onClick={() => togglePaid(month)} />
+                            {items.length > 0 && (
+                              <span style={{ fontSize: 14, fontWeight: 700, color: C.primary, marginLeft: 4 }}>${total.toLocaleString()}</span>
+                            )}
+                          </div>
                         </div>
 
                         {items.map(item => (
@@ -10402,16 +10621,22 @@ export default function App({ user }) {
                               </div>
                             </div>
                             <span style={{ fontSize: 14, fontWeight: 700, marginRight: 4 }}>${item.amount.toLocaleString()}</span>
-                            <button onClick={() => toggleRecurring(item.id)} style={{ background: "none", border: "none", fontSize: 12, color: item.recurring ? C.primary : C.borderLight, cursor: "pointer", padding: "2px" }}>↻</button>
-                            <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", fontSize: 14, color: C.borderLight, cursor: "pointer", padding: "0 2px" }}>×</button>
+                            {!readOnly && (
+                              <>
+                                <button onClick={() => toggleRecurring(item.id)} style={{ background: "none", border: "none", fontSize: 12, color: item.recurring ? C.primary : C.borderLight, cursor: "pointer", padding: "2px" }}>↻</button>
+                                <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", fontSize: 14, color: C.borderLight, cursor: "pointer", padding: "0 2px" }}>×</button>
+                              </>
+                            )}
                           </div>
                         ))}
 
                         {items.length === 0 && !isAdding && (
-                          <div style={{ padding: "12px 0", fontSize: 14, color: C.textMuted }}>No items yet.</div>
+                          <div style={{ padding: "12px 0", fontSize: 14, color: C.textMuted }}>
+                            {readOnly ? "No items logged for this month." : "No items yet."}
+                          </div>
                         )}
 
-                        {isAdding ? (
+                        {!readOnly && (isAdding ? (
                           <div style={{ padding: "12px 0", display: "flex", flexDirection: "column", gap: 8 }}>
                             <input value={billingNewItem.description} onChange={e => setBillingNewItem({ ...billingNewItem, description: e.target.value })} placeholder="Description (e.g. Retainer, Creative refresh)" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
                             <input type="number" value={billingNewItem.amount} onChange={e => setBillingNewItem({ ...billingNewItem, amount: e.target.value })} placeholder="Amount ($)" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
@@ -10428,35 +10653,135 @@ export default function App({ user }) {
                           </div>
                         ) : (
                           <button onClick={() => setBillingAddOpen(month)} style={{ width: "100%", padding: "10px", background: "transparent", color: C.primary, border: "1px dashed " + C.border, borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 6 }}>+ Add line item</button>
-                        )}
-
-                        {items.length > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0 0", marginTop: 8, borderTop: "2px solid " + C.border }}>
-                            <span style={{ fontSize: 14, fontWeight: 800 }}>Total</span>
-                            <span style={{ fontSize: 14, fontWeight: 800, color: C.primary }}>${total.toLocaleString()}</span>
-                          </div>
-                        )}
+                        ))}
                       </div>
                     );
                   };
 
                   return (
                     <div>
-                      {renderMonth(nextMonth, true)}
+                      {/* ─── Billing terms flap (top of tab) ─── */}
+                      <div style={{ background: C.bg, border: "1px solid " + C.border, borderRadius: 10, marginBottom: 18, overflow: "hidden" }}>
+                        <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surface, borderBottom: currentTerm || termsAddingNew[sc.id] ? "1px solid " + C.border : "none" }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", gap: 6, letterSpacing: 0.2 }}>
+                            <Icon name="file" size={13} color={C.textSec} />
+                            Billing terms
+                          </div>
+                          <span style={{ fontSize: 11, color: C.textMuted }}>
+                            {termsForClient.length === 0 ? "No entries yet" : (
+                              termsForClient.length === 1 ? "1 entry" : `${termsForClient.length} entries`
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Body — current entry or empty state */}
+                        <div style={{ padding: "12px 14px", background: C.card }}>
+                          {currentTerm && termsEditingId !== currentTerm.id && !termsAddingNew[sc.id] && (
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "baseline" }}>
+                                <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>{formatTermDate(currentTerm.created_at)}</span>
+                                <span style={{ fontSize: 9.5, fontWeight: 700, color: C.success, background: "#E8F3EC", padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3, textTransform: "uppercase" }}>Current</span>
+                              </div>
+                              <div style={{ fontSize: 13, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap" }}>{currentTerm.body}</div>
+                              <div style={{ display: "flex", gap: 12, marginTop: 10, paddingTop: 10, borderTop: "1px dashed " + C.borderLight }}>
+                                <button onClick={() => { setTermsEditingId(currentTerm.id); setTermsEditDraft(currentTerm.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
+                                <button onClick={() => removeTerm(currentTerm.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                                {historyTerms.length > 0 && (
+                                  <button onClick={() => setTermsHistoryOpen(prev => ({ ...prev, [sc.id]: !prev[sc.id] }))} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                                    {termsHistoryOpen[sc.id] ? "Hide" : "View"} history ({historyTerms.length})
+                                  </button>
+                                )}
+                                <span style={{ flex: 1 }} />
+                                <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: true })); setTermsEditDraft(""); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.btn, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ New entry</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Editing the current entry */}
+                          {currentTerm && termsEditingId === currentTerm.id && (
+                            <div>
+                              <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "8px 14px", background: termsEditDraft.trim() ? C.btn : C.surface, color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 6, fontSize: 12.5, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                                <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "8px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.border, borderRadius: 6, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Adding a new entry */}
+                          {termsAddingNew[sc.id] && (
+                            <div>
+                              {currentTerm && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8, fontStyle: "italic" }}>Adding a new entry will become the current terms. Previous entry stays in history.</div>}
+                              <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "8px 14px", background: termsEditDraft.trim() ? C.btn : C.surface, color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 6, fontSize: 12.5, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
+                                <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "8px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.border, borderRadius: 6, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Empty state — no entries, not adding */}
+                          {!currentTerm && !termsAddingNew[sc.id] && (
+                            <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
+                              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>No billing terms recorded.</div>
+                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: true })); setTermsEditDraft(""); }} style={{ background: "transparent", color: C.btn, border: "1px dashed " + C.border, borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ Add first entry</button>
+                            </div>
+                          )}
+
+                          {/* History (older entries) — expanded */}
+                          {termsHistoryOpen[sc.id] && historyTerms.length > 0 && (
+                            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + C.border }}>
+                              <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>History</div>
+                              {historyTerms.map(t => (
+                                <div key={t.id} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: "1px dashed " + C.borderLight }}>
+                                  {termsEditingId === t.id ? (
+                                    <div>
+                                      <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                        <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.btn : C.surface, color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                                        <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.border, borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginBottom: 4 }}>{formatTermDate(t.created_at)}</div>
+                                      <div style={{ fontSize: 13, lineHeight: 1.55, color: C.textSec, whiteSpace: "pre-wrap" }}>{t.body}</div>
+                                      <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                                        <button onClick={() => { setTermsEditingId(t.id); setTermsEditDraft(t.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
+                                        <button onClick={() => removeTerm(t.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Months — next, current, previous (all read-write for status, prev read-only for items) */}
+                      {renderMonth(nextMonth, { isNext: true })}
                       <div style={{ height: 1, background: C.border, margin: "4px 0 20px" }} />
-                      {renderMonth(currentMonth, false)}
+                      {renderMonth(currentMonth)}
+                      <div style={{ height: 1, background: C.border, margin: "4px 0 20px" }} />
+                      {renderMonth(prevMonth, { readOnly: true })}
 
                       {pastMonths.length > 0 && (
                         <div style={{ marginTop: 8 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, paddingTop: 12, borderTop: "1px solid " + C.borderLight }}>Previous months</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, paddingTop: 12, borderTop: "1px solid " + C.borderLight }}>Earlier months</div>
                           {pastMonths.map((month, mi) => {
                             const items = getMonthItems(month);
                             const total = getMonthTotal(month);
+                            const status = getStatus(month);
                             return (
                               <div key={mi} style={{ background: C.bg, borderRadius: 8, padding: "10px 12px", marginBottom: 6 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: items.length > 0 ? 4 : 0 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: items.length > 0 ? 4 : 0 }}>
                                   <span style={{ fontSize: 14, fontWeight: 600 }}>{month}</span>
-                                  <span style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>${total.toLocaleString()}</span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    {status.invoiced && <span style={{ fontSize: 10, fontWeight: 700, color: C.warning, padding: "2px 7px", borderRadius: 999, background: "#FAF0DF" }}>Invoiced</span>}
+                                    {status.paid && <span style={{ fontSize: 10, fontWeight: 700, color: C.success, padding: "2px 7px", borderRadius: 999, background: "#E8F3EC" }}>Paid</span>}
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: C.primary, marginLeft: 4 }}>${total.toLocaleString()}</span>
+                                  </div>
                                 </div>
                                 {items.length > 0 && (
                                   <div style={{ fontSize: 12, color: C.textMuted }}>
