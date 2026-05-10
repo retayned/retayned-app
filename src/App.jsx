@@ -169,12 +169,9 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
       <path d="M9 19 L13 19 L14.5 15.5 L16.5 22.5 L18.5 16 L20 19 L23 19" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
-      <line x1="16" y1="8" x2="16" y2="3.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
-      <circle cx="16" cy="3" r="1.6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
-      <path d="M5 11 Q5 8 8 8 L24 8 Q27 8 27 11 L27 21 Q27 24 24 24 L14 24 L9 28 L10 24 Q5 24 5 21 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <circle cx="13" cy="16" r="1.4" fill="var(--rt-icon-stroke)"/>
-      <circle cx="19" cy="16" r="1.4" fill="var(--rt-icon-stroke)"/>
-      <path d="M12 19 Q16 21 20 19" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M5 9 Q5 6 8 6 L24 6 Q27 6 27 9 L27 19 Q27 22 24 22 L14 22 L9 27 L10 22 Q5 22 5 19 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M16 10 L17.6 14.4 L22 16 L17.6 17.6 L16 22 L14.4 17.6 L10 16 L14.4 14.4 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinejoin="round"/>
+      <path d="M22 10 L22.6 11.6 L24.2 12.2 L22.6 12.8 L22 14.4 L21.4 12.8 L19.8 12.2 L21.4 11.6 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1" strokeLinejoin="round"/>
     </>),
     rolodex: (<>
       <rect x="3" y="22" width="26" height="5" rx="1.5" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
@@ -653,47 +650,296 @@ function formatRecurrenceLabel(pattern) {
   }
 }
 
+// ─── Composer lexicon dictionaries ──────────────────────────────────────
+// Used by parseComposer's normalization phase to fix common typos and
+// auto-cap industry acronyms / proper nouns. Small lists by design — the
+// goal is to handle the 90% of cases users actually hit, not be a
+// comprehensive spellchecker.
+
+// Common typo → canonical mapping. Run BEFORE matching; preserves the
+// user's intent while cleaning the rendered title.
+const COMPOSER_TYPO_DICT = {
+  "teh": "the", "thte": "the", "hte": "the",
+  "adn": "and", "nad": "and",
+  "thier": "their", "recieve": "receive", "recieved": "received",
+  "becuase": "because", "occured": "occurred",
+  "seperate": "separate", "definately": "definitely",
+  "wiht": "with", "wtih": "with", "fro": "for",
+};
+
+// Lowercase token → canonical-cased version. Applied BOTH inside matched
+// client/worker spans (no — those use the matched name) AND in the cleaned
+// title remainder. So "google ads roas review" → "Google Ads ROAS review".
+// Pure-acronym entries (all caps) are uppercase; proper-noun entries are
+// title-case. Extend this list freely as you notice cases worth boosting.
+const COMPOSER_CASING_DICT = {
+  // Marketing acronyms
+  "roas": "ROAS", "cpa": "CPA", "ctr": "CTR", "cpm": "CPM",
+  "cpc": "CPC", "kpi": "KPI", "kpis": "KPIs",
+  "aov": "AOV", "ltv": "LTV", "cac": "CAC", "mrr": "MRR", "arr": "ARR",
+  "qbr": "QBR", "sla": "SLA", "nps": "NPS",
+  // Time / business shorthand
+  "eod": "EOD", "eom": "EOM", "eoq": "EOQ", "eoy": "EOY",
+  "q1": "Q1", "q2": "Q2", "q3": "Q3", "q4": "Q4",
+  "p&l": "P&L", "b2b": "B2B", "b2c": "B2C",
+  // Tech acronyms
+  "ai": "AI", "llm": "LLM", "mcp": "MCP", "api": "API",
+  "sdk": "SDK", "ui": "UI", "ux": "UX", "url": "URL",
+  "seo": "SEO", "sem": "SEM", "cms": "CMS", "crm": "CRM",
+  "saas": "SaaS", "ios": "iOS", "id": "ID",
+  // Roles
+  "ceo": "CEO", "cfo": "CFO", "cmo": "CMO", "coo": "COO",
+  "cto": "CTO", "vp": "VP", "hr": "HR", "pr": "PR",
+  // Major proper nouns (consumer-facing companies / platforms)
+  "google": "Google", "meta": "Meta", "facebook": "Facebook",
+  "instagram": "Instagram", "tiktok": "TikTok", "youtube": "YouTube",
+  "linkedin": "LinkedIn", "twitter": "Twitter", "x": "X",
+  "snapchat": "Snapchat", "pinterest": "Pinterest", "reddit": "Reddit",
+  "slack": "Slack", "gmail": "Gmail", "outlook": "Outlook",
+  "zoom": "Zoom", "teams": "Teams",
+  "claude": "Claude", "openai": "OpenAI", "anthropic": "Anthropic",
+  "chatgpt": "ChatGPT", "gpt": "GPT",
+  "microsoft": "Microsoft", "apple": "Apple", "amazon": "Amazon",
+  "shopify": "Shopify", "stripe": "Stripe", "paypal": "PayPal",
+  "hubspot": "HubSpot", "salesforce": "Salesforce",
+  "mailchimp": "Mailchimp", "klaviyo": "Klaviyo",
+  "figma": "Figma", "notion": "Notion", "airtable": "Airtable",
+  "monday": "Monday", "asana": "Asana", "trello": "Trello",
+  "github": "GitHub", "gitlab": "GitLab",
+};
+
+// Multi-word trailing phrases to strip from the cleaned title when a
+// match span ate the noun they were referring to. Single words handled
+// in the per-word strip pass after this.
+const TRAILING_PHRASE_REGEX =
+  /\s+(?:on behalf of|in regards? to|with respect to|in light of|in terms of|due to|because of|prior to|relative to|as opposed to)\s*[.,;:]?\s*$/i;
+
+// Single trailing prepositions to strip. Order matters less here — repeated
+// strip pass below handles cascading. Includes both core ("for", "with") and
+// the previously-missing ones ("at", "from", "about", "regarding", etc).
+const TRAILING_PREP_REGEX =
+  /\s+(?:for|with|by|to|at|from|about|regarding|re|vs|against|on|of|over|under|via|per|toward|towards)\s*[.,;:]?\s*$/i;
+
+// Compute initials for a multi-word client name, skipping articles / stop
+// words. "The Motley Fool" → "TMF" (or "MF" without the article). "Matte
+// Collection" → "MC". Single-word names → null (don't have abbreviations).
+const COMPOSER_STOP_WORDS = new Set(["the", "a", "an", "and", "of", "&", "for", "to"]);
+function computeAbbreviations(name) {
+  const tokens = name.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return [];
+  const abbrevs = [];
+  // Full initials (TMF for "The Motley Fool", MC for "Matte Collection")
+  const fullInitials = tokens.map(t => t.charAt(0).toUpperCase()).join("");
+  if (fullInitials.length >= 2) abbrevs.push(fullInitials);
+  // Initials excluding stop words (MF for "The Motley Fool")
+  const meaningful = tokens.filter(t => !COMPOSER_STOP_WORDS.has(t.toLowerCase()));
+  if (meaningful.length >= 2 && meaningful.length !== tokens.length) {
+    const meaningfulInitials = meaningful.map(t => t.charAt(0).toUpperCase()).join("");
+    if (meaningfulInitials.length >= 2 && !abbrevs.includes(meaningfulInitials)) {
+      abbrevs.push(meaningfulInitials);
+    }
+  }
+  // For 3+ initial abbreviations, also include the first 2-letter prefix.
+  // ("The Motley Fool" → TMF → also TM. Users abbreviate organically; not
+  // everyone hits all initials.) Only the first prefix; we don't want to
+  // sprinkle every 2-letter combo.
+  if (fullInitials.length >= 3) {
+    const prefix = fullInitials.slice(0, 2);
+    if (!abbrevs.includes(prefix)) abbrevs.push(prefix);
+  }
+  return abbrevs;
+}
+
+// Apply typo + casing dictionaries to a string. Preserves user's existing
+// capitalization (only autocaps lowercase words found in the dict).
+// Returns the normalized string AND a list of replacements made (for span
+// adjustment if needed — currently unused but available).
+function normalizeComposerText(input) {
+  let out = input;
+  // Typo pass: case-preserving replacement (capital input → capital output)
+  out = out.replace(/\b([a-zA-Z]+)\b/g, (match) => {
+    const lower = match.toLowerCase();
+    const fix = COMPOSER_TYPO_DICT[lower];
+    if (!fix) return match;
+    // Preserve capitalization: if original was Title-cased, capitalize fix
+    if (match[0] === match[0].toUpperCase() && match.slice(1) === match.slice(1).toLowerCase()) {
+      return fix.charAt(0).toUpperCase() + fix.slice(1);
+    }
+    if (match === match.toUpperCase()) return fix.toUpperCase();
+    return fix;
+  });
+  // Casing pass: only auto-cap when user typed in lowercase. If they typed
+  // it capitalized already (proper noun start of sentence, etc), leave alone.
+  out = out.replace(/\b([a-z][a-zA-Z0-9&]*)\b/g, (match) => {
+    const canonical = COMPOSER_CASING_DICT[match.toLowerCase()];
+    if (!canonical) return match;
+    // Only replace when user's input is fully lowercase (clear intent to autocap)
+    if (match === match.toLowerCase()) return canonical;
+    return match;
+  });
+  return out;
+}
+
 function parseComposer(rawText, clients, workers) {
-  const text = rawText || "";
+  // ─── Phase 1: Lexicon normalization ──────────────────────────────────
+  // Apply typo and casing dictionaries to the raw input BEFORE matching.
+  // This means "teh" becomes "the", "google" becomes "Google", and so on,
+  // throughout the rendered title — no special-casing needed downstream.
+  const text = normalizeComposerText(rawText || "");
   const lower = text.toLowerCase();
   const matches = []; // {start, end, kind: 'client'|'worker'|'date'}
 
-  // ─── client match ──────────────────────────────────────────────
-  // Try full client name first (longest match wins). Then try first-token match
-  // ("Matte Collection" → "matte"). Case-insensitive substring with word boundaries.
+  // ─── Phase 2: Client matching (layered priority) ─────────────────────
+  // Priority order: full name > full token > abbreviation > prefix-typo.
+  // Each candidate stops at first hit; first client wins on ties.
   let matchedClient = null;
+  let clientMatchSpan = null;
   if (clients && clients.length > 0) {
     const sortedClients = [...clients].sort((a, b) => b.name.length - a.name.length);
-    // Articles to skip when picking candidate tokens — "The Motley Fool"
-    // should match on "Motley" or "Fool", not on "The".
-    const STOP_WORDS = new Set(["the", "a", "an", "and", "of", "&"]);
+
+    // Build the ranked candidate list per client. Higher score wins overall.
+    // We collect ALL candidate matches across clients and pick the best.
+    const allCandidates = []; // {client, score, start, end}
+
     for (const c of sortedClients) {
-      const candidates = [c.name];
-      // Add each individual token (4+ chars, not a stop word) as a fallback.
-      // E.g. "The Motley Fool" → adds "Motley", "Fool". "Lemon Law Assist" →
-      // adds "Lemon", "Assist" (skips "Law" — too short).
+      // 100 — exact full-name (case-insensitive substring with word boundaries)
+      const fullRe = new RegExp(`\\b${escapeRegexChars(c.name.toLowerCase())}(?:'s)?\\b`, "i");
+      const fullM = lower.match(fullRe);
+      if (fullM && fullM.index !== undefined) {
+        allCandidates.push({ client: c, score: 100, start: fullM.index, end: fullM.index + fullM[0].length });
+        continue; // best possible — skip lower-priority candidates for this client
+      }
+
+      // 90 — meaningful single-token match ("Motley", "Fool", "Matte")
       const tokens = c.name.split(/\s+/);
+      let tokenHit = null;
       for (const tok of tokens) {
         const clean = tok.replace(/[^\w]/g, "").toLowerCase();
-        if (clean.length >= 4 && !STOP_WORDS.has(clean) && !candidates.includes(tok)) {
-          candidates.push(tok);
+        if (clean.length >= 4 && !COMPOSER_STOP_WORDS.has(clean)) {
+          const re = new RegExp(`\\b${escapeRegexChars(clean)}(?:'s)?\\b`, "i");
+          const m = lower.match(re);
+          if (m && m.index !== undefined) {
+            tokenHit = { client: c, score: 90, start: m.index, end: m.index + m[0].length };
+            break;
+          }
         }
       }
-      for (const cand of candidates) {
-        const re = new RegExp(`\\b${escapeRegexChars(cand.toLowerCase())}(?:'s)?\\b`, "i");
-        const m = lower.match(re);
+      if (tokenHit) {
+        allCandidates.push(tokenHit);
+        continue;
+      }
+
+      // 80 — abbreviation match. Two-letter abbreviations ("MC", "TM")
+      // require uppercase to avoid colliding with English words that happen
+      // to share initials (mc → emcee/mac, tm → trademark). Three-or-more
+      // letter abbreviations ("TMF", "WMP", "BYD") match case-insensitively
+      // because the collision risk is vanishingly low — no common English
+      // words look like all-consonant 3-letter strings.
+      const abbrevs = computeAbbreviations(c.name);
+      let abbrevHit = null;
+      for (const ab of abbrevs) {
+        const flags = ab.length >= 3 ? "i" : "";
+        const re = new RegExp(`\\b${escapeRegexChars(ab)}\\b`, flags);
+        const m = text.match(re);
         if (m && m.index !== undefined) {
-          matchedClient = c;
-          matches.push({ start: m.index, end: m.index + m[0].length, kind: "client" });
+          abbrevHit = { client: c, score: 80, start: m.index, end: m.index + m[0].length };
           break;
         }
       }
-      if (matchedClient) break;
+      if (abbrevHit) {
+        allCandidates.push(abbrevHit);
+        continue;
+      }
+
+      // 70 — prefix-typo match. Catches "whitemou" → "White Mountain Puzzles"
+      // and similar truncated/typo'd attempts at a multi-word client name.
+      // Strategy: look at each meaningful token in the user's input that's
+      // ≥ 4 chars long, and check whether it begins with the first 4+ chars
+      // of any meaningful client token. Length must be ≥ 4 AND ≥ 60% of the
+      // matched client token to avoid over-eager matches.
+      // We tokenize the lowered text by word boundary.
+      const userTokens = [];
+      const tokenRe = /\b[a-z][a-z0-9]*\b/gi;
+      let m;
+      while ((m = tokenRe.exec(text)) !== null) {
+        userTokens.push({ tok: m[0].toLowerCase(), start: m.index, end: m.index + m[0].length });
+      }
+      let prefixHit = null;
+      for (const ut of userTokens) {
+        if (ut.tok.length < 5) continue; // need real substance, not "go", "to"
+        for (const ctok of tokens) {
+          const cclean = ctok.replace(/[^\w]/g, "").toLowerCase();
+          if (cclean.length < 5 || COMPOSER_STOP_WORDS.has(cclean)) continue;
+          // User token starts with the FIRST 4+ chars of the client token,
+          // user token length is ≥ 60% of client token length.
+          const sharedPrefix = cclean.slice(0, Math.min(ut.tok.length, cclean.length));
+          if (ut.tok.startsWith(cclean.slice(0, 4)) && ut.tok.length >= cclean.length * 0.6) {
+            prefixHit = { client: c, score: 70, start: ut.start, end: ut.end };
+            break;
+          }
+          // Reverse direction: user typed a longer prefix than first 4 ("whitemou"
+          // → "white" — user starts with "white", a full client token).
+          if (ut.tok.startsWith(cclean) && ut.tok.length >= cclean.length + 1) {
+            // The user's token contains the full client token plus extra chars
+            // (e.g. "whitemou" contains "white" + "mou"). Solid signal.
+            prefixHit = { client: c, score: 75, start: ut.start, end: ut.end };
+            break;
+          }
+        }
+        if (prefixHit) break;
+      }
+      if (prefixHit) {
+        allCandidates.push(prefixHit);
+        continue;
+      }
+    }
+
+    // Pick highest-scoring candidate; tie-break by earliest start
+    if (allCandidates.length > 0) {
+      allCandidates.sort((a, b) => b.score - a.score || a.start - b.start);
+      const winner = allCandidates[0];
+      matchedClient = winner.client;
+      clientMatchSpan = { start: winner.start, end: winner.end, kind: "client" };
+      matches.push(clientMatchSpan);
+
+      // Secondary sweep: now that we know which client wins, scan the input
+      // for OTHER prefix/typo references to the same client and add them as
+      // additional spans to strip. Handles cases like "Create new puzzle ads
+      // whitemou" where both "puzzle(s)" and "whitemou" reference White
+      // Mountain Puzzles — we matched on "puzzle" first but the user also
+      // typed "whitemou", so we strip both.
+      const winnerTokens = winner.client.name.split(/\s+/);
+      const userTokensSweep = [];
+      const sweepRe = /\b[a-z][a-z0-9]*\b/gi;
+      let sm;
+      while ((sm = sweepRe.exec(text)) !== null) {
+        userTokensSweep.push({ tok: sm[0].toLowerCase(), start: sm.index, end: sm.index + sm[0].length });
+      }
+      for (const ut of userTokensSweep) {
+        if (ut.tok.length < 5) continue;
+        // Skip if this span is already matched
+        if (matches.some(m => m.start === ut.start && m.end === ut.end)) continue;
+        // Skip if it overlaps the existing client span
+        if (matches.some(m => m.kind === "client" && ut.start < m.end && ut.end > m.start)) continue;
+        for (const ctok of winnerTokens) {
+          const cclean = ctok.replace(/[^\w]/g, "").toLowerCase();
+          if (cclean.length < 5 || COMPOSER_STOP_WORDS.has(cclean)) continue;
+          // Apply the same prefix-typo rules as the primary match
+          const startsWithPrefix4 = ut.tok.startsWith(cclean.slice(0, 4)) && ut.tok.length >= cclean.length * 0.6;
+          const containsFullToken = ut.tok.startsWith(cclean) && ut.tok.length >= cclean.length + 1;
+          // Also allow simple plural/singular variants (puzzle ↔ puzzles)
+          const pluralVariant = ut.tok === cclean.replace(/s$/, "") || cclean === ut.tok.replace(/s$/, "");
+          if (startsWithPrefix4 || containsFullToken || pluralVariant) {
+            matches.push({ start: ut.start, end: ut.end, kind: "client" });
+            break;
+          }
+        }
+      }
     }
   }
 
-  // ─── worker match ──────────────────────────────────────────────
-  // Workers are humans → match on first name.
+  // ─── Phase 3: Worker matching ────────────────────────────────────────
+  // Match on first name. Skip if the span overlaps the client span.
   let matchedWorker = null;
   if (workers && workers.length > 0) {
     const clientSpans = matches.filter(m => m.kind === "client");
@@ -713,7 +959,7 @@ function parseComposer(rawText, clients, workers) {
     }
   }
 
-  // ─── date match ────────────────────────────────────────────────
+  // ─── Phase 4: Date matching ──────────────────────────────────────────
   let matchedDate = null;
   const datePatterns = [
     { re: /\btoday\b/i, value: () => addDays(todayAnchored(), 0), kind: "today" },
@@ -732,7 +978,8 @@ function parseComposer(rawText, clients, workers) {
     }
   }
 
-  // ─── build cleaned title ────────────────────────────────────────
+  // ─── Phase 5: Title cleanup ──────────────────────────────────────────
+  // Strip matched spans, then aggressively scrub leftover prepositions.
   let title = text;
   const sortedMatches = [...matches].sort((a, b) => b.start - a.start);
   for (const m of sortedMatches) {
@@ -742,21 +989,28 @@ function parseComposer(rawText, clients, workers) {
     }
     title = title.slice(0, m.start) + title.slice(endIdx);
   }
+  // Leading "have/for/with/by/tell" — common in voice-y inputs ("for Backyard, do X")
   title = title.replace(/^\s*(have|for|with|by|tell)\s+/i, "");
+  // Collapse double-spaces left by mid-string strips
   title = title.replace(/\s{2,}/g, " ").trim();
+  // Stray possessives left over: " 's" or "'s "
   title = title.replace(/\s+'s\b/g, "");
   title = title.replace(/^'s\s+/, "");
-  // Strip trailing prepositions repeatedly — handles cases like
-  // "ads for matte for tomorrow" where stripping leaves two trailing "for"s.
+  // Strip trailing prepositional phrases (multi-word first), then single-word.
+  // Repeat until stable to handle cascades like "for at" or "with on".
   let prev;
   do {
     prev = title;
-    title = title.replace(/\s+(for|with|by|to)\s*$/i, "").trim();
+    title = title.replace(TRAILING_PHRASE_REGEX, "").trim();
+    title = title.replace(TRAILING_PREP_REGEX, "").trim();
   } while (title !== prev);
-  title = title.trim();
+  // Strip orphaned trailing connectors like " — " or " - " or " :" left over
+  title = title.replace(/\s*[—–\-:,;]\s*$/g, "").trim();
+  // Capitalize first letter
   if (title.length > 0) {
     title = title.charAt(0).toUpperCase() + title.slice(1);
   }
+  // Add terminal period if absent
   if (title.length > 0 && !/[.!?]$/.test(title)) {
     title += ".";
   }
