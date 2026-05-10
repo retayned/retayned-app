@@ -1126,6 +1126,157 @@ export const clientBillingDb = {
 
 
 // ============================================================
+// CLIENT BILLING MONTH STATUS — invoiced/paid status per month
+// ============================================================
+//
+// One row per (user, client, month). Row exists only when status has been
+// set; absent = both flags false. Upsert pattern — setInvoiced/setPaid
+// create-or-update.
+
+export const clientBillingMonthStatusDb = {
+  // Hydrate ALL status rows for the user. Returns nested map:
+  //   { [client_id]: { [month]: { invoiced, paid, invoiced_at, paid_at } } }
+  listAll: async (userId) => {
+    const { data, error } = await supabase
+      .from('client_billing_month_status')
+      .select('*')
+      .eq('user_id', userId);
+    if (error) return { data: {}, error };
+    const grouped = {};
+    (data || []).forEach(row => {
+      if (!grouped[row.client_id]) grouped[row.client_id] = {};
+      grouped[row.client_id][row.month] = {
+        id: row.id,
+        invoiced: row.invoiced,
+        paid: row.paid,
+        invoiced_at: row.invoiced_at,
+        paid_at: row.paid_at,
+      };
+    });
+    return { data: grouped, error: null };
+  },
+
+  // Set the invoiced flag for a month. Upserts so callers don't need to
+  // know whether a row exists yet. Sets invoiced_at to now when turning on,
+  // null when turning off.
+  setInvoiced: async (userId, clientId, month, invoiced) => {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('client_billing_month_status')
+      .upsert({
+        user_id: userId,
+        client_id: clientId,
+        month,
+        invoiced,
+        invoiced_at: invoiced ? now : null,
+      }, { onConflict: 'user_id,client_id,month' })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Set the paid flag for a month. Same upsert pattern.
+  setPaid: async (userId, clientId, month, paid) => {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('client_billing_month_status')
+      .upsert({
+        user_id: userId,
+        client_id: clientId,
+        month,
+        paid,
+        paid_at: paid ? now : null,
+      }, { onConflict: 'user_id,client_id,month' })
+      .select()
+      .single();
+    return { data, error };
+  },
+};
+
+
+// ============================================================
+// CLIENT BILLING TERMS — append-able log of billing arrangement notes
+// ============================================================
+//
+// Per-client billing memory. Users add an entry whenever the deal evolves.
+// Newest entry by created_at = "current" terms (derived in frontend, not stored).
+// Entries are editable + deletable.
+
+export const clientBillingTermsDb = {
+  // Hydrate ALL terms entries for the user, grouped by client_id.
+  // Returns { [client_id]: [{ id, body, created_at, updated_at }, ...] }
+  // sorted newest-first within each client (so [0] is current).
+  listAll: async (userId) => {
+    const { data, error } = await supabase
+      .from('client_billing_terms')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) return { data: {}, error };
+    const grouped = {};
+    (data || []).forEach(row => {
+      if (!grouped[row.client_id]) grouped[row.client_id] = [];
+      grouped[row.client_id].push({
+        id: row.id,
+        body: row.body,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      });
+    });
+    return { data: grouped, error: null };
+  },
+
+  // Per-client list (rare, mostly for direct fetches).
+  listForClient: async (userId, clientId) => {
+    const { data, error } = await supabase
+      .from('client_billing_terms')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+    return { data: data || [], error };
+  },
+
+  // Append a new entry. Caller passes plain text body; the new entry
+  // becomes "current" (most recent created_at).
+  create: async (userId, clientId, body) => {
+    const { data, error } = await supabase
+      .from('client_billing_terms')
+      .insert({
+        user_id: userId,
+        client_id: clientId,
+        body,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Edit an existing entry (typos, corrections). created_at stays the
+  // same so sort order is stable; updated_at gets bumped by the trigger.
+  update: async (entryId, body) => {
+    const { data, error } = await supabase
+      .from('client_billing_terms')
+      .update({ body })
+      .eq('id', entryId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Hard delete. If you delete the current entry, the next-most-recent
+  // becomes current automatically.
+  remove: async (entryId) => {
+    const { error } = await supabase
+      .from('client_billing_terms')
+      .delete()
+      .eq('id', entryId);
+    return { error };
+  },
+};
+
+
+// ============================================================
 // REALTIME SUBSCRIPTIONS
 // ============================================================
 
