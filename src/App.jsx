@@ -6228,7 +6228,7 @@ export default function App({ user }) {
             );
           };
 
-          const V2Sparkline = ({ points, width = 72, height = 22, stroke, fill, showEnd = false }) => {
+          const V2Sparkline = ({ points, width = 72, height = 22, stroke, fill, showEnd = false, responsive = false }) => {
             if (!points || points.length === 0) return null;
             const min = Math.min(...points);
             const max = Math.max(...points);
@@ -6248,8 +6248,14 @@ export default function App({ user }) {
             const dir = lastV > first ? "up" : lastV < first ? "dn" : "flat";
             const auto = dir === "up" ? C.retGood : dir === "dn" ? C.retWarn : C.textMuted;
             const sColor = stroke || auto;
+            // Responsive mode: SVG fills its parent container width via CSS (100%).
+            // viewBox is always set so internal coordinates remain stable. This is
+            // used in the columns view where each card width depends on the
+            // bucket column width and we don't want the sparkline overflowing.
+            const svgWidth = responsive ? "100%" : width;
+            const svgHeight = responsive ? "100%" : height;
             return (
-              <svg width={width} height={height} style={{ display: "block" }}>
+              <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: "block" }}>
                 {fill && <path d={area} fill={sColor} fillOpacity={0.08} />}
                 <path d={path} fill="none" stroke={sColor} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
                 {showEnd && <circle cx={last[0]} cy={last[1]} r={1.8} fill={sColor} />}
@@ -6957,70 +6963,80 @@ export default function App({ user }) {
                   )}
 
                   {variant === "columns" && (
-                    <div className="rc-desktop-view" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, alignItems: "flex-start" }}>
-                      {[
-                        { id: "thriving", label: "Thriving",  color: C.retElite, bg: "#E5EDE7" },
-                        { id: "healthy",  label: "Healthy",   color: C.retGood,  bg: "#EFF5F1" },
-                        { id: "watch",    label: "Watch",     color: C.retOk,    bg: "#F6F4E5" },
-                        { id: "at-risk",  label: "At risk",   color: C.retWarn,  bg: "#F9EEE0" },
-                        { id: "critical", label: "Critical",  color: C.retCrit,  bg: "#F5E4E0" },
-                      ].map(s => {
-                        const col = filteredClients.filter(c => stubStage(c.ret || 0) === s.id);
-                        const mrr = col.reduce((a, c) => a + (c.revenue || 0), 0);
-                        return (
-                          <div key={s.id} style={{ background: s.bg, border: "1px solid " + s.color + "22", borderRadius: 12, padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 200 }}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px 8px", borderBottom: "1px solid " + C.borderLight }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: 4, background: s.color }} />
-                                <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, letterSpacing: -0.1 }}>{s.label}</span>
-                                <span style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{col.length}</span>
+                    /* Columns view — five retention-stage buckets side-by-side.
+                       The buckets are the whole point of this view (Thriving →
+                       Healthy → Watch → At risk → Critical), so we don't let
+                       them collapse or wrap; instead the grid scrolls horizontally
+                       once the viewport is too narrow to show all 5 at the
+                       minmax min-width. Each column has overflow:hidden so card
+                       contents (especially the sparkline) can't bleed into
+                       neighbouring buckets. */
+                    <div style={{ overflowX: "auto", overflowY: "hidden", paddingBottom: 4 }}>
+                      <div className="rc-desktop-view" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(240px, 1fr))", gap: 10, alignItems: "flex-start" }}>
+                        {[
+                          { id: "thriving", label: "Thriving",  color: C.retElite, bg: "#E5EDE7" },
+                          { id: "healthy",  label: "Healthy",   color: C.retGood,  bg: "#EFF5F1" },
+                          { id: "watch",    label: "Watch",     color: C.retOk,    bg: "#F6F4E5" },
+                          { id: "at-risk",  label: "At risk",   color: C.retWarn,  bg: "#F9EEE0" },
+                          { id: "critical", label: "Critical",  color: C.retCrit,  bg: "#F5E4E0" },
+                        ].map(s => {
+                          const col = filteredClients.filter(c => stubStage(c.ret || 0) === s.id);
+                          const mrr = col.reduce((a, c) => a + (c.revenue || 0), 0);
+                          return (
+                            <div key={s.id} style={{ background: s.bg, border: "1px solid " + s.color + "22", borderRadius: 12, padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 200, minWidth: 0, overflow: "hidden" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 6px 8px", borderBottom: "1px solid " + C.borderLight, gap: 8, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: 4, background: s.color, flexShrink: 0 }} />
+                                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, letterSpacing: -0.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
+                                  <span style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{col.length}</span>
+                                </div>
+                                <div style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>${(mrr/1000).toFixed(1)}k</div>
                               </div>
-                              <div style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>${(mrr/1000).toFixed(1)}k</div>
-                            </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              {col.map(c => {
-                                const trend = stubTrend(c);
-                                const trendStart = trend[0], trendEnd = trend[trend.length - 1];
-                                const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
-                                const owner = stubOwner(c.name);
-                                const ct = stubCadenceTarget(c);
-                                const ca = stubCadenceActual(c);
-                                const delta = stubDelta(c.name);
-                                return (
-                                  <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                      <ScoreRing2 client={c} size={32} />
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
-                                        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1 }}>{c.tag || "Client"} · renews {stubRenewal(c)}</div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                                {col.map(c => {
+                                  const trend = stubTrend(c);
+                                  const trendStart = trend[0], trendEnd = trend[trend.length - 1];
+                                  const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
+                                  const owner = stubOwner(c.name);
+                                  const ct = stubCadenceTarget(c);
+                                  const ca = stubCadenceActual(c);
+                                  const delta = stubDelta(c.name);
+                                  return (
+                                    <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                                        <ScoreRing2 client={c} size={32} />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div style={{ fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
+                                          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · renews {stubRenewal(c)}</div>
+                                        </div>
+                                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                          <div style={{ fontSize: 12.5, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                                            {c.ret || 0}{delta !== 0 && <span style={{ fontSize: 9.5, marginLeft: 3, color: delta > 0 ? C.retGood : C.retWarn }}>{delta > 0 ? "+" : ""}{delta}</span>}
+                                          </div>
+                                        </div>
                                       </div>
-                                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                        <div style={{ fontSize: 12.5, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                                          {c.ret || 0}{delta !== 0 && <span style={{ fontSize: 9.5, marginLeft: 3, color: delta > 0 ? C.retGood : C.retWarn }}>{delta > 0 ? "+" : ""}{delta}</span>}
+                                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
+                                        <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
+                                        <CadencePips target={ct} actual={ca} />
+                                      </div>
+                                      <div style={{ position: "relative", background: C.bg, border: "1px solid " + C.borderLight, borderRadius: 6, padding: "4px 6px", minWidth: 0, overflow: "hidden" }}>
+                                        <V2Sparkline points={trend} width={156} height={28} fill responsive />
+                                        <div style={{ position: "absolute", top: 4, left: 0, right: 6, display: "flex", justifyContent: "space-between", padding: "0 6px", pointerEvents: "none" }}>
+                                          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0)/1000).toFixed(1)}k</span>
+                                          <span style={{ fontSize: 10.5, fontWeight: 700, color: pct >= 1 ? C.retGood : pct <= -1 ? C.retWarn : C.textMuted, fontVariantNumeric: "tabular-nums" }}>{pct >= 0 ? "+" : ""}{pct.toFixed(0)}%</span>
                                         </div>
                                       </div>
                                     </div>
-                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                                      <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
-                                      <CadencePips target={ct} actual={ca} />
-                                    </div>
-                                    <div style={{ position: "relative", background: C.bg, border: "1px solid " + C.borderLight, borderRadius: 6, padding: "4px 6px" }}>
-                                      <V2Sparkline points={trend} width={156} height={28} fill />
-                                      <div style={{ position: "absolute", top: 4, left: 0, right: 6, display: "flex", justifyContent: "space-between", padding: "0 6px", pointerEvents: "none" }}>
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0)/1000).toFixed(1)}k</span>
-                                        <span style={{ fontSize: 10.5, fontWeight: 700, color: pct >= 1 ? C.retGood : pct <= -1 ? C.retWarn : C.textMuted, fontVariantNumeric: "tabular-nums" }}>{pct >= 0 ? "+" : ""}{pct.toFixed(0)}%</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                              {col.length === 0 && (
-                                <div style={{ fontSize: 12, color: C.textMuted, textAlign: "center", padding: "20px 0", fontStyle: "italic" }}>No clients</div>
-                              )}
+                                  );
+                                })}
+                                {col.length === 0 && (
+                                  <div style={{ fontSize: 12, color: C.textMuted, textAlign: "center", padding: "20px 0", fontStyle: "italic" }}>No clients</div>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
