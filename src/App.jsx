@@ -124,7 +124,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
   // mode. The `color` prop is intentionally ignored for these icons — they
   // don't recolor on active state; the active state is signalled by the
   // surrounding row's background fill.
-  const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers"]);
+  const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "sun", "moon", "due"]);
   const isEditorial = editorialNames.has(name);
 
   const paths = {
@@ -207,9 +207,51 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
       </g>
     </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
-    settings: (<><circle cx="12" cy="12" r="3" stroke={color} strokeWidth="1.8" fill="none"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke={color} strokeWidth="1.8" fill="none"/></>),
-    sun: (<><circle cx="12" cy="12" r="4.5" stroke={color} strokeWidth="1.8" fill="none"/><path d="M12 3v2M12 19v2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M3 12h2M19 12h2M5.6 18.4L7 17M17 7l1.4-1.4" stroke={color} strokeWidth="1.8" strokeLinecap="round"/></>),
-    moon: (<><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
+    settings: (<>
+      <g strokeLinejoin="round" strokeLinecap="round">
+        <path d="M16 3 L18 6.5 L22 5.5 L22.5 9.5 L26 11 L24.5 14.5 L27 17.5 L24 20 L24.5 24 L20.5 24.5 L18.5 28 L15 26 L11.5 28 L9.5 24.5 L5.5 24 L6 20 L3 17.5 L5.5 14.5 L4 11 L7.5 9.5 L8 5.5 L12 6.5 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <circle cx="16" cy="16" r="6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <circle cx="16" cy="16" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+      </g>
+    </>),
+    sun: (<>
+      <g strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="16" cy="16" r="6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <circle cx="14" cy="14" r="1.4" fill="var(--rt-icon-fill)" stroke="none"/>
+        <line x1="16" y1="3" x2="16" y2="6.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="16" y1="25.5" x2="16" y2="29" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="3" y1="16" x2="6.5" y2="16" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="25.5" y1="16" x2="29" y2="16" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="6.5" y1="6.5" x2="9" y2="9" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="23" y1="23" x2="25.5" y2="25.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="6.5" y1="25.5" x2="9" y2="23" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+        <line x1="23" y1="9" x2="25.5" y2="6.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
+      </g>
+    </>),
+    moon: (<>
+      <g strokeLinejoin="round" strokeLinecap="round">
+        <path d="M22 6 Q14 6 11 12 Q8 18 12 24 Q16 28 22 26 Q14 24 12 18 Q10 12 22 6 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
+        <g fill="var(--rt-icon-stroke)" stroke="none">
+          <circle cx="8" cy="8" r="1.2"/>
+          <circle cx="26" cy="14" r="1.2"/>
+          <circle cx="24" cy="24" r="1"/>
+        </g>
+        <path d="M7 18 L8 20 L10 21 L8 22 L7 24 L6 22 L4 21 L6 20 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.2"/>
+      </g>
+    </>),
+    due: (<>
+      <rect x="4" y="6" width="22" height="22" rx="3" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <path d="M4 9 Q4 6 7 6 L23 6 Q26 6 26 9 L26 12 L4 12 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+      <line x1="10" y1="3.5" x2="10" y2="8.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <line x1="20" y1="3.5" x2="20" y2="8.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <g fill="var(--rt-icon-stroke)" stroke="none" opacity="0.55">
+        <circle cx="9" cy="17" r="1"/><circle cx="14" cy="17" r="1"/><circle cx="19" cy="17" r="1"/>
+        <circle cx="9" cy="22" r="1"/><circle cx="14" cy="22" r="1"/>
+      </g>
+      <circle cx="22" cy="23" r="6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
+      <line x1="22" y1="23" x2="22" y2="20" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <line x1="22" y1="23" x2="25" y2="23" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+    </>),
     sweeps: (<><path d="M18 20V10M12 20V4M6 20v-6" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     target: (<><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="6" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="2" fill={color}/></>),
     spark: (<><path d="M12 2L9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z" stroke={color} strokeWidth="1.6" fill="none" strokeLinejoin="round"/></>),
@@ -3449,7 +3491,7 @@ export default function App({ user }) {
             const active = page === n.id;
             return (
               <div key={n.id} className="nav-item" onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, marginBottom: 2, background: active ? C.deepCream : "transparent", color: active ? C.text : C.text, fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={16} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
                 {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.surfaceWarm, flexShrink: 0 }} />}
               </div>
             );
@@ -4252,7 +4294,21 @@ export default function App({ user }) {
                     };
 
                     return (
-                      <div className="rt-band-pick" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: C.text, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic" }}>
+                      <div className="rt-band-pick" style={{
+                        marginTop: 10,
+                        fontSize: 14,
+                        lineHeight: 1.55,
+                        // Match the site's established Fraunces voice: muted color
+                        // (not headline ink), weight 400, optical-size + softness +
+                        // wonk axis values that lighten the strokes. Without these
+                        // axes, Fraunces italic at 14px renders noticeably darker
+                        // and chunkier than the surrounding sans-serif body text.
+                        color: C.textMuted,
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontStyle: "italic",
+                        fontWeight: 400,
+                        fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                      }}>
                         Today&rsquo;s client is{" "}
                         <span
                           onClick={handleEditProfile}
@@ -4262,8 +4318,8 @@ export default function App({ user }) {
                         </span>
                         {" "}&mdash;{" "}
                         {raiPicks.reason ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") : "Worth a check-in"}.{" "}
-                        <span style={{ color: C.textMuted }}>-Rai</span>
-                        <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal", color: C.textMuted }}>
+                        <span>-Rai</span>
+                        <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal", color: C.textMuted, fontVariationSettings: "normal" }}>
                           <button onClick={handleAddTask} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
                             Add task
                           </button>
@@ -4504,7 +4560,7 @@ export default function App({ user }) {
                             onMouseLeave={e => { if (!selectedWorker && !workerPickerOpen) e.currentTarget.style.background = "transparent"; }}
                             title={selectedWorker ? `Assigned to ${selectedWorker.name}` : "Assign to a worker"}
                           >
-                            <Icon name="clients" size={12} color={selectedWorker ? C.btn : C.textMuted} />
+                            <Icon name="workers" size={12} color={selectedWorker ? C.btn : C.textMuted} />
                             <span>{selectedWorker ? selectedWorker.name.split(' ')[0] : "Worker"}</span>
                           </button>
                           {selectedWorker && (
