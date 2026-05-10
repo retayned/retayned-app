@@ -10660,103 +10660,105 @@ export default function App({ user }) {
 
                   return (
                     <div>
-                      {/* ─── Billing terms flap (top of tab) ─── */}
-                      <div style={{ background: C.bg, border: "1px solid " + C.border, borderRadius: 10, marginBottom: 18, overflow: "hidden" }}>
-                        <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", background: C.surface, borderBottom: currentTerm || termsAddingNew[sc.id] ? "1px solid " + C.border : "none" }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.text, display: "flex", alignItems: "center", gap: 6, letterSpacing: 0.2 }}>
-                            <Icon name="file" size={13} color={C.textSec} />
+                      {/* ─── Billing terms flap (Direction C: paper-note) ─── */}
+                      {/* Cream fill (surfaceWarm) + warning-color left accent (gold).
+                          Sharp 0/4 radius differentiates from rounded tabs above.
+                          All actions are demoted to small text-muted links — no
+                          purple call-to-action, since adding new entries is rare. */}
+                      <div style={{
+                        background: C.surfaceWarm,
+                        borderLeft: "3px solid " + C.warning,
+                        borderRadius: "0 4px 4px 0",
+                        padding: "12px 14px",
+                        marginBottom: 18,
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: C.warning, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                             Billing terms
-                          </div>
+                          </span>
                           <span style={{ fontSize: 11, color: C.textMuted }}>
-                            {termsForClient.length === 0 ? "No entries yet" : (
-                              termsForClient.length === 1 ? "1 entry" : `${termsForClient.length} entries`
-                            )}
+                            {currentTerm ? formatTermDate(currentTerm.created_at) : "No entries yet"}
+                            {termsForClient.length > 0 && ` · ${termsForClient.length === 1 ? "1 entry" : `${termsForClient.length} entries`}`}
                           </span>
                         </div>
 
-                        {/* Body — current entry or empty state */}
-                        <div style={{ padding: "12px 14px", background: C.card }}>
-                          {currentTerm && termsEditingId !== currentTerm.id && !termsAddingNew[sc.id] && (
-                            <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, alignItems: "baseline" }}>
-                                <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>{formatTermDate(currentTerm.created_at)}</span>
-                                <span style={{ fontSize: 9.5, fontWeight: 700, color: C.success, background: "#E8F3EC", padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3, textTransform: "uppercase" }}>Current</span>
-                              </div>
-                              <div style={{ fontSize: 13, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap" }}>{currentTerm.body}</div>
-                              <div style={{ display: "flex", gap: 12, marginTop: 10, paddingTop: 10, borderTop: "1px dashed " + C.borderLight }}>
-                                <button onClick={() => { setTermsEditingId(currentTerm.id); setTermsEditDraft(currentTerm.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
-                                <button onClick={() => removeTerm(currentTerm.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
-                                {historyTerms.length > 0 && (
-                                  <button onClick={() => setTermsHistoryOpen(prev => ({ ...prev, [sc.id]: !prev[sc.id] }))} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-                                    {termsHistoryOpen[sc.id] ? "Hide" : "View"} history ({historyTerms.length})
-                                  </button>
-                                )}
-                                <span style={{ flex: 1 }} />
-                                <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: true })); setTermsEditDraft(""); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.btn, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ New entry</button>
-                              </div>
+                        {/* Body — current entry, edit, add, or empty */}
+                        {currentTerm && termsEditingId !== currentTerm.id && !termsAddingNew[sc.id] && (
+                          <div>
+                            <div style={{ fontSize: 13, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap" }}>{currentTerm.body}</div>
+                            <div style={{ display: "flex", gap: 14, marginTop: 8, paddingTop: 8, borderTop: "0.5px dashed " + C.deepCream, fontSize: 11, color: C.textMuted }}>
+                              <button onClick={() => { setTermsEditingId(currentTerm.id); setTermsEditDraft(currentTerm.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
+                              <button onClick={() => removeTerm(currentTerm.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                              {historyTerms.length > 0 && (
+                                <button onClick={() => setTermsHistoryOpen(prev => ({ ...prev, [sc.id]: !prev[sc.id] }))} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                                  {termsHistoryOpen[sc.id] ? "Hide" : "View"} history ({historyTerms.length})
+                                </button>
+                              )}
+                              <span style={{ flex: 1 }} />
+                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: true })); setTermsEditDraft(""); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>+ New entry</button>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {/* Editing the current entry */}
-                          {currentTerm && termsEditingId === currentTerm.id && (
-                            <div>
-                              <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
-                              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "8px 14px", background: termsEditDraft.trim() ? C.btn : C.surface, color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 6, fontSize: 12.5, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
-                                <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "8px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.border, borderRadius: 6, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                              </div>
+                        {/* Editing the current entry */}
+                        {currentTerm && termsEditingId === currentTerm.id && (
+                          <div>
+                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                              <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? C.surfaceWarm : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                              <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {/* Adding a new entry */}
-                          {termsAddingNew[sc.id] && (
-                            <div>
-                              {currentTerm && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8, fontStyle: "italic" }}>Adding a new entry will become the current terms. Previous entry stays in history.</div>}
-                              <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
-                              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "8px 14px", background: termsEditDraft.trim() ? C.btn : C.surface, color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 6, fontSize: 12.5, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
-                                <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "8px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.border, borderRadius: 6, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                              </div>
+                        {/* Adding a new entry */}
+                        {termsAddingNew[sc.id] && (
+                          <div>
+                            {currentTerm && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8, fontStyle: "italic" }}>Adding a new entry will become the current terms. Previous entry stays in history.</div>}
+                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                              <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? C.surfaceWarm : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
+                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          {/* Empty state — no entries, not adding */}
-                          {!currentTerm && !termsAddingNew[sc.id] && (
-                            <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
-                              <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8 }}>No billing terms recorded.</div>
-                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: true })); setTermsEditDraft(""); }} style={{ background: "transparent", color: C.btn, border: "1px dashed " + C.border, borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>+ Add first entry</button>
-                            </div>
-                          )}
+                        {/* Empty state — no entries, not adding */}
+                        {!currentTerm && !termsAddingNew[sc.id] && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4 }}>
+                            <span style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>No billing terms recorded.</span>
+                            <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: true })); setTermsEditDraft(""); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>+ Add entry</button>
+                          </div>
+                        )}
 
-                          {/* History (older entries) — expanded */}
-                          {termsHistoryOpen[sc.id] && historyTerms.length > 0 && (
-                            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + C.border }}>
-                              <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>History</div>
-                              {historyTerms.map(t => (
-                                <div key={t.id} style={{ paddingBottom: 12, marginBottom: 12, borderBottom: "1px dashed " + C.borderLight }}>
-                                  {termsEditingId === t.id ? (
-                                    <div>
-                                      <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
-                                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                        <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.btn : C.surface, color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
-                                        <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.border, borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                                      </div>
+                        {/* History (older entries) — expanded */}
+                        {termsHistoryOpen[sc.id] && historyTerms.length > 0 && (
+                          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "0.5px solid " + C.deepCream }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>History</div>
+                            {historyTerms.map(t => (
+                              <div key={t.id} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: "0.5px dashed " + C.deepCream }}>
+                                {termsEditingId === t.id ? (
+                                  <div>
+                                    <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                      <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? C.surfaceWarm : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                                      <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                                     </div>
-                                  ) : (
-                                    <>
-                                      <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginBottom: 4 }}>{formatTermDate(t.created_at)}</div>
-                                      <div style={{ fontSize: 13, lineHeight: 1.55, color: C.textSec, whiteSpace: "pre-wrap" }}>{t.body}</div>
-                                      <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-                                        <button onClick={() => { setTermsEditingId(t.id); setTermsEditDraft(t.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
-                                        <button onClick={() => removeTerm(t.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginBottom: 4 }}>{formatTermDate(t.created_at)}</div>
+                                    <div style={{ fontSize: 13, lineHeight: 1.55, color: C.textSec, whiteSpace: "pre-wrap" }}>{t.body}</div>
+                                    <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+                                      <button onClick={() => { setTermsEditingId(t.id); setTermsEditDraft(t.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
+                                      <button onClick={() => removeTerm(t.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
                       {/* Months — next, current, previous (all read-write for status, prev read-only for items) */}
