@@ -3116,6 +3116,28 @@ export default function App({ user }) {
         }
         .rt-row.is-done .rt-task-title { color: ${C.textMuted}; }
         .rt-row.is-done .rt-task-title::after { width: 100%; }
+        /* Mobile: long task titles get 2 lines instead of single-line ellipsis.
+           Single-line truncate hides too much content on phone widths where
+           there's no hover-tooltip affordance. We override the inline styles
+           via !important; row height becomes variable but readability wins.
+           Strikethrough-on-done still works because we use box-decoration-break
+           continuity on the span. */
+        @media (max-width: 900px) {
+          .rt-row .rt-task-title {
+            display: -webkit-box !important;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            white-space: normal !important;
+            overflow: hidden !important;
+            text-overflow: clip !important;
+            word-break: break-word;
+          }
+          /* On mobile the strikethrough ::after pseudo (which is a single
+             positioned line) doesn't span both wrapped lines — use the native
+             text-decoration instead so each line gets struck through. */
+          .rt-row.is-done .rt-task-title { text-decoration: line-through; }
+          .rt-row .rt-task-title::after { display: none; }
+        }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
 
@@ -5677,7 +5699,7 @@ export default function App({ user }) {
                                     return (
                                       <span
                                         className="rt-task-title is-discussable"
-                                        title={`Talk this through with Rai`}
+                                        title={`${t.text}\n\nClick to talk this through with Rai`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setAiConvoId(null);
@@ -5693,7 +5715,7 @@ export default function App({ user }) {
                                       </span>
                                     );
                                   }
-                                  return <span className="rt-task-title" style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{t.text}</span>;
+                                  return <span className="rt-task-title" title={t.text} style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{t.text}</span>;
                                 })()}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
@@ -10339,7 +10361,31 @@ export default function App({ user }) {
                             </>
                           );
                         })()}
-                        <button onClick={() => { setEditingOverview(true); setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" }); }} style={{ width: "100%", padding: "11px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 14, boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)" }}>Edit Details</button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+                          <button
+                            onClick={() => {
+                              // Open Rai chat preloaded with this client. Mirrors the
+                              // discussable-task-title flow: clear convo state, seed
+                              // an opener keyed off the client (uses coachOpeners map
+                              // when available, otherwise a generic prompt), close
+                              // the modal so the user lands cleanly on the chat page.
+                              const opener = coachOpeners[sc.name] || `Let's talk about ${sc.name}. What's on your mind?`;
+                              setAiConvoId(null);
+                              setAiMessages([{ role: "ai", text: opener }]);
+                              setSelectedClient(null);
+                              setPage("coach");
+                            }}
+                            style={{ width: "100%", padding: "11px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)" }}
+                          >
+                            Discuss {sc.name}
+                          </button>
+                          <button
+                            onClick={() => { setEditingOverview(true); setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" }); }}
+                            style={{ width: "100%", padding: "11px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            Edit Details
+                          </button>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -10961,20 +11007,22 @@ export default function App({ user }) {
 
                   return (
                     <div>
-                      {/* ─── Billing terms flap (Direction C: paper-note) ─── */}
-                      {/* Cream fill (surfaceWarm) + warning-color left accent (gold).
-                          Sharp 0/4 radius differentiates from rounded tabs above.
-                          All actions are demoted to small text-muted links — no
-                          purple call-to-action, since adding new entries is rare. */}
+                      {/* ─── Billing terms section ─── */}
+                      {/* Standard card pattern: white bg, hairline border,
+                          10px radius. Matches every other card in the app
+                          (Settings rows, client list cards, etc). No tinted
+                          surface, no gold left rule — the cream-on-cream
+                          collision with the tab bar above made the previous
+                          paper-note treatment feel buried. */}
                       <div style={{
-                        background: C.surfaceWarm,
-                        borderLeft: "3px solid " + C.warning,
-                        borderRadius: "0 4px 4px 0",
-                        padding: "12px 14px",
+                        background: C.card,
+                        border: "1px solid " + C.border,
+                        borderRadius: 10,
+                        padding: "14px 16px",
                         marginBottom: 18,
                       }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: C.warning, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em", textTransform: "uppercase" }}>
                             Billing terms
                           </span>
                           <span style={{ fontSize: 11, color: C.textMuted }}>
@@ -10987,7 +11035,7 @@ export default function App({ user }) {
                         {currentTerm && termsEditingId !== currentTerm.id && !termsAddingNew[sc.id] && (
                           <div>
                             <div style={{ fontSize: 13, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap" }}>{currentTerm.body}</div>
-                            <div style={{ display: "flex", gap: 14, marginTop: 8, paddingTop: 8, borderTop: "0.5px dashed " + C.deepCream, fontSize: 11, color: C.textMuted }}>
+                            <div style={{ display: "flex", gap: 14, marginTop: 8, paddingTop: 8, borderTop: "0.5px dashed " + C.borderLight, fontSize: 11, color: C.textMuted }}>
                               <button onClick={() => { setTermsEditingId(currentTerm.id); setTermsEditDraft(currentTerm.body); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
                               <button onClick={() => removeTerm(currentTerm.id)} style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: C.textMuted, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
                               {historyTerms.length > 0 && (
@@ -11004,10 +11052,10 @@ export default function App({ user }) {
                         {/* Editing the current entry */}
                         {currentTerm && termsEditingId === currentTerm.id && (
                           <div>
-                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                              <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? C.surfaceWarm : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
-                              <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                              <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
                           </div>
                         )}
@@ -11016,10 +11064,10 @@ export default function App({ user }) {
                         {termsAddingNew[sc.id] && (
                           <div>
                             {currentTerm && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8, fontStyle: "italic" }}>Adding a new entry will become the current terms. Previous entry stays in history.</div>}
-                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                              <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? C.surfaceWarm : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
-                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
+                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
                           </div>
                         )}
@@ -11034,16 +11082,16 @@ export default function App({ user }) {
 
                         {/* History (older entries) — expanded */}
                         {termsHistoryOpen[sc.id] && historyTerms.length > 0 && (
-                          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "0.5px solid " + C.deepCream }}>
+                          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "0.5px solid " + C.borderLight }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>History</div>
                             {historyTerms.map(t => (
-                              <div key={t.id} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: "0.5px dashed " + C.deepCream }}>
+                              <div key={t.id} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: "0.5px dashed " + C.borderLight }}>
                                 {termsEditingId === t.id ? (
                                   <div>
-                                    <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                                    <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
                                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                      <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? C.surfaceWarm : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
-                                      <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.deepCream, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                                      <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                                      <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                                     </div>
                                   </div>
                                 ) : (
