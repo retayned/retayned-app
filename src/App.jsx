@@ -1059,6 +1059,13 @@ export default function App({ user }) {
   // Used to drag a task left to reveal a "push to next bucket" action.
   const [swipeOffset, setSwipeOffset] = useState({});
   const [swipeStartX, setSwipeStartX] = useState({});
+  // Track touchstart Y coord and the gesture lock state per task.
+  // Used to commit a gesture as either "scroll" or "swipe" once the
+  // user's finger has moved enough to indicate intent (see touch
+  // handlers in the task row render). Industry-standard pattern that
+  // prevents accidental row drift while scrolling vertically.
+  const [swipeStartY, setSwipeStartY] = useState({});
+  const [swipeLock, setSwipeLock] = useState({});
   const [dragOverTaskId, setDragOverTaskId] = useState(null);
   const [healthStripOpen, setHealthStripOpen] = useState(false);
   const [retroAnswers, setRetroAnswers] = useState({});
@@ -3064,10 +3071,21 @@ export default function App({ user }) {
           }
           .rt-focus-col { display: none !important; }
           .rt-rai-col { display: none !important; }
-          /* Band stays row-direction on mobile so compact % sits right of headline */
-          .rt-band { flex-wrap: nowrap !important; gap: 12px !important; }
+          /* Mobile band layout: switch from flex-row to block so the pick-of-day
+             text and events dropdown span the full band width. The %-completion
+             widget gets absolutely positioned in the top-right corner so it
+             doesn't steal horizontal space from anything below the greeting. */
+          .rt-band { display: block !important; position: relative !important; }
+          .rt-band > div:first-child { width: 100% !important; }
           .rt-band-greet { font-size: 24px !important; white-space: nowrap; }
-          .rt-band-right { display: block !important; min-width: 0 !important; flex-shrink: 0; }
+          .rt-band-right {
+            display: block !important;
+            position: absolute !important;
+            top: 4px !important;
+            right: 4px !important;
+            min-width: 0 !important;
+            flex-shrink: 0;
+          }
           .rt-band-right .rt-pct-num { font-size: 24px !important; }
           .rt-band-right .rt-pct-num span { font-size: 13px !important; }
           .rt-band-right .rt-pct-lbl { display: block !important; font-size: 9px !important; }
@@ -3075,15 +3093,11 @@ export default function App({ user }) {
           .rt-band-sub-pct { display: none !important; }
           .rt-band-sub-bar { display: none !important; }
           .rt-band-sub { width: 100% !important; }
+          .rt-band-pick { width: 100% !important; margin-top: 18px !important; }
           .rt-composer-controls { width: 100%; }
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-        }
-        /* Focus button bolt watermark — sized proportional to viewport */
-        .rt-focus-bolt { font-size: 60px; }
-        @media (max-width: 900px) {
-          .rt-focus-bolt { font-size: 32px; }
         }
         /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
         @media (min-width: 1440px) {
@@ -4064,29 +4078,25 @@ export default function App({ user }) {
                     };
 
                     return (
-                      <div style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: C.textSec, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic" }}>
-                        <span style={{ display: "inline-block", fontSize: 10.5, letterSpacing: "0.12em", fontWeight: 600, color: "#1C3224", fontFamily: "inherit", fontStyle: "normal", marginRight: 10, verticalAlign: 1 }}>
-                          RAI
-                        </span>
-                        Today,{" "}
-                        <span
-                          onClick={handleEditProfile}
-                          style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontStyle: "normal", fontFamily: "inherit", fontWeight: 500 }}
-                        >
-                          {pickClient.name}
+                      <div className="rt-band-pick" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: C.textSec, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic" }}>
+                        <span style={{ fontStyle: "normal", fontFamily: "inherit", color: C.text }}>
+                          Today&rsquo;s client is{" "}
+                          <span
+                            onClick={handleEditProfile}
+                            style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontWeight: 500 }}
+                          >
+                            {pickClient.name}
+                          </span>
                         </span>{" "}
-                        is on her mind &mdash; {raiPicks.reason ? raiPicks.reason.replace(/^["']|["']$/g, "").replace(/\.$/, "").toLowerCase() : "worth a check-in"}.
+                        &mdash; &ldquo;{raiPicks.reason ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") : "Worth a check-in"}.&rdquo;{" "}
+                        <span style={{ fontStyle: "normal", fontFamily: "inherit", fontSize: 12, color: C.textMuted }}>-Rai</span>
                         <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal" }}>
                           <button onClick={handleAddTask} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textSec, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
-                            Add a task
-                          </button>
-                          <span style={{ margin: "0 6px", color: C.borderLight }}>&middot;</span>
-                          <button onClick={handleEditProfile} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textSec, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
-                            refresh profile
+                            Add task
                           </button>
                           <span style={{ margin: "0 6px", color: C.borderLight }}>&middot;</span>
                           <button onClick={handleDismiss} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textMuted, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
-                            not today
+                            Not today
                           </button>
                         </span>
                       </div>
@@ -4964,7 +4974,10 @@ export default function App({ user }) {
                           Manual
                         </button>
                       </div>
-                      {/* Focus mode button — only enabled in Rai mode */}
+                      {/* Focus mode button — only enabled in Rai mode.
+                          Direction A: outlined when off (neutral), gold-fill when on.
+                          SVG bolt icon (not emoji) reads as an energy mark. Gold
+                          (C.warning) matches the lightning flash that fires on activation. */}
                       {rankMode === "rai" && (
                         <button
                           onClick={() => {
@@ -4976,37 +4989,27 @@ export default function App({ user }) {
                             }
                           }}
                           style={{
-                            position: "relative",
-                            overflow: "hidden",
                             display: "inline-flex",
                             alignItems: "center",
+                            gap: 6,
                             padding: "6px 14px",
                             borderRadius: 999,
-                            background: focusMode ? C.primaryDeep : "transparent",
-                            border: focusMode ? "1px solid " + C.primaryDeep : "1px solid " + C.ink300,
+                            background: focusMode ? C.warning : "transparent",
+                            border: "1px solid " + (focusMode ? C.warning : C.ink300),
                             color: focusMode ? "#fff" : C.textSec,
                             fontSize: 12,
                             fontWeight: 600,
                             fontFamily: "inherit",
                             cursor: "pointer",
-                            boxShadow: focusMode ? "0 1px 2px rgba(28,50,36,0.18), 0 2px 6px rgba(28,50,36,0.22)" : "none",
+                            lineHeight: 1,
+                            boxShadow: focusMode ? "0 1px 2px rgba(184,139,21,0.20), 0 2px 6px rgba(184,139,21,0.18)" : "none",
                             transition: "background 120ms, color 120ms, border-color 120ms"
                           }}
                         >
-                          {/* Background bolt watermark — V4 fill style, offset +15% right of center */}
-                          <span aria-hidden="true" className="rt-focus-bolt" style={{
-                            position: "absolute",
-                            top: "50%",
-                            left: "65%",
-                            transform: "translate(-50%, -50%)",
-                            color: focusMode ? "rgba(251,181,64,0.18)" : "rgba(251,181,64,0.10)",
-                            zIndex: 1,
-                            pointerEvents: "none",
-                            lineHeight: 1,
-                          }}>⚡</span>
-                          <span style={{ position: "relative", zIndex: 2 }}>
-                            {focusMode ? "Focusing" : "Focus"}
-                          </span>
+                          <svg width="11" height="13" viewBox="0 0 11 13" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+                            <path d="M6.5 0L0.5 7.5H4.5L4 13L10.5 5H6.5L6.5 0Z" fill="currentColor" />
+                          </svg>
+                          <span>{focusMode ? "Focusing" : "Focus"}</span>
                         </button>
                       )}
                       {debugScores && (
@@ -5190,26 +5193,78 @@ export default function App({ user }) {
                         const offset = swipeOffset[t.id] || 0;
                         const SWIPE_THRESHOLD = 90;
                         const SWIPE_MAX = 130;
+                        // Industry-standard gesture defaults (iOS Mail / Things / Linear):
+                        //   DEAD_ZONE — finger must travel this many px before any
+                        //     row movement begins. Filters micro-jitter from finger
+                        //     contact + small horizontal drift while scrolling.
+                        //   ANGLE_RATIO — once the gesture passes the dead zone, we
+                        //     measure horizontal vs vertical travel. If vertical is
+                        //     greater (i.e. user is scrolling up/down), we lock the
+                        //     gesture as "scroll" and never translate the row for
+                        //     this touch. If horizontal wins, we lock as "swipe"
+                        //     and process the remainder normally.
+                        // The lock holds until touchEnd. This prevents the row from
+                        // accidentally tracking sideways while the user is just
+                        // scrolling the task list.
+                        const DEAD_ZONE = 12;
+                        const ANGLE_RATIO = 1.0; // dx must exceed dy to commit to swipe
 
                         const handleTouchStart = (e) => {
                           if (e.touches.length !== 1) return;
                           setSwipeStartX(prev => ({ ...prev, [t.id]: e.touches[0].clientX }));
+                          // Stash startY in a ref-like field on the same map so we
+                          // don't need a second state hook just for this.
+                          setSwipeStartY(prev => ({ ...prev, [t.id]: e.touches[0].clientY }));
+                          setSwipeLock(prev => ({ ...prev, [t.id]: null })); // null = undecided
                           setSwipeOffset(prev => ({ ...prev, [t.id]: 0 }));
                         };
                         const handleTouchMove = (e) => {
                           const startX = swipeStartX[t.id];
-                          if (startX == null) return;
+                          const startY = swipeStartY[t.id];
+                          if (startX == null || startY == null) return;
                           const deltaX = e.touches[0].clientX - startX;
+                          const deltaY = e.touches[0].clientY - startY;
+
+                          // Look up our current lock state. If we already decided
+                          // this gesture is a vertical scroll, do nothing (let the
+                          // page handle it).
+                          const lock = swipeLock[t.id];
+                          if (lock === "scroll") return;
+
+                          if (lock !== "swipe") {
+                            // Still undecided — apply the dead zone + angle test.
+                            const absX = Math.abs(deltaX);
+                            const absY = Math.abs(deltaY);
+                            if (Math.max(absX, absY) < DEAD_ZONE) return; // not enough travel yet
+                            if (absY * ANGLE_RATIO >= absX) {
+                              // Vertical wins → lock as scroll, never move the row.
+                              setSwipeLock(prev => ({ ...prev, [t.id]: "scroll" }));
+                              return;
+                            }
+                            // Horizontal wins → lock as swipe and proceed.
+                            setSwipeLock(prev => ({ ...prev, [t.id]: "swipe" }));
+                          }
+
                           // Recurring tasks can be deleted (left swipe) but not pushed
                           // to another bucket (right swipe blocked — they have no due_date
                           // and the bucket concept doesn't apply).
                           const minDelta = t.recurring ? -SWIPE_MAX : -SWIPE_MAX;
                           const maxDelta = t.recurring ? 0 : SWIPE_MAX;
-                          const clamped = Math.max(minDelta, Math.min(maxDelta, deltaX));
+                          // Subtract the dead zone from the displayed offset so the
+                          // row starts at 0 visually when the swipe is just-committed,
+                          // not at +/- DEAD_ZONE (which would be a visual jump).
+                          const adjustedDelta = deltaX > 0
+                            ? Math.max(0, deltaX - DEAD_ZONE)
+                            : Math.min(0, deltaX + DEAD_ZONE);
+                          const clamped = Math.max(minDelta, Math.min(maxDelta, adjustedDelta));
                           setSwipeOffset(prev => ({ ...prev, [t.id]: clamped }));
                         };
                         const handleTouchEnd = () => {
                           const off = swipeOffset[t.id] || 0;
+                          // Always clear the lock + startY on end so the next touch
+                          // starts fresh.
+                          setSwipeStartY(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                          setSwipeLock(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                           if (off <= -SWIPE_THRESHOLD) {
                             // Left swipe past threshold → DELETE the task. Slide off-screen left, then remove.
                             setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
