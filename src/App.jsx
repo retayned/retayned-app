@@ -3071,33 +3071,35 @@ export default function App({ user }) {
           }
           .rt-focus-col { display: none !important; }
           .rt-rai-col { display: none !important; }
-          /* Mobile band layout: switch from flex-row to block so the pick-of-day
-             text and events dropdown span the full band width. The %-completion
-             widget gets absolutely positioned in the top-right corner so it
-             doesn't steal horizontal space from anything below the greeting. */
-          .rt-band { display: block !important; position: relative !important; }
+          /* Mobile band layout: switch from flex-row to block. The %-completion
+             widget (.rt-band-right) is hidden entirely on mobile; instead we
+             show the smaller inline elements .rt-band-sub-pct (in the events
+             row) and .rt-band-sub-bar (full-width thin bar below the row).
+             This keeps a single, vertically-stacked, full-width content column.
+             Horizontal padding is removed on mobile so the events dropdown
+             matches the composer card width pixel-for-pixel. */
+          .rt-band {
+            display: block !important;
+            position: relative !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }
           .rt-band > div:first-child { width: 100% !important; }
           .rt-band-greet { font-size: 24px !important; white-space: nowrap; }
-          .rt-band-right {
-            display: block !important;
-            position: absolute !important;
-            top: 4px !important;
-            right: 4px !important;
-            min-width: 0 !important;
-            flex-shrink: 0;
-          }
-          .rt-band-right .rt-pct-num { font-size: 24px !important; }
-          .rt-band-right .rt-pct-num span { font-size: 13px !important; }
-          .rt-band-right .rt-pct-lbl { display: block !important; font-size: 9px !important; }
-          .rt-band-right .rt-pct-bar { width: 100% !important; height: 4px !important; margin-top: 6px !important; }
-          .rt-band-sub-pct { display: none !important; }
-          .rt-band-sub-bar { display: none !important; }
+          .rt-band-right { display: none !important; }
+          .rt-band-sub-pct { display: inline-block !important; }
+          .rt-band-sub-bar { display: block !important; }
           .rt-band-sub { width: 100% !important; }
-          .rt-band-pick { width: 100% !important; margin-top: 18px !important; }
+          .rt-band-pick { width: 100% !important; }
           .rt-composer-controls { width: 100%; }
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
+        }
+        /* Focus button bolt watermark — sized proportional to viewport */
+        .rt-focus-bolt { font-size: 60px; }
+        @media (max-width: 900px) {
+          .rt-focus-bolt { font-size: 32px; }
         }
         /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
         @media (min-width: 1440px) {
@@ -4078,24 +4080,23 @@ export default function App({ user }) {
                     };
 
                     return (
-                      <div className="rt-band-pick" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: C.textSec, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic" }}>
-                        <span style={{ fontStyle: "normal", fontFamily: "inherit", color: C.text }}>
-                          Today&rsquo;s client is{" "}
-                          <span
-                            onClick={handleEditProfile}
-                            style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontWeight: 500 }}
-                          >
-                            {pickClient.name}
-                          </span>
-                        </span>{" "}
-                        &mdash; &ldquo;{raiPicks.reason ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") : "Worth a check-in"}.&rdquo;{" "}
-                        <span style={{ fontStyle: "normal", fontFamily: "inherit", fontSize: 12, color: C.textMuted }}>-Rai</span>
-                        <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal" }}>
-                          <button onClick={handleAddTask} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textSec, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
+                      <div className="rt-band-pick" style={{ marginTop: 10, fontSize: 14, lineHeight: 1.55, color: C.text, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic" }}>
+                        Today&rsquo;s client is{" "}
+                        <span
+                          onClick={handleEditProfile}
+                          style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontWeight: 500 }}
+                        >
+                          {pickClient.name}
+                        </span>
+                        {" "}&mdash;{" "}
+                        {raiPicks.reason ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") : "Worth a check-in"}.{" "}
+                        <span style={{ color: C.textMuted }}>-Rai</span>
+                        <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal", color: C.textMuted }}>
+                          <button onClick={handleAddTask} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
                             Add task
                           </button>
-                          <span style={{ margin: "0 6px", color: C.borderLight }}>&middot;</span>
-                          <button onClick={handleDismiss} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: C.textMuted, textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
+                          <span style={{ margin: "0 8px", color: C.borderLight }}>&middot;</span>
+                          <button onClick={handleDismiss} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
                             Not today
                           </button>
                         </span>
@@ -4974,10 +4975,7 @@ export default function App({ user }) {
                           Manual
                         </button>
                       </div>
-                      {/* Focus mode button — only enabled in Rai mode.
-                          Direction A: outlined when off (neutral), gold-fill when on.
-                          SVG bolt icon (not emoji) reads as an energy mark. Gold
-                          (C.warning) matches the lightning flash that fires on activation. */}
+                      {/* Focus mode button — only enabled in Rai mode */}
                       {rankMode === "rai" && (
                         <button
                           onClick={() => {
@@ -4989,27 +4987,37 @@ export default function App({ user }) {
                             }
                           }}
                           style={{
+                            position: "relative",
+                            overflow: "hidden",
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: 6,
                             padding: "6px 14px",
                             borderRadius: 999,
-                            background: focusMode ? C.warning : "transparent",
-                            border: "1px solid " + (focusMode ? C.warning : C.ink300),
+                            background: focusMode ? C.primaryDeep : "transparent",
+                            border: focusMode ? "1px solid " + C.primaryDeep : "1px solid " + C.ink300,
                             color: focusMode ? "#fff" : C.textSec,
                             fontSize: 12,
                             fontWeight: 600,
                             fontFamily: "inherit",
                             cursor: "pointer",
-                            lineHeight: 1,
-                            boxShadow: focusMode ? "0 1px 2px rgba(184,139,21,0.20), 0 2px 6px rgba(184,139,21,0.18)" : "none",
+                            boxShadow: focusMode ? "0 1px 2px rgba(28,50,36,0.18), 0 2px 6px rgba(28,50,36,0.22)" : "none",
                             transition: "background 120ms, color 120ms, border-color 120ms"
                           }}
                         >
-                          <svg width="11" height="13" viewBox="0 0 11 13" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
-                            <path d="M6.5 0L0.5 7.5H4.5L4 13L10.5 5H6.5L6.5 0Z" fill="currentColor" />
-                          </svg>
-                          <span>{focusMode ? "Focusing" : "Focus"}</span>
+                          {/* Background bolt watermark — V4 fill style, offset +15% right of center */}
+                          <span aria-hidden="true" className="rt-focus-bolt" style={{
+                            position: "absolute",
+                            top: "50%",
+                            left: "65%",
+                            transform: "translate(-50%, -50%)",
+                            color: focusMode ? "rgba(251,181,64,0.18)" : "rgba(251,181,64,0.10)",
+                            zIndex: 1,
+                            pointerEvents: "none",
+                            lineHeight: 1,
+                          }}>⚡</span>
+                          <span style={{ position: "relative", zIndex: 2 }}>
+                            {focusMode ? "Focusing" : "Focus"}
+                          </span>
                         </button>
                       )}
                       {debugScores && (
