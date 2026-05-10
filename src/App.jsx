@@ -115,7 +115,16 @@ const THEME_CSS = `
     --rt-icon-stroke: #B5A788;
     --rt-icon-accent: #558B68;
   }
-  html, body { background: var(--rt-bg); }
+  html, body {
+    background: var(--rt-bg);
+    /* Prevent mobile Safari/Chrome from auto-inflating text in narrow
+       containers ("text autosizing"). Without this, task titles and other
+       body text can render at headline-size on first paint until the page
+       settles or refreshes. Setting to 100% locks the rendered size to
+       what we declare in CSS, on every device. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
 `;
 
 const Icon = ({ name, size = 18, color = "currentColor" }) => {
@@ -3310,11 +3319,6 @@ export default function App({ user }) {
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
         }
-        /* Focus button bolt watermark — sized proportional to viewport */
-        .rt-focus-bolt { font-size: 60px; }
-        @media (max-width: 900px) {
-          .rt-focus-bolt { font-size: 32px; }
-        }
         /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
         @media (min-width: 1440px) {
           .rt-today-v4 {
@@ -3482,7 +3486,7 @@ export default function App({ user }) {
       <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 2px 6px rgba(10,10,10,0.04)" }}>
         {/* Logo — fixed at top */}
         <div style={{ padding: "20px 18px 18px", flexShrink: 0 }}>
-          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FFFFFF" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FAFAF7" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
 
         {/* Nav items — fixed, always visible */}
@@ -3606,7 +3610,7 @@ export default function App({ user }) {
               const milestones = [5000, 4000, 3000, 2500, 2000, 1500, 1000, 500, 250, 100];
               const hit = milestones.find(m => year >= m);
               if (hit) {
-                return { line1: hit.toLocaleString() + "+ tasks", line2: "this year ↙" };
+                return { line1: hit.toLocaleString() + "+ tasks", line2: "↙ this year" };
               }
               return null;
             }
@@ -3623,17 +3627,17 @@ export default function App({ user }) {
                 if ((wh[i] || 0) >= current) break;
                 n++;
               }
-              if (n >= 6) return { line1: "fastest week", line2: "in " + n + " weeks ↙" };
+              if (n >= 6) return { line1: "fastest week", line2: "↙ in " + n + " weeks" };
 
               // "+N vs last week" — only when delta ≥ 3.
               const delta = current - lastWeek;
-              if (delta >= 3) return { line1: "+" + delta + " this week", line2: "vs last ↙" };
+              if (delta >= 3) return { line1: "+" + delta + " this week", line2: "↙ vs last" };
 
               // Streak — ≥ 3 days
-              if (streak >= 3) return { line1: streak + " days straight", line2: "keep going ↙" };
+              if (streak >= 3) return { line1: streak + " days straight", line2: "↙ keep going" };
 
               // Recovery — last week 0, this week non-zero
-              if (lastWeek === 0 && current > 0) return { line1: "back at it", line2: current + " this week ↙" };
+              if (lastWeek === 0 && current > 0) return { line1: "back at it", line2: "↙ " + current + " this week" };
 
               return null;
             }
@@ -3650,11 +3654,11 @@ export default function App({ user }) {
                 if ((mh[i] || 0) >= current) break;
                 n++;
               }
-              if (n >= 6) return { line1: "biggest month", line2: "in " + n + " months ↙" };
+              if (n >= 6) return { line1: "biggest month", line2: "↙ in " + n + " months" };
 
               // "+N vs last month" — delta ≥ 10
               const delta = current - lastMonth;
-              if (delta >= 10) return { line1: "+" + delta + " this month", line2: "vs last ↙" };
+              if (delta >= 10) return { line1: "+" + delta + " this month", line2: "↙ vs last" };
 
               return null;
             }
@@ -3756,12 +3760,6 @@ export default function App({ user }) {
           );
         })()}
         <div style={{ padding: "4px 6px 8px" }}>
-          <div onClick={() => setTier(tier === "core" ? "enterprise" : "core")} className="nav-item" style={{ display: "none", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 8, color: C.textSec }}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>{tier === "enterprise" ? "Enterprise" : "Core"}</span>
-            <div style={{ width: 36, height: 20, borderRadius: 10, background: tier === "enterprise" ? C.btn : C.border, position: "relative", transition: "background 0.2s", cursor: "pointer" }}>
-              <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 2, left: tier === "enterprise" ? 18 : 2, transition: "left 0.2s" }} />
-            </div>
-          </div>
           {(() => {
             const active = page === "settings";
             return (
@@ -3802,7 +3800,7 @@ export default function App({ user }) {
       {/* MOBILE TOP */}
       <div className="r-mob-top" style={{ justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: C.card, borderBottom: "1px solid " + C.borderLight }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FFFFFF" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FAFAF7" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
         <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{(() => { const n = user?.user_metadata?.full_name; if (n) return n.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase(); return (user?.email || "U")[0].toUpperCase(); })()}</div>
       </div>
@@ -5205,7 +5203,12 @@ export default function App({ user }) {
                           Manual
                         </button>
                       </div>
-                      {/* Focus mode button — only enabled in Rai mode */}
+                      {/* Focus mode button — only enabled in Rai mode.
+                          Direction E: soft-green tint when idle, full deep-green
+                          fill when active. Stays in the existing primary palette
+                          (uses primarySoft and primaryDeep). No emoji watermark,
+                          no icon — text alone. Physical dimensions locked to
+                          padding 6px/14px, border-radius 999, font-size 12. */}
                       {rankMode === "rai" && (
                         <button
                           onClick={() => {
@@ -5217,15 +5220,13 @@ export default function App({ user }) {
                             }
                           }}
                           style={{
-                            position: "relative",
-                            overflow: "hidden",
                             display: "inline-flex",
                             alignItems: "center",
                             padding: "6px 14px",
                             borderRadius: 999,
-                            background: focusMode ? C.primaryDeep : "transparent",
-                            border: focusMode ? "1px solid " + C.primaryDeep : "1px solid " + C.ink300,
-                            color: focusMode ? "#fff" : C.textSec,
+                            background: focusMode ? C.primaryDeep : C.primarySoft,
+                            border: "1px solid " + (focusMode ? C.primaryDeep : C.primarySoft),
+                            color: focusMode ? "#fff" : C.primary,
                             fontSize: 12,
                             fontWeight: 600,
                             fontFamily: "inherit",
@@ -5234,20 +5235,7 @@ export default function App({ user }) {
                             transition: "background 120ms, color 120ms, border-color 120ms"
                           }}
                         >
-                          {/* Background bolt watermark — V4 fill style, offset +15% right of center */}
-                          <span aria-hidden="true" className="rt-focus-bolt" style={{
-                            position: "absolute",
-                            top: "50%",
-                            left: "65%",
-                            transform: "translate(-50%, -50%)",
-                            color: focusMode ? "rgba(251,181,64,0.18)" : "rgba(251,181,64,0.10)",
-                            zIndex: 1,
-                            pointerEvents: "none",
-                            lineHeight: 1,
-                          }}>⚡</span>
-                          <span style={{ position: "relative", zIndex: 2 }}>
-                            {focusMode ? "Focusing" : "Focus"}
-                          </span>
+                          {focusMode ? "Focusing" : "Focus"}
                         </button>
                       )}
                       {debugScores && (
@@ -6817,9 +6805,12 @@ export default function App({ user }) {
                         {sortOptions.map(s => (
                           <button key={s.id} onClick={() => setClientsSort(s.id)} className={s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : ""} style={{
                             padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                            background: "transparent",
-                            color: sortId === s.id ? "#274230" : C.textMuted,
-                            border: "1px solid " + (sortId === s.id ? "#93AC9D" : C.borderLight),
+                            // Active = filled black with white text (matches the
+                            // Referrals page email-tone toggle's active state).
+                            // Inactive stays as a hairline outlined pill, muted.
+                            background: sortId === s.id ? C.text : "transparent",
+                            color: sortId === s.id ? "#fff" : C.textMuted,
+                            border: "1px solid " + (sortId === s.id ? C.text : C.borderLight),
                           }}>{s.label}</button>
                         ))}
                       </div>
@@ -9966,21 +9957,6 @@ export default function App({ user }) {
               </button>
             </div>
 
-            {/* Account tier — Core / Enterprise toggle. Used to live in the
-                mobile More popup; surfaced here as a regular Settings card now
-                that the More popup is gone. Switches the navigation surface
-                between consumer (Core) and enterprise (Sweeps + Referral Intel)
-                feature sets. */}
-            <div className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Account tier</div>
-                <div style={{ fontSize: 12, color: C.textMuted }}>{tier === "enterprise" ? "Enterprise" : "Core"}</div>
-              </div>
-              <div onClick={() => setTier(tier === "core" ? "enterprise" : "core")} style={{ width: 44, height: 24, borderRadius: 12, background: tier === "enterprise" ? C.btn : C.borderLight, position: "relative", transition: "background 0.2s", cursor: "pointer", flexShrink: 0 }}>
-                <div style={{ width: 20, height: 20, borderRadius: 10, background: "#fff", position: "absolute", top: 2, left: tier === "enterprise" ? 22 : 2, transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
-              </div>
-            </div>
-
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
               <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
@@ -11468,7 +11444,7 @@ export default function App({ user }) {
                 minWidth: 60,
               }}
             >
-              <Icon name={n.icon} size={22} color={active ? C.primary : C.ink500} />
+              <Icon name={n.icon} size={24} color={active ? C.primary : C.ink500} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.text : C.ink500 }}>{n.label}</span>
               {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.deepCream : C.surfaceWarm) }} />}
             </div>
