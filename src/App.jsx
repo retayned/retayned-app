@@ -2280,22 +2280,49 @@ export default function App({ user }) {
       });
     }
     const countable = updated;
-    // Fireworks fire only when ALL of TODAY's tasks are complete.
-    // "Today" = recurring + no due_date + due_date <= today.
-    // Tomorrow / Later tasks don't count toward the celebration.
-    // Day boundary anchored to 2am local — between midnight and 2am, "today"
-    // still refers to yesterday's calendar date (matches task soft-clear cron).
+    // Fireworks fire EXACTLY ONCE — when the LAST today-bucket task is checked
+    // off. Triple-gated to prevent the historical bugs:
+    //   (1) Only fires when newDone is true (we're checking, not unchecking)
+    //   (2) Only fires when the TOGGLED task itself is in the today bucket
+    //       (so finishing a tomorrow/later task never triggers, even if all
+    //        today tasks happen to already be complete)
+    //   (3) Only fires on TRANSITION — i.e. the previous state had at least
+    //       one today task still incomplete, and the new state has none.
+    //       Prevents re-firing on subsequent toggles when today is already
+    //       complete, prevents stale-state confetti if the optimistic update
+    //       didn't apply for some reason (we explicitly verify the count
+    //       went from < total to === total).
+    // Day boundary anchored to 2am local — matches task soft-clear cron.
     const _now = new Date();
     if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
     const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
-    const todayCountable = countable.filter(t => {
+    const isTodayBucket = (t) => {
       if (t.recurring) return true;
       if (!t.due_date) return true;
       const d = String(t.due_date).slice(0, 10);
       return d <= _todayStr;
-    });
-    const todayDoneNow = todayCountable.filter(t => t.done).length;
-    if (todayDoneNow === todayCountable.length && todayCountable.length > 0) {
+    };
+    // Was the toggled task itself a today-bucket task?
+    const toggledIsToday = isTodayBucket(task);
+    // Today-bucket counts BEFORE this toggle (using the pre-update tasks state).
+    const todayBucketBefore = tasks.filter(isTodayBucket);
+    const todayDoneBefore = todayBucketBefore.filter(t => t.done).length;
+    const todayTotalBefore = todayBucketBefore.length;
+    // Today-bucket counts AFTER (from updated).
+    const todayBucketAfter = countable.filter(isTodayBucket);
+    const todayDoneAfter = todayBucketAfter.filter(t => t.done).length;
+    const todayTotalAfter = todayBucketAfter.length;
+    // Fire only when:
+    //   - we're checking (not unchecking)
+    //   - toggled task is a today task
+    //   - we transitioned: before had some incomplete, after is fully complete
+    if (
+      newDone &&
+      toggledIsToday &&
+      todayTotalAfter > 0 &&
+      todayDoneBefore < todayTotalBefore &&
+      todayDoneAfter === todayTotalAfter
+    ) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 3000);
     }
@@ -2307,8 +2334,22 @@ export default function App({ user }) {
   const todayTasks = tasks.filter(t => !t.recurring);
   const countableTasks = tasks;
 
-  const tasksDone = countableTasks.filter(t => t.done).length;
-  const tasksTotal = countableTasks.length;
+  // tasksDone / tasksTotal scope to TODAY bucket only — recurring tasks +
+  // tasks with no due_date + tasks due today-or-earlier. Tomorrow/Later don't
+  // count toward the sidebar red dot. Otherwise the dot persists whenever
+  // ANY future task is incomplete, which is misleading: "today" is finished
+  // but the dot says otherwise.
+  const _todayDotNow = new Date();
+  if (_todayDotNow.getHours() < 2) _todayDotNow.setDate(_todayDotNow.getDate() - 1);
+  const _todayDotStr = `${_todayDotNow.getFullYear()}-${String(_todayDotNow.getMonth() + 1).padStart(2, "0")}-${String(_todayDotNow.getDate()).padStart(2, "0")}`;
+  const todayBucketCountable = countableTasks.filter(t => {
+    if (t.recurring) return true;
+    if (!t.due_date) return true;
+    const d = String(t.due_date).slice(0, 10);
+    return d <= _todayDotStr;
+  });
+  const tasksDone = todayBucketCountable.filter(t => t.done).length;
+  const tasksTotal = todayBucketCountable.length;
 
   // Task sorting — by Profile Score (invisible), highest first
   // Rai priority boost — applied to one task per day during sweep
@@ -3089,7 +3130,9 @@ export default function App({ user }) {
           .rt-band-right { display: none !important; }
           .rt-band-sub-pct { display: inline-block !important; }
           .rt-band-sub-bar { display: block !important; }
-          .rt-band-sub { width: 100% !important; }
+          /* Sub row stays single-line on mobile so the inline progress bar
+             sits between "12 tasks" and "100%" without wrapping. */
+          .rt-band-sub { width: 100% !important; flex-wrap: nowrap !important; }
           .rt-band-pick { width: 100% !important; }
           .rt-composer-controls { width: 100%; }
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
@@ -4129,7 +4172,14 @@ export default function App({ user }) {
                     </button>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
-                    <span className="rt-band-sub-pct" style={{ display: "none", marginLeft: "auto", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999 }}>
+                    {/* Inline progress bar — mobile only. Sits between the tasks
+                        count and the % pill, taking the remaining horizontal space.
+                        On desktop this element is hidden (the standalone right-side
+                        widget handles % display). */}
+                    <div className="rt-band-sub-bar" style={{ display: "none", height: 3, background: C.borderLight, borderRadius: 2, overflow: "hidden", flex: 1, minWidth: 40 }}>
+                      <div style={{ height: "100%", width: `${pct * 100}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
+                    </div>
+                    <span className="rt-band-sub-pct" style={{ display: "none", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999, flexShrink: 0 }}>
                       {Math.round(pct * 100)}%
                     </span>
                   </div>
@@ -4168,9 +4218,6 @@ export default function App({ user }) {
                       </div>
                     </div>
                   )}
-                  <div className="rt-band-sub-bar" style={{ display: "none", height: 3, background: C.borderLight, borderRadius: 2, marginTop: 10, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct * 100}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
-                  </div>
                 </div>
                 <div className="rt-band-right" style={{ minWidth: 220, textAlign: "right" }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
@@ -5624,11 +5671,16 @@ export default function App({ user }) {
                                   fontSize: 11,
                                   fontWeight: 600,
                                   flexShrink: 0,
-                                  background: isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : "transparent",
-                                  color: isOverdue ? C.danger : isToday ? C.text : C.textMuted,
-                                  border: isOverdue || isToday ? "none" : "1px solid " + C.borderLight,
+                                  // When the task is done, the Today/Overdue pill
+                                  // collapses to the muted "future" treatment
+                                  // (transparent bg, hairline border, muted text)
+                                  // so it visually matches the rest of the dimmed
+                                  // task row instead of staying full-color.
+                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : "transparent"),
+                                  color: isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted),
+                                  border: isDone ? "1px solid " + C.borderLight : (isOverdue || isToday ? "none" : "1px solid " + C.borderLight),
                                 }}>
-                                  <Icon name="calendar" size={10} color={isOverdue ? C.danger : isToday ? C.text : C.textMuted} />
+                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted)} />
                                   <span className="rt-row-text">{label}</span>
                                 </span>
                               );
