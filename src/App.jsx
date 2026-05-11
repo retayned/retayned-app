@@ -1064,9 +1064,25 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
     "eod": { h: 17, m: 0 },
   };
   const parseHourMin = (str) => {
-    // Match "9", "9am", "9pm", "9:30am", "9:30", "14:00", "14"
-    const m = str.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/i);
-    if (!m) return null;
+    // Match three forms:
+    //   "9", "9am", "9pm", "9:30am", "9:30", "14:00", "14"
+    //   "930am", "1230pm" — compact 3-4 digits with meridiem
+    //   "1430" — compact 24-hr
+    //
+    // The compact form is common in voice/typed shorthand. We try the
+    // colon-form first, then fall back to compact.
+    let m = str.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/i);
+    if (!m) {
+      // Compact 3-4 digit form: parse last 2 digits as minutes, rest as hour
+      const compact = str.match(/^(\d{3,4})(am|pm)?$/i);
+      if (!compact) return null;
+      const digits = compact[1];
+      const meridiem = compact[2] || "";
+      const splitAt = digits.length - 2;
+      const hourStr = digits.slice(0, splitAt);
+      const minStr = digits.slice(splitAt);
+      m = [str, hourStr, minStr, meridiem];
+    }
     let h = parseInt(m[1], 10);
     const min = m[2] ? parseInt(m[2], 10) : 0;
     const meridiem = (m[3] || "").toLowerCase();
@@ -1082,9 +1098,11 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
     return { h, m: min };
   };
 
-  // Try range syntax first: "2-3pm" or "2pm-3:30pm" or "2pm-3pm"
+  // Try range syntax first: "2-3pm" or "2pm-3:30pm" or "2pm-3pm" or
+  // compact forms like "430pm-530pm" or "4-430pm".
   let starts = null, ends = null;
-  const rangeRe = /\b(\d{1,2}(?::\d{2})?(?:am|pm)?)\s*[-–—to]+\s*(\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
+  const timeTok = `(?:\\d{3,4}(?:am|pm)?|\\d{1,2}(?::\\d{2})?(?:am|pm)?)`;
+  const rangeRe = new RegExp(`\\b(${timeTok})\\s*[-–—to]+\\s*(${timeTok})\\b`, "i");
   const rangeM = text.match(rangeRe);
   let stripped = text;
   if (rangeM) {
@@ -1131,9 +1149,13 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
         break;
       }
     }
-    // Numeric time
+    // Numeric time. Two formats supported here:
+    //   "9", "9am", "9:30am" — standard
+    //   "430pm", "1230am", "1430" — compact 3-4 digit, with or without meridiem
+    // Try compact-with-meridiem first (more specific) so "430pm" doesn't
+    // get partially matched by the standard regex as "4" + leftover "30pm".
     if (!starts) {
-      const numRe = /\b(\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
+      const numRe = /\b(\d{3,4}(?:am|pm)?|\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
       const nm = stripped.match(numRe);
       if (nm) {
         const hm = parseHourMin(nm[1]);
@@ -1581,13 +1603,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
         </div>
       </div>
 
-      {/* Composer — rendered as a div (not a form) to avoid any
-          nested-form interactions with surrounding wrappers. Enter
-          submission handled inline on the input's onKeyDown.
-          TEMP DIAGNOSTIC: console.logs on focus/click/keydown/change
-          so we can find what's preventing typing. Remove once fixed. */}
+      {/* Composer — rendered as a div (not a form) to avoid nested-form
+          interactions. The position:relative + zIndex:5 lifts the composer
+          above the absolute-positioned timeline content above it. */}
       <div
-        onClick={() => { console.log("[cal-composer] wrapper click"); inputRef.current && inputRef.current.focus(); }}
+        onClick={() => inputRef.current && inputRef.current.focus()}
         style={{
           display: "flex",
           alignItems: "center",
@@ -1606,11 +1626,9 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           ref={inputRef}
           type="text"
           value={composerText}
-          onChange={e => { console.log("[cal-composer] onChange:", JSON.stringify(e.target.value)); setComposerText(e.target.value); }}
-          onKeyDown={e => { console.log("[cal-composer] onKeyDown key=", e.key); handleKey(e); }}
-          onFocus={() => console.log("[cal-composer] onFocus")}
-          onBlur={() => console.log("[cal-composer] onBlur")}
-          onClick={e => { console.log("[cal-composer] input click"); e.stopPropagation(); }}
+          onChange={e => setComposerText(e.target.value)}
+          onKeyDown={handleKey}
+          onClick={e => e.stopPropagation()}
           autoComplete="off"
           spellCheck={false}
           placeholder="2pm Sarah · noon lunch · 9-10am sync"
