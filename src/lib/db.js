@@ -580,6 +580,32 @@ export const raiUserState = {
       .single();
     return { data, error };
   },
+
+  // Write the badge target for today. Called once per day by the
+  // auto-badge settle effect in App.jsx after the >60s settle window
+  // resolves on the top-priority task of the picked client.
+  //
+  // Sets BOTH fields atomically:
+  //   - todays_badged_task_id → the task that gets the badge
+  //   - todays_badge_set_at   → timestamp acts as "already badged today"
+  //                             gate so the effect becomes a no-op for
+  //                             the rest of the day
+  //
+  // The daily sweep (3am local) is responsible for clearing both fields
+  // back to null when it writes the next pick. Without that reset, the
+  // gate in App.jsx will refuse to write a new badge tomorrow.
+  //
+  // Returns { error } only — no row payload needed by callers.
+  setBadgeTask: async (userId, taskId) => {
+    const { error } = await supabase
+      .from('rai_user_state')
+      .update({
+        todays_badged_task_id: taskId,
+        todays_badge_set_at: new Date().toISOString(),
+      })
+      .eq('user_id', userId);
+    return { error };
+  },
 };
 
 
@@ -969,6 +995,29 @@ export const raiPicks = {
       .limit(1)
       .maybeSingle();
     return { data, error };
+  },
+
+  // Mark a pick as annotated (= the frontend assigned its client to a
+  // badged task). Companion call to raiUserState.setBadgeTask — when
+  // the auto-badge effect resolves, it writes the badge to user state
+  // AND flags the pick row itself so we can see (in DB) which picks
+  // actually drove a badge vs. which expired unannotated.
+  //
+  // Filters by (user_id, client_id) rather than pick row id because
+  // the App.jsx caller only has the client_id in scope at the time
+  // of the badge decision. Within today's 23h window, there is at
+  // most one pick row per client per user, so this update is
+  // unambiguous in practice.
+  //
+  // Fail-soft: caller wraps in try/catch and the auto-badge effect
+  // continues either way.
+  markAnnotated: async (userId, clientId) => {
+    const { error } = await supabase
+      .from('rai_picks')
+      .update({ was_annotated: true })
+      .eq('user_id', userId)
+      .eq('client_id', clientId);
+    return { error };
   },
 };
 
@@ -1706,6 +1755,7 @@ export const buildRaiContext = async (userId, clientId = null) => {
       retention_score: c.retention_score,
       drift: c.drift_status,
       tag: c.tag,
+      profile_score: c.profile_score,
       profile_scores: c.profile_scores
     })),
     tasks_today: (taskList || []).map(t => ({
@@ -1737,6 +1787,7 @@ export const buildRaiContext = async (userId, clientId = null) => {
         months: client.months,
         retention_score: client.retention_score,
         drift: client.drift_status,
+        profile_score: client.profile_score,
         profile_scores: client.profile_scores,
         notes: client.notes
       };
