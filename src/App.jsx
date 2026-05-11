@@ -1403,9 +1403,9 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
                       color: C.btn,
                       fontFamily: "inherit",
                       fontSize: "inherit",
-                      textDecoration: "underline",
-                      textDecorationColor: C.btnLight,
-                      textUnderlineOffset: 3,
+                      borderBottom: `1px dotted ${C.btn}`,
+                      paddingBottom: 1,
+                      fontWeight: 500,
                     }}
                   >
                     Connect Google Calendar
@@ -1594,6 +1594,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           marginTop: 8,
           borderTop: "1px solid " + C.borderLight,
           cursor: "text",
+          pointerEvents: "auto",
         }}
       >
         <span style={{ fontSize: 16, color: C.btn, fontWeight: 700, lineHeight: 1, paddingLeft: 2, pointerEvents: "none" }}>+</span>
@@ -1617,6 +1618,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
             outline: "none",
             padding: "2px 0",
             minWidth: 0,
+            pointerEvents: "auto",
           }}
         />
       </div>
@@ -4024,8 +4026,10 @@ export default function App({ user }) {
           pointer-events: none;
         }
 
-        /* Dim every direct child of the today grid except the tasks column */
-        .rt-focus-on > *:not(.rt-tasks-col) {
+        /* Dim every direct child of the today grid except the tasks column
+           and the calendar column. Calendar stays interactive even in focus
+           mode — it's ambient context, not a competing surface. */
+        .rt-focus-on > *:not(.rt-tasks-col):not(.rt-focus-col) {
           opacity: 0.06 !important;
           pointer-events: none !important;
           transition: opacity 280ms ease;
