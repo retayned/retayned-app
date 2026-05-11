@@ -831,13 +831,23 @@ export const raiConversations = {
 
 export const raiPicks = {
   // Get the user's current Pick of the Day (or null if none).
-  // The sweep wipes the previous day's row before writing today's, so any
-  // row that exists IS today's. Returns the single most recent row.
+  //
+  // Sweep behaviour change (May 2026): the sweep no longer wipes the
+  // previous day's rows before writing today's — yesterday's row stays
+  // in place so the sweep can read it to enforce the "no back-to-back
+  // same client" rule. To keep this method returning ONLY today's pick
+  // (never yesterday's, e.g. if today's sweep failed), we filter to
+  // rows whose picked_at falls on today's date.
   getCurrent: async (userId) => {
+    // ISO date string for "today" in UTC (the sweep writes picked_at
+    // as a timestamptz, so comparing on the date portion is safe across
+    // timezones — yesterday's row is from a different calendar date).
+    const todayIso = new Date().toISOString().slice(0, 10);
     const { data, error } = await supabase
       .from('rai_picks')
       .select('*')
       .eq('user_id', userId)
+      .gte('picked_at', todayIso + 'T00:00:00Z')
       .order('picked_at', { ascending: false })
       .limit(1)
       .maybeSingle();
