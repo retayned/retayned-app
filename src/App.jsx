@@ -1583,9 +1583,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
 
       {/* Composer — rendered as a div (not a form) to avoid any
           nested-form interactions with surrounding wrappers. Enter
-          submission handled inline on the input's onKeyDown. */}
+          submission handled inline on the input's onKeyDown.
+          TEMP DIAGNOSTIC: console.logs on focus/click/keydown/change
+          so we can find what's preventing typing. Remove once fixed. */}
       <div
-        onClick={() => inputRef.current && inputRef.current.focus()}
+        onClick={() => { console.log("[cal-composer] wrapper click"); inputRef.current && inputRef.current.focus(); }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -1595,6 +1597,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           borderTop: "1px solid " + C.borderLight,
           cursor: "text",
           pointerEvents: "auto",
+          position: "relative",
+          zIndex: 5,
         }}
       >
         <span style={{ fontSize: 16, color: C.btn, fontWeight: 700, lineHeight: 1, paddingLeft: 2, pointerEvents: "none" }}>+</span>
@@ -1602,9 +1606,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           ref={inputRef}
           type="text"
           value={composerText}
-          onChange={e => setComposerText(e.target.value)}
-          onKeyDown={handleKey}
-          onClick={e => e.stopPropagation()}
+          onChange={e => { console.log("[cal-composer] onChange:", JSON.stringify(e.target.value)); setComposerText(e.target.value); }}
+          onKeyDown={e => { console.log("[cal-composer] onKeyDown key=", e.key); handleKey(e); }}
+          onFocus={() => console.log("[cal-composer] onFocus")}
+          onBlur={() => console.log("[cal-composer] onBlur")}
+          onClick={e => { console.log("[cal-composer] input click"); e.stopPropagation(); }}
           autoComplete="off"
           spellCheck={false}
           placeholder="2pm Sarah · noon lunch · 9-10am sync"
