@@ -169,9 +169,16 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
       <path d="M9 19 L13 19 L14.5 15.5 L16.5 22.5 L18.5 16 L20 19 L23 19" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
-      <path d="M5 9 Q5 6 8 6 L24 6 Q27 6 27 9 L27 19 Q27 22 24 22 L14 22 L9 27 L10 22 Q5 22 5 19 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <path d="M16 10 L17.6 14.4 L22 16 L17.6 17.6 L16 22 L14.4 17.6 L10 16 L14.4 14.4 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinejoin="round"/>
-      <path d="M22 10 L22.6 11.6 L24.2 12.2 L22.6 12.8 L22 14.4 L21.4 12.8 L19.8 12.2 L21.4 11.6 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1" strokeLinejoin="round"/>
+      {/* Wrap in a group with a small downward translate so the speech bubble's
+          visual center of mass aligns with the centers of Today (calendar) and
+          Clients (heads). Without this, the Rai icon appears to sit higher in
+          its nav cell because its content is biased toward the top of the
+          32-unit canvas. */}
+      <g transform="translate(0 1.5)">
+        <path d="M5 9 Q5 6 8 6 L24 6 Q27 6 27 9 L27 19 Q27 22 24 22 L14 22 L9 27 L10 22 Q5 22 5 19 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
+        <path d="M16 10 L17.6 14.4 L22 16 L17.6 17.6 L16 22 L14.4 17.6 L10 16 L14.4 14.4 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinejoin="round"/>
+        <path d="M22 10 L22.6 11.6 L24.2 12.2 L22.6 12.8 L22 14.4 L21.4 12.8 L19.8 12.2 L21.4 11.6 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1" strokeLinejoin="round"/>
+      </g>
     </>),
     rolodex: (<>
       <rect x="3" y="22" width="26" height="5" rx="1.5" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
@@ -4775,7 +4782,7 @@ export default function App({ user }) {
                               </>
                             ) : (
                               <>
-                                <Icon name="clients" size={12} />
+                                <Icon name="clients" size={14} />
                                 <span style={{ fontWeight: 500 }}>Client</span>
                               </>
                             )}
@@ -4832,7 +4839,7 @@ export default function App({ user }) {
                             onMouseLeave={e => { if (!selectedWorker && !workerPickerOpen) e.currentTarget.style.background = "transparent"; }}
                             title={selectedWorker ? `Assigned to ${selectedWorker.name}` : "Assign to a worker"}
                           >
-                            <Icon name="workers" size={12} color={selectedWorker ? C.btn : C.textMuted} />
+                            <Icon name="workers" size={14} color={selectedWorker ? C.btn : C.textMuted} />
                             <span>{selectedWorker ? selectedWorker.name.split(' ')[0] : "Worker"}</span>
                           </button>
                           {selectedWorker && (
@@ -5480,9 +5487,8 @@ export default function App({ user }) {
                         </button>
                       </div>
                       {/* Focus mode button — only enabled in Rai mode.
-                          Direction E: soft-green tint when idle, full deep-green
-                          fill when active. Stays in the existing primary palette
-                          (uses primarySoft and primaryDeep). No emoji watermark,
+                          Idle: transparent with site-standard ink-300 outline.
+                          Active: deep-green fill with white text. No watermark,
                           no icon — text alone. Physical dimensions locked to
                           padding 6px/14px, border-radius 999, font-size 12. */}
                       {rankMode === "rai" && (
@@ -5500,9 +5506,9 @@ export default function App({ user }) {
                             alignItems: "center",
                             padding: "6px 14px",
                             borderRadius: 999,
-                            background: focusMode ? C.primaryDeep : C.primarySoft,
-                            border: "1px solid " + (focusMode ? C.primaryDeep : C.primarySoft),
-                            color: focusMode ? "#fff" : C.primary,
+                            background: focusMode ? C.primaryDeep : "transparent",
+                            border: "1px solid " + (focusMode ? C.primaryDeep : C.ink300),
+                            color: focusMode ? "#fff" : C.textSec,
                             fontSize: 12,
                             fontWeight: 600,
                             fontFamily: "inherit",
