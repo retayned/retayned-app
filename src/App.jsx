@@ -1122,18 +1122,106 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
     }
   }
 
-  // "for Xh" / "for Xm" / "for X min" / "for X hour" duration parser
-  // Only runs if we have a start time. Try after range fails.
+  // "for X hours/minutes" — duration parser. Comprehensive: handles
+  // digits, decimals, English number words, and the most common compound
+  // phrases. Only runs if we DON'T have a range (and so don't yet have
+  // a start time).
+  //
+  // Supported forms:
+  //   "for 30m", "for 1h", "for 1.5 hours", "for 1hr", "for 90 min"
+  //   "for an hour", "for a hour", "for one hour", "for two hours"
+  //   "for half an hour", "for a half hour", "for half hour"
+  //   "for an hour and a half", "for one and a half hours"
+  //   "for 30 minutes", "for forty-five minutes" (last not yet supported)
   let durationMs = null;
   if (!starts) {
-    const durRe = /\bfor\s+(\d+)\s*(h|hr|hour|hours|m|min|mins|minute|minutes)\b/i;
-    const durM = text.match(durRe);
+    // Map common spelled-out numbers to their numeric value. Covers 1-12
+    // which is enough for any reasonable meeting duration. Beyond that,
+    // people type digits.
+    const WORD_NUMBERS = {
+      "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+      "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+      "eleven": 11, "twelve": 12,
+      "a": 1, "an": 1,
+    };
+    // Tokens that mean "0.5". Used after we've matched a quantity.
+    // "half" → 0.5, "quarter" → 0.25 (rare but supported).
+    const FRACTION_WORDS = { "half": 0.5, "quarter": 0.25 };
+    const UNIT_GROUP = "(h|hr|hrs|hour|hours|m|min|mins|minute|minutes)";
+
+    // Normalize compound phrases BEFORE the regex match. Converts
+    // "an hour and a half" → "1.5 hour", "one and a half hours" → "1.5 hours",
+    // "2 and a half hours" → "2.5 hours".
+    let normalized = text;
+    normalized = normalized.replace(
+      /\b(a|an|one)\s+(hour|hours)\s+and\s+(a\s+)?half\b/gi,
+      "1.5 $2"
+    );
+    // Handle number-word + "and a half hours" — e.g. "one and a half hours".
+    // Has to come BEFORE the digits version so "one" doesn't get eaten as a
+    // bareword. We restrict to 1-12 same as elsewhere.
+    normalized = normalized.replace(
+      /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+and\s+(a\s+)?half\s+(hours?)\b/gi,
+      (_m, word, _a, unit) => {
+        const words = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+        return `${(words[word.toLowerCase()] ?? 1) + 0.5} ${unit}`;
+      }
+    );
+    normalized = normalized.replace(
+      /\b(\d+)\s+and\s+(a\s+)?half\s+(hours?)\b/gi,
+      (_m, n, _a, unit) => `${parseFloat(n) + 0.5} ${unit}`
+    );
+    // "half an hour" / "a half hour" / "half hour" → "0.5 hour"
+    normalized = normalized.replace(
+      /\b(?:a\s+)?half\s+(?:an?\s+)?(hour|hours)\b/gi,
+      "0.5 $1"
+    );
+    // "quarter (of an) hour" → "0.25 hour" (rare but cheap to support)
+    normalized = normalized.replace(
+      /\b(?:a\s+)?quarter\s+(?:of\s+)?(?:an?\s+)?(hour|hours)\b/gi,
+      "0.25 $1"
+    );
+
+    // Now match: "for <quantity> <unit>" where quantity is digits,
+    // decimal, OR a word-number (one, two, an, a, etc.)
+    const wordNumRe = Object.keys(WORD_NUMBERS).join("|");
+    const qtyPattern = `(\\d+(?:\\.\\d+)?|${wordNumRe})`;
+    const durRe = new RegExp(`\\bfor\\s+${qtyPattern}\\s*${UNIT_GROUP}\\b`, "i");
+    const durM = normalized.match(durRe);
     if (durM) {
-      const n = parseInt(durM[1], 10);
+      const qty = durM[1].toLowerCase();
       const unit = durM[2].toLowerCase();
-      const isHour = unit.startsWith("h");
-      durationMs = isHour ? n * 3600 * 1000 : n * 60 * 1000;
-      stripped = text.replace(durM[0], "").trim();
+      const n = /^\d/.test(qty) ? parseFloat(qty) : (WORD_NUMBERS[qty] ?? null);
+      if (n !== null && !isNaN(n)) {
+        const isHour = unit.startsWith("h");
+        durationMs = isHour ? n * 3600 * 1000 : n * 60 * 1000;
+        // Strip the matched phrase from the ORIGINAL text by re-running the
+        // match against `text` (not normalized) where possible. If the user
+        // wrote "for an hour", the original text contained that phrase; we
+        // strip it. If they wrote "for an hour and a half" (which was
+        // normalized to "for 1.5 hour"), we strip the original compound from
+        // text instead.
+        const compoundRe = /\bfor\s+(?:a|an|one)\s+(?:hour|hours)\s+and\s+(?:a\s+)?half\b/i;
+        const wordCompoundRe = /\bfor\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+and\s+(?:a\s+)?half\s+hours?\b/i;
+        const halfAnHourRe = /\bfor\s+(?:a\s+)?half\s+(?:an?\s+)?(?:hour|hours)\b/i;
+        const quarterHourRe = /\bfor\s+(?:a\s+)?quarter\s+(?:of\s+)?(?:an?\s+)?(?:hour|hours)\b/i;
+        const compoundDigitRe = /\bfor\s+\d+\s+and\s+(?:a\s+)?half\s+hours?\b/i;
+        if (compoundRe.test(text)) {
+          stripped = text.replace(compoundRe, "").trim();
+        } else if (wordCompoundRe.test(text)) {
+          stripped = text.replace(wordCompoundRe, "").trim();
+        } else if (compoundDigitRe.test(text)) {
+          stripped = text.replace(compoundDigitRe, "").trim();
+        } else if (halfAnHourRe.test(text)) {
+          stripped = text.replace(halfAnHourRe, "").trim();
+        } else if (quarterHourRe.test(text)) {
+          stripped = text.replace(quarterHourRe, "").trim();
+        } else {
+          // Standard form — strip the matched phrase from original text
+          const standardRe = new RegExp(`\\bfor\\s+${qtyPattern}\\s*${UNIT_GROUP}\\b`, "i");
+          stripped = text.replace(standardRe, "").trim();
+        }
+      }
     }
   }
 
@@ -1152,17 +1240,55 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
     // Numeric time. Two formats supported here:
     //   "9", "9am", "9:30am" — standard
     //   "430pm", "1230am", "1430" — compact 3-4 digit, with or without meridiem
-    // Try compact-with-meridiem first (more specific) so "430pm" doesn't
-    // get partially matched by the standard regex as "4" + leftover "30pm".
+    //
+    // Priority order (handles common collision with client names like "1620"):
+    //   1. Token immediately after the word "at" — strongest signal
+    //   2. Any token with explicit am/pm — strong signal
+    //   3. Bare numeric fallback — only when no better candidate exists
+    //
+    // This is important because clients are often named with numbers
+    // (e.g. "1620", "412 Studios"). Without these priority rules, the
+    // parser would greedily grab "1620" as a time when "330pm" later in
+    // the string is the actual time.
     if (!starts) {
-      const numRe = /\b(\d{3,4}(?:am|pm)?|\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
-      const nm = stripped.match(numRe);
-      if (nm) {
-        const hm = parseHourMin(nm[1]);
-        if (hm) {
-          starts = todayAt(hm.h, hm.m);
-          stripped = stripped.replace(nm[0], "").trim();
+      const tryToken = (tokStr) => {
+        const hm = parseHourMin(tokStr);
+        return hm ? { hm, tokStr } : null;
+      };
+
+      // Pass 1: token after "at" / "@"
+      const atRe = /\b(?:at|@)\s+(\d{3,4}(?:am|pm)?|\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
+      let pick = null;
+      const atM = stripped.match(atRe);
+      if (atM) {
+        const r = tryToken(atM[1]);
+        if (r) pick = { hm: r.hm, fullMatch: atM[0], replaceFull: true };
+      }
+
+      // Pass 2: any token with explicit meridiem
+      if (!pick) {
+        const meridiemRe = /\b(\d{3,4}(?:am|pm)|\d{1,2}(?::\d{2})?(?:am|pm))\b/i;
+        const mm = stripped.match(meridiemRe);
+        if (mm) {
+          const r = tryToken(mm[1]);
+          if (r) pick = { hm: r.hm, fullMatch: mm[0], replaceFull: false };
         }
+      }
+
+      // Pass 3: bare numeric fallback (no meridiem). This is the looseiest
+      // match and only fires when no better signal exists.
+      if (!pick) {
+        const bareRe = /\b(\d{3,4}|\d{1,2}(?::\d{2})?)\b/;
+        const bm = stripped.match(bareRe);
+        if (bm) {
+          const r = tryToken(bm[1]);
+          if (r) pick = { hm: r.hm, fullMatch: bm[0], replaceFull: false };
+        }
+      }
+
+      if (pick) {
+        starts = todayAt(pick.hm.h, pick.hm.m);
+        stripped = stripped.replace(pick.fullMatch, " ").trim();
       }
     }
   }
@@ -1194,14 +1320,6 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
 }
 
 // ─── Format helpers for the timeline UI ──────────────────────────────
-function formatTimeLabel(date) {
-  // "9:00 AM" or "9:30 AM" — concise, lower-case meridiem to match the design
-  let h = date.getHours();
-  const m = date.getMinutes();
-  const meridiem = h >= 12 ? "pm" : "am";
-  h = h % 12; if (h === 0) h = 12;
-  return m === 0 ? `${h}${meridiem}` : `${h}:${String(m).padStart(2, "0")}${meridiem}`;
-}
 function formatHourLabel(hour24) {
   const meridiem = hour24 >= 12 ? "pm" : "am";
   let h = hour24 % 12; if (h === 0) h = 12;
@@ -1511,9 +1629,6 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
                 }}
                 title={evt.title}
               >
-                <span style={{ fontVariantNumeric: "tabular-nums", color: isManual ? C.btn : C.primary, fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
-                  {formatTimeLabel(evt._start)}
-                </span>
                 <span style={{
                   flex: 1, minWidth: 0,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -4050,10 +4165,9 @@ export default function App({ user }) {
           pointer-events: none;
         }
 
-        /* Dim every direct child of the today grid except the tasks column
-           and the calendar column. Calendar stays interactive even in focus
-           mode — it's ambient context, not a competing surface. */
-        .rt-focus-on > *:not(.rt-tasks-col):not(.rt-focus-col) {
+        /* Dim every direct child of the today grid except the tasks column.
+           Focus mode is single-task tunnel vision — everything else fades. */
+        .rt-focus-on > *:not(.rt-tasks-col) {
           opacity: 0.06 !important;
           pointer-events: none !important;
           transition: opacity 280ms ease;
