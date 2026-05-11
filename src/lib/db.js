@@ -1771,3 +1771,87 @@ export const workerTokens = {
     return { data, error };
   },
 };
+
+
+// ============================================================
+// PERSONAL CALENDAR EVENTS — today timeline (manual + future Google sync)
+// ============================================================
+//
+// Backs the "today timeline" widget. For now only `source='manual'` rows
+// are written from the client. Once Google Calendar sync ships, rows
+// with `source='google'` will be added by the sync layer; the timeline
+// reads them through this same module.
+//
+// Conventions:
+//   listToday(userId)         → all rows whose starts_at falls in today's
+//                                 [00:00, 24:00) UTC range, sorted by starts_at
+//   create(userId, evt)       → insert a manual event. evt = { title, starts_at, ends_at? }
+//   update(eventId, patch)    → patch a manual event. RLS blocks google rows.
+//   remove(eventId)           → delete a manual event. RLS blocks google rows.
+// ============================================================
+
+export const personalCalendar = {
+  // Get every event for today. "Today" is a 24-hour window aligned to the
+  // user's local day, but we use a +/- 23h relative window centered on
+  // "now" to be timezone-safe (same pattern as raiPicks.getCurrent). The
+  // timeline UI further filters to events overlapping the displayed
+  // window — this method just gives it everything plausibly relevant.
+  listToday: async (userId) => {
+    const now = Date.now();
+    const startIso = new Date(now - 23 * 3600 * 1000).toISOString();
+    const endIso = new Date(now + 23 * 3600 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('personal_calendar_events')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('starts_at', startIso)
+      .lte('starts_at', endIso)
+      .order('starts_at', { ascending: true });
+    return { data: data || [], error };
+  },
+
+  // Insert a manual event. Caller is responsible for parsing user input
+  // into { title, starts_at, ends_at? }. RLS enforces source='manual'.
+  create: async (userId, { title, starts_at, ends_at = null }) => {
+    const { data, error } = await supabase
+      .from('personal_calendar_events')
+      .insert({
+        user_id: userId,
+        title,
+        starts_at,
+        ends_at,
+        source: 'manual',
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Patch a manual event. Common patches: title rename, time adjust.
+  update: async (eventId, patch) => {
+    // Only allow patchable fields through; never let caller change
+    // user_id, source, external_id from the client.
+    const allowed = {};
+    if (typeof patch.title === 'string') allowed.title = patch.title;
+    if (patch.starts_at) allowed.starts_at = patch.starts_at;
+    if (patch.ends_at !== undefined) allowed.ends_at = patch.ends_at;
+    const { data, error } = await supabase
+      .from('personal_calendar_events')
+      .update(allowed)
+      .eq('id', eventId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Delete a manual event. RLS blocks deletion of google rows.
+  remove: async (eventId) => {
+    const { data, error } = await supabase
+      .from('personal_calendar_events')
+      .delete()
+      .eq('id', eventId)
+      .select()
+      .single();
+    return { data, error };
+  },
+};
