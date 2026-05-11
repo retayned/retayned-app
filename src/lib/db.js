@@ -835,19 +835,22 @@ export const raiPicks = {
   // Sweep behaviour change (May 2026): the sweep no longer wipes the
   // previous day's rows before writing today's — yesterday's row stays
   // in place so the sweep can read it to enforce the "no back-to-back
-  // same client" rule. To keep this method returning ONLY today's pick
-  // (never yesterday's, e.g. if today's sweep failed), we filter to
-  // rows whose picked_at falls on today's date.
+  // same client" rule. To keep this method returning ONLY today's pick,
+  // we filter to rows whose picked_at is within the last 23 hours.
+  //
+  // Why 23h and not "today in UTC"? Sweeps fire at the user's LOCAL 3am.
+  // For a user in ET (UTC-5), that's 8am UTC. If we filtered by UTC date,
+  // every evening between 7pm ET (midnight UTC) and 3am ET (sweep time)
+  // the row would fall on the "previous" UTC date and disappear from view.
+  // A relative-age filter is timezone-free and always returns the most
+  // recent pick if one was written within the past day.
   getCurrent: async (userId) => {
-    // ISO date string for "today" in UTC (the sweep writes picked_at
-    // as a timestamptz, so comparing on the date portion is safe across
-    // timezones — yesterday's row is from a different calendar date).
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const cutoffIso = new Date(Date.now() - 23 * 3600 * 1000).toISOString();
     const { data, error } = await supabase
       .from('rai_picks')
       .select('*')
       .eq('user_id', userId)
-      .gte('picked_at', todayIso + 'T00:00:00Z')
+      .gte('picked_at', cutoffIso)
       .order('picked_at', { ascending: false })
       .limit(1)
       .maybeSingle();
