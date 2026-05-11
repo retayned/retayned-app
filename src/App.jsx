@@ -4561,11 +4561,6 @@ export default function App({ user }) {
                     const pickClient = clients.find(c => c.id === raiPicks.client_id);
                     if (!pickClient) return null;
 
-                    const handleDismiss = async () => {
-                      setRaiState(prev => prev ? { ...prev, todays_pick_dismissed_at: new Date().toISOString() } : prev);
-                      try { await raiUserStateDb.dismissTodaysPick(user.id); } catch (e) { console.warn("Failed to dismiss Rai pick:", e); }
-                    };
-                    const handleEditProfile = () => { setSelectedClient(pickClient); };
                     const handleAddTask = () => {
                       setTodayComposerClient(pickClient.name);
                       setTimeout(() => {
@@ -4592,7 +4587,7 @@ export default function App({ user }) {
                       }}>
                         Today&rsquo;s client is{" "}
                         <span
-                          onClick={handleEditProfile}
+                          onClick={handleAddTask}
                           style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontWeight: 500 }}
                         >
                           {pickClient.name}
@@ -4600,15 +4595,6 @@ export default function App({ user }) {
                         {" "}&mdash;{" "}
                         {raiPicks.reason ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") : "Worth a check-in"}.{" "}
                         <span>-Rai</span>
-                        <span style={{ display: "inline-block", marginLeft: 10, fontSize: 12.5, fontFamily: "inherit", fontStyle: "normal", color: C.textMuted, fontVariationSettings: "normal" }}>
-                          <button onClick={handleAddTask} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
-                            Add task
-                          </button>
-                          <span style={{ margin: "0 8px", color: C.borderLight }}>&middot;</span>
-                          <button onClick={handleDismiss} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: C.borderLight, textUnderlineOffset: 3, fontFamily: "inherit", fontSize: "inherit" }}>
-                            Not today
-                          </button>
-                        </span>
                       </div>
                     );
                   })()}
