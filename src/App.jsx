@@ -1620,13 +1620,73 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
             </div>
           ))}
 
-          {/* Events */}
+          {/* Events.
+              Visual state is determined by time relationship to now, not by
+              source (manual vs google). One stripe in the column at a time:
+              the live event, in btn purple, matching the NOW marker line.
+
+              past:     transparent fill, no stripe, muted text, thin bottom rule
+              now:      deepCream fill, 3px btn-purple left stripe, full-strength
+                        text, inset shadow (variant 4d "active" pattern)
+              upcoming: bg fill, 1px borderLight outline, no stripe, textSec
+                        title / textMuted time
+
+              Recurring or no-end events use a 30-min default block for state math. */}
           {todayEvents.map(evt => {
             const top = yForDate(evt._start);
             const endY = evt._end ? yForDate(evt._end) : top + SLOT_HEIGHT * 0.5;
             const height = Math.max(20, endY - top - 2);
             const isManual = evt.source === "manual";
             const isHovered = hoveredId === evt.id;
+
+            // Time-based state. _end falls back to _start + 30min for events
+            // without an explicit end so they get a real "now" window.
+            const startMs = evt._start.getTime();
+            const endMs = evt._end ? evt._end.getTime() : (startMs + 30 * 60 * 1000);
+            const nowMs = nowTick;
+            let state;
+            if (endMs <= nowMs) state = "past";
+            else if (startMs <= nowMs && nowMs < endMs) state = "now";
+            else state = "upcoming";
+
+            // Style by state
+            let containerStyle;
+            let titleColor = C.text;
+            let timeColor = C.textMuted;
+            let titleWeight = 500;
+            if (state === "past") {
+              containerStyle = {
+                background: "transparent",
+                borderBottom: `1px solid ${C.borderLight}`,
+                borderRadius: 0,
+                paddingLeft: 0,
+              };
+              titleColor = C.textMuted;
+              timeColor = C.textMuted;
+              titleWeight = 400;
+            } else if (state === "now") {
+              containerStyle = {
+                background: C.deepCream,
+                borderLeft: `3px solid ${C.btn}`,
+                borderRadius: "0 6px 6px 0",
+                paddingLeft: 8,
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+              };
+              titleColor = C.text;
+              timeColor = C.textSec;
+              titleWeight = 600;
+            } else { // upcoming
+              containerStyle = {
+                background: C.bg,
+                border: `1px solid ${C.borderLight}`,
+                borderRadius: 6,
+                paddingLeft: 8,
+              };
+              titleColor = C.text;
+              timeColor = C.textMuted;
+              titleWeight = 500;
+            }
+
             return (
               <div
                 key={evt.id}
@@ -1638,25 +1698,24 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
                   left: 42,
                   right: 4,
                   height,
-                  background: isManual ? C.btnLight : C.primarySoft,
-                  borderLeft: `3px solid ${isManual ? C.btn : C.primaryLight}`,
-                  borderRadius: "0 6px 6px 0",
                   padding: "4px 8px",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                   overflow: "hidden",
                   fontSize: 12,
-                  color: C.text,
+                  color: titleColor,
                   cursor: "default",
+                  ...containerStyle,
                 }}
                 title={evt.title}
               >
                 <span style={{
                   flex: 1, minWidth: 0,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  fontWeight: titleWeight,
                 }}>
-                  {evt.title}<span style={{ color: C.textMuted, fontWeight: 400 }}>, {formatTimeRangeLabel(evt._start, evt._end)}</span>
+                  {evt.title}<span style={{ color: timeColor, fontWeight: 400 }}>, {formatTimeRangeLabel(evt._start, evt._end)}</span>
                 </span>
                 {isManual && isHovered && onDelete && (
                   <button
