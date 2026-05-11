@@ -1282,11 +1282,12 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 //
 // Note: this component reads `C` from a closure-free import-only style —
 // since `C` is declared inside the App function, we pass it via props.
-function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showHeader = true, C, googleConnected = false }) {
+function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null }) {
   const [composerText, setComposerText] = useState("");
   const [composerError, setComposerError] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
+  const inputRef = useRef(null);
 
   // Tick every 60s so the NOW marker stays in sync. Doesn't re-render on
   // composer keystrokes — only the tick.
@@ -1384,9 +1385,33 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           <Icon name="due" size={26} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today</div>
-            <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>
-              {isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}
-              {googleConnected && <span style={{ marginLeft: 6, color: C.primary }}>· Google connected</span>}
+            <div style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span>{isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}</span>
+              {googleConnected ? (
+                <span style={{ color: C.primary }}>· Google connected</span>
+              ) : onConnectClick ? (
+                <>
+                  <span style={{ color: C.borderLight }}>·</span>
+                  <button
+                    type="button"
+                    onClick={onConnectClick}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      color: C.btn,
+                      fontFamily: "inherit",
+                      fontSize: "inherit",
+                      textDecoration: "underline",
+                      textDecorationColor: C.btnLight,
+                      textUnderlineOffset: 3,
+                    }}
+                  >
+                    Connect Google Calendar
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1556,9 +1581,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
         </div>
       </div>
 
-      {/* Composer */}
-      <form
-        onSubmit={handleSubmit}
+      {/* Composer — rendered as a div (not a form) to avoid any
+          nested-form interactions with surrounding wrappers. Enter
+          submission handled inline on the input's onKeyDown. */}
+      <div
+        onClick={() => inputRef.current && inputRef.current.focus()}
         style={{
           display: "flex",
           alignItems: "center",
@@ -1566,14 +1593,19 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           padding: "10px 0 0",
           marginTop: 8,
           borderTop: "1px solid " + C.borderLight,
+          cursor: "text",
         }}
       >
-        <span style={{ fontSize: 16, color: C.btn, fontWeight: 700, lineHeight: 1, paddingLeft: 2 }}>+</span>
+        <span style={{ fontSize: 16, color: C.btn, fontWeight: 700, lineHeight: 1, paddingLeft: 2, pointerEvents: "none" }}>+</span>
         <input
+          ref={inputRef}
           type="text"
           value={composerText}
           onChange={e => setComposerText(e.target.value)}
           onKeyDown={handleKey}
+          onClick={e => e.stopPropagation()}
+          autoComplete="off"
+          spellCheck={false}
           placeholder="2pm Sarah · noon lunch · 9-10am sync"
           style={{
             flex: 1,
@@ -1587,7 +1619,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
             minWidth: 0,
           }}
         />
-      </form>
+      </div>
       {composerError && (
         <div style={{ fontSize: 10.5, color: C.danger, marginTop: 4, paddingLeft: 14 }}>{composerError}</div>
       )}
@@ -5148,6 +5180,7 @@ export default function App({ user }) {
                         showHeader={true}
                         compact={true}
                         googleConnected={false}
+                        onConnectClick={() => setPage("settings")}
                         onCreate={async (entry) => {
                           const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                           setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
@@ -6060,6 +6093,7 @@ export default function App({ user }) {
                         showHeader={true}
                         compact={true}
                         googleConnected={false}
+                        onConnectClick={() => setPage("settings")}
                         onCreate={async (entry) => {
                           const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                           setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
@@ -6777,6 +6811,7 @@ export default function App({ user }) {
                     showHeader={true}
                     compact={false}
                     googleConnected={false}
+                        onConnectClick={() => setPage("settings")}
                     onCreate={async (entry) => {
                       const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                       setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
