@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -1031,6 +1031,161 @@ function parseComposer(rawText, clients, workers) {
   };
 }
 
+// ─── Today-timeline calendar entry parser ────────────────────────────
+// Parses inputs for the timeline composer. Returns { starts_at, ends_at,
+// title } or null if no time could be extracted. Supported syntaxes:
+//
+//   "2pm coffee"              → 2pm, no end time
+//   "2pm Sarah"               → 2pm, no end time
+//   "2-3pm Sarah"             → 2pm start, 3pm end
+//   "2pm-3:30pm planning"     → 2pm start, 3:30pm end
+//   "9am for 30m standup"     → 9am start, 9:30am end
+//   "9am for 1h standup"      → 9am start, 10am end
+//   "noon lunch"              → 12pm, no end time
+//   "9:30am call"             → 9:30am, no end time
+//   "lunch with mom at noon"  → 12pm, title = "lunch with mom"
+//
+// The parser is forgiving: time tokens can appear anywhere in the input;
+// the remaining text becomes the title.
+function parseCalendarEntry(rawText, anchorDate = new Date()) {
+  if (!rawText || !rawText.trim()) return null;
+  const text = rawText.trim();
+
+  // Helper: build a Date for "today at HH:MM" given an hour+minute
+  const todayAt = (h, m = 0) => {
+    const d = new Date(anchorDate);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+  // Convert spoken-time tokens to {h, m}
+  const namedTimes = {
+    "noon": { h: 12, m: 0 },
+    "midnight": { h: 0, m: 0 },
+    "eod": { h: 17, m: 0 },
+  };
+  const parseHourMin = (str) => {
+    // Match "9", "9am", "9pm", "9:30am", "9:30", "14:00", "14"
+    const m = str.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = m[2] ? parseInt(m[2], 10) : 0;
+    const meridiem = (m[3] || "").toLowerCase();
+    if (h > 23 || min > 59) return null;
+    if (meridiem === "pm" && h < 12) h += 12;
+    if (meridiem === "am" && h === 12) h = 0;
+    // Heuristic for bare integers without am/pm: 1-7 → assume pm (1pm-7pm),
+    // 8-23 → keep (8am-11pm). Better than always-am which would render past
+    // events for typical workday hours.
+    if (!meridiem) {
+      if (h >= 1 && h <= 7) h += 12;
+    }
+    return { h, m: min };
+  };
+
+  // Try range syntax first: "2-3pm" or "2pm-3:30pm" or "2pm-3pm"
+  let starts = null, ends = null;
+  const rangeRe = /\b(\d{1,2}(?::\d{2})?(?:am|pm)?)\s*[-–—to]+\s*(\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
+  const rangeM = text.match(rangeRe);
+  let stripped = text;
+  if (rangeM) {
+    const left = rangeM[1], right = rangeM[2];
+    // If left has no meridiem and right has one, infer left's meridiem from right.
+    const rightMeridiem = (right.match(/(am|pm)$/i) || [, ""])[1].toLowerCase();
+    let leftAdj = left;
+    if (rightMeridiem && !/(am|pm)$/i.test(left)) {
+      leftAdj = left + rightMeridiem;
+    }
+    const lhs = parseHourMin(leftAdj);
+    const rhs = parseHourMin(right);
+    if (lhs && rhs) {
+      starts = todayAt(lhs.h, lhs.m);
+      ends = todayAt(rhs.h, rhs.m);
+      stripped = text.replace(rangeM[0], "").trim();
+    }
+  }
+
+  // "for Xh" / "for Xm" / "for X min" / "for X hour" duration parser
+  // Only runs if we have a start time. Try after range fails.
+  let durationMs = null;
+  if (!starts) {
+    const durRe = /\bfor\s+(\d+)\s*(h|hr|hour|hours|m|min|mins|minute|minutes)\b/i;
+    const durM = text.match(durRe);
+    if (durM) {
+      const n = parseInt(durM[1], 10);
+      const unit = durM[2].toLowerCase();
+      const isHour = unit.startsWith("h");
+      durationMs = isHour ? n * 3600 * 1000 : n * 60 * 1000;
+      stripped = text.replace(durM[0], "").trim();
+    }
+  }
+
+  // Single time token: "9am", "2pm", "9:30am", "noon", "midnight"
+  if (!starts) {
+    // Named time first
+    for (const [name, hm] of Object.entries(namedTimes)) {
+      const namedRe = new RegExp(`\\b${name}\\b`, "i");
+      const nm = stripped.match(namedRe);
+      if (nm) {
+        starts = todayAt(hm.h, hm.m);
+        stripped = stripped.replace(namedRe, "").trim();
+        break;
+      }
+    }
+    // Numeric time
+    if (!starts) {
+      const numRe = /\b(\d{1,2}(?::\d{2})?(?:am|pm)?)\b/i;
+      const nm = stripped.match(numRe);
+      if (nm) {
+        const hm = parseHourMin(nm[1]);
+        if (hm) {
+          starts = todayAt(hm.h, hm.m);
+          stripped = stripped.replace(nm[0], "").trim();
+        }
+      }
+    }
+  }
+
+  if (!starts) return null;
+
+  // Apply duration if we captured one
+  if (!ends && durationMs) {
+    ends = new Date(starts.getTime() + durationMs);
+  }
+
+  // Title = whatever's left after stripping time/duration tokens, cleaned up.
+  let title = stripped
+    .replace(/^\s*(at|@)\s+/i, "")
+    .replace(/\s+(at|@)\s*$/i, "")
+    .replace(/^\s*[-–—,:]\s*/, "")
+    .replace(/\s*[-–—,:]\s*$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!title) title = "Untitled";
+  // Capitalize first letter
+  title = title.charAt(0).toUpperCase() + title.slice(1);
+
+  return {
+    starts_at: starts.toISOString(),
+    ends_at: ends ? ends.toISOString() : null,
+    title,
+  };
+}
+
+// ─── Format helpers for the timeline UI ──────────────────────────────
+function formatTimeLabel(date) {
+  // "9:00 AM" or "9:30 AM" — concise, lower-case meridiem to match the design
+  let h = date.getHours();
+  const m = date.getMinutes();
+  const meridiem = h >= 12 ? "pm" : "am";
+  h = h % 12; if (h === 0) h = 12;
+  return m === 0 ? `${h}${meridiem}` : `${h}:${String(m).padStart(2, "0")}${meridiem}`;
+}
+function formatHourLabel(hour24) {
+  const meridiem = hour24 >= 12 ? "pm" : "am";
+  let h = hour24 % 12; if (h === 0) h = 12;
+  return `${h}${meridiem}`;
+}
+
 // Minimal markdown renderer for Rai's chat responses.
 // Handles: **bold**, numbered lists, bulleted lists, paragraphs separated by blank lines.
 // Safe: uses React nodes, not dangerouslySetInnerHTML.
@@ -1101,6 +1256,342 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
         );
       })}
     </>
+  );
+}
+
+// ─── TodayTimeline — visual timeline widget ─────────────────────────────
+// Renders today as a top-to-bottom timeline. Each event is a colored block
+// anchored at a vertical position proportional to its time. A purple "NOW"
+// line marks the current moment.
+//
+// Window math:
+//   - earliestHour = min(min(event_hours), now_hour - 1), clamped to 6
+//   - latestHour   = max(max(event_hours), now_hour + 6), clamped to 23
+//   - Mobile: cap visible hours at 6, scroll inside the widget
+//   - Hour rows are SLOT_HEIGHT px tall, blocks position relative to that
+//
+// Props:
+//   events      — array of { id, title, starts_at, ends_at?, source }
+//   onCreate    — async ({ title, starts_at, ends_at }) → returns created event
+//   onDelete    — async (eventId) → deletes
+//   compact     — bool. When true, widget caps height to 6 visible hours
+//                 with internal scroll (mobile). When false, shows the
+//                 full window (desktop right-rail).
+//   showHeader  — bool. The mobile band dropdown and trigger dropdown
+//                 supply their own header; right-rail widget renders its own.
+//
+// Note: this component reads `C` from a closure-free import-only style —
+// since `C` is declared inside the App function, we pass it via props.
+function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showHeader = true, C, googleConnected = false }) {
+  const [composerText, setComposerText] = useState("");
+  const [composerError, setComposerError] = useState(null);
+  const [hoveredId, setHoveredId] = useState(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+
+  // Tick every 60s so the NOW marker stays in sync. Doesn't re-render on
+  // composer keystrokes — only the tick.
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const SLOT_HEIGHT = 44; // pixels per hour row
+  const now = new Date(nowTick);
+  const nowFractional = now.getHours() + now.getMinutes() / 60;
+
+  // Filter to events whose start falls on today (local date match).
+  const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const todayEvents = events
+    .map(e => ({
+      ...e,
+      _start: new Date(e.starts_at),
+      _end: e.ends_at ? new Date(e.ends_at) : null,
+    }))
+    .filter(e => {
+      const d = e._start;
+      const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return ymd === todayYmd;
+    })
+    .sort((a, b) => a._start - b._start);
+
+  // Compute the dynamic hour window
+  const eventHours = todayEvents.flatMap(e => {
+    const s = e._start.getHours() + e._start.getMinutes() / 60;
+    const en = e._end ? e._end.getHours() + e._end.getMinutes() / 60 : s + 0.5;
+    return [s, en];
+  });
+  const minCandidate = Math.min(nowFractional - 1, ...(eventHours.length ? eventHours : [nowFractional]));
+  const maxCandidate = Math.max(nowFractional + 6, ...(eventHours.length ? eventHours : [nowFractional]));
+  const earliestHour = Math.max(6, Math.floor(minCandidate));
+  const latestHour = Math.min(23, Math.ceil(maxCandidate));
+  const totalHours = Math.max(1, latestHour - earliestHour);
+
+  // Position helpers
+  const yForHour = (h) => (h - earliestHour) * SLOT_HEIGHT;
+  const yForDate = (d) => {
+    const h = d.getHours() + d.getMinutes() / 60;
+    return yForHour(h);
+  };
+
+  // Compose
+  const handleSubmit = (e) => {
+    if (e) e.preventDefault();
+    const parsed = parseCalendarEntry(composerText, now);
+    if (!parsed) {
+      setComposerError("Add a time (e.g. 2pm, 9:30am, noon)");
+      return;
+    }
+    setComposerError(null);
+    setComposerText("");
+    onCreate && onCreate(parsed);
+  };
+
+  const handleKey = (e) => {
+    if (e.key === "Enter") handleSubmit(e);
+    if (composerError) setComposerError(null);
+  };
+
+  // Hour labels — render at integer hours in the window
+  const hourLabels = [];
+  for (let h = earliestHour; h <= latestHour; h++) {
+    hourLabels.push(h);
+  }
+
+  const timelineHeight = totalHours * SLOT_HEIGHT;
+  // Compact (mobile): cap visible to 6 hours with scroll
+  const visibleHeight = compact ? Math.min(6 * SLOT_HEIGHT, timelineHeight) : timelineHeight;
+
+  // Auto-scroll the visible window to center NOW on mount/tick (mobile only)
+  const scrollRef = useRef(null);
+  useEffect(() => {
+    if (!compact) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const nowY = yForDate(now);
+    const targetScroll = Math.max(0, nowY - visibleHeight / 2);
+    el.scrollTop = targetScroll;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compact, earliestHour, latestHour]);
+
+  // Empty state — no events at all
+  const isEmpty = todayEvents.length === 0;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Optional header */}
+      {showHeader && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
+          <Icon name="due" size={26} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today</div>
+            <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>
+              {isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}
+              {googleConnected && <span style={{ marginLeft: 6, color: C.primary }}>· Google connected</span>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Timeline body */}
+      <div
+        ref={scrollRef}
+        style={{
+          position: "relative",
+          height: visibleHeight,
+          overflowY: compact ? "auto" : "visible",
+          paddingRight: 2,
+        }}
+      >
+        <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight }}>
+          {/* Hour grid */}
+          {hourLabels.map(h => (
+            <div
+              key={h}
+              style={{
+                position: "absolute",
+                top: yForHour(h),
+                left: 0,
+                right: 0,
+                height: SLOT_HEIGHT,
+                borderTop: "1px solid " + C.borderLight,
+              }}
+            >
+              <span style={{
+                position: "absolute",
+                top: -7,
+                left: 0,
+                fontSize: 10,
+                color: C.textMuted,
+                fontVariantNumeric: "tabular-nums",
+                fontWeight: 500,
+                background: C.card,
+                paddingRight: 4,
+              }}>
+                {formatHourLabel(h)}
+              </span>
+            </div>
+          ))}
+
+          {/* Events */}
+          {todayEvents.map(evt => {
+            const top = yForDate(evt._start);
+            const endY = evt._end ? yForDate(evt._end) : top + SLOT_HEIGHT * 0.5;
+            const height = Math.max(20, endY - top - 2);
+            const isManual = evt.source === "manual";
+            const isHovered = hoveredId === evt.id;
+            return (
+              <div
+                key={evt.id}
+                onMouseEnter={() => setHoveredId(evt.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                style={{
+                  position: "absolute",
+                  top,
+                  left: 42,
+                  right: 4,
+                  height,
+                  background: isManual ? C.btnLight : C.primarySoft,
+                  borderLeft: `3px solid ${isManual ? C.btn : C.primaryLight}`,
+                  borderRadius: "0 6px 6px 0",
+                  padding: "4px 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  overflow: "hidden",
+                  fontSize: 12,
+                  color: C.text,
+                  cursor: "default",
+                }}
+                title={evt.title}
+              >
+                <span style={{ fontVariantNumeric: "tabular-nums", color: isManual ? C.btn : C.primary, fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+                  {formatTimeLabel(evt._start)}
+                </span>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {evt.title}
+                </span>
+                {isManual && isHovered && onDelete && (
+                  <button
+                    onClick={() => onDelete(evt.id)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      color: C.textMuted,
+                      fontSize: 12,
+                      padding: 0,
+                      width: 16,
+                      height: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      lineHeight: 1,
+                    }}
+                    title="Delete"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {/* NOW marker */}
+          {nowFractional >= earliestHour && nowFractional <= latestHour && (
+            <div style={{
+              position: "absolute",
+              top: yForDate(now),
+              left: 0,
+              right: 0,
+              height: 0,
+              zIndex: 3,
+              pointerEvents: "none",
+            }}>
+              <div style={{
+                position: "absolute",
+                left: 0,
+                top: -6,
+                fontSize: 8.5,
+                fontWeight: 700,
+                color: C.btn,
+                letterSpacing: 0.1,
+                background: C.card,
+                padding: "0 4px",
+                zIndex: 2,
+              }}>NOW</div>
+              <div style={{
+                position: "absolute",
+                left: 32,
+                right: 0,
+                top: 0,
+                height: 1.5,
+                background: C.btn,
+              }} />
+            </div>
+          )}
+
+          {/* Empty state message */}
+          {isEmpty && (
+            <div style={{
+              position: "absolute",
+              top: visibleHeight / 2 - 18,
+              left: 0,
+              right: 0,
+              textAlign: "center",
+              fontFamily: "'Fraunces', Georgia, serif",
+              fontStyle: "italic",
+              fontWeight: 400,
+              fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+              fontSize: 13,
+              color: C.textMuted,
+              pointerEvents: "none",
+            }}>
+              No events yet — add one below.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Composer */}
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 0 0",
+          marginTop: 8,
+          borderTop: "1px solid " + C.borderLight,
+        }}
+      >
+        <span style={{ fontSize: 16, color: C.btn, fontWeight: 700, lineHeight: 1, paddingLeft: 2 }}>+</span>
+        <input
+          type="text"
+          value={composerText}
+          onChange={e => setComposerText(e.target.value)}
+          onKeyDown={handleKey}
+          placeholder="2pm Sarah · noon lunch · 9-10am sync"
+          style={{
+            flex: 1,
+            border: "none",
+            background: "transparent",
+            fontFamily: "inherit",
+            fontSize: 12.5,
+            color: C.text,
+            outline: "none",
+            padding: "2px 0",
+            minWidth: 0,
+          }}
+        />
+      </form>
+      {composerError && (
+        <div style={{ fontSize: 10.5, color: C.danger, marginTop: 4, paddingLeft: 14 }}>{composerError}</div>
+      )}
+    </div>
   );
 }
 
@@ -1437,6 +1928,10 @@ export default function App({ user }) {
   // (no pick today, or sweep hasn't run yet). Realtime sub keeps this in
   // sync if a fresh sweep lands while app is open.
   const [raiPicks, setRaiPicks] = useState(null);
+  // Today timeline — personal calendar events (manual + future Google sync).
+  // Currently only manual rows are written from the app. The TodayTimeline
+  // widget reads from this state to render the timeline view of today.
+  const [personalEvents, setPersonalEvents] = useState([]);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -2027,6 +2522,12 @@ export default function App({ user }) {
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
+
+    // Today timeline — personal calendar events. Fire-and-forget; widget
+    // renders empty + composer if this fails or is empty.
+    personalCalendarDb.listToday(uid)
+      .then(r => { if (r?.data) setPersonalEvents(r.data); })
+      .catch(e => console.warn("personal calendar load failed:", e));
 
     // Sidebar tasks-completed widget — fire-and-forget, doesn't block render.
     // Up to ~1k completion rows over 12 months for active users; query is fast
@@ -4636,36 +5137,38 @@ export default function App({ user }) {
                     </span>
                   </div>
 
-                  {/* Mobile calendar dropdown — drops down right under the band trigger */}
+                  {/* Mobile calendar dropdown — drops down right under the band trigger.
+                      Renders the today timeline in compact mode (caps at 6 visible
+                      hours with internal scroll). */}
                   {todayStripOpen && (
                     <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <Icon name="due" size={26} />
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
-                            <span
-                              className="rt-task-title is-discussable"
-                              onClick={() => setPage("settings")}
-                              style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
-                            >
-                              Connect to activate
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        {[
-                          { time: "2:30pm", title: "Backyard Discovery sync" },
-                          { time: "4:00pm", title: "Motley Fool review" },
-                          { time: "5:30pm", title: "Internal — weekly planning" },
-                        ].map((e, i) => (
-                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid " + C.borderLight }}>
-                            <span style={{ fontSize: 11.5, color: C.textMuted, fontVariantNumeric: "tabular-nums", fontWeight: 500, width: 48, flexShrink: 0 }}>{e.time}</span>
-                            <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
-                          </div>
-                        ))}
-                      </div>
+                      <TodayTimeline
+                        events={personalEvents}
+                        C={C}
+                        showHeader={true}
+                        compact={true}
+                        googleConnected={false}
+                        onCreate={async (entry) => {
+                          const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                          setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                          const { data, error } = await personalCalendarDb.create(user.id, entry);
+                          if (error) {
+                            console.error("Calendar create failed:", error);
+                            setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
+                            return;
+                          }
+                          setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                        }}
+                        onDelete={async (id) => {
+                          const prev = personalEvents;
+                          setPersonalEvents(prev.filter(e => e.id !== id));
+                          const { error } = await personalCalendarDb.remove(id);
+                          if (error) {
+                            console.error("Calendar delete failed:", error);
+                            setPersonalEvents(prev);
+                          }
+                        }}
+                      />
                     </div>
                   )}
                 </div>
@@ -5546,39 +6049,38 @@ export default function App({ user }) {
                     </button>
                   </div>
 
-                  {/* Mobile-only expanded calendar sheet (toggled by trigger above) */}
+                  {/* Mobile-only expanded calendar sheet (toggled by trigger above)
+                      Renders the today timeline in compact mode (caps at 6 visible
+                      hours with internal scroll). */}
                   {todayStripOpen && (
                     <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <Icon name="due" size={26} />
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
-                            <span
-                              className="rt-task-title is-discussable"
-                              onClick={() => setPage("settings")}
-                              style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
-                            >
-                              Connect to activate
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        {(() => {
-                          const events = [
-                            { time: "2:30pm", title: "Backyard Discovery sync" },
-                            { time: "4:00pm", title: "Motley Fool review" },
-                            { time: "5:30pm", title: "Internal — weekly planning" },
-                          ];
-                          return events.map((e, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid " + C.borderLight }}>
-                              <span style={{ fontSize: 11.5, color: C.textMuted, fontVariantNumeric: "tabular-nums", fontWeight: 500, width: 48, flexShrink: 0 }}>{e.time}</span>
-                              <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
-                            </div>
-                          ));
-                        })()}
-                      </div>
+                      <TodayTimeline
+                        events={personalEvents}
+                        C={C}
+                        showHeader={true}
+                        compact={true}
+                        googleConnected={false}
+                        onCreate={async (entry) => {
+                          const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                          setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                          const { data, error } = await personalCalendarDb.create(user.id, entry);
+                          if (error) {
+                            console.error("Calendar create failed:", error);
+                            setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
+                            return;
+                          }
+                          setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                        }}
+                        onDelete={async (id) => {
+                          const prev = personalEvents;
+                          setPersonalEvents(prev.filter(e => e.id !== id));
+                          const { error } = await personalCalendarDb.remove(id);
+                          if (error) {
+                            console.error("Calendar delete failed:", error);
+                            setPersonalEvents(prev);
+                          }
+                        }}
+                      />
                     </div>
                   )}
 
@@ -6263,36 +6765,39 @@ export default function App({ user }) {
                   {/* Completed section removed — done tasks now render inline above with strikethrough state. */}
                 </div>
 
-              {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead. */}
+              {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead.
+                  Now wired to the today timeline: dynamic hour window, NOW marker, manual
+                  events with inline composer. Google events will render alongside manual
+                  ones once sync ships. */}
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
                 <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px 16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                      <Icon name="due" size={26} />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today's calendar</div>
-                        <span
-                          className="rt-task-title is-discussable"
-                          onClick={() => setPage("settings")}
-                          style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "inline-block", cursor: "pointer" }}
-                        >
-                          Connect to activate
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ opacity: 0.55 }}>
-                    {[
-                      { time: "2:30pm", title: "Backyard Discovery sync" },
-                      { time: "4:00pm", title: "Motley Fool review" },
-                      { time: "5:30pm", title: "Internal — weekly planning" },
-                    ].map((e, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid " + C.borderLight }}>
-                        <span style={{ fontSize: 11.5, color: C.textMuted, fontVariantNumeric: "tabular-nums", fontWeight: 500, width: 56, flexShrink: 0 }}>{e.time}</span>
-                        <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <TodayTimeline
+                    events={personalEvents}
+                    C={C}
+                    showHeader={true}
+                    compact={false}
+                    googleConnected={false}
+                    onCreate={async (entry) => {
+                      const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                      setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                      const { data, error } = await personalCalendarDb.create(user.id, entry);
+                      if (error) {
+                        console.error("Calendar create failed:", error);
+                        setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
+                        return;
+                      }
+                      setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                    }}
+                    onDelete={async (id) => {
+                      const prev = personalEvents;
+                      setPersonalEvents(prev.filter(e => e.id !== id));
+                      const { error } = await personalCalendarDb.remove(id);
+                      if (error) {
+                        console.error("Calendar delete failed:", error);
+                        setPersonalEvents(prev);
+                      }
+                    }}
+                  />
                 </div>
               </div>
 
