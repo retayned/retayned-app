@@ -203,17 +203,101 @@ export const tasks = {
     return { data, error };
   },
 
+  // Mark a task done or undone.
+  //
+  // Behavior:
+  //   - Update tasks.is_done and tasks.completed_at (existing fields,
+  //     unchanged behavior — UI continues to use these for "is this
+  //     currently done").
+  //   - When done=true, insert a row into task_completions to record
+  //     the completion permanently. Deduped by (task_id, today) so
+  //     toggling on/off multiple times in one day records exactly one.
+  //   - When done=false, delete today's task_completions row for this
+  //     task (the "I clicked it by mistake" undo case).
+  //
+  // task_completions exists because tasksDb.resetRecurring nulls
+  // tasks.completed_at on recurring tasks every morning. Without a
+  // separate record, recurring completions are invisible to the sweep
+  // and the sidebar counter. The new table holds every completion as
+  // an immutable record; tasks.completed_at remains the "current
+  // state" field.
   toggle: async (taskId, isDone) => {
+    // Read the row to capture task metadata for the completion record
+    // (denormalized snapshots). Also tells us the user_id and client_id.
+    const { data: existing, error: readErr } = await supabase
+      .from('tasks')
+      .select('id, user_id, client_id, text, is_recurring')
+      .eq('id', taskId)
+      .single();
+    if (readErr) return { data: null, error: readErr };
+
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from('tasks')
       .update({
         is_done: isDone,
-        completed_at: isDone ? new Date().toISOString() : null
+        completed_at: isDone ? nowIso : null,
       })
       .eq('id', taskId)
       .select()
       .single();
-    return { data, error };
+    if (error) return { data, error };
+
+    if (isDone) {
+      // Record the completion. Dedupe: don't insert if a row already
+      // exists for this task today (handles done → undo → done in
+      // quick succession).
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const { data: existingToday } = await supabase
+        .from('task_completions')
+        .select('id')
+        .eq('task_id', taskId)
+        .gte('completed_at', todayStart.toISOString())
+        .lte('completed_at', todayEnd.toISOString())
+        .limit(1);
+
+      if (!existingToday || existingToday.length === 0) {
+        // Look up client name for the snapshot. Best-effort — if it
+        // fails or the client is null, we still insert with null name.
+        let clientName = null;
+        if (existing.client_id) {
+          const { data: cli } = await supabase
+            .from('clients')
+            .select('name')
+            .eq('id', existing.client_id)
+            .single();
+          clientName = cli?.name ?? null;
+        }
+        // Fire-and-forget — completion record is non-critical to UI
+        // responsiveness. Errors logged but don't block.
+        const { error: insErr } = await supabase
+          .from('task_completions')
+          .insert({
+            task_id: taskId,
+            user_id: existing.user_id,
+            client_id: existing.client_id,
+            client_name: clientName,
+            task_text: existing.text,
+            is_recurring: existing.is_recurring || false,
+            completed_at: nowIso,
+          });
+        if (insErr) console.warn('task_completions insert failed:', insErr);
+      }
+    } else {
+      // Undo: remove today's completion row(s) for this task.
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+      const { error: delErr } = await supabase
+        .from('task_completions')
+        .delete()
+        .eq('task_id', taskId)
+        .gte('completed_at', todayStart.toISOString())
+        .lte('completed_at', todayEnd.toISOString());
+      if (delErr) console.warn('task_completions delete (undo) failed:', delErr);
+    }
+
+    return { data, error: null };
   },
 
   // Set / clear / change a task's due_date. Used by:
@@ -283,29 +367,26 @@ export const tasks = {
   },
 
   // Get count of completed tasks for week/month/year windows + history buckets.
-  // Used for the sidebar tasks-completed widget. Single query returns just
-  // completed_at timestamps; we bucket on the client. Cheaper than separate
-  // count queries since most users have <1k completed tasks/year.
+  // Used for the sidebar tasks-completed widget.
   //
-  // Counts include both regular tasks and recurring tasks (each completion
-  // is a separate row in completion history once the recurring task has been
-  // reset and re-completed). Excludes still-incomplete tasks.
+  // Reads from task_completions (NOT tasks.completed_at). The completions
+  // table records every completion as an immutable row, so recurring task
+  // completions — which get nulled out of tasks.completed_at by the daily
+  // reset — are still counted here. This is the fix for the sidebar
+  // undercounting daily recurring task work.
   //
   // Returns:
   //   week, month, year — current period counts (rolling 7/30/365 days from now)
   //   weekHistory[12]   — counts per rolling 7-day bucket, oldest → newest
-  //                       (index 11 = current week, index 10 = last week, etc.)
   //   monthHistory[12]  — counts per rolling 30-day bucket, oldest → newest
-  //                       (index 11 = current month, index 10 = last month, etc.)
   //   dayStreak         — consecutive days ending today with at least 1 completion
   getCompletedCounts: async (userId) => {
     const oneYearAgo = new Date();
     oneYearAgo.setDate(oneYearAgo.getDate() - 365);
     const { data, error } = await supabase
-      .from('tasks')
+      .from('task_completions')
       .select('completed_at')
       .eq('user_id', userId)
-      .not('completed_at', 'is', null)
       .gte('completed_at', oneYearAgo.toISOString());
     if (error) return {
       data: { week: 0, month: 0, year: 0, weekHistory: Array(12).fill(0), monthHistory: Array(12).fill(0), dayStreak: 0 },
@@ -395,17 +476,50 @@ export const tasks = {
 
   // Worker-side mark complete. Sets is_done + worker_completed_at.
   // Called from the magic-link Edge Function with service role.
+  // Also writes a task_completions record so worker-completed tasks
+  // show up in the sidebar counter and Rai sweep just like user-completed
+  // ones. Bypasses RLS via service role.
   markCompleteByWorker: async (taskId) => {
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from('tasks')
       .update({
         is_done: true,
-        completed_at: new Date().toISOString(),
-        worker_completed_at: new Date().toISOString(),
+        completed_at: nowIso,
+        worker_completed_at: nowIso,
       })
       .eq('id', taskId)
       .select()
       .single();
+    if (error) return { data, error };
+
+    // Write completion record. Service role bypasses RLS so we can
+    // freely insert. Fail-soft: a missing completion row is annoying
+    // but not blocking for the worker's flow.
+    if (data) {
+      let clientName = null;
+      if (data.client_id) {
+        const { data: cli } = await supabase
+          .from('clients')
+          .select('name')
+          .eq('id', data.client_id)
+          .single();
+        clientName = cli?.name ?? null;
+      }
+      const { error: insErr } = await supabase
+        .from('task_completions')
+        .insert({
+          task_id: taskId,
+          user_id: data.user_id,
+          client_id: data.client_id,
+          client_name: clientName,
+          task_text: data.text,
+          is_recurring: data.is_recurring || false,
+          completed_at: nowIso,
+        });
+      if (insErr) console.warn('task_completions insert (worker) failed:', insErr);
+    }
+
     return { data, error };
   },
 };
