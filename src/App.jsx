@@ -3205,7 +3205,7 @@ export default function App({ user }) {
     if (!user) return;
     if (rankMode !== "rai") return;
     if (!raiState) return; // not loaded yet
-    if (!raiPicks || raiPicks.length === 0) return; // no picks today
+    if (!raiPicks) return; // no pick today (raiPicks is a single object or null)
 
     // Day is over: badge has been set at some point today. Never re-badge.
     if (raiState.todays_badge_set_at) return;
@@ -3218,45 +3218,47 @@ export default function App({ user }) {
       const now = Date.now();
       const todayIso = new Date().toISOString().slice(0, 10);
 
-      for (const pick of raiPicks) {
-        const c = clients.find(x => x.id === pick.client_id);
-        if (!c) continue;
+      // raiPicks is a single pick row (or null, gated above). The original
+      // code was written as if multiple picks could land at once; the
+      // current sweep writes exactly one row per user per day and
+      // raiPicksDb.getCurrent returns it via maybeSingle(). Treat as one.
+      const pick = raiPicks;
+      const c = clients.find(x => x.id === pick.client_id);
+      if (!c) return;
 
-        // Only TODAY tasks are eligible. Tomorrow / Later never get badged.
-        const clientTodayTasks = tasks.filter(t => {
-          if (t.done) return false;
-          if (todayDismissed[t.id]) return false;
-          if (t.client !== c.name) return false;
-          // Only today's bucket: due_date is today (recurring tasks count
-          // as today by convention since they have no due_date but render
-          // in the today bucket).
-          if (t.recurring) return true;
-          if (!t.due_date) return false;
-          return String(t.due_date).slice(0, 10) === todayIso;
-        });
-        if (clientTodayTasks.length === 0) continue;
+      // Only TODAY tasks are eligible. Tomorrow / Later never get badged.
+      const clientTodayTasks = tasks.filter(t => {
+        if (t.done) return false;
+        if (todayDismissed[t.id]) return false;
+        if (t.client !== c.name) return false;
+        // Only today's bucket: due_date is today (recurring tasks count
+        // as today by convention since they have no due_date but render
+        // in the today bucket).
+        if (t.recurring) return true;
+        if (!t.due_date) return false;
+        return String(t.due_date).slice(0, 10) === todayIso;
+      });
+      if (clientTodayTasks.length === 0) return;
 
-        // Eligible = at least one of these tasks has settled >60s
-        const settled = clientTodayTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
-        if (settled.length === 0) continue;
+      // Eligible = at least one of these tasks has settled >60s
+      const settled = clientTodayTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
+      if (settled.length === 0) return;
 
-        // Pick highest-priority among settled
-        const sorted = [...settled].sort((a, b) => {
-          const psA = getProfileSortScore(a.client, a.raiPriority, 0);
-          const psB = getProfileSortScore(b.client, b.raiPriority, 0);
-          if (psA !== psB) return psB - psA;
-          if (a.alert !== b.alert) return a.alert ? -1 : 1;
-          if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
-          return (b.created_at || 0) - (a.created_at || 0);
-        });
-        const winnerId = sorted[0].id;
-        try {
-          await raiUserStateDb.setBadgeTask(user.id, winnerId);
-          await raiPicksDb.markAnnotated(user.id, c.id);
-        } catch (e) {
-          console.warn("Failed to write badge state:", e);
-        }
-        return;
+      // Pick highest-priority among settled
+      const sorted = [...settled].sort((a, b) => {
+        const psA = getProfileSortScore(a.client, a.raiPriority, 0);
+        const psB = getProfileSortScore(b.client, b.raiPriority, 0);
+        if (psA !== psB) return psB - psA;
+        if (a.alert !== b.alert) return a.alert ? -1 : 1;
+        if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+        return (b.created_at || 0) - (a.created_at || 0);
+      });
+      const winnerId = sorted[0].id;
+      try {
+        await raiUserStateDb.setBadgeTask(user.id, winnerId);
+        await raiPicksDb.markAnnotated(user.id, c.id);
+      } catch (e) {
+        console.warn("Failed to write badge state:", e);
       }
     };
 
@@ -4816,15 +4818,20 @@ export default function App({ user }) {
           // Tomorrow / Later tasks are never badged. The settle effect that
           // writes the badge gates on due_date == today.
           const activeBadgeTaskId = (rankMode === "rai" && raiState?.todays_badged_task_id) || null;
-          const activeBadgePick = activeBadgeTaskId
-            ? raiPicks.find(p => {
-                // Match the picked client to the badged task
-                const t = tasks.find(x => x.id === activeBadgeTaskId);
-                if (!t) return false;
-                const c = clients.find(x => x.name === t.client);
-                return c && p.client_id === c.id;
-              })
-            : null;
+          // raiPicks is a single pick row (or null). Match it against the
+          // badged task's client; return the pick if they match, else null.
+          // Original code used .find() as if raiPicks were an array; it
+          // never has been since the sweep writes one row and getCurrent
+          // returns it via maybeSingle.
+          const activeBadgePick = (() => {
+            if (!activeBadgeTaskId) return null;
+            if (!raiPicks || !raiPicks.client_id) return null;
+            const t = tasks.find(x => x.id === activeBadgeTaskId);
+            if (!t) return null;
+            const c = clients.find(x => x.name === t.client);
+            if (!c) return null;
+            return raiPicks.client_id === c.id ? raiPicks : null;
+          })();
 
           // Sort comparator for Rai mode. Layered final score:
           //   priority_score (deterministic, with soft clamp inside)
