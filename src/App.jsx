@@ -1655,9 +1655,15 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
             let timeColor = C.textMuted;
             let titleWeight = 500;
             if (state === "past") {
+              // Past events: no fill, no border. The timeline's hour-grid
+              // lines (rendered as borderTop on each hour-row above) already
+              // provide structural separators — adding a per-event underline
+              // double-draws horizontal lines, which stacks visibly when
+              // past events sit close together (e.g. three events in one hour).
+              // Recede entirely into the grid; muted text is the only signal
+              // that these events exist.
               containerStyle = {
                 background: "transparent",
-                borderBottom: `1px solid ${C.borderLight}`,
                 borderRadius: 0,
                 paddingLeft: 0,
               };
