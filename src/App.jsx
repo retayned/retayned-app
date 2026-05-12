@@ -7891,7 +7891,7 @@ export default function App({ user }) {
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => setProfileStep(12)} style={{ padding: "10px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
-                      <button className="r-btn" onClick={submitNewClient} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add Client</button>
+                      <button className="r-btn" onClick={submitNewClient} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add client</button>
                     </div>
                     <div style={{ fontSize: 10.5, color: C.textMuted, lineHeight: 1.45, marginTop: 10, textAlign: "center" }}>
                       By adding this client, you confirm you have the right to process their information for client management purposes.
@@ -8733,7 +8733,7 @@ export default function App({ user }) {
                         }}
                       >
                         <div style={{
-                          background: C.btnLight,
+                          background: C.primarySoft,
                           color: C.text,
                           borderRadius: 14,
                           border: "1px solid " + C.borderLight,
@@ -9819,7 +9819,7 @@ export default function App({ user }) {
               boxShadow: "0 20px 50px rgba(20,30,22,0.30)",
               zIndex: 100,
             }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 14px" }}>Add a worker</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 14px" }}>Add worker</h3>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Name</label>
                 <input
@@ -10021,7 +10021,7 @@ export default function App({ user }) {
                 </div>
                 <div style={{ flexShrink: 0 }}>
                   <button onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
-                    Log a referral
+                    Log referral
                   </button>
                 </div>
               </div>
@@ -10315,7 +10315,7 @@ export default function App({ user }) {
               {refForm && (
                 <div onClick={() => setRefForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 18 }}>Log a referral</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 18 }}>Log referral</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>New client name</label>
