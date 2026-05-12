@@ -8733,7 +8733,7 @@ export default function App({ user }) {
                         }}
                       >
                         <div style={{
-                          background: C.primarySoft,
+                          background: C.btnLight,
                           color: C.text,
                           borderRadius: 14,
                           border: "1px solid " + C.borderLight,
