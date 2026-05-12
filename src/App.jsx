@@ -4117,6 +4117,15 @@ export default function App({ user }) {
         .rt-obs-illo {
           width: 100px !important;
           height: 84px !important;
+          /* The 34 observation SVGs all have ~29% internal padding inside
+             their 360x300 viewBox (artwork centered, fills middle ~60%).
+             Combined with the card's right padding, this creates a large
+             visible gap to the right of the artwork. Pulling the <img>
+             right with a negative margin lets the empty SVG padding sit
+             outside the card while the visible artwork aligns flush with
+             where content lives. Only on mobile — desktop's absolute
+             positioning handles this differently. */
+          margin-right: -18px !important;
         }
         .rt-obs-content { padding-right: 0 !important; }
         .rt-obs-topbar-rule { display: none !important; }
@@ -4217,6 +4226,7 @@ export default function App({ user }) {
             top: 28px !important;
             width: 200px !important;
             height: 165px !important;
+            margin-right: 0 !important;
           }
           .rt-obs-content { padding-right: 220px !important; }
           .rt-obs-topbar-rule { display: block !important; }
