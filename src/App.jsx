@@ -493,6 +493,56 @@ const integrations = [
   ]},
 ];
 
+// ============================================================
+// OBSERVATION_ILLUSTRATIONS
+// Maps observations.observation_number → SVG asset URL.
+// Files live in /public/observations/ (Vite serves /public at site
+// root, so app.retayned.com/observations/01_xxx.svg). Bundled with
+// each release — when a release rolls back, illustrations roll back
+// with it.
+//
+// Lookup by observation_number ONLY (not card_name slug) so renaming
+// "Rescue" → "The Rescue" in the DB cannot break the image link. If
+// observation_number is missing or unmapped, the card renders without
+// an illustration and content flows full-width.
+// ============================================================
+const OBSERVATION_ILLUSTRATIONS = {
+  1: "/observations/01_frequency_mismatch.svg",
+  2: "/observations/02_depth_mismatch.svg",
+  3: "/observations/03_anniversary_approaching.svg",
+  4: "/observations/04_slow_decline.svg",
+  5: "/observations/05_stale_profile.svg",
+  6: "/observations/06_expectations_mismatch.svg",
+  7: "/observations/07_renewal_ghost.svg",
+  8: "/observations/08_long_goodbye.svg",
+  9: "/observations/09_anniversary_pileup.svg",
+  10: "/observations/10_renewal_with_room.svg",
+  11: "/observations/11_forgotten_addon.svg",
+  12: "/observations/12_underbilled.svg",
+  13: "/observations/13_quiet_compounder.svg",
+  14: "/observations/14_advocate_in_waiting.svg",
+  15: "/observations/15_referral_source_untapped.svg",
+  16: "/observations/16_discount_habit.svg",
+  17: "/observations/17_high_tenure_low_touch.svg",
+  18: "/observations/18_thriving_untouched.svg",
+  19: "/observations/19_quiet_loyal.svg",
+  20: "/observations/20_long_tenure_plateau.svg",
+  21: "/observations/21_the_favorite.svg",
+  22: "/observations/22_the_rescue.svg",
+  23: "/observations/23_the_autopilot.svg",
+  24: "/observations/24_self_cluster.svg",
+  25: "/observations/25_reverse_pareto.svg",
+  26: "/observations/26_client_task_disproportion.svg",
+  27: "/observations/27_concentration_cliff.svg",
+  28: "/observations/28_hours_sink.svg",
+  29: "/observations/29_rate_compression.svg",
+  30: "/observations/30_pipeline_drought.svg",
+  31: "/observations/31_the_composition.svg",
+  32: "/observations/32_cadence_mirror.svg",
+  33: "/observations/33_tenure_map.svg",
+  34: "/observations/34_drift_census.svg",
+};
+
 function retColor(v) {
   if (v >= 80) return "#0C3A2E";      // Elite (retElite)
   if (v >= 65) return "#1F7A5C";      // Good (retGood)
@@ -8563,6 +8613,11 @@ export default function App({ user }) {
                     })();
                     const firedDate = firedAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '.');
 
+                    // Illustration asset for this observation. Lookup by
+                    // observation_number (immutable). null if missing/unmapped
+                    // → card renders without illo and content flows full-width.
+                    const illoSrc = OBSERVATION_ILLUSTRATIONS[obs.observation_number] || null;
+
                     // ─── Action handlers ───
                     const handleDrop = async () => {
                       setObsDismissing(true);
@@ -8688,79 +8743,28 @@ export default function App({ user }) {
                           boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
                         }}>
                           {/* ─── ILLUSTRATION — top-right inside card ─── */}
-                          <div style={{
-                            position: "absolute",
-                            right: 36,
-                            top: 28,
-                            width: 200,
-                            height: 165,
-                            pointerEvents: "none",
-                            opacity: 0.9,
-                          }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300" style={{ width: "100%", height: "100%" }}>
-                              <g fill="none" stroke="#2F2F31" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M150 58 Q144 44 154 34 Q162 24 154 12"/>
-                                <path d="M178 54 Q172 38 182 28 Q188 20 182 8"/>
-                                <path d="M204 60 Q198 46 208 36 Q216 26 208 14"/>
-                              </g>
-                              <g transform="translate(110 70)">
-                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M130 50 Q170 50 170 90 Q170 130 130 130"/>
-                                <path fill="none" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round" d="M130 62 Q158 62 158 90 Q158 118 130 118"/>
-                                <path fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round" d="M6 44 Q4 38 12 38 L134 38 Q142 38 140 44 L132 174 Q130 184 120 184 L26 184 Q16 184 14 174 Z"/>
-                                <ellipse cx="73" cy="45" rx="62" ry="9" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                <ellipse cx="73" cy="45" rx="54" ry="6" fill="#3F434B" opacity="0.9"/>
-                                <path d="M40 42 Q52 38 70 39" stroke="#FCFCFE" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.8"/>
-                                <g stroke="#2F2F31" strokeWidth="0.9" opacity="0.35" strokeLinecap="round" fill="none">
-                                  <line x1="118" y1="70" x2="122" y2="164"/>
-                                  <line x1="124" y1="70" x2="127" y2="160"/>
-                                  <line x1="112" y1="72" x2="115" y2="166"/>
-                                </g>
-                              </g>
-                              <g transform="translate(220 130) rotate(10)">
-                                <rect x="0" y="0" width="92" height="140" rx="12" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2" strokeLinejoin="round"/>
-                                <rect x="6" y="14" width="80" height="118" rx="6" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                <rect x="36" y="6" width="20" height="3" rx="1.5" fill="#2F2F31"/>
-                                <g transform="translate(10 22)">
-                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="#558B68"/>
-                                  <rect x="0" y="0" width="72" height="44" rx="6" fill="none" stroke="#2F2F31" strokeWidth="1.8" strokeLinejoin="round"/>
-                                  <circle cx="10" cy="10" r="4" fill="#FCFCFE"/>
-                                  <circle cx="10" cy="10" r="4" fill="none" stroke="#2F2F31" strokeWidth="1.2"/>
-                                  <line x1="20" y1="8" x2="58" y2="8" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
-                                  <line x1="20" y1="14" x2="48" y2="14" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round" opacity="0.85"/>
-                                  <line x1="6" y1="26" x2="66" y2="26" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="6" y1="32" x2="58" y2="32" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="6" y1="38" x2="42" y2="38" stroke="#FCFCFE" strokeWidth="1.4" strokeLinecap="round"/>
-                                </g>
-                                <g transform="translate(10 74)">
-                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <line x1="18" y1="9" x2="58" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="18" y1="15" x2="44" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                </g>
-                                <g transform="translate(10 102)">
-                                  <rect x="0" y="0" width="72" height="22" rx="5" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <circle cx="9" cy="11" r="3" fill="none" stroke="#2F2F31" strokeWidth="1.4"/>
-                                  <line x1="18" y1="9" x2="54" y2="9" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                  <line x1="18" y1="15" x2="40" y2="15" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                                </g>
-                                <line x1="92" y1="30" x2="92" y2="48" stroke="#2F2F31" strokeWidth="1.4" strokeLinecap="round"/>
-                              </g>
-                              <g stroke="#2F2F31" strokeWidth="1.8" strokeLinecap="round" fill="none">
-                                <path d="M232 108 L228 100"/>
-                                <path d="M246 102 L244 92"/>
-                                <path d="M260 100 L262 90"/>
-                                <path d="M274 104 L280 96"/>
-                              </g>
-                              <g transform="translate(300 100)">
-                                <circle cx="0" cy="0" r="10" fill="#FCFCFE" stroke="#2F2F31" strokeWidth="2"/>
-                                <line x1="0" y1="-4" x2="0" y2="2" stroke="#2F2F31" strokeWidth="2.4" strokeLinecap="round"/>
-                                <circle cx="0" cy="6" r="1.4" fill="#2F2F31"/>
-                              </g>
-                            </svg>
-                          </div>
+                          {/* Renders the SVG mapped to obs.observation_number.    */}
+                          {/* Files are bundled in /public/observations/.            */}
+                          {/* If unmapped, no <img> renders and content flows full. */}
+                          {illoSrc && (
+                            <img
+                              src={illoSrc}
+                              alt=""
+                              aria-hidden="true"
+                              style={{
+                                position: "absolute",
+                                right: 36,
+                                top: 28,
+                                width: 200,
+                                height: 165,
+                                pointerEvents: "none",
+                                opacity: 0.9,
+                              }}
+                            />
+                          )}
 
-                          {/* ─── CONTENT (right-padded so it doesn't collide with illo) ─── */}
-                          <div style={{ paddingRight: 220 }}>
+                          {/* ─── CONTENT (right-padded only when illo is present) ─── */}
+                          <div style={{ paddingRight: illoSrc ? 220 : 0 }}>
                           {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
                           <div style={{
                             display: "flex",
