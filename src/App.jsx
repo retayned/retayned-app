@@ -1585,6 +1585,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
           17-hour day on every surface. */}
       <div
         ref={scrollRef}
+        className="rt-timeline-scroll"
         style={{
           position: "relative",
           height: visibleHeight,
@@ -4025,6 +4026,18 @@ export default function App({ user }) {
            overflow itself plus the inertia/snap behavior. */
         .rt-mob-nav-scroll::-webkit-scrollbar { display: none; }
         .rt-mob-nav-scroll { -ms-overflow-style: none; }
+        /* Timeline scroll container hides its scrollbar — the partial-day
+           visible window plus the NOW marker make scroll affordance clear
+           enough without a visible track. Covers all three browser engines:
+           webkit (chrome/safari/edge), firefox (scrollbar-width), legacy
+           edge (-ms-overflow-style). */
+        .rt-timeline-scroll::-webkit-scrollbar { display: none; }
+        .rt-timeline-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        /* Client profile modal scrolls internally up to 90vh. Hide the
+           scrollbar — the modal's clear edges and the sticky close button
+           provide enough affordance that the inner track adds visual noise. */
+        .r-client-modal::-webkit-scrollbar { display: none; }
+        .r-client-modal { scrollbar-width: none; -ms-overflow-style: none; }
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
