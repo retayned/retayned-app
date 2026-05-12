@@ -8733,10 +8733,10 @@ export default function App({ user }) {
                         }}
                       >
                         <div style={{
-                          background: C.surfaceWarm,
+                          background: C.primarySoft,
                           color: C.text,
                           borderRadius: 14,
-                          border: "1px solid " + C.deepCream,
+                          border: "1px solid " + C.borderLight,
                           padding: "24px 28px 22px",
                           position: "relative",
                           overflow: "hidden",
