@@ -4121,6 +4121,7 @@ export default function App({ user }) {
         .rt-obs-content { padding-right: 0 !important; }
         .rt-obs-topbar-rule { display: none !important; }
         .rt-obs-topbar-meta { display: none !important; }
+        .rt-obs-meta-row { display: block !important; }
         .rt-obs-actions {
           flex-direction: column !important;
           align-items: stretch !important;
@@ -4220,6 +4221,7 @@ export default function App({ user }) {
           .rt-obs-content { padding-right: 220px !important; }
           .rt-obs-topbar-rule { display: block !important; }
           .rt-obs-topbar-meta { display: block !important; }
+          .rt-obs-meta-row { display: none !important; }
           .rt-obs-actions {
             flex-direction: row !important;
             align-items: center !important;
@@ -8891,6 +8893,24 @@ export default function App({ user }) {
                                 }}
                               />
                             )}
+                          </div>
+
+                          {/* ─── MOBILE METADATA ROW ───
+                              On mobile, the topbar's inline metadata is hidden
+                              (it would fight the graphic for the right side).
+                              We render the same № WK DATE string here as its own
+                              footnote row, between the topbar divider and the
+                              headline. Hidden on desktop where the inline
+                              version lives in the topbar. */}
+                          <div className="rt-obs-meta-row" style={{
+                            fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                            fontSize: 10.5,
+                            letterSpacing: "0.14em",
+                            color: C.textMuted,
+                            marginBottom: 14,
+                            display: "none",
+                          }}>
+                            № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
                           </div>
 
                           {/* ─── HEADLINE ─── */}
