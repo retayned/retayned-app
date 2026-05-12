@@ -495,53 +495,67 @@ const integrations = [
 
 // ============================================================
 // OBSERVATION_ILLUSTRATIONS
-// Maps observations.observation_number → SVG asset URL.
+// Maps observations.card_name → SVG asset URL.
 // Files live in /public/observations/ (Vite serves /public at site
-// root, so app.retayned.com/observations/01_xxx.svg). Bundled with
-// each release — when a release rolls back, illustrations roll back
-// with it.
+// root, so app.retayned.com/observations/22_the_rescue.svg). Bundled
+// with each release — rollbacks roll illustrations back too.
 //
-// Lookup by observation_number ONLY (not card_name slug) so renaming
-// "Rescue" → "The Rescue" in the DB cannot break the image link. If
-// observation_number is missing or unmapped, the card renders without
-// an illustration and content flows full-width.
+// Lookup by card_name (immutable per archetype) rather than
+// observation_number — the DB's number field is a sort order that has
+// no relationship to the SVG filename's numeric prefix. The filename
+// prefix is alphabetical-by-archetype-grouping from the design folder.
+//
+// Map keys are normalized: lowercase, single-spaced, no punctuation.
+// The lookupObservationIllustration() helper normalizes the DB string
+// the same way, so casing variants like "renewal with room" vs
+// "Renewal With Room" both resolve correctly.
 // ============================================================
 const OBSERVATION_ILLUSTRATIONS = {
-  1: "/observations/01_frequency_mismatch.svg",
-  2: "/observations/02_depth_mismatch.svg",
-  3: "/observations/03_anniversary_approaching.svg",
-  4: "/observations/04_slow_decline.svg",
-  5: "/observations/05_stale_profile.svg",
-  6: "/observations/06_expectations_mismatch.svg",
-  7: "/observations/07_renewal_ghost.svg",
-  8: "/observations/08_long_goodbye.svg",
-  9: "/observations/09_anniversary_pileup.svg",
-  10: "/observations/10_renewal_with_room.svg",
-  11: "/observations/11_forgotten_addon.svg",
-  12: "/observations/12_underbilled.svg",
-  13: "/observations/13_quiet_compounder.svg",
-  14: "/observations/14_advocate_in_waiting.svg",
-  15: "/observations/15_referral_source_untapped.svg",
-  16: "/observations/16_discount_habit.svg",
-  17: "/observations/17_high_tenure_low_touch.svg",
-  18: "/observations/18_thriving_untouched.svg",
-  19: "/observations/19_quiet_loyal.svg",
-  20: "/observations/20_long_tenure_plateau.svg",
-  21: "/observations/21_the_favorite.svg",
-  22: "/observations/22_the_rescue.svg",
-  23: "/observations/23_the_autopilot.svg",
-  24: "/observations/24_self_cluster.svg",
-  25: "/observations/25_reverse_pareto.svg",
-  26: "/observations/26_client_task_disproportion.svg",
-  27: "/observations/27_concentration_cliff.svg",
-  28: "/observations/28_hours_sink.svg",
-  29: "/observations/29_rate_compression.svg",
-  30: "/observations/30_pipeline_drought.svg",
-  31: "/observations/31_the_composition.svg",
-  32: "/observations/32_cadence_mirror.svg",
-  33: "/observations/33_tenure_map.svg",
-  34: "/observations/34_drift_census.svg",
+  "frequency mismatch":         "/observations/01_frequency_mismatch.svg",
+  "depth mismatch":             "/observations/02_depth_mismatch.svg",
+  "anniversary approaching":    "/observations/03_anniversary_approaching.svg",
+  "slow decline":               "/observations/04_slow_decline.svg",
+  "stale profile":              "/observations/05_stale_profile.svg",
+  "expectations mismatch":      "/observations/06_expectations_mismatch.svg",
+  "renewal ghost":              "/observations/07_renewal_ghost.svg",
+  "long goodbye":               "/observations/08_long_goodbye.svg",
+  "anniversary pileup":         "/observations/09_anniversary_pileup.svg",
+  "renewal with room":          "/observations/10_renewal_with_room.svg",
+  "forgotten addon":            "/observations/11_forgotten_addon.svg",
+  "underbilled":                "/observations/12_underbilled.svg",
+  "quiet compounder":           "/observations/13_quiet_compounder.svg",
+  "advocate in waiting":        "/observations/14_advocate_in_waiting.svg",
+  "referral source untapped":   "/observations/15_referral_source_untapped.svg",
+  "discount habit":             "/observations/16_discount_habit.svg",
+  "high tenure low touch":      "/observations/17_high_tenure_low_touch.svg",
+  "thriving untouched":         "/observations/18_thriving_untouched.svg",
+  "quiet loyal":                "/observations/19_quiet_loyal.svg",
+  "long tenure plateau":        "/observations/20_long_tenure_plateau.svg",
+  "the favorite":               "/observations/21_the_favorite.svg",
+  "the rescue":                 "/observations/22_the_rescue.svg",
+  "the autopilot":              "/observations/23_the_autopilot.svg",
+  "self cluster":               "/observations/24_self_cluster.svg",
+  "reverse pareto":             "/observations/25_reverse_pareto.svg",
+  "client task disproportion":  "/observations/26_client_task_disproportion.svg",
+  "concentration cliff":        "/observations/27_concentration_cliff.svg",
+  "hours sink":                 "/observations/28_hours_sink.svg",
+  "rate compression":           "/observations/29_rate_compression.svg",
+  "pipeline drought":           "/observations/30_pipeline_drought.svg",
+  "the composition":            "/observations/31_the_composition.svg",
+  "cadence mirror":             "/observations/32_cadence_mirror.svg",
+  "tenure map":                 "/observations/33_tenure_map.svg",
+  "drift census":               "/observations/34_drift_census.svg",
 };
+
+// Normalize a card_name for lookup: lowercase, strip non-alphanumeric
+// to spaces, collapse whitespace. Lets "The Rescue", "the rescue",
+// "Renewal With Room" vs "Renewal with Room", "Forgotten Add-on" vs
+// "Forgotten Addon" all resolve to the same key.
+function lookupObservationIllustration(cardName) {
+  if (!cardName) return null;
+  const key = String(cardName).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return OBSERVATION_ILLUSTRATIONS[key] || null;
+}
 
 function retColor(v) {
   if (v >= 80) return "#0C3A2E";      // Elite (retElite)
@@ -7505,7 +7519,7 @@ export default function App({ user }) {
                     <button onClick={() => { setShowImport(!showImport); setShowAddClient(false); }} style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Import Clients</button>
                   )}
                   <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
-                    Add client
+                    Add Client
                   </button>
                 </div>
               </div>
@@ -7891,7 +7905,7 @@ export default function App({ user }) {
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => setProfileStep(12)} style={{ padding: "10px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
-                      <button className="r-btn" onClick={submitNewClient} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add client</button>
+                      <button className="r-btn" onClick={submitNewClient} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add Client</button>
                     </div>
                     <div style={{ fontSize: 10.5, color: C.textMuted, lineHeight: 1.45, marginTop: 10, textAlign: "center" }}>
                       By adding this client, you confirm you have the right to process their information for client management purposes.
@@ -8614,9 +8628,10 @@ export default function App({ user }) {
                     const firedDate = firedAt.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }).replace(/\//g, '.');
 
                     // Illustration asset for this observation. Lookup by
-                    // observation_number (immutable). null if missing/unmapped
-                    // → card renders without illo and content flows full-width.
-                    const illoSrc = OBSERVATION_ILLUSTRATIONS[obs.observation_number] || null;
+                    // card_name through a normalizer so casing/punctuation
+                    // variants resolve correctly. null if unmapped → card
+                    // renders without illo and content flows full-width.
+                    const illoSrc = lookupObservationIllustration(obs.card_name);
 
                     // ─── Action handlers ───
                     const handleDrop = async () => {
@@ -9534,7 +9549,7 @@ export default function App({ user }) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    Add worker
+                    Add Worker
                   </button>
                 </div>
               </div>
@@ -9819,7 +9834,7 @@ export default function App({ user }) {
               boxShadow: "0 20px 50px rgba(20,30,22,0.30)",
               zIndex: 100,
             }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 14px" }}>Add worker</h3>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 14px" }}>Add Worker</h3>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Name</label>
                 <input
@@ -9877,7 +9892,7 @@ export default function App({ user }) {
                     fontFamily: "inherit", fontSize: 13, fontWeight: 600,
                     cursor: (!newWorkerName.trim() || !newWorkerEmail.trim()) ? "default" : "pointer",
                   }}
-                >Add worker</button>
+                >Add Worker</button>
               </div>
             </div>
           </>
@@ -10021,7 +10036,7 @@ export default function App({ user }) {
                 </div>
                 <div style={{ flexShrink: 0 }}>
                   <button onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
-                    Log referral
+                    Log Referral
                   </button>
                 </div>
               </div>
@@ -10315,7 +10330,7 @@ export default function App({ user }) {
               {refForm && (
                 <div onClick={() => setRefForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 18 }}>Log referral</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 18 }}>Log Referral</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>New client name</label>
@@ -10334,7 +10349,7 @@ export default function App({ user }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={addRef} disabled={!refName.trim() || !refFrom} style={{ flex: 1, padding: "10px", background: (refName.trim() && refFrom) ? C.btn : C.surface, color: (refName.trim() && refFrom) ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: (refName.trim() && refFrom) ? "pointer" : "default", fontFamily: "inherit" }}>Log referral</button>
+                      <button onClick={addRef} disabled={!refName.trim() || !refFrom} style={{ flex: 1, padding: "10px", background: (refName.trim() && refFrom) ? C.btn : C.surface, color: (refName.trim() && refFrom) ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: (refName.trim() && refFrom) ? "pointer" : "default", fontFamily: "inherit" }}>Log Referral</button>
                       <button onClick={() => { setRefForm(false); setRefName(""); setRefFrom(""); setRefRevenue(""); }} style={{ padding: "10px 18px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   </div>
@@ -10547,7 +10562,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <button onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
-                  <span style={{ whiteSpace: "nowrap" }}>New contact</span>
+                  <span style={{ whiteSpace: "nowrap" }}>New Contact</span>
                 </button>
               </div>
 
@@ -10708,7 +10723,7 @@ export default function App({ user }) {
                         <Icon name="check" size={20} color={C.retGood} />
                       </div>
                       <div style={{ fontSize: 16, fontWeight: 600 }}>Deck cleared.</div>
-                      <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 4 }}>All contacts are filed. Tap "New contact" to add more.</div>
+                      <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 4 }}>All contacts are filed. Tap "New Contact" to add more.</div>
                     </div>
                   )}
 
