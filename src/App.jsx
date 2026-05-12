@@ -1437,9 +1437,11 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 //   events      — array of { id, title, starts_at, ends_at?, source }
 //   onCreate    — async ({ title, starts_at, ends_at }) → returns created event
 //   onDelete    — async (eventId) → deletes
-//   compact     — bool. When true, widget caps height to 6 visible hours
-//                 with internal scroll (mobile). When false, shows the
-//                 full window (desktop right-rail).
+//   compact     — bool. Currently unused. The previous behavior (cap to
+//                 6 visible hours on mobile) was removed when the timeline
+//                 unified to a fixed 17-hour range and 8-hour viewport on
+//                 every surface. Prop retained for forward compatibility
+//                 in case future surface variants need a denser treatment.
 //   showHeader  — bool. The mobile band dropdown and trigger dropdown
 //                 supply their own header; right-rail widget renders its own.
 //
@@ -1478,17 +1480,14 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
     })
     .sort((a, b) => a._start - b._start);
 
-  // Compute the dynamic hour window
-  const eventHours = todayEvents.flatMap(e => {
-    const s = e._start.getHours() + e._start.getMinutes() / 60;
-    const en = e._end ? e._end.getHours() + e._end.getMinutes() / 60 : s + 0.5;
-    return [s, en];
-  });
-  const minCandidate = Math.min(nowFractional - 1, ...(eventHours.length ? eventHours : [nowFractional]));
-  const maxCandidate = Math.max(nowFractional + 6, ...(eventHours.length ? eventHours : [nowFractional]));
-  const earliestHour = Math.max(6, Math.floor(minCandidate));
-  const latestHour = Math.min(23, Math.ceil(maxCandidate));
-  const totalHours = Math.max(1, latestHour - earliestHour);
+  // Fixed full-day window: 6am to 11pm. Same range on every surface
+  // (mobile band, desktop trigger dropdown, desktop right-rail). The
+  // timeline always renders all 17 hours; the viewport is fixed at
+  // 8 hours and the user scrolls to see the rest. Events outside this
+  // window (rare — pre-dawn or late-night) get clamped to the edges.
+  const earliestHour = 6;
+  const latestHour = 23;
+  const totalHours = latestHour - earliestHour;
 
   // Position helpers
   const yForHour = (h) => (h - earliestHour) * SLOT_HEIGHT;
@@ -1522,20 +1521,22 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
   }
 
   const timelineHeight = totalHours * SLOT_HEIGHT;
-  // Compact (mobile): cap visible to 6 hours with scroll
-  const visibleHeight = compact ? Math.min(6 * SLOT_HEIGHT, timelineHeight) : timelineHeight;
+  // Fixed 8-hour viewport on every surface. User scrolls to see the rest
+  // of the 17-hour day.
+  const visibleHeight = 8 * SLOT_HEIGHT;
 
-  // Auto-scroll the visible window to center NOW on mount/tick (mobile only)
+  // Auto-scroll the visible window to center NOW on mount / when hour
+  // range or now-tick changes. Runs on every surface — desktop and
+  // mobile alike scroll inside the same fixed 8-hour viewport.
   const scrollRef = useRef(null);
   useEffect(() => {
-    if (!compact) return;
     const el = scrollRef.current;
     if (!el) return;
     const nowY = yForDate(now);
     const targetScroll = Math.max(0, nowY - visibleHeight / 2);
     el.scrollTop = targetScroll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compact, earliestHour, latestHour]);
+  }, [earliestHour, latestHour, visibleHeight]);
 
   // Empty state — no events at all
   const isEmpty = todayEvents.length === 0;
@@ -1580,13 +1581,14 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
         </div>
       )}
 
-      {/* Timeline body */}
+      {/* Timeline body — fixed 8-hour viewport, scrollable across the full
+          17-hour day on every surface. */}
       <div
         ref={scrollRef}
         style={{
           position: "relative",
           height: visibleHeight,
-          overflowY: compact ? "auto" : "visible",
+          overflowY: "auto",
           paddingRight: 2,
         }}
       >
@@ -1655,15 +1657,9 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
             let timeColor = C.textMuted;
             let titleWeight = 500;
             if (state === "past") {
-              // Past events: no fill, no border. The timeline's hour-grid
-              // lines (rendered as borderTop on each hour-row above) already
-              // provide structural separators — adding a per-event underline
-              // double-draws horizontal lines, which stacks visibly when
-              // past events sit close together (e.g. three events in one hour).
-              // Recede entirely into the grid; muted text is the only signal
-              // that these events exist.
               containerStyle = {
                 background: "transparent",
+                borderBottom: `1px solid ${C.borderLight}`,
                 borderRadius: 0,
                 paddingLeft: 0,
               };
