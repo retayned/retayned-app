@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300">
+
+  <g transform="translate(70 70)">
+    <g transform="translate(10 100) rotate(-6)">
+      <rect x="0" y="0" width="180" height="110" rx="4" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></rect>
+      <path d="M0 0 L90 60 L180 0" fill="none" stroke="#2F2F31" stroke-width="1.6"></path>
+    </g>
+    <g transform="translate(20 60) rotate(2)">
+      <rect x="0" y="0" width="180" height="110" rx="4" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></rect>
+      <path d="M0 0 L90 60 L180 0" fill="none" stroke="#2F2F31" stroke-width="1.6"></path>
+      <circle cx="150" cy="22" r="8" fill="#558B68" stroke="#2F2F31" stroke-width="1.4"></circle>
+    </g>
+    <g transform="translate(0 20) rotate(-3)">
+      <rect x="0" y="0" width="180" height="110" rx="4" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></rect>
+      <path d="M0 0 L90 60 L180 0" fill="none" stroke="#2F2F31" stroke-width="1.6"></path>
+      <circle cx="150" cy="22" r="8" fill="#558B68" stroke="#2F2F31" stroke-width="1.4"></circle>
+    </g>
+    <g transform="translate(30 -10) rotate(8)">
+      <rect x="0" y="0" width="180" height="110" rx="4" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></rect>
+      <path d="M0 0 L90 60 L180 0" fill="none" stroke="#2F2F31" stroke-width="1.6"></path>
+      <circle cx="150" cy="22" r="8" fill="#558B68" stroke="#2F2F31" stroke-width="1.4"></circle>
+    </g>
+  </g>
+  <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.6">
+    <path d="M40 60 Q34 50 42 44"></path>
+    <path d="M310 80 Q318 74 314 64"></path>
+    <path d="M328 230 Q322 222 328 216"></path>
+  </g>
+
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300">
+
+  <g transform="translate(40 110)">
+    <ellipse cx="60" cy="80" rx="56" ry="10" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></ellipse>
+    <path d="M8 76 Q12 90 24 92" fill="none" stroke="#2F2F31" stroke-width="1.4" stroke-linecap="round" opacity="0.5"></path>
+    <path d="M100 90 Q108 88 112 76" fill="none" stroke="#2F2F31" stroke-width="1.4" stroke-linecap="round" opacity="0.5"></path>
+    <ellipse cx="60" cy="78" rx="40" ry="6" fill="#558B68" opacity="0.3"></ellipse>
+    <path d="M30 70 Q40 66 56 68" stroke="#FCFCFE" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.9"></path>
+  </g>
+  <g transform="translate(200 60)">
+    <ellipse cx="55" cy="14" rx="55" ry="10" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></ellipse>
+    <path d="M0 14 L8 170 Q8 180 18 184 L92 184 Q102 180 102 170 L110 14" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2" stroke-linejoin="round"></path>
+    <ellipse cx="55" cy="14" rx="46" ry="7" fill="#3F434B"></ellipse>
+    <path d="M22 12 Q34 8 50 9" stroke="#FCFCFE" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.7"></path>
+    <g stroke="#2F2F31" stroke-width="0.9" opacity="0.3" stroke-linecap="round" fill="none">
+      <line x1="14" y1="40" x2="22" y2="170"></line>
+      <line x1="98" y1="40" x2="92" y2="170"></line>
+    </g>
+  </g>
+  <path d="M150 90 Q160 80 170 90" fill="none" stroke="#2F2F31" stroke-width="1.4" stroke-linecap="round" opacity="0.5"></path>
+  <path d="M150 100 Q160 90 170 100" fill="none" stroke="#2F2F31" stroke-width="1.4" stroke-linecap="round" opacity="0.4"></path>
+
+</svg>

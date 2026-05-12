@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300">
+
+  <g transform="translate(140 150)">
+    <path d="M0 0 L80 0 L80 90 Q80 100 70 100 L10 100 Q0 100 0 90 Z" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2" stroke-linejoin="round"></path>
+    <ellipse cx="40" cy="0" rx="40" ry="6" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></ellipse>
+    <path d="M2 50 Q40 60 78 50" fill="none" stroke="#2F2F31" stroke-width="1.4" opacity="0.4"></path>
+    <ellipse cx="40" cy="0" rx="32" ry="4" fill="#558B68" opacity="0.25"></ellipse>
+  </g>
+  <g stroke="#558B68" stroke-width="2.2" fill="none" stroke-linecap="round">
+    <path d="M180 150 Q174 100 160 70"></path>
+    <path d="M180 150 Q186 110 196 76"></path>
+    <path d="M180 150 Q180 110 180 60"></path>
+  </g>
+  <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round">
+    <path d="M168 110 Q160 108 154 112"></path>
+    <path d="M192 100 Q200 100 204 96"></path>
+    <path d="M180 90 Q174 88 170 92"></path>
+  </g>
+  <g>
+    <circle cx="160" cy="70" r="10" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="160" cy="70" r="3" fill="#558B68"></circle>
+    <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round">
+      <line x1="150" y1="70" x2="146" y2="70"></line>
+      <line x1="170" y1="70" x2="174" y2="70"></line>
+      <line x1="160" y1="60" x2="160" y2="56"></line>
+      <line x1="160" y1="80" x2="160" y2="84"></line>
+    </g>
+  </g>
+  <g>
+    <circle cx="196" cy="76" r="9" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="196" cy="76" r="2.6" fill="#558B68"></circle>
+    <g stroke="#2F2F31" stroke-width="1.2" fill="none" stroke-linecap="round">
+      <line x1="187" y1="76" x2="184" y2="76"></line>
+      <line x1="205" y1="76" x2="208" y2="76"></line>
+      <line x1="196" y1="67" x2="196" y2="64"></line>
+      <line x1="196" y1="85" x2="196" y2="88"></line>
+    </g>
+  </g>
+  <g>
+    <circle cx="180" cy="60" r="8" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="180" cy="60" r="2" fill="#558B68"></circle>
+  </g>
+  <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.6">
+    <path d="M120 50 Q116 42 124 38"></path>
+    <path d="M240 70 L246 64"></path>
+    <path d="M60 200 Q66 194 64 188"></path>
+  </g>
+
+</svg>

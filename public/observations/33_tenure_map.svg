@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300">
+
+  <g transform="translate(70 90)">
+    <circle cx="0" cy="0" r="42" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="0" cy="0" r="32" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="22" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="12" fill="#558B68" opacity="0.7"></circle>
+    <circle cx="0" cy="0" r="12" fill="none" stroke="#2F2F31" stroke-width="1.2"></circle>
+    <circle cx="0" cy="0" r="3" fill="#2F2F31"></circle>
+  </g>
+  <g transform="translate(180 70)">
+    <circle cx="0" cy="0" r="56" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="0" cy="0" r="44" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="32" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="20" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="10" fill="#558B68" opacity="0.7"></circle>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#2F2F31" stroke-width="1.2"></circle>
+    <circle cx="0" cy="0" r="3" fill="#2F2F31"></circle>
+  </g>
+  <g transform="translate(290 130)">
+    <circle cx="0" cy="0" r="32" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="0" cy="0" r="22" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="12" fill="#558B68" opacity="0.7"></circle>
+    <circle cx="0" cy="0" r="12" fill="none" stroke="#2F2F31" stroke-width="1.2"></circle>
+    <circle cx="0" cy="0" r="3" fill="#2F2F31"></circle>
+  </g>
+  <g transform="translate(110 210)">
+    <circle cx="0" cy="0" r="36" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="0" cy="0" r="26" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="16" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="6" fill="#558B68"></circle>
+    <circle cx="0" cy="0" r="6" fill="none" stroke="#2F2F31" stroke-width="1.2"></circle>
+  </g>
+  <g transform="translate(240 220)">
+    <circle cx="0" cy="0" r="46" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></circle>
+    <circle cx="0" cy="0" r="36" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="26" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="16" fill="none" stroke="#2F2F31" stroke-width="1.2" opacity="0.6"></circle>
+    <circle cx="0" cy="0" r="8" fill="#558B68" opacity="0.7"></circle>
+    <circle cx="0" cy="0" r="8" fill="none" stroke="#2F2F31" stroke-width="1.2"></circle>
+    <circle cx="0" cy="0" r="2.4" fill="#2F2F31"></circle>
+  </g>
+  <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.55">
+    <path d="M30 30 Q26 20 34 18"></path>
+    <path d="M340 50 L334 56"></path>
+    <path d="M30 270 Q36 266 36 260"></path>
+  </g>
+
+</svg>

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300">
+
+  <g transform="translate(40 80)">
+    <line x1="0" y1="170" x2="280" y2="170" stroke="#2F2F31" stroke-width="2"></line>
+    <g transform="translate(0 130)">
+      <rect x="0" y="0" width="40" height="40" rx="3" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></rect>
+    </g>
+    <g transform="translate(50 50)">
+      <rect x="0" y="0" width="40" height="40" rx="3" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></rect>
+      <rect x="0" y="40" width="40" height="40" rx="3" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></rect>
+      <rect x="0" y="80" width="40" height="40" rx="3" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></rect>
+    </g>
+    <g transform="translate(100 -10)">
+      <rect x="0" y="0" width="40" height="40" rx="3" fill="#558B68" stroke="#2F2F31" stroke-width="2"></rect>
+      <rect x="0" y="40" width="40" height="40" rx="3" fill="#558B68" stroke="#2F2F31" stroke-width="2"></rect>
+      <rect x="0" y="80" width="40" height="40" rx="3" fill="#558B68" stroke="#2F2F31" stroke-width="2"></rect>
+      <rect x="0" y="120" width="40" height="40" rx="3" fill="#558B68" stroke="#2F2F31" stroke-width="2"></rect>
+    </g>
+    <g transform="translate(150 110)">
+      <rect x="0" y="0" width="40" height="60" rx="3" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></rect>
+    </g>
+    <g transform="translate(200 150)">
+      <rect x="0" y="0" width="40" height="20" rx="3" fill="#FCFCFE" stroke="#2F2F31" stroke-width="2"></rect>
+    </g>
+    <g transform="translate(250 130)">
+      <rect x="0" y="0" width="30" height="40" rx="3" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2"></rect>
+    </g>
+  </g>
+  <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.55">
+    <path d="M170 50 Q174 40 184 42"></path>
+    <path d="M186 30 L192 26"></path>
+    <path d="M50 250 Q56 246 56 240"></path>
+  </g>
+
+</svg>

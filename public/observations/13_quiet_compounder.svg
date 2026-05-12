@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 300">
+
+  <g transform="translate(140 130)">
+    <path d="M0 0 L80 0 L72 90 Q70 100 60 100 L20 100 Q10 100 8 90 Z" fill="#FAF0E4" stroke="#2F2F31" stroke-width="2" stroke-linejoin="round"></path>
+    <line x1="0" y1="0" x2="80" y2="0" stroke="#2F2F31" stroke-width="2"></line>
+    <ellipse cx="40" cy="-2" rx="38" ry="6" fill="#3F434B" opacity="0.6"></ellipse>
+    <path d="M40 -2 Q40 -40 60 -60 Q70 -68 76 -58" fill="none" stroke="#558B68" stroke-width="2.4" stroke-linecap="round"></path>
+    <path d="M40 -2 Q40 -30 24 -50 Q14 -58 8 -50" fill="none" stroke="#558B68" stroke-width="2.4" stroke-linecap="round"></path>
+    <path d="M40 -2 L40 -90" stroke="#558B68" stroke-width="2.4" stroke-linecap="round"></path>
+    <path d="M50 -40 Q70 -42 76 -58 Q60 -56 50 -40 Z" fill="#558B68" stroke="#2F2F31" stroke-width="1.6" stroke-linejoin="round"></path>
+    <path d="M30 -40 Q10 -44 8 -50 Q24 -52 30 -40 Z" fill="#558B68" stroke="#2F2F31" stroke-width="1.6" stroke-linejoin="round"></path>
+    <path d="M40 -70 Q56 -72 60 -86 Q44 -84 40 -70 Z" fill="#558B68" stroke="#2F2F31" stroke-width="1.6" stroke-linejoin="round"></path>
+    <path d="M40 -70 Q24 -72 20 -86 Q36 -84 40 -70 Z" fill="#558B68" stroke="#2F2F31" stroke-width="1.6" stroke-linejoin="round"></path>
+    <path d="M40 -100 Q44 -110 50 -110" fill="none" stroke="#558B68" stroke-width="2" stroke-linecap="round"></path>
+    <circle cx="50" cy="-110" r="5" fill="#FAF0E4" stroke="#2F2F31" stroke-width="1.4"></circle>
+  </g>
+  <g stroke="#2F2F31" stroke-width="1.4" fill="none" stroke-linecap="round" opacity="0.6">
+    <path d="M70 80 Q66 72 74 68"></path>
+    <path d="M280 90 L286 84"></path>
+    <path d="M286 100 L294 98"></path>
+  </g>
+
+</svg>
