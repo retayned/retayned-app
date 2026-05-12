@@ -4102,18 +4102,44 @@ export default function App({ user }) {
            provide enough affordance that the inner track adds visual noise. */
         .r-client-modal::-webkit-scrollbar { display: none; }
         .r-client-modal { scrollbar-width: none; -ms-overflow-style: none; }
-        /* Observer illustration · responsive sizing.
-           Base = mobile: smaller graphic (80x66) anchored top-right with a
-           bit of breathing room (top: 10px). Important needed to beat the
-           inline style declarations on the <img>, which carry desktop values.
-           Desktop reverts to inline values via min-width: 768px below. */
+        /* ============================================================
+           Observer card · mobile layout
+           ============================================================
+           Mobile is severely width-constrained. Layout rewrite:
+             - Graphic: lives inline inside the topbar (right side), 100×84.
+               Sits next to the archetype name as a paired pictogram.
+             - Topbar rule + № WK DATE metadata: hidden on mobile —
+               the right side is now taken by the graphic.
+             - Content padding-right: 0 — content flows full-width below.
+             - Actions row: stacks vertically — stats on one row, then
+               buttons full-width below (Unpack primary, Dismiss link).
+           Important needed throughout to beat inline styles on the JSX. */
         .rt-obs-illo {
-          right: 18px !important;
-          top: 10px !important;
-          width: 80px !important;
-          height: 66px !important;
+          width: 100px !important;
+          height: 84px !important;
         }
-        .rt-obs-content { padding-right: 90px !important; }
+        .rt-obs-content { padding-right: 0 !important; }
+        .rt-obs-topbar-rule { display: none !important; }
+        .rt-obs-topbar-meta { display: none !important; }
+        .rt-obs-actions {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: 14px !important;
+        }
+        .rt-obs-metrics { gap: 22px !important; }
+        .rt-obs-spacer { display: none !important; }
+        .rt-obs-unpack {
+          width: 100% !important;
+          padding: 12px 16px !important;
+          font-size: 14px !important;
+          order: 1;
+        }
+        .rt-obs-dismiss {
+          width: 100% !important;
+          padding: 4px 0 0 !important;
+          font-size: 12.5px !important;
+          order: 2;
+        }
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
@@ -4178,15 +4204,39 @@ export default function App({ user }) {
           .r-rai-inner { padding-top: 32px !important; }
           .r-rai-inputbar { padding: 12px 24px 28px !important; }
           .r-chat-msg-user { scroll-margin-top: 24px !important; }
-          /* Observer illustration — revert to desktop values, overriding the
-             mobile-base rule above. Matches the inline style on the <img>. */
+          /* Observer card · desktop overrides.
+             The graphic lives inside the topbar in the JSX, but on
+             desktop we promote it to position:absolute and pin it to
+             the card's top-right corner — same visual as before this
+             refactor. Topbar metadata + rule re-appear. Actions row
+             reverts to native horizontal flex layout. */
           .rt-obs-illo {
+            position: absolute !important;
             right: 36px !important;
             top: 28px !important;
             width: 200px !important;
             height: 165px !important;
           }
           .rt-obs-content { padding-right: 220px !important; }
+          .rt-obs-topbar-rule { display: block !important; }
+          .rt-obs-topbar-meta { display: block !important; }
+          .rt-obs-actions {
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 24px !important;
+          }
+          .rt-obs-metrics { gap: 28px !important; }
+          .rt-obs-spacer { display: block !important; }
+          .rt-obs-unpack {
+            width: auto !important;
+            padding: 8px 14px !important;
+            font-size: 13px !important;
+          }
+          .rt-obs-dismiss {
+            width: auto !important;
+            padding: 10px 8px !important;
+            font-size: 13px !important;
+          }
         }
         @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
         @keyframes confetti-fall {
@@ -8778,42 +8828,17 @@ export default function App({ user }) {
                           overflow: "hidden",
                           boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
                         }}>
-                          {/* ─── ILLUSTRATION — top-right inside card ─── */}
-                          {/* Renders the SVG mapped to obs.observation_number.    */}
-                          {/* Files are bundled in /public/observations/.            */}
-                          {/* If unmapped, no <img> renders and content flows full. */}
-                          {/*                                                        */}
-                          {/* Sizing: 200×165 on desktop, 80×66 on mobile via the    */}
-                          {/* .rt-obs-illo class targeted in the global <style>      */}
-                          {/* block (see "Observer illustration responsive" rule).   */}
-                          {/* objectFit:contain locks SVG aspect ratio so the image  */}
-                          {/* never squashes if a future SVG has a different viewBox.*/}
-                          {illoSrc && (
-                            <img
-                              src={illoSrc}
-                              alt=""
-                              aria-hidden="true"
-                              className="rt-obs-illo"
-                              style={{
-                                position: "absolute",
-                                right: 36,
-                                top: 28,
-                                width: 200,
-                                height: 165,
-                                pointerEvents: "none",
-                                opacity: 0.9,
-                                objectFit: "contain",
-                              }}
-                            />
-                          )}
-
                           {/* ─── CONTENT (right-padded only when illo is present) ─── */}
                           {/* paddingRight scales with breakpoint via the .rt-obs-content */}
                           {/* class (see global style block). Desktop reserves 220px for  */}
-                          {/* the 200px illo + gap. Mobile reserves 90px for the 80px illo.*/}
+                          {/* the 200px illo + gap. Mobile content is full-width.         */}
                           <div className={illoSrc ? "rt-obs-content" : undefined} style={{ paddingRight: illoSrc ? 220 : 0 }}>
-                          {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
-                          <div style={{
+                          {/* ─── TOP BAR: dot + name on left, № WK DATE on right.
+                              On MOBILE the graphic also lives in this topbar (right side).
+                              On DESKTOP the same <img> is absolute-positioned out of flow
+                              to the card's top-right corner. One element, two placements,
+                              handled entirely in CSS. ─── */}
+                          <div className="rt-obs-topbar" style={{
                             display: "flex",
                             alignItems: "center",
                             gap: 12,
@@ -8835,8 +8860,8 @@ export default function App({ user }) {
                             }}>
                               {archetype}
                             </div>
-                            <div style={{ flex: 1, height: 1, background: C.borderLight }} />
-                            <div style={{
+                            <div className="rt-obs-topbar-rule" style={{ flex: 1, height: 1, background: C.borderLight }} />
+                            <div className="rt-obs-topbar-meta" style={{
                               fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
                               fontSize: 11,
                               letterSpacing: "0.14em",
@@ -8845,6 +8870,27 @@ export default function App({ user }) {
                             }}>
                               № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
                             </div>
+                            {/* Illustration. Lives inside the topbar so it can sit
+                                inline on mobile (right of archetype name). On desktop,
+                                the .rt-obs-illo class promotes it to position:absolute
+                                and pins it to the card's top-right corner — see global
+                                <style> block. */}
+                            {illoSrc && (
+                              <img
+                                src={illoSrc}
+                                alt=""
+                                aria-hidden="true"
+                                className="rt-obs-illo"
+                                style={{
+                                  width: 100,
+                                  height: 84,
+                                  flexShrink: 0,
+                                  pointerEvents: "none",
+                                  opacity: 0.9,
+                                  objectFit: "contain",
+                                }}
+                              />
+                            )}
                           </div>
 
                           {/* ─── HEADLINE ─── */}
@@ -8874,7 +8920,7 @@ export default function App({ user }) {
                           </div>
 
                           {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
-                          <div style={{
+                          <div className="rt-obs-actions" style={{
                             paddingTop: 16,
                             borderTop: "1px solid " + C.borderLight,
                             display: "flex",
@@ -8882,7 +8928,7 @@ export default function App({ user }) {
                             gap: 24,
                           }}>
                             {/* METRIC STRIP */}
-                            <div style={{ display: "flex", gap: 28 }}>
+                            <div className="rt-obs-metrics" style={{ display: "flex", gap: 28 }}>
                               {metricEntries.map(([key, val]) => (
                                 <div key={key}>
                                   <div style={{
@@ -8910,12 +8956,13 @@ export default function App({ user }) {
                             </div>
 
                             {/* SPACER */}
-                            <div style={{ flex: 1 }} />
+                            <div className="rt-obs-spacer" style={{ flex: 1 }} />
 
                             {/* BUTTONS */}
                             <button
                               type="button"
                               onClick={handleUnpack}
+                              className="rt-obs-unpack"
                               style={{
                                 background: C.btn,
                                 color: "#FFFFFF",
@@ -8935,6 +8982,7 @@ export default function App({ user }) {
                             <button
                               type="button"
                               onClick={handleDrop}
+                              className="rt-obs-dismiss"
                               style={{
                                 background: "transparent",
                                 color: C.textMuted,
