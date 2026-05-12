@@ -4119,18 +4119,42 @@ export default function App({ user }) {
           height: 84px !important;
           /* The 34 observation SVGs all have ~29% internal padding inside
              their 360x300 viewBox (artwork centered, fills middle ~60%).
-             Combined with the card's right padding, this creates a large
-             visible gap to the right of the artwork. Pulling the <img>
-             right with a negative margin lets the empty SVG padding sit
-             outside the card while the visible artwork aligns flush with
-             where content lives. Only on mobile — desktop's absolute
-             positioning handles this differently. */
-          margin-right: -18px !important;
+             Using transform:translateX shifts the rendered SVG visually
+             right inside its box; the parent card has overflow:hidden,
+             which clips the now-overflowing empty right padding — net
+             effect is the visible artwork sits flush with the card's
+             right content edge. Works where margin-right does not
+             because margin doesn't bypass overflow:hidden the same way
+             a transform does (margin shifts position WITHIN the layout,
+             transform shifts the rendered pixels — overflow:hidden clips
+             the latter at the parent boundary). */
+          transform: translateX(18px) !important;
         }
         .rt-obs-content { padding-right: 0 !important; }
         .rt-obs-topbar-rule { display: none !important; }
         .rt-obs-topbar-meta { display: none !important; }
         .rt-obs-meta-row { display: block !important; }
+        /* Due picker dropdown · mobile bottom sheet.
+           Desktop anchors right:0 relative to the Due button — works
+           because viewport is wide. On mobile the picker is 240px+
+           and the Due button sits in the middle-right of the composer
+           chip row; absolute-anchoring from a small button can't
+           reliably contain a 240px dropdown within a 393px viewport
+           regardless of which anchor we pick.
+           Mobile fix: detach from the button entirely, pin to the
+           viewport as a bottom sheet. Slides up from the bottom edge
+           with margins. Centered horizontally. Standard mobile pattern
+           for date/option pickers — gives the picker real screen room. */
+        .rt-due-picker {
+          position: fixed !important;
+          top: auto !important;
+          bottom: 80px !important;
+          left: 16px !important;
+          right: 16px !important;
+          min-width: 0 !important;
+          width: auto !important;
+          max-width: none !important;
+        }
         .rt-obs-actions {
           flex-direction: column !important;
           align-items: stretch !important;
@@ -4227,11 +4251,26 @@ export default function App({ user }) {
             width: 200px !important;
             height: 165px !important;
             margin-right: 0 !important;
+            transform: none !important;
           }
           .rt-obs-content { padding-right: 220px !important; }
           .rt-obs-topbar-rule { display: block !important; }
           .rt-obs-topbar-meta { display: block !important; }
           .rt-obs-meta-row { display: none !important; }
+          /* Due picker · desktop reset.
+             Base/mobile pins it to viewport as bottom sheet. Desktop
+             reverts to the original "drop below button, right-aligned"
+             absolute positioning. */
+          .rt-due-picker {
+            position: absolute !important;
+            top: calc(100% + 6px) !important;
+            bottom: auto !important;
+            right: 0 !important;
+            left: auto !important;
+            min-width: 240px !important;
+            width: auto !important;
+            max-width: none !important;
+          }
           .rt-obs-actions {
             flex-direction: row !important;
             align-items: center !important;
@@ -5476,12 +5515,17 @@ export default function App({ user }) {
                   </h1>
 
                   {/* Rai's Pick of the Day — editorial sentence directly under
-                      the greeting. Hidden when: rankMode is manual, no pick row
+                      the greeting. Shows regardless of rankMode: the Pick is
+                      an OBSERVATION ("here's the client to focus on today"),
+                      not a SORT directive. The Manual toggle only disables
+                      Rai's influence on task ORDER — it should not silence
+                      her editorial read of the day. Hidden when: no pick row
                       exists, picked client isn't in roster, or user dismissed
-                      it today. The pick boost stays active even after dismiss
-                      (boost rides on tasks, not on the card). */}
+                      it today. The pick_boost is already gated to Rai-mode
+                      inside the sort comparator (see manualCompare vs.
+                      raiCompare), so this card showing in Manual mode does
+                      not silently re-apply ranking. */}
                   {(() => {
-                    if (rankMode !== "rai") return null;
                     if (!raiPicks || !raiPicks.client_id) return null;
                     if (raiState?.todays_pick_dismissed_at) return null;
                     const pickClient = clients.find(c => c.id === raiPicks.client_id);
@@ -5808,8 +5852,16 @@ export default function App({ user }) {
                                   onMouseEnter={e => { if (newTaskWorkerId) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
                                   onMouseLeave={e => { if (newTaskWorkerId) e.currentTarget.style.background = "transparent"; }}
                                 >
-                                  <div style={{ width: 22, height: 22, borderRadius: 11, background: C.borderLight, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                                    <Icon name="clients" size={12} color={C.textMuted} />
+                                  <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                                    {(() => {
+                                      // Match the sidebar profile pill at line ~5002:
+                                      // full_name → initials (max 2), else first char of email, else "U".
+                                      // Self-assignment shows the user's own initial(s), not the
+                                      // generic "clients" icon — same visual language as worker rows.
+                                      const n = user?.user_metadata?.full_name;
+                                      if (n) return n.split(" ").map(x => x[0]).join("").slice(0, 2).toUpperCase();
+                                      return (user?.email || "U")[0].toUpperCase();
+                                    })()}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 13, fontWeight: !newTaskWorkerId ? 600 : 500, color: !newTaskWorkerId ? C.btn : C.text }}>Just me</div>
@@ -5901,7 +5953,7 @@ export default function App({ user }) {
                           onClick={() => setDuePickerOpen(false)}
                           style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
                         />
-                        <div style={{
+                        <div className="rt-due-picker" style={{
                           position: "absolute",
                           top: "calc(100% + 6px)",
                           right: 0,
