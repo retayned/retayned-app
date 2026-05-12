@@ -4102,6 +4102,18 @@ export default function App({ user }) {
            provide enough affordance that the inner track adds visual noise. */
         .r-client-modal::-webkit-scrollbar { display: none; }
         .r-client-modal { scrollbar-width: none; -ms-overflow-style: none; }
+        /* Observer illustration · responsive sizing.
+           Base = mobile: smaller graphic (80x66) anchored top-right with a
+           bit of breathing room (top: 10px). Important needed to beat the
+           inline style declarations on the <img>, which carry desktop values.
+           Desktop reverts to inline values via min-width: 768px below. */
+        .rt-obs-illo {
+          right: 18px !important;
+          top: 10px !important;
+          width: 80px !important;
+          height: 66px !important;
+        }
+        .rt-obs-content { padding-right: 90px !important; }
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
@@ -4166,6 +4178,15 @@ export default function App({ user }) {
           .r-rai-inner { padding-top: 32px !important; }
           .r-rai-inputbar { padding: 12px 24px 28px !important; }
           .r-chat-msg-user { scroll-margin-top: 24px !important; }
+          /* Observer illustration — revert to desktop values, overriding the
+             mobile-base rule above. Matches the inline style on the <img>. */
+          .rt-obs-illo {
+            right: 36px !important;
+            top: 28px !important;
+            width: 200px !important;
+            height: 165px !important;
+          }
+          .rt-obs-content { padding-right: 220px !important; }
         }
         @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
         @keyframes confetti-fall {
@@ -8761,11 +8782,18 @@ export default function App({ user }) {
                           {/* Renders the SVG mapped to obs.observation_number.    */}
                           {/* Files are bundled in /public/observations/.            */}
                           {/* If unmapped, no <img> renders and content flows full. */}
+                          {/*                                                        */}
+                          {/* Sizing: 200×165 on desktop, 80×66 on mobile via the    */}
+                          {/* .rt-obs-illo class targeted in the global <style>      */}
+                          {/* block (see "Observer illustration responsive" rule).   */}
+                          {/* objectFit:contain locks SVG aspect ratio so the image  */}
+                          {/* never squashes if a future SVG has a different viewBox.*/}
                           {illoSrc && (
                             <img
                               src={illoSrc}
                               alt=""
                               aria-hidden="true"
+                              className="rt-obs-illo"
                               style={{
                                 position: "absolute",
                                 right: 36,
@@ -8774,12 +8802,16 @@ export default function App({ user }) {
                                 height: 165,
                                 pointerEvents: "none",
                                 opacity: 0.9,
+                                objectFit: "contain",
                               }}
                             />
                           )}
 
                           {/* ─── CONTENT (right-padded only when illo is present) ─── */}
-                          <div style={{ paddingRight: illoSrc ? 220 : 0 }}>
+                          {/* paddingRight scales with breakpoint via the .rt-obs-content */}
+                          {/* class (see global style block). Desktop reserves 220px for  */}
+                          {/* the 200px illo + gap. Mobile reserves 90px for the 80px illo.*/}
+                          <div className={illoSrc ? "rt-obs-content" : undefined} style={{ paddingRight: illoSrc ? 220 : 0 }}>
                           {/* ─── TOP BAR: dot + name on left, № WK DATE on right ─── */}
                           <div style={{
                             display: "flex",
