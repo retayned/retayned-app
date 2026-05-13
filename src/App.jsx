@@ -2665,6 +2665,8 @@ export default function App({ user }) {
   const [newRolodexEntry, setNewRolodexEntry] = useState({ client: "", contact: "", work: "", type: "former" });
   const [rolodexConfirm, setRolodexConfirm] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(false);
+  const [pauseConfirm, setPauseConfirm] = useState(false);
+  const [resumeConfirm, setResumeConfirm] = useState(false);
   const [selectedRolodex, setSelectedRolodex] = useState(null);
   const [rolodexRemoveConfirm, setRolodexRemoveConfirm] = useState(false);
   const [rolodexEditing, setRolodexEditing] = useState(false);
@@ -8458,11 +8460,16 @@ export default function App({ user }) {
                       const months = c.months || 0;
                       const tenureDisplay = months < 12 ? `${months}mo` : `${(months / 12).toFixed(1)}yr`;
                       return (
-                        <div key={c.id} onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); }} style={{ padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
+                        <div key={c.id} onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             <ScoreRing2 client={c} size={32} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
+                                {c.is_paused && (
+                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, color: C.textMuted, background: C.surfaceWarm, letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 }}>Paused</span>
+                                )}
+                              </div>
                               <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {(c.tag || "Client")} · ${((c.revenue || 0) / 1000).toFixed(1)}k/mo · {tenureDisplay}
                               </div>
@@ -8506,12 +8513,17 @@ export default function App({ user }) {
                           const renewUrgent = renewDays <= 14;
                           const delta = stubDelta(c.name);
                           return (
-                            <div key={c.id} className="row-hover" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
+                            <div key={c.id} className="row-hover" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
                               <div style={{ width: 32, display: "flex", alignItems: "center" }}>
                                 <ScoreRing2 client={c} size={28} />
                               </div>
                               <div style={{ flex: 1.4, minWidth: 0 }}>
-                                <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                                  {c.is_paused && (
+                                    <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, color: C.textMuted, background: C.surfaceWarm, letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 }}>Paused</span>
+                                  )}
+                                </div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{c.tag || "Client"} · last {c.lastContact || "—"}</div>
                               </div>
                               <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 3 }}>
@@ -11977,6 +11989,29 @@ export default function App({ user }) {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <h2 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, color: C.text, margin: 0, lineHeight: 1.15 }}>{sc.name}</h2>
+                    {(() => {
+                      // Pause status line: "Currently paused since May 4 · 2 previous pauses"
+                      // Renders only when relevant — if a client has never been paused,
+                      // skip the line entirely to keep the header clean.
+                      const pauses = engagementPausesByClient[sc.id] || [];
+                      if (pauses.length === 0) return null;
+                      const openPause = pauses.find(p => !p.resumed_at);
+                      const previousCount = pauses.filter(p => p.resumed_at).length;
+                      const fmtDate = (d) => {
+                        try {
+                          return new Date(d + (d.length === 10 ? "T00:00:00" : "")).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                        } catch { return d; }
+                      };
+                      const parts = [];
+                      if (openPause) parts.push("Currently paused since " + fmtDate(openPause.paused_at));
+                      if (previousCount > 0) parts.push(previousCount + " previous pause" + (previousCount === 1 ? "" : "s"));
+                      if (parts.length === 0) return null;
+                      return (
+                        <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4, fontWeight: 500 }}>
+                          {parts.join(" · ")}
+                        </div>
+                      );
+                    })()}
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
                       {sc.ret ? (
                         <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, color: _driftMeta.fg, background: _driftMeta.bg, fontVariantNumeric: "tabular-nums" }}>
@@ -12150,6 +12185,27 @@ export default function App({ user }) {
                               Your best estimate of monthly revenue. Changing this will not affect prior months.
                             </div>
                           </div>
+                          {/* Revenue change reason — only revealed when the rate actually
+                              differs from the current saved value. Optional. Lets Rai see
+                              the narrative behind movement (expansion, contraction, etc)
+                              rather than just the numbers. */}
+                          {Number(overviewEditData.revenue || 0) !== Number(sc.revenue || 0) && (
+                            <div style={{ background: C.surfaceWarm, borderRadius: 8, padding: "12px", border: "1px solid " + C.borderLight }}>
+                              <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Why is the rate changing? (optional)</label>
+                              <select value={overviewEditData.change_reason || ""} onChange={e => setOverviewEditData({ ...overviewEditData, change_reason: e.target.value })} style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, marginBottom: 6 }}>
+                                <option value="">Skip — no reason given</option>
+                                <option value="expansion">Expansion (scope grew)</option>
+                                <option value="contraction">Contraction (scope shrank)</option>
+                                <option value="annual_increase">Annual rate increase</option>
+                                <option value="discount_expired">Discount expired</option>
+                                <option value="discount_applied">Discount applied</option>
+                                <option value="renegotiation">Renegotiation</option>
+                                <option value="correction">Correction (typo / wrong rate)</option>
+                                <option value="other">Other</option>
+                              </select>
+                              <input type="text" value={overviewEditData.change_note || ""} onChange={e => setOverviewEditData({ ...overviewEditData, change_note: e.target.value })} placeholder="Note (optional)" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, boxSizing: "border-box" }} />
+                            </div>
+                          )}
                           {!showBaselineEdit ? (
                             <button
                               type="button"
@@ -12228,7 +12284,7 @@ export default function App({ user }) {
                             try {
                               await clientsDb.update(sc.id, baseUpdates);
                               if (rateChanged) {
-                                await revenueHistoryDb.changeRate(user.id, sc.id, newRate);
+                                await revenueHistoryDb.changeRate(user.id, sc.id, newRate, overviewEditData.change_reason || null, overviewEditData.change_note || null);
                               }
                             } catch (e) {
                               console.error("Failed to save client edits:", e);
@@ -12237,13 +12293,72 @@ export default function App({ user }) {
                         </div>
                       </>
                     )}
-                {/* Destructive actions — text-link strip (rare events, light visual weight) */}
+                {/* Destructive actions — text-link strip (rare events, light visual weight).
+                    Order is by severity: Pause (reversible, muted) · Move to Rolodex
+                    (state change, muted) · Terminate (permanent, red). */}
                 <div style={{ marginTop: 18 }}>
-                  {!rolodexConfirm && !removeConfirm ? (
+                  {!rolodexConfirm && !removeConfirm && !pauseConfirm && !resumeConfirm ? (
                     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, fontSize: 12 }}>
-                      <button onClick={() => { setRolodexConfirm(true); setRemoveConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Move to Rolodex</button>
+                      {sc.is_paused ? (
+                        <button onClick={() => { setResumeConfirm(true); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Resume engagement</button>
+                      ) : (
+                        <button onClick={() => { setPauseConfirm(true); setRolodexConfirm(false); setRemoveConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Pause</button>
+                      )}
                       <span style={{ color: C.border }}>·</span>
-                      <button onClick={() => { setRemoveConfirm(true); setRolodexConfirm(false); }} style={{ background: "none", border: "none", color: C.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Remove</button>
+                      <button onClick={() => { setRolodexConfirm(true); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Move to Rolodex</button>
+                      <span style={{ color: C.border }}>·</span>
+                      <button onClick={() => { setRemoveConfirm(true); setRolodexConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Terminate</button>
+                    </div>
+                  ) : pauseConfirm ? (
+                    <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px", border: "1px solid " + C.border }}>
+                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be paused. Their tasks stay visible but Rai stops surfacing them, and their retention score will drop -4. Tenure clock freezes until you resume.</p>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={async () => {
+                          // Optimistic: flip is_paused, drop ret -4
+                          const newRet = Math.max(1, (sc.ret || 50) - 4);
+                          setClients(clients.map(c => c.id === sc.id ? { ...c, is_paused: true, ret: newRet, retention_score: newRet } : c));
+                          setSelectedClient({ ...sc, is_paused: true, ret: newRet, retention_score: newRet });
+                          setPauseConfirm(false);
+                          // Persist: open pause row + bump retention_score down -4
+                          try {
+                            await clientEngagementPausesDb.start(user.id, sc.id);
+                            await clientsDb.update(sc.id, { retention_score: newRet });
+                            // Refresh pauses map so subsequent reads see the new pause
+                            setEngagementPausesByClient(prev => ({
+                              ...prev,
+                              [sc.id]: [...(prev[sc.id] || []), { paused_at: new Date().toISOString().slice(0,10), resumed_at: null }],
+                            }));
+                          } catch (e) {
+                            console.error("Failed to pause:", e);
+                          }
+                        }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Pause engagement</button>
+                        <button onClick={() => setPauseConfirm(false)} style={{ padding: "10px 14px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : resumeConfirm ? (
+                    <div style={{ background: C.primarySoft, borderRadius: 12, padding: "16px", border: "1px solid " + C.primary + "33" }}>
+                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>Resume the engagement with this client. Their tasks will start surfacing again and tenure resumes growing. The -4 retention dent from pausing stays — it doesn't auto-restore.</p>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={async () => {
+                          // Optimistic
+                          setClients(clients.map(c => c.id === sc.id ? { ...c, is_paused: false } : c));
+                          setSelectedClient({ ...sc, is_paused: false });
+                          setResumeConfirm(false);
+                          try {
+                            await clientEngagementPausesDb.end(user.id, sc.id);
+                            // Update pauses map: set resumed_at on the open one
+                            setEngagementPausesByClient(prev => {
+                              const list = prev[sc.id] || [];
+                              const today = new Date().toISOString().slice(0,10);
+                              const updated = list.map(p => p.resumed_at ? p : { ...p, resumed_at: today });
+                              return { ...prev, [sc.id]: updated };
+                            });
+                          } catch (e) {
+                            console.error("Failed to resume:", e);
+                          }
+                        }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Resume engagement</button>
+                        <button onClick={() => setResumeConfirm(false)} style={{ padding: "10px 14px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      </div>
                     </div>
                   ) : rolodexConfirm ? (
                     <div style={{ background: C.primarySoft, borderRadius: 12, padding: "16px", border: "1px solid " + C.primary + "33" }}>
@@ -12259,7 +12374,7 @@ export default function App({ user }) {
                       <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This will permanently delete this client from your account — all tasks, touchpoints, health checks, and Rai's memory of them will be erased. This cannot be undone.</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => { setClients(clients.filter(c => c.id !== sc.id));
-                          clientsDb.hardDelete(sc.id); setSelectedClient(null); setRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove Permanently</button>
+                          clientsDb.hardDelete(sc.id); setSelectedClient(null); setRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Terminate Permanently</button>
                         <button className="r-btn" onClick={() => setRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                       </div>
                     </div>
