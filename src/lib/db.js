@@ -389,7 +389,7 @@ export const tasks = {
       .eq('user_id', userId)
       .gte('completed_at', oneYearAgo.toISOString());
     if (error) return {
-      data: { week: 0, month: 0, year: 0, weekHistory: Array(12).fill(0), monthHistory: Array(12).fill(0), dayStreak: 0 },
+      data: { today: 0, week: 0, month: 0, year: 0, weekHistory: Array(12).fill(0), monthHistory: Array(12).fill(0), dayStreak: 0 },
       error,
     };
 
@@ -400,7 +400,8 @@ export const tasks = {
     const thirtyDaysAgo = new Date(nowMs - 30 * DAY_MS);
 
     // Roll-up counts for the active toggle
-    let week = 0, month = 0, year = 0;
+    let today = 0, week = 0, month = 0, year = 0;
+    const todayKey = now.toISOString().slice(0, 10);
 
     // 12 rolling weekly buckets — index 0 = oldest (84 days ago → 77 days ago),
     // index 11 = current (7 days ago → now). Each bucket spans 7 days.
@@ -422,6 +423,7 @@ export const tasks = {
       year++;
       if (t >= thirtyDaysAgo) month++;
       if (t >= sevenDaysAgo)  week++;
+      if (t.toISOString().slice(0, 10) === todayKey) today++;
 
       // Weekly bucket: how many full 7-day windows ago?
       const daysAgo = (nowMs - tMs) / DAY_MS;
@@ -440,7 +442,6 @@ export const tasks = {
     // If today has no completions yet, start from yesterday (so the streak doesn't
     // break just because the user hasn't worked yet today).
     let dayStreak = 0;
-    const todayKey = now.toISOString().slice(0, 10);
     let cursor = new Date(now);
     if (!daysWithCompletions.has(todayKey)) {
       cursor = new Date(nowMs - DAY_MS);
@@ -455,7 +456,7 @@ export const tasks = {
       }
     }
 
-    return { data: { week, month, year, weekHistory, monthHistory, dayStreak }, error: null };
+    return { data: { today, week, month, year, weekHistory, monthHistory, dayStreak }, error: null };
   },
 
   // Assign a task to a worker (or unassign by passing null).
