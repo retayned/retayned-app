@@ -15,7 +15,7 @@ import {
   forceX as d3forceX,
   forceY as d3forceY,
 } from "d3-force";
- 
+
 // ============================================================
 // PALETTE
 // ============================================================
@@ -1841,12 +1841,29 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 //
 // Note: this component reads `C` from a closure-free import-only style —
 // since `C` is declared inside the App function, we pass it via props.
-function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null }) {
+function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null }) {
   const [composerText, setComposerText] = useState("");
   const [composerError, setComposerError] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const inputRef = useRef(null);
+
+  // ─── Drag-to-move / resize state ───────────────────────────────────────
+  // Google-Calendar-style direct manipulation. While the user drags an
+  // event body, the event shifts as a whole (start + end both move). While
+  // they drag the bottom resize handle, only end moves. On release, we
+  // commit via onUpdate; until then everything is optimistic / visual.
+  //
+  // Google-sourced events are read-only here — their source of truth is
+  // Google itself, so dragging would just lie. We block initiation when
+  // source !== "manual".
+  //
+  // Snap interval: 15 minutes (matches Google).
+  const [dragState, setDragState] = useState(null);
+  // dragState shape when active:
+  //   { eventId, mode: "move"|"resize",
+  //     pointerStartY, originalStartMs, originalEndMs,
+  //     currentStartMs, currentEndMs }
 
   // Tick every 60s so the NOW marker stays in sync. Doesn't re-render on
   // composer keystrokes — only the tick.
@@ -1856,6 +1873,83 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
   }, []);
 
   const SLOT_HEIGHT = 44; // pixels per hour row
+  const SNAP_MINUTES = 15;
+  const PX_PER_MINUTE = SLOT_HEIGHT / 60;
+
+  // ─── Global pointer listeners during drag ──────────────────────────────
+  // We attach to window (not the event block) so the drag continues even
+  // when the cursor leaves the timeline element. Released on pointerup;
+  // commits via onUpdate then clears state.
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handleMove = (e) => {
+      const deltaY = e.clientY - dragState.pointerStartY;
+      const deltaMinutes = deltaY / PX_PER_MINUTE;
+      // Snap to nearest 15-min increment.
+      const snappedDelta = Math.round(deltaMinutes / SNAP_MINUTES) * SNAP_MINUTES;
+      const snappedDeltaMs = snappedDelta * 60 * 1000;
+
+      let newStartMs = dragState.originalStartMs;
+      let newEndMs = dragState.originalEndMs;
+      if (dragState.mode === "move") {
+        // Both start and end shift by the same delta — event length preserved.
+        newStartMs = dragState.originalStartMs + snappedDeltaMs;
+        newEndMs = dragState.originalEndMs + snappedDeltaMs;
+      } else {
+        // Resize: only end moves. Floor at start + 15 min so the event
+        // can't collapse to zero length or invert.
+        newEndMs = Math.max(
+          dragState.originalStartMs + SNAP_MINUTES * 60 * 1000,
+          dragState.originalEndMs + snappedDeltaMs,
+        );
+      }
+      setDragState(prev => prev ? { ...prev, currentStartMs: newStartMs, currentEndMs: newEndMs } : null);
+    };
+
+    const handleUp = () => {
+      const ds = dragState;
+      // No actual movement? Just clear state, treat as a click.
+      const moved = ds.currentStartMs !== ds.originalStartMs || ds.currentEndMs !== ds.originalEndMs;
+      setDragState(null);
+      if (moved && onUpdate) {
+        onUpdate(ds.eventId, {
+          starts_at: new Date(ds.currentStartMs).toISOString(),
+          ends_at: new Date(ds.currentEndMs).toISOString(),
+        });
+      }
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [dragState, onUpdate, PX_PER_MINUTE]);
+
+  // Start a drag. Caller specifies mode ("move" or "resize"). Initiation
+  // is blocked for google-sourced events (they're read-only here).
+  const startDrag = (evt, mode, pointerY) => {
+    if (evt.source !== "manual") return;
+    if (!onUpdate) return;
+    const startMs = new Date(evt.starts_at).getTime();
+    // If no end, treat as 30-min event for math purposes (matches existing
+    // fallback used by the state coloring code).
+    const endMs = evt.ends_at ? new Date(evt.ends_at).getTime() : (startMs + 30 * 60 * 1000);
+    setDragState({
+      eventId: evt.id,
+      mode,
+      pointerStartY: pointerY,
+      originalStartMs: startMs,
+      originalEndMs: endMs,
+      currentStartMs: startMs,
+      currentEndMs: endMs,
+    });
+  };
+
   const now = new Date(nowTick);
   const nowFractional = now.getHours() + now.getMinutes() / 60;
 
@@ -2030,14 +2124,23 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
 
               Recurring or no-end events use a 30-min default block for state math. */}
           {todayEvents.map(evt => {
-            const top = yForDate(evt._start);
-            const endY = evt._end ? yForDate(evt._end) : top + SLOT_HEIGHT * 0.5;
+            // During an active drag, show the projected position instead of
+            // the stored one. Smooth visual feedback; commit happens on release.
+            const isDraggingThis = dragState && dragState.eventId === evt.id;
+            const effectiveStart = isDraggingThis ? new Date(dragState.currentStartMs) : evt._start;
+            const effectiveEnd = isDraggingThis
+              ? new Date(dragState.currentEndMs)
+              : (evt._end || new Date(evt._start.getTime() + 30 * 60 * 1000));
+            const top = yForDate(effectiveStart);
+            const endY = yForDate(effectiveEnd);
             const height = Math.max(20, endY - top - 2);
             const isManual = evt.source === "manual";
             const isHovered = hoveredId === evt.id;
+            const draggable = isManual && !!onUpdate;
 
-            // Time-based state. _end falls back to _start + 30min for events
-            // without an explicit end so they get a real "now" window.
+            // Time-based state. Uses ORIGINAL times for the past/now/upcoming
+            // classification (we don't want a dragged event to flicker "past"
+            // while the user moves it earlier in the day mid-drag).
             const startMs = evt._start.getTime();
             const endMs = evt._end ? evt._end.getTime() : (startMs + 30 * 60 * 1000);
             const nowMs = nowTick;
@@ -2084,11 +2187,30 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
               titleWeight = 500;
             }
 
+            // While dragging this event, add a soft shadow + slightly elevated
+            // styling so it visually pops above other blocks.
+            if (isDraggingThis) {
+              containerStyle = {
+                ...containerStyle,
+                boxShadow: "0 6px 18px rgba(91,33,182,0.22), 0 2px 6px rgba(0,0,0,0.10)",
+                zIndex: 5,
+              };
+            }
+
             return (
               <div
                 key={evt.id}
                 onMouseEnter={() => setHoveredId(evt.id)}
                 onMouseLeave={() => setHoveredId(null)}
+                onPointerDown={(e) => {
+                  if (!draggable) return;
+                  // Skip if user grabbed the delete button or the resize handle.
+                  // The bottom-edge handle has its own onPointerDown that calls
+                  // stopPropagation, so this code path only runs for body drags.
+                  if (e.target.closest("[data-drag-skip]")) return;
+                  e.preventDefault();
+                  startDrag(evt, "move", e.clientY);
+                }}
                 style={{
                   position: "absolute",
                   top,
@@ -2102,20 +2224,24 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
                   overflow: "hidden",
                   fontSize: 12,
                   color: titleColor,
-                  cursor: "default",
+                  cursor: !isManual ? "not-allowed" : (draggable ? (isDraggingThis ? "grabbing" : "grab") : "default"),
+                  userSelect: "none",
+                  touchAction: draggable ? "none" : "auto",
                   ...containerStyle,
                 }}
-                title={evt.title}
+                title={!isManual ? "Google event — managed in Google Calendar" : evt.title}
               >
                 <span style={{
                   flex: 1, minWidth: 0,
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   fontWeight: titleWeight,
                 }}>
-                  {evt.title}<span style={{ color: timeColor, fontWeight: 400 }}>, {formatTimeRangeLabel(evt._start, evt._end)}</span>
+                  {evt.title}<span style={{ color: timeColor, fontWeight: 400 }}>, {formatTimeRangeLabel(effectiveStart, effectiveEnd)}</span>
                 </span>
-                {isManual && isHovered && onDelete && (
+                {isManual && isHovered && onDelete && !isDraggingThis && (
                   <button
+                    data-drag-skip
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => onDelete(evt.id)}
                     style={{
                       background: "transparent",
@@ -2136,6 +2262,32 @@ function TodayTimeline({ events = [], onCreate, onDelete, compact = false, showH
                   >
                     ×
                   </button>
+                )}
+                {/* Resize handle — bottom edge. Only visible/active for manual
+                    events with onUpdate wired. Captures the pointer event
+                    before the body's onPointerDown sees it. */}
+                {draggable && (
+                  <div
+                    data-drag-skip
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      startDrag(evt, "resize", e.clientY);
+                    }}
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 6,
+                      cursor: "ns-resize",
+                      // Subtle visual hint on hover.
+                      background: (isHovered || isDraggingThis) ? `linear-gradient(180deg, transparent 0%, ${C.borderLight} 100%)` : "transparent",
+                      borderBottomLeftRadius: containerStyle.borderRadius || 0,
+                      borderBottomRightRadius: containerStyle.borderRadius || 0,
+                    }}
+                    title="Drag to resize"
+                  />
                 )}
               </div>
             );
@@ -6519,6 +6671,17 @@ export default function App({ user }) {
                           }
                           setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
                         }}
+                        onUpdate={async (id, patch) => {
+                          // Optimistic move/resize. Capture prev so we can
+                          // roll back if the server rejects the update.
+                          const prev = personalEvents;
+                          setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                          const { error } = await personalCalendarDb.update(id, patch);
+                          if (error) {
+                            console.error("Calendar update failed:", error);
+                            setPersonalEvents(prev);
+                          }
+                        }}
                         onDelete={async (id) => {
                           const prev = personalEvents;
                           setPersonalEvents(prev.filter(e => e.id !== id));
@@ -7440,6 +7603,17 @@ export default function App({ user }) {
                           }
                           setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
                         }}
+                        onUpdate={async (id, patch) => {
+                          // Optimistic move/resize. Capture prev so we can
+                          // roll back if the server rejects the update.
+                          const prev = personalEvents;
+                          setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                          const { error } = await personalCalendarDb.update(id, patch);
+                          if (error) {
+                            console.error("Calendar update failed:", error);
+                            setPersonalEvents(prev);
+                          }
+                        }}
                         onDelete={async (id) => {
                           const prev = personalEvents;
                           setPersonalEvents(prev.filter(e => e.id !== id));
@@ -8157,6 +8331,17 @@ export default function App({ user }) {
                         return;
                       }
                       setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                    }}
+                    onUpdate={async (id, patch) => {
+                      // Optimistic move/resize. Capture prev so we can
+                      // roll back if the server rejects the update.
+                      const prev = personalEvents;
+                      setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                      const { error } = await personalCalendarDb.update(id, patch);
+                      if (error) {
+                        console.error("Calendar update failed:", error);
+                        setPersonalEvents(prev);
+                      }
                     }}
                     onDelete={async (id) => {
                       const prev = personalEvents;
