@@ -557,6 +557,49 @@ function lookupObservationIllustration(cardName) {
   return OBSERVATION_ILLUSTRATIONS[key] || null;
 }
 
+// ============================================================
+// Avatar initials helpers
+// ============================================================
+// Two rules, applied consistently across the app:
+//
+// USER ("Just me", sidebar profile pill, etc) → ONE letter.
+//   - First letter of full_name if available.
+//   - Else first letter of the email's local part.
+//   - Else "U".
+//
+// WORKERS → TWO letters.
+//   - Multi-word names ("John Smith") → first letter of first +
+//     first letter of last word: "JS".
+//   - Single-word names ("Sarah") → first two letters of the
+//     word: "SA". Always two letters when possible.
+//
+// Keeps avatar visual rhythm consistent — user is always a single
+// glyph, workers are always two — so the eye can tell them apart
+// at a glance in the worker-picker dropdown.
+
+function getUserInitial(user) {
+  const n = user?.user_metadata?.full_name;
+  if (n && n.trim().length > 0) return n.trim()[0].toUpperCase();
+  const email = user?.email;
+  if (email && email.length > 0) return email[0].toUpperCase();
+  return "U";
+}
+
+function getWorkerInitials(name) {
+  if (!name || typeof name !== "string") return "??";
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return "??";
+  const parts = trimmed.split(/\s+/).filter(p => p.length > 0);
+  if (parts.length >= 2) {
+    // Multi-word — first letter of first word + first letter of LAST word.
+    // "John Smith" → "JS"; "John Quincy Adams" → "JA".
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  // Single-word — first two letters of the only word.
+  // "Sarah" → "SA"; "Mike" → "MI"; "A" → "A" (degenerate single char).
+  return parts[0].slice(0, 2).toUpperCase();
+}
+
 function retColor(v) {
   if (v >= 80) return "#0C3A2E";      // Elite (retElite)
   if (v >= 65) return "#1F7A5C";      // Good (retGood)
@@ -5034,7 +5077,7 @@ export default function App({ user }) {
         </div>
         <div style={{ padding: "10px 16px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 15, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{(() => { const n = user?.user_metadata?.full_name; if (n) return n.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase(); return (user?.email || "U")[0].toUpperCase(); })()}</div>
+            <div style={{ width: 30, height: 30, borderRadius: 15, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{getUserInitial(user)}</div>
             <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
           </div>
         </div>
@@ -5045,7 +5088,7 @@ export default function App({ user }) {
         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
           <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FAFAF7" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{(() => { const n = user?.user_metadata?.full_name; if (n) return n.split(" ").map(x => x[0]).join("").slice(0,2).toUpperCase(); return (user?.email || "U")[0].toUpperCase(); })()}</div>
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{getUserInitial(user)}</div>
       </div>
 
       <div className="r-main">
@@ -5853,15 +5896,7 @@ export default function App({ user }) {
                                   onMouseLeave={e => { if (newTaskWorkerId) e.currentTarget.style.background = "transparent"; }}
                                 >
                                   <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                                    {(() => {
-                                      // Match the sidebar profile pill at line ~5002:
-                                      // full_name → initials (max 2), else first char of email, else "U".
-                                      // Self-assignment shows the user's own initial(s), not the
-                                      // generic "clients" icon — same visual language as worker rows.
-                                      const n = user?.user_metadata?.full_name;
-                                      if (n) return n.split(" ").map(x => x[0]).join("").slice(0, 2).toUpperCase();
-                                      return (user?.email || "U")[0].toUpperCase();
-                                    })()}
+                                    {getUserInitial(user)}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 13, fontWeight: !newTaskWorkerId ? 600 : 500, color: !newTaskWorkerId ? C.btn : C.text }}>Just me</div>
@@ -5886,7 +5921,7 @@ export default function App({ user }) {
                                     onMouseLeave={e => { if (newTaskWorkerId !== w.id) e.currentTarget.style.background = "transparent"; }}
                                   >
                                     <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                                      {w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}
+                                      {getWorkerInitials(w.name)}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ fontSize: 13, fontWeight: newTaskWorkerId === w.id ? 600 : 500, color: newTaskWorkerId === w.id ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</div>
@@ -7027,7 +7062,7 @@ export default function App({ user }) {
                             {t.assigned_worker_id && (() => {
                               const w = workersList.find(x => x.id === t.assigned_worker_id);
                               if (!w) return null;
-                              const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+                              const initials = getWorkerInitials(w.name);
                               const isWorkerDone = !!t.worker_completed_at;
                               return (
                                 <span className="rt-row-worker" style={{
@@ -9821,7 +9856,7 @@ export default function App({ user }) {
                           <div style={{ fontSize: 10.5, fontWeight: 700, color: C.success, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>More active</div>
                           {climbing.map(({ w, delta }) => (
                             <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
-                              <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}</div>
+                              <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{getWorkerInitials(w.name)}</div>
                               <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
                               <span style={{ fontSize: 12, fontWeight: 700, color: C.success, fontVariantNumeric: "tabular-nums" }}>+{delta}</span>
                             </div>
@@ -9833,7 +9868,7 @@ export default function App({ user }) {
                           <div style={{ fontSize: 10.5, fontWeight: 700, color: C.warning, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Gone quiet</div>
                           {slipping.map(({ w, delta }) => (
                             <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
-                              <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase()}</div>
+                              <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>{getWorkerInitials(w.name)}</div>
                               <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
                               <span style={{ fontSize: 12, fontWeight: 700, color: C.warning, fontVariantNumeric: "tabular-nums" }}>{delta}</span>
                             </div>
@@ -9882,7 +9917,7 @@ export default function App({ user }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {workersList.map(w => {
                       const s = statsByWorker[w.id];
-                      const initials = w.name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+                      const initials = getWorkerInitials(w.name);
                       return (
                         <div key={w.id} style={{
                           padding: "16px 18px",
