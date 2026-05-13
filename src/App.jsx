@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 
 // ============================================================
@@ -2848,6 +2848,40 @@ export default function App({ user }) {
   // value, not historical revenue. We pull the referred client's honest LTV
   // from their `ltv` field too, falling back to a 12-month estimate for
   // referrals where the referred-to is not yet a Retayned client.
+  // ─── Tenure math ─────────────────────────────────────────────
+  // Single source of truth for "how long has this client been with
+  // us." Uses engagement_started_at (immutable date set at signup)
+  // and subtracts any pause intervals from client_engagement_pauses.
+  //
+  // Why a date column instead of a stored months integer:
+  //   - A stored months value never grows, drifts wrong as time passes
+  //   - A date is immutable, derivation always reflects current moment
+  //   - Matches how every world-class CRM handles tenure (Stripe,
+  //     Salesforce, HubSpot all store dates and derive durations)
+  //
+  // Pause handling: each pause subtracts (resumed_at - paused_at) from
+  // total elapsed. If currently paused (resumed_at = null), use now as
+  // the end of the open pause so tenure freezes during the pause.
+  const monthsTogether = (client, pausesByClient) => {
+    if (!client?.engagement_started_at) return 0;
+    const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
+    const startMs = new Date(client.engagement_started_at).getTime();
+    const nowMs = Date.now();
+    let elapsedMs = nowMs - startMs;
+    const pauses = (pausesByClient && pausesByClient[client.id]) || [];
+    for (const p of pauses) {
+      const pStart = new Date(p.paused_at).getTime();
+      const pEnd = p.resumed_at ? new Date(p.resumed_at).getTime() : nowMs;
+      elapsedMs -= Math.max(0, pEnd - pStart);
+    }
+    return Math.max(0, Math.floor(elapsedMs / MS_PER_MONTH));
+  };
+
+  const isCurrentlyPaused = (clientId, pausesByClient) => {
+    const pauses = (pausesByClient && pausesByClient[clientId]) || [];
+    return pauses.some(p => !p.resumed_at);
+  };
+
   const getAdjustedLTV = (client) => {
     const ownLTV = Number(client.ltv || 0);
     const referralRevenue = refs
@@ -2917,6 +2951,12 @@ export default function App({ user }) {
     const monthlyRate = parseInt(newClient.revenue) || 0;
     const preEntryBaseline = parseFloat(newClient.lifetime_revenue_at_entry) || 0;
     const tenureMonths = parseInt(newClient.months) || 0;
+    // Translate months input → engagement_started_at (immutable date).
+    // User says "started 6 months ago", we store today - 6 months as the
+    // start date. From there, tenure grows automatically over time.
+    const engagementStart = new Date();
+    engagementStart.setMonth(engagementStart.getMonth() - tenureMonths);
+    const engagementStartedAt = engagementStart.toISOString().slice(0, 10);
 
     // Insert into Supabase first
     const { data: created, error } = await clientsDb.create(user.id, {
@@ -2925,7 +2965,8 @@ export default function App({ user }) {
       role: newClient.role || "",
       tag: newClient.tag || "",
       revenue: monthlyRate,
-      months: tenureMonths,
+      months: tenureMonths, // kept for migration window; engagement_started_at is the truth
+      engagement_started_at: engagementStartedAt,
       lifetime_revenue_at_entry: preEntryBaseline,
       retention_score: baseline || 50,
       profile_scores: { ...profileScores },
@@ -3115,6 +3156,10 @@ export default function App({ user }) {
   // for rhythm calc and history) — only the manual Log UI was removed.
   const [tpLogged, setTpLogged] = useState([]);
   const [allTouchpoints, setAllTouchpoints] = useState([]);
+  // Engagement pauses, keyed by client_id. Each value is an array of
+  // { id, paused_at, resumed_at, reason, note }. Loaded once at
+  // hydration, mutated optimistically when user clicks pause/resume.
+  const [engagementPausesByClient, setEngagementPausesByClient] = useState({});
   const [confetti, setConfetti] = useState(false);
   // ─── Today v4 state ──
   const [todayFocusId, setTodayFocusId] = useState(null);
@@ -3149,7 +3194,7 @@ export default function App({ user }) {
     if (!user) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -3179,7 +3224,15 @@ export default function App({ user }) {
       // map built below, so this hydrate is the round-trip.
       supabase
         .from('client_revenue_history')
-        .select('client_id, monthly_rate, started_at, ended_at')
+        .select('client_id, monthly_rate, started_at, ended_at, change_reason, change_note')
+        .eq('user_id', uid)
+        .then(r => r, () => ({ data: [], error: null })),
+      // Engagement pauses — same batch pattern. Drives monthsTogether and
+      // is_currently_paused on every client. Empty array on failure (table
+      // may not exist yet during migration window).
+      supabase
+        .from('client_engagement_pauses')
+        .select('id, client_id, paused_at, resumed_at, reason, note')
         .eq('user_id', uid)
         .then(r => r, () => ({ data: [], error: null })),
     ]);
@@ -3230,6 +3283,15 @@ export default function App({ user }) {
       if (!revHistoryByClient[row.client_id]) revHistoryByClient[row.client_id] = [];
       revHistoryByClient[row.client_id].push(row);
     }
+
+    // Build per-client engagement-pauses map. Used by monthsTogether
+    // (subtract paused intervals) and isCurrentlyPaused (any open pause).
+    const pausesByClient = {};
+    for (const row of (pausesRes?.data || [])) {
+      if (!pausesByClient[row.client_id]) pausesByClient[row.client_id] = [];
+      pausesByClient[row.client_id].push(row);
+    }
+    setEngagementPausesByClient(pausesByClient);
 
     // Cadence data — loaded separately with fallback so a missing db function
     // degrades cadence only, doesn't nuke the whole page
@@ -3296,7 +3358,16 @@ export default function App({ user }) {
         ret: c.retention_score || 0,
         contact: c.contact || "",
         role: c.role || "",
-        months: c.months || 0,
+        // months is now DERIVED from engagement_started_at and pauses.
+        // The raw c.months column from the DB is ignored once
+        // engagement_started_at is set (the source of truth). Falls
+        // back to c.months only if engagement_started_at is missing
+        // (shouldn't happen post-migration, but kept as a safety net).
+        months: c.engagement_started_at
+          ? monthsTogether({ id: c.id, engagement_started_at: c.engagement_started_at }, pausesByClient)
+          : (c.months || 0),
+        engagement_started_at: c.engagement_started_at || null,
+        is_paused: isCurrentlyPaused(c.id, pausesByClient),
         revenue: c.revenue || 0,
         tag: c.tag || "",
         lastHC: c.last_hc_date || null,
@@ -3975,6 +4046,12 @@ export default function App({ user }) {
     if (!clientName || clientName === "All Clients") return 500;
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
+    // Paused engagement: this client is in a temporary pause window.
+    // Their tasks stay visible (in case user wants to mark stragglers
+    // done) but rank at the bottom of the queue — Rai doesn't surface
+    // them and the daily sweep skips them. Returning 0 is enough; no
+    // boosts apply when score = 0.
+    if (c.is_paused) return 0;
     const ps = calcProfileScore(c.ret || 50, c, clients);
     const totalRev = clients.reduce((a, x) => a + (x.revenue || 0), 0);
     const revPct = totalRev > 0 ? (c.revenue || 0) / totalRev : 0;
@@ -8223,7 +8300,12 @@ export default function App({ user }) {
                       <input value={newClient.contact} onChange={e => setNewClient({...newClient, contact: e.target.value})} placeholder="Primary contact name" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
                       <input value={newClient.role} onChange={e => setNewClient({...newClient, role: e.target.value})} placeholder="Their role" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
                       <input value={newClient.tag} onChange={e => setNewClient({...newClient, tag: e.target.value})} placeholder="Industry (e.g. Fitness, Real Estate)" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
-                      <input value={newClient.months} onChange={e => setNewClient({...newClient, months: e.target.value})} placeholder="Months working together" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+                      <div>
+                        <input value={newClient.months} onChange={e => setNewClient({...newClient, months: e.target.value})} placeholder="Months working together" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
+                          Calibrates the engagement start. Tenure grows automatically from here — you won't need to update this.
+                        </div>
+                      </div>
                       <div>
                         <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Current monthly rate ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
