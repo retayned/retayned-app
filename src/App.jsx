@@ -2875,15 +2875,14 @@ export default function App({ user }) {
     // Lowered floor: was 0.90, now 0.75. Lets struggling clients actually sink.
     const multiplier = Math.max(0.75, revNorm * 0.60 + ltvF * 0.20 + tenF * 0.20);
     const raw = rs * multiplier;
-    // Soft clamp: anything <= 85 untouched. Above 85, compress excess to 50%.
-    // This preserves real differentiation among top-tier clients (which used to
-    // pile up at the hard 99 ceiling) while leaving mid/bottom tier clients
-    // exactly where the multiplier puts them.
-    // Returns a FLOAT — sort comparators use it directly. UI rounds for display.
-    // Hard ceiling at 97 protects against runaway outliers without flattening the top.
+    // Soft compression: anything <= 85 untouched. Above 85, compress excess
+    // to 50% so top-tier differences still register but don't dominate.
+    // No hard ceiling — the score flows raw through to sort comparators.
+    // Display layers round/cap for UI (the badge shows 99 max), but sort
+    // needs the true magnitudes to break ties between top clients.
     const T = 85;
     const ratio = 0.50;
-    const softClamped = raw <= T ? raw : Math.min(97, T + (raw - T) * ratio);
+    const softClamped = raw <= T ? raw : T + (raw - T) * ratio;
     return Math.max(1, softClamped);
   };
 
@@ -3968,7 +3967,12 @@ export default function App({ user }) {
   };
 
   const getProfileSortScore = (clientName, hasRaiBoost = false, pickBoost = 0, daysLate = 0) => {
-    if (!clientName || clientName === "All Clients") return 200; // All Clients tasks first
+    // All Clients sentinel: a task tagged "All Clients" should always sort
+    // first regardless of any per-client math. Set high enough to clear the
+    // theoretical max real score: ~104 base + 25 raiBoost + 10 nudge + 20
+    // pickBoost + 60 lateBoost + 15 newClientBoost ≈ 234 max. 500 leaves
+    // generous headroom for future score expansions.
+    if (!clientName || clientName === "All Clients") return 500;
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
     const ps = calcProfileScore(c.ret || 50, c, clients);
@@ -3994,7 +3998,11 @@ export default function App({ user }) {
       const ret = c.ret != null ? c.ret : 50;
       lateBoost = Math.min(60, daysLate * (100 - ret) / 4);
     }
-    return Math.min(99, ps + boost + raiBoost + raiNudge + (pickBoost || 0) + lateBoost);
+    // No upper clamp — the sort comparator needs true magnitudes to break
+    // ties between top-tier clients. Display layers round/cap for UI (the
+    // score badge shows 99 max). Without removing this clamp, two clients
+    // both scoring 105 raw would tie at 99 and lose their differentiator.
+    return ps + boost + raiBoost + raiNudge + (pickBoost || 0) + lateBoost;
   };
 
 
@@ -4457,41 +4465,12 @@ export default function App({ user }) {
            provide enough affordance that the inner track adds visual noise. */
         .r-client-modal::-webkit-scrollbar { display: none; }
         .r-client-modal { scrollbar-width: none; -ms-overflow-style: none; }
-        /* Due picker dropdown · mobile bottom sheet.
-           Desktop anchors right:0 relative to the Due button — works
-           because viewport is wide. On mobile the picker is 240px+
-           and the Due button sits in the middle-right of the composer
-           chip row; absolute-anchoring from a small button can't
-           reliably contain a 240px dropdown within a 393px viewport
-           regardless of which anchor we pick.
-           Mobile fix: detach from the button entirely, pin to the
-           viewport as a bottom sheet. Slides up from the bottom edge
-           with margins. Centered horizontally. Standard mobile pattern
-           for date/option pickers — gives the picker real screen room. */
-        .rt-due-picker {
-          position: fixed !important;
-          top: auto !important;
-          bottom: 80px !important;
-          left: 16px !important;
-          right: 16px !important;
-          min-width: 0 !important;
-          width: auto !important;
-          max-width: none !important;
-        }
-        /* Client picker · mobile bottom sheet.
-           Same rationale as Due picker — anchored dropdown can't reliably
-           contain a 300px+ panel within a 393px viewport when the keyboard
-           is open. Pin to viewport, slide up from bottom. */
-        .rt-client-picker {
-          position: fixed !important;
-          top: auto !important;
-          bottom: 80px !important;
-          left: 16px !important;
-          right: 16px !important;
-          min-width: 0 !important;
-          width: auto !important;
-          max-width: none !important;
-        }
+        /* Due picker and Client picker on mobile: keep anchored to the chip
+           (like Worker does) instead of popping as a bottom sheet. Earlier
+           iterations pinned these to the viewport to give them screen room,
+           but it disconnected them from the source chip and looked sloppy.
+           Falling back to the inline JSX position (absolute, dropping below
+           the chip) makes the relationship clear and matches Worker. */
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
@@ -4555,33 +4534,6 @@ export default function App({ user }) {
           .r-rai-inner { padding-top: 32px !important; }
           .r-rai-inputbar { padding: 12px 24px 28px !important; }
           .r-chat-msg-user { scroll-margin-top: 24px !important; }
-          /* Due picker · desktop reset.
-             Base/mobile pins it to viewport as bottom sheet. Desktop
-             reverts to the original "drop below button, right-aligned"
-             absolute positioning. */
-          .rt-due-picker {
-            position: absolute !important;
-            top: calc(100% + 6px) !important;
-            bottom: auto !important;
-            right: 0 !important;
-            left: auto !important;
-            min-width: 240px !important;
-            width: auto !important;
-            max-width: none !important;
-          }
-          /* Client picker · desktop reset.
-             Same pattern as Due picker — restore the "drop below button"
-             dropdown that was overridden by the mobile bottom-sheet rule. */
-          .rt-client-picker {
-            position: absolute !important;
-            top: calc(100% + 6px) !important;
-            bottom: auto !important;
-            left: 16px !important;
-            right: auto !important;
-            width: 300px !important;
-            min-width: 0 !important;
-            max-width: none !important;
-          }
         }
         @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
         @keyframes confetti-fall {
@@ -5356,6 +5308,28 @@ export default function App({ user }) {
             if (clientName !== pickClient.name) return 0;
             return Number(raiPicks.pick_boost) || 0;
           };
+
+          // ─── Cross-client tiebreaker precompute ──────────────────────
+          // When two tasks score identically AND belong to DIFFERENT clients,
+          // we break the tie using signals that aren't in the score itself.
+          // These are computed once here (O(clients) + O(touchpoints)) and
+          // referenced by raiCompare as O(1) map lookups, instead of being
+          // recomputed for every pairwise comparison during sort.
+          const lastTouchedByClient = new Map();
+          for (const tp of (allTouchpoints || [])) {
+            const key = tp.client_id || tp.client_name;
+            if (!key || !tp.occurred_at) continue;
+            const t = new Date(tp.occurred_at).getTime();
+            const cur = lastTouchedByClient.get(key);
+            if (!cur || t > cur) lastTouchedByClient.set(key, t);
+          }
+          const lookupLastTouched = (clientName) => {
+            if (!clientName) return 0; // never touched → most stale
+            const c = clients.find(cc => cc.name === clientName);
+            if (!c) return 0;
+            return lastTouchedByClient.get(c.id) || lastTouchedByClient.get(c.name) || 0;
+          };
+
           const raiCompare = (a, b) => {
             // 30-second priority hold: tasks created in the last 30 seconds
             // float to the top regardless of priority score, so when the user
@@ -5390,13 +5364,60 @@ export default function App({ user }) {
             const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForClient(a.client), aDaysLate);
             const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForClient(b.client), bDaysLate);
             if (psA !== psB) return psB - psA;
-            // Rai's tiebreak: larger nudge magnitude wins (positive = stronger
-            // surface signal, negative = stronger demote signal — both meaningful).
-            const nudgeA = Math.abs(nudgeForClient(a.client));
-            const nudgeB = Math.abs(nudgeForClient(b.client));
-            if (nudgeA !== nudgeB) return nudgeB - nudgeA;
+            // ─── CROSS-CLIENT TIEBREAKERS ───────────────────────────────
+            // When two tasks belong to DIFFERENT clients but scored
+            // identically, we break the tie using signals NOT in the
+            // profile_sort_score. Cascade order: last_touched_at older,
+            // then renewal sooner, then higher LTV, then longer tenure,
+            // then higher revenue, then lower retention (the only direction
+            // that "surfaces fragility" — and the rarest possible tie since
+            // by step 6 the clients are nearly indistinguishable on every
+            // other axis). All six are skipped when a.client === b.client
+            // (their values would be identical for both tasks).
+            if (a.client && b.client && a.client !== b.client) {
+              const cA = clients.find(c => c.name === a.client);
+              const cB = clients.find(c => c.name === b.client);
+              if (cA && cB) {
+                // 1. last_touched_at — older (smaller timestamp) wins.
+                //    Longer-neglected client surfaces first.
+                const ltA = lookupLastTouched(a.client);
+                const ltB = lookupLastTouched(b.client);
+                if (ltA !== ltB) return ltA - ltB;
+                // 2. renewal_date — sooner (smaller timestamp) wins.
+                //    Closer to contract end = more time-sensitive.
+                const rdA = cA.renewal_date ? new Date(cA.renewal_date).getTime() : Infinity;
+                const rdB = cB.renewal_date ? new Date(cB.renewal_date).getTime() : Infinity;
+                if (rdA !== rdB) return rdA - rdB;
+                // 3. LTV — higher wins.
+                const ltvA = getAdjustedLTV(cA);
+                const ltvB = getAdjustedLTV(cB);
+                if (ltvA !== ltvB) return ltvB - ltvA;
+                // 4. tenure (months) — longer wins.
+                const tenA = cA.months || 0;
+                const tenB = cB.months || 0;
+                if (tenA !== tenB) return tenB - tenA;
+                // 5. revenue — higher wins.
+                const revA = cA.revenue || 0;
+                const revB = cB.revenue || 0;
+                if (revA !== revB) return revB - revA;
+                // 6. retention_score — LOWER wins (surface the fragile one).
+                //    Only fires when literally every other factor is identical.
+                const retA = cA.ret != null ? cA.ret : 50;
+                const retB = cB.ret != null ? cB.ret : 50;
+                if (retA !== retB) return retA - retB;
+              }
+            }
+            // ─── WITHIN-CLIENT TIEBREAKERS ──────────────────────────────
+            // Note: the nudge-magnitude tiebreaker was removed (May 2026).
+            // The nudge is already inside getProfileSortScore via raiNudge,
+            // so using |nudge| again here double-counted Rai's signal and
+            // treated -10 ("demote") the same as +10 ("surface").
             if (a.alert !== b.alert) return a.alert ? -1 : 1;
-            if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
+            // Non-recurring wins over recurring. Within a single client's
+            // group, this surfaces "the deliverable I committed to today"
+            // above "the daily check-in routine." Recurring tasks come
+            // back tomorrow anyway; one-offs need to actually get done.
+            if (a.recurring !== b.recurring) return a.recurring ? 1 : -1;
             return (b.created_at || 0) - (a.created_at || 0);
           };
 
@@ -6024,6 +6045,81 @@ export default function App({ user }) {
                               <Icon name="x" size={9} />
                             </button>
                           )}
+                {composerMenuOpen && (
+                  <>
+                    {/* Click-outside backdrop — invisible but captures clicks anywhere on the page */}
+                    <div
+                      onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
+                      style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
+                    />
+                    <div className="rt-client-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 300, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
+                      <Icon name="search" size={12} color={C.textMuted} />
+                      <input autoFocus value={composerQuery}
+                        onChange={e => { setComposerQuery(e.target.value); setComposerHighlight(0); }}
+                        onKeyDown={e => {
+                          if (e.key === "Escape") { setComposerMenuOpen(false); return; }
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            setComposerHighlight(h => Math.min(h + 1, Math.max(0, clientMatches.length - 1)));
+                            return;
+                          }
+                          if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            setComposerHighlight(h => Math.max(h - 1, 0));
+                            return;
+                          }
+                          if (e.key === "Enter") {
+                            const pick = clientMatches[composerHighlight] || clientMatches[0];
+                            if (pick) {
+                              setComposerClient(pick.name);
+                              setComposerMenuOpen(false);
+                              setComposerQuery("");
+                              setComposerHighlight(0);
+                              // Refocus the task input so the user can type immediately
+                              setTimeout(() => {
+                                const el = document.getElementById("rt-composer-input");
+                                if (el) el.focus();
+                              }, 0);
+                            }
+                          }
+                        }}
+                        placeholder="Search clients…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontFamily: "inherit", color: C.text }} />
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", paddingTop: 4, maxHeight: 300, overflow: "auto" }}>
+                      {clientMatches.map((c, idx) => (
+                        <button key={c.id || c.name}
+                          onClick={() => {
+                            setComposerClient(c.name);
+                            setComposerMenuOpen(false);
+                            setComposerQuery("");
+                            setComposerHighlight(0);
+                            // Refocus the task input so the user can type immediately
+                            setTimeout(() => {
+                              const el = document.getElementById("rt-composer-input");
+                              if (el) el.focus();
+                            }, 0);
+                          }}
+                          onMouseEnter={() => setComposerHighlight(idx)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            padding: "7px 8px", borderRadius: 6, textAlign: "left",
+                            background: idx === composerHighlight ? C.btnLight : "none",
+                            border: "none", cursor: "pointer", fontFamily: "inherit",
+                          }}>
+                          <ClientAvatar client={c} size={22} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: idx === composerHighlight ? 600 : 500, color: idx === composerHighlight ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                            <div style={{ fontSize: 10.5, color: C.textMuted }}>{c.industry || "Client"}</div>
+                          </div>
+                          <ScoreChip score={c.ret} size="sm" />
+                        </button>
+                      ))}
+                      {clientMatches.length === 0 && <div style={{ padding: "12px 10px", fontSize: 12, color: C.textMuted }}>No matches</div>}
+                    </div>
+                  </div>
+                  </>
+                )}
                         </div>
                       );
                     })()}
@@ -6576,81 +6672,6 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-                {composerMenuOpen && (
-                  <>
-                    {/* Click-outside backdrop — invisible but captures clicks anywhere on the page */}
-                    <div
-                      onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
-                      style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
-                    />
-                    <div className="rt-client-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
-                      <Icon name="search" size={12} color={C.textMuted} />
-                      <input autoFocus value={composerQuery}
-                        onChange={e => { setComposerQuery(e.target.value); setComposerHighlight(0); }}
-                        onKeyDown={e => {
-                          if (e.key === "Escape") { setComposerMenuOpen(false); return; }
-                          if (e.key === "ArrowDown") {
-                            e.preventDefault();
-                            setComposerHighlight(h => Math.min(h + 1, Math.max(0, clientMatches.length - 1)));
-                            return;
-                          }
-                          if (e.key === "ArrowUp") {
-                            e.preventDefault();
-                            setComposerHighlight(h => Math.max(h - 1, 0));
-                            return;
-                          }
-                          if (e.key === "Enter") {
-                            const pick = clientMatches[composerHighlight] || clientMatches[0];
-                            if (pick) {
-                              setComposerClient(pick.name);
-                              setComposerMenuOpen(false);
-                              setComposerQuery("");
-                              setComposerHighlight(0);
-                              // Refocus the task input so the user can type immediately
-                              setTimeout(() => {
-                                const el = document.getElementById("rt-composer-input");
-                                if (el) el.focus();
-                              }, 0);
-                            }
-                          }
-                        }}
-                        placeholder="Search clients…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontFamily: "inherit", color: C.text }} />
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", paddingTop: 4, maxHeight: 300, overflow: "auto" }}>
-                      {clientMatches.map((c, idx) => (
-                        <button key={c.id || c.name}
-                          onClick={() => {
-                            setComposerClient(c.name);
-                            setComposerMenuOpen(false);
-                            setComposerQuery("");
-                            setComposerHighlight(0);
-                            // Refocus the task input so the user can type immediately
-                            setTimeout(() => {
-                              const el = document.getElementById("rt-composer-input");
-                              if (el) el.focus();
-                            }, 0);
-                          }}
-                          onMouseEnter={() => setComposerHighlight(idx)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 10,
-                            padding: "7px 8px", borderRadius: 6, textAlign: "left",
-                            background: idx === composerHighlight ? C.btnLight : "none",
-                            border: "none", cursor: "pointer", fontFamily: "inherit",
-                          }}>
-                          <ClientAvatar client={c} size={22} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: idx === composerHighlight ? 600 : 500, color: idx === composerHighlight ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                            <div style={{ fontSize: 10.5, color: C.textMuted }}>{c.industry || "Client"}</div>
-                          </div>
-                          <ScoreChip score={c.ret} size="sm" />
-                        </button>
-                      ))}
-                      {clientMatches.length === 0 && <div style={{ padding: "12px 10px", fontSize: 12, color: C.textMuted }}>No matches</div>}
-                    </div>
-                  </div>
-                  </>
-                )}
 
 
               </div>
