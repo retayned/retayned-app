@@ -698,6 +698,30 @@ function nextWeekdayDate(name) {
   return addDays(today, delta);
 }
 
+// Map short weekday tokens ("mon", "tues", "thur", etc.) to canonical full
+// names ("monday", "tuesday", "thursday"). Used by the parser's date and
+// recurrence rules so users can type either short or long forms.
+function expandWeekday(short) {
+  const map = {
+    mon: "monday",
+    tue: "tuesday", tues: "tuesday",
+    wed: "wednesday",
+    thu: "thursday", thur: "thursday", thurs: "thursday",
+    fri: "friday",
+    sat: "saturday",
+    sun: "sunday",
+  };
+  return map[short.toLowerCase()] || short;
+}
+
+// Day-of-week index for a name. 0=Sunday, 6=Saturday. Accepts full or short
+// form (short forms expanded via expandWeekday).
+function weekdayIndex(name) {
+  const full = expandWeekday(name);
+  const lookup = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  return lookup[full.toLowerCase()] ?? 0;
+}
+
 function dateToYmd(d) {
   if (!d) return null;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1074,20 +1098,120 @@ function parseComposer(rawText, clients, workers) {
   }
 
   // ─── Phase 4: Date matching ──────────────────────────────────────────
+  //
+  // Order matters: longer/more-specific patterns first so "in 2 weeks"
+  // matches the weeks rule before "in 2" can match anything else, and
+  // "next Tuesday" beats bare "Tuesday".
+  //
+  // "end of week" anchors to the upcoming Friday (5). "end of month" anchors
+  // to the last day of the current month. Shorthand "+3d" / "+1w" / "+2m"
+  // is a power-user nicety; the leading "+" disambiguates it from
+  // ordinary numeric content that might appear in task text.
   let matchedDate = null;
+  const lastDayOfMonth = (d) => {
+    const x = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return x;
+  };
   const datePatterns = [
     { re: /\btoday\b/i, value: () => addDays(todayAnchored(), 0), kind: "today" },
     { re: /\btomorrow\b/i, value: () => addDays(todayAnchored(), 1), kind: "tomorrow" },
-    { re: /\blater\b/i, value: () => addDays(todayAnchored(), 6), kind: "later" },
+    { re: /\b(?:eow|end of (?:the )?week)\b/i, value: () => {
+      const t = todayAnchored();
+      let d = 5 - t.getDay(); // 5 = Friday
+      if (d < 0) d += 7;
+      return addDays(t, d);
+    }, kind: "later" },
+    { re: /\b(?:eom|end of (?:the )?month)\b/i, value: () => lastDayOfMonth(todayAnchored()), kind: "later" },
     { re: /\bnext week\b/i, value: () => addDays(todayAnchored(), 7), kind: "later" },
+    { re: /\blater\b/i, value: () => addDays(todayAnchored(), 6), kind: "later" },
     { re: /\bin (\d+) days?\b/i, value: (m) => addDays(todayAnchored(), parseInt(m[1], 10)), kind: "later" },
+    { re: /\bin (\d+) weeks?\b/i, value: (m) => addDays(todayAnchored(), parseInt(m[1], 10) * 7), kind: "later" },
+    { re: /\bin (\d+) months?\b/i, value: (m) => {
+      const t = todayAnchored();
+      const out = new Date(t);
+      out.setMonth(t.getMonth() + parseInt(m[1], 10));
+      return out;
+    }, kind: "later" },
+    // Shorthand: +3d / +2w / +1m. Leading "+" required to disambiguate from
+    // task text like "send 3 reports" that contains a bare number.
+    { re: /(?:^|\s)\+(\d+)d\b/i, value: (m) => addDays(todayAnchored(), parseInt(m[1], 10)), kind: "later" },
+    { re: /(?:^|\s)\+(\d+)w\b/i, value: (m) => addDays(todayAnchored(), parseInt(m[1], 10) * 7), kind: "later" },
+    { re: /(?:^|\s)\+(\d+)m\b/i, value: (m) => {
+      const t = todayAnchored();
+      const out = new Date(t);
+      out.setMonth(t.getMonth() + parseInt(m[1], 10));
+      return out;
+    }, kind: "later" },
+    // "next Tuesday" — explicitly skip a week vs current weekday. nextWeekdayDate
+    // already returns the upcoming weekday; "next" adds another 7 days to force
+    // it past the immediate next occurrence ("next Monday" said on a Wednesday
+    // means a week from this coming Monday, not the one in 5 days).
+    { re: /\bnext (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, value: (m) => addDays(nextWeekdayDate(m[1]), 7), kind: "weekday" },
+    { re: /\bnext (mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/i, value: (m) => addDays(nextWeekdayDate(expandWeekday(m[1])), 7), kind: "weekday" },
     { re: /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, value: (m) => nextWeekdayDate(m[1]), kind: "weekday" },
+    { re: /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/i, value: (m) => nextWeekdayDate(expandWeekday(m[1])), kind: "weekday" },
   ];
   for (const p of datePatterns) {
     const m = lower.match(p.re);
     if (m && m.index !== undefined) {
       matchedDate = { date: p.value(m), kind: p.kind };
-      matches.push({ start: m.index, end: m.index + m[0].length, kind: "date" });
+      // For shorthand patterns with optional leading whitespace, the regex
+      // capture may start at the space. We strip the actual matched text,
+      // which is what m[0] tells us — adjust the strip start to skip leading
+      // whitespace from m[0] since the leading space isn't part of the date.
+      let stripStart = m.index;
+      let stripEnd = m.index + m[0].length;
+      const leadingSpace = m[0].match(/^\s+/);
+      if (leadingSpace) stripStart += leadingSpace[0].length;
+      matches.push({ start: stripStart, end: stripEnd, kind: "date" });
+      break;
+    }
+  }
+
+  // ─── Phase 4b: Recurrence matching ───────────────────────────────────
+  //
+  // Recurrence patterns describe a task that repeats. When detected, the
+  // composer creates the task with is_recurring=true and stores the pattern
+  // shape in recurrence_pattern (see RECURRENCE PATTERN HELPERS above for
+  // the shape spec). Recurrence and explicit due_date are mutually
+  // exclusive in the data model: the composer clears one when it sets the
+  // other.
+  //
+  // Order matters: more specific patterns before more general ones.
+  // "every other week" before "every week"; "every weekday" before
+  // "every (monday|...)"; "every day" / "daily" last.
+  let matchedRecurrence = null;
+  const recurrencePatterns = [
+    // every other week → weekly on today's day-of-week, interval 2 (not
+    // currently supported by the data model — fall back to weekly on the
+    // current day-of-week with no interval. Future: extend schema with
+    // interval field.)
+    { re: /\bevery other week\b/i, pattern: () => ({ kind: "weekly", days: [todayAnchored().getDay()] }) },
+    { re: /\bevery other day\b/i, pattern: () => ({ kind: "daily" }) },
+    // every weekday / every weekdays / weekdays
+    { re: /\bevery (?:weekday|weekdays)\b/i, pattern: () => ({ kind: "weekdays" }) },
+    { re: /\bweekdays?\b/i, pattern: () => ({ kind: "weekdays" }) },
+    // every Mon/Tue/.../Sunday and full names
+    { re: /\bevery (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, pattern: (m) => ({ kind: "weekly", days: [weekdayIndex(m[1])] }) },
+    { re: /\bevery (mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/i, pattern: (m) => ({ kind: "weekly", days: [weekdayIndex(expandWeekday(m[1]))] }) },
+    // every week / weekly → weekly on today's day-of-week
+    { re: /\b(?:every week|weekly)\b/i, pattern: () => ({ kind: "weekly", days: [todayAnchored().getDay()] }) },
+    // every day / daily
+    { re: /\b(?:every day|daily)\b/i, pattern: () => ({ kind: "daily" }) },
+  ];
+  for (const p of recurrencePatterns) {
+    const m = lower.match(p.re);
+    if (m && m.index !== undefined) {
+      matchedRecurrence = { pattern: p.pattern(m) };
+      matches.push({ start: m.index, end: m.index + m[0].length, kind: "recurrence" });
+      // If recurrence matched, void any previously-matched date — the two
+      // are mutually exclusive. Also drop the date match from the matches
+      // list so the strip pass doesn't double-strip.
+      if (matchedDate) {
+        matchedDate = null;
+        const idx = matches.findIndex(x => x.kind === "date");
+        if (idx >= 0) matches.splice(idx, 1);
+      }
       break;
     }
   }
@@ -1161,6 +1285,7 @@ function parseComposer(rawText, clients, workers) {
     matchedClient,
     matchedWorker,
     matchedDate,
+    matchedRecurrence,
     title,
     matches,
   };
@@ -5683,7 +5808,16 @@ export default function App({ user }) {
                         if (parsed.matchedWorker && newTaskWorkerId !== parsed.matchedWorker.id) {
                           setNewTaskWorkerId(parsed.matchedWorker.id);
                         }
-                        if (parsed.matchedDate && parsed.matchedDate.date) {
+                        // Recurrence wins over due_date: they're mutually
+                        // exclusive in the data model, and the parser already
+                        // voided matchedDate when matchedRecurrence fired.
+                        if (parsed.matchedRecurrence) {
+                          if (!newTaskRecurring) setNewTaskRecurring(true);
+                          if (JSON.stringify(newTaskRecurrencePattern) !== JSON.stringify(parsed.matchedRecurrence.pattern)) {
+                            setNewTaskRecurrencePattern(parsed.matchedRecurrence.pattern);
+                          }
+                          if (newTaskDueDate) setNewTaskDueDate(null);
+                        } else if (parsed.matchedDate && parsed.matchedDate.date) {
                           const ymd = dateToYmd(parsed.matchedDate.date);
                           if (ymd && newTaskDueDate !== ymd) {
                             setNewTaskDueDate(ymd);
