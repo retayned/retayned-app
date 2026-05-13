@@ -2193,6 +2193,24 @@ export default function App({ user }) {
   // Also: detect keyboard open on mobile so we can hide the bottom nav (iOS covers the input
   // with the keyboard + the fixed bottom nav, making the input unreachable).
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // Breakpoint tracking. We use this for components that need to render
+  // structurally different JSX on mobile vs desktop (rather than the
+  // CSS-media-query approach used elsewhere in the app, which works well
+  // for visual variants but breaks down when the layouts diverge enough
+  // that responsive classes start fighting inline styles). The Observer
+  // card is the first such component — too many !important rules became
+  // brittle. Single source of truth, no className/style conflicts.
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
   useEffect(() => {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
     if (!vv) return;
@@ -4152,56 +4170,6 @@ export default function App({ user }) {
            provide enough affordance that the inner track adds visual noise. */
         .r-client-modal::-webkit-scrollbar { display: none; }
         .r-client-modal { scrollbar-width: none; -ms-overflow-style: none; }
-        /* ============================================================
-           Observer card · mobile layout
-           ============================================================
-           Mobile is severely width-constrained. Layout rewrite:
-             - Graphic: lives inline inside the topbar (right side), 100×84.
-               Sits next to the archetype name as a paired pictogram.
-             - Topbar rule + № WK DATE metadata: hidden on mobile —
-               the right side is now taken by the graphic.
-             - Content padding-right: 0 — content flows full-width below.
-             - Actions row: stacks vertically — stats on one row, then
-               buttons full-width below (Unpack primary, Dismiss link).
-           Important needed throughout to beat inline styles on the JSX. */
-        .rt-obs-illo {
-          width: 60px !important;
-          height: 50px !important;
-          margin-right: 32px !important;
-        }
-        .rt-obs-card { padding: 16px 18px !important; }
-        .rt-obs-headline { font-size: 19px !important; padding-right: 28px !important; }
-        .rt-obs-content { padding-right: 0 !important; }
-        .rt-obs-topbar { border-bottom: none !important; padding-bottom: 0 !important; margin-bottom: 14px !important; }
-        .rt-obs-topbar-rule { display: none !important; }
-        .rt-obs-topbar-meta { display: none !important; }
-        /* Corner ✕ dismiss — mobile only. Hidden on desktop where the
-           inline "Dismiss" button at the end of the actions row handles
-           the same job. */
-        .rt-obs-dismiss-x { display: flex !important; }
-        /* Collapsible content on mobile. Base = collapsed (hidden).
-           When .rt-obs-expanded is added (user tapped "More"), it shows.
-           Desktop always shows via the min-width:768px override below. */
-        .rt-obs-collapsible { display: none !important; }
-        .rt-obs-collapsible.rt-obs-expanded { display: block !important; }
-        /* For flex containers we need to restore the original display value
-           when expanded. .rt-obs-metrics is the only flex collapsible. */
-        .rt-obs-metrics.rt-obs-expanded { display: flex !important; }
-        /* More/Less toggle — mobile only. */
-        .rt-obs-more { display: inline-flex !important; }
-        /* Mobile actions row: when collapsed, no border-top (it would
-           hang in empty space since the metric strip is hidden). When
-           expanded, the border returns naturally because it lives in
-           the inline style. We use a sibling-state hack: when none of
-           the collapsibles are expanded, suppress the border. Since we
-           can't easily target that, instead always suppress on mobile
-           and let the expanded state re-add it inline (handled via JS
-           is unnecessary — the visual transition without the border
-           reads fine even when expanded, since the spacing alone is
-           enough to separate). */
-        .rt-obs-actions { border-top: none !important; padding-top: 4px !important; }
-        /* Dismiss button hidden on mobile — replaced by corner ✕. */
-        .rt-obs-dismiss { display: none !important; }
         /* Due picker dropdown · mobile bottom sheet.
            Desktop anchors right:0 relative to the Due button — works
            because viewport is wide. On mobile the picker is 240px+
@@ -4222,25 +4190,6 @@ export default function App({ user }) {
           min-width: 0 !important;
           width: auto !important;
           max-width: none !important;
-        }
-        .rt-obs-actions {
-          flex-direction: column !important;
-          align-items: stretch !important;
-          gap: 14px !important;
-        }
-        .rt-obs-metrics { gap: 22px !important; }
-        .rt-obs-spacer { display: none !important; }
-        .rt-obs-unpack {
-          width: 100% !important;
-          padding: 12px 16px !important;
-          font-size: 14px !important;
-          order: 1;
-        }
-        .rt-obs-dismiss {
-          width: 100% !important;
-          padding: 4px 0 0 !important;
-          font-size: 12.5px !important;
-          order: 2;
         }
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
@@ -4305,38 +4254,6 @@ export default function App({ user }) {
           .r-rai-inner { padding-top: 32px !important; }
           .r-rai-inputbar { padding: 12px 24px 28px !important; }
           .r-chat-msg-user { scroll-margin-top: 24px !important; }
-          /* Observer card · desktop overrides.
-             The graphic lives inside the topbar in the JSX, but on
-             desktop we promote it to position:absolute and pin it to
-             the card's top-right corner — same visual as before this
-             refactor. Topbar metadata + rule re-appear. Actions row
-             reverts to native horizontal flex layout. */
-          .rt-obs-illo {
-            position: absolute !important;
-            right: 36px !important;
-            top: 28px !important;
-            width: 200px !important;
-            height: 165px !important;
-            margin-right: 0 !important;
-          }
-          .rt-obs-card { padding: 24px 28px 22px !important; }
-          .rt-obs-headline { font-size: 25px !important; padding-right: 0 !important; }
-          .rt-obs-content { padding-right: 220px !important; }
-          .rt-obs-topbar { border-bottom: 1px dashed ${C.borderLight} !important; padding-bottom: 14px !important; margin-bottom: 18px !important; }
-          .rt-obs-topbar-rule { display: block !important; }
-          .rt-obs-topbar-meta { display: block !important; }
-          .rt-obs-meta-row { display: none !important; }
-          /* Corner ✕ and More button — mobile-only. Hidden on desktop. */
-          .rt-obs-dismiss-x { display: none !important; }
-          .rt-obs-more { display: none !important; }
-          /* Collapsibles always shown on desktop, regardless of expanded
-             state. The original block/flex display values restored. */
-          .rt-obs-collapsible { display: block !important; }
-          .rt-obs-metrics.rt-obs-collapsible { display: flex !important; }
-          /* Meta-row is the one exception — it's the mobile-only version
-             of the same string that lives inline in the topbar on desktop.
-             Override the .rt-obs-collapsible default-block above. */
-          .rt-obs-meta-row.rt-obs-collapsible { display: none !important; }
           /* Due picker · desktop reset.
              Base/mobile pins it to viewport as bottom sheet. Desktop
              reverts to the original "drop below button, right-aligned"
@@ -4350,28 +4267,6 @@ export default function App({ user }) {
             min-width: 240px !important;
             width: auto !important;
             max-width: none !important;
-          }
-          /* Inline Dismiss button visible on desktop. */
-          .rt-obs-dismiss { display: inline-flex !important; }
-          /* Actions row gets its border-top back on desktop. */
-          .rt-obs-actions {
-            flex-direction: row !important;
-            align-items: center !important;
-            gap: 24px !important;
-            border-top: 1px solid ${C.borderLight} !important;
-            padding-top: 16px !important;
-          }
-          .rt-obs-metrics { gap: 28px !important; }
-          .rt-obs-spacer { display: block !important; }
-          .rt-obs-unpack {
-            width: auto !important;
-            padding: 8px 14px !important;
-            font-size: 13px !important;
-          }
-          .rt-obs-dismiss {
-            width: auto !important;
-            padding: 10px 8px !important;
-            font-size: 13px !important;
           }
         }
         @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
@@ -4923,48 +4818,43 @@ export default function App({ user }) {
           //
           // Each branch returns { line1, line2 } or null. If null, no callout
           // shows. The circle around the number is gated on the same condition.
-          // Sidebar callout: "+N today" — the count of tasks the user has
-          // completed today. Always honest, works for new accounts, stays
-          // true across week/month/year toggles (the callout describes
-          // today regardless of which period the big number shows).
-          // Silent if zero — the widget says nothing rather than show "+0".
+          // Sidebar callout: "plus N / tasks today" — two-line handwritten
+          // note pointing at the big completion number. Counts tasks the
+          // user completed today (checked off in the task list). Always
+          // renders — at 0 it shows "plus 0 / tasks today" so the slot
+          // is a stable always-present line. The ↙ arrow on line two
+          // points down-left toward the big number below.
           const computeCallout = () => {
             const today = taskCompletedCounts.today || 0;
-            if (today < 1) return null;
-            return { line1: "+" + today + " today", line2: "" };
+            return { line1: "plus " + today, line2: "↙ tasks today" };
           };
 
           const callout = computeCallout();
 
           return (
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, position: "relative" }}>
-              {/* Handwritten callout — only renders when computeCallout returns
-                  a signal. Otherwise the widget is silent. The circle around
-                  the number is gated on the same condition (they belong
-                  together — circle without callout is decoration). */}
-              {callout && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: -16,
-                    right: -2,
-                    fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
-                    fontSize: 18,
-                    color: C.primaryDeep,
-                    transform: "rotate(-6deg)",
-                    pointerEvents: "none",
-                    lineHeight: 1.05,
-                    fontWeight: 600,
-                  }}
-                >
-                  {callout.line1}
-                  {callout.line2 && (
-                    <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
-                      {callout.line2}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* Handwritten callout — always rendered. Hovers over the
+                  big completion number in the top-right corner of the
+                  Done section. ↙ on line two points down at the number. */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: -16,
+                  right: -2,
+                  fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
+                  fontSize: 18,
+                  color: C.primaryDeep,
+                  transform: "rotate(-6deg)",
+                  pointerEvents: "none",
+                  lineHeight: 1.05,
+                  fontWeight: 600,
+                }}
+              >
+                {callout.line1}
+                <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
+                  {callout.line2}
+                </span>
+              </div>
 
               {/* TASKS COMPLETED section */}
               <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
@@ -8900,268 +8790,370 @@ export default function App({ user }) {
                           borderRadius: 14,
                         }}
                       >
-                        <div className="rt-obs-card" style={{
-                          background: C.primarySoft,
-                          color: C.text,
-                          borderRadius: 14,
-                          border: "1px solid " + C.borderLight,
-                          padding: "24px 28px 22px",
-                          position: "relative",
-                          overflow: "hidden",
-                          boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
-                        }}>
-                          {/* ─── CORNER DISMISS (mobile only) ───
-                              On mobile the inline "Dismiss" button at the
-                              bottom of the actions row competes with the
-                              primary action. Replaced with a small ✕ in the
-                              top-right corner — matches iOS/Linear/Stripe
-                              notification dismiss pattern. Hidden on desktop
-                              via CSS (.rt-obs-dismiss-x). */}
-                          <button
-                            type="button"
-                            className="rt-obs-dismiss-x"
-                            onClick={handleDrop}
-                            aria-label="Dismiss observation"
-                            style={{
-                              position: "absolute",
-                              top: 10,
-                              right: 10,
-                              width: 28,
-                              height: 28,
-                              borderRadius: 14,
-                              background: "transparent",
-                              border: "none",
-                              color: C.textMuted,
-                              fontSize: 16,
-                              lineHeight: 1,
-                              cursor: "pointer",
-                              display: "none",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontFamily: "inherit",
-                              padding: 0,
-                              zIndex: 2,
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = "rgba(28,50,36,0.06)"; e.currentTarget.style.color = C.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.textMuted; }}
-                          >
-                            ✕
-                          </button>
-
-                          {/* ─── CONTENT (right-padded only when illo is present) ─── */}
-                          {/* paddingRight scales with breakpoint via the .rt-obs-content */}
-                          {/* class (see global style block). Desktop reserves 220px for  */}
-                          {/* the 200px illo + gap. Mobile content is full-width.         */}
-                          <div className={illoSrc ? "rt-obs-content" : undefined} style={{ paddingRight: illoSrc ? 220 : 0 }}>
-                          {/* ─── TOP BAR: dot + name on left, № WK DATE on right.
-                              On MOBILE the graphic also lives in this topbar (right side).
-                              On DESKTOP the same <img> is absolute-positioned out of flow
-                              to the card's top-right corner. One element, two placements,
-                              handled entirely in CSS. ─── */}
-                          <div className="rt-obs-topbar" style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 12,
-                            paddingBottom: 14,
-                            borderBottom: "1px dashed " + C.borderLight,
-                            marginBottom: 18,
+                        {/* ═══════════════════════════════════════════
+                            OBSERVER CARD — desktop and mobile layouts
+                            ═══════════════════════════════════════════
+                            Two separate JSX trees, picked by `isMobile`.
+                            Each owns its own layout end-to-end. No
+                            !important wars. No responsive class fights.
+                            Shared closure scope: archetype, illoSrc,
+                            obsNum, weekNum, firedDate, handleUnpack,
+                            handleDrop, metricEntries, METRIC_LABELS,
+                            formatMetricValue, obsMobileExpanded,
+                            setObsMobileExpanded. */}
+                        {isMobile ? (
+                          /* ─── MOBILE LAYOUT — V1 spec ───
+                             Compact card. Topbar pairs the archetype name
+                             with a small (60×50) illo. Corner ✕ replaces
+                             the inline Dismiss button. Headline only, by
+                             default. Body + metadata + metric strip live
+                             behind a "More" tap. Action row uses text
+                             links (no harsh button background). */
+                          <div style={{
+                            background: C.primarySoft,
+                            color: C.text,
+                            borderRadius: 14,
+                            border: "1px solid " + C.borderLight,
+                            padding: "16px 18px",
+                            position: "relative",
+                            overflow: "hidden",
+                            boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
                           }}>
-                            <div style={{
-                              width: 8, height: 8, borderRadius: 999,
-                              background: C.btn, flexShrink: 0,
-                            }} />
-                            <div style={{
-                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                              fontSize: 11,
-                              fontWeight: 700,
-                              letterSpacing: "0.18em",
-                              textTransform: "uppercase",
+                            {/* Corner ✕ dismiss — top-right notification pattern */}
+                            <button
+                              type="button"
+                              onClick={handleDrop}
+                              aria-label="Dismiss observation"
+                              style={{
+                                position: "absolute",
+                                top: 10, right: 10,
+                                width: 28, height: 28,
+                                borderRadius: 14,
+                                background: "transparent",
+                                border: "none",
+                                color: C.textMuted,
+                                fontSize: 16,
+                                lineHeight: 1,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                padding: 0,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                zIndex: 2,
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = "rgba(28,50,36,0.06)"; e.currentTarget.style.color = C.text; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.textMuted; }}
+                            >
+                              ✕
+                            </button>
+
+                            {/* TOPBAR — dot + name + illo (right side, with margin to clear ✕) */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                              <div style={{ width: 6, height: 6, borderRadius: 999, background: C.btn, flexShrink: 0 }} />
+                              <div style={{
+                                fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                letterSpacing: "0.16em",
+                                textTransform: "uppercase",
+                                color: C.text,
+                                flex: 1,
+                              }}>
+                                {archetype}
+                              </div>
+                              {illoSrc && (
+                                <img
+                                  src={illoSrc}
+                                  alt=""
+                                  aria-hidden="true"
+                                  style={{
+                                    width: 60, height: 50,
+                                    flexShrink: 0,
+                                    pointerEvents: "none",
+                                    opacity: 0.9,
+                                    objectFit: "contain",
+                                    marginRight: 32,
+                                  }}
+                                />
+                              )}
+                            </div>
+
+                            {/* HEADLINE — always visible. padding-right clears the corner ✕ */}
+                            <h3 style={{
+                              fontFamily: "'Fraunces', Georgia, serif",
+                              fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
+                              fontWeight: 400,
+                              fontStyle: "italic",
+                              fontSize: 19,
+                              lineHeight: 1.25,
+                              letterSpacing: "-0.005em",
                               color: C.text,
+                              margin: "0 0 14px",
+                              paddingRight: 28,
                             }}>
-                              {archetype}
+                              {obs.front_headline}
+                            </h3>
+
+                            {/* EXPANDABLE — meta + body + metric strip, shown after "More" tap */}
+                            {obsMobileExpanded && (
+                              <>
+                                <div style={{
+                                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                  fontSize: 10.5,
+                                  letterSpacing: "0.14em",
+                                  color: C.textMuted,
+                                  marginBottom: 12,
+                                }}>
+                                  № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
+                                </div>
+                                <p style={{
+                                  fontSize: 13.5,
+                                  lineHeight: 1.55,
+                                  color: C.textSec,
+                                  margin: "0 0 16px",
+                                }}>
+                                  {obs.front_body}
+                                </p>
+                                {metricEntries.length > 0 && (
+                                  <div style={{ display: "flex", gap: 22, marginBottom: 16, flexWrap: "wrap" }}>
+                                    {metricEntries.map(([key, val]) => (
+                                      <div key={key}>
+                                        <div style={{
+                                          fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                          fontSize: 16,
+                                          fontWeight: 600,
+                                          color: C.text,
+                                          lineHeight: 1,
+                                        }}>
+                                          {formatMetricValue(key, val)}
+                                        </div>
+                                        <div style={{
+                                          fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                          fontSize: 9,
+                                          fontWeight: 700,
+                                          letterSpacing: "0.16em",
+                                          textTransform: "uppercase",
+                                          color: C.textMuted,
+                                          marginTop: 4,
+                                        }}>
+                                          {METRIC_LABELS[key] || key.replace(/_/g, " ")}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {/* ACTIONS — text links, no button background */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <button
+                                type="button"
+                                onClick={() => setObsMobileExpanded(v => !v)}
+                                style={{
+                                  background: "transparent",
+                                  color: C.textMuted,
+                                  border: "none",
+                                  padding: "8px 0",
+                                  fontSize: 12.5,
+                                  fontWeight: 500,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                {obsMobileExpanded ? "Less" : "More"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleUnpack}
+                                style={{
+                                  background: "transparent",
+                                  color: C.btn,
+                                  border: "none",
+                                  padding: "8px 0",
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                Unpack with Rai
+                              </button>
                             </div>
-                            <div className="rt-obs-topbar-rule" style={{ flex: 1, height: 1, background: C.borderLight }} />
-                            <div className="rt-obs-topbar-meta" style={{
-                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                              fontSize: 11,
-                              letterSpacing: "0.14em",
-                              color: C.textMuted,
-                              whiteSpace: "nowrap",
-                            }}>
-                              № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
-                            </div>
-                            {/* Illustration. Lives inside the topbar so it can sit
-                                inline on mobile (right of archetype name). On desktop,
-                                the .rt-obs-illo class promotes it to position:absolute
-                                and pins it to the card's top-right corner — see global
-                                <style> block. */}
+                          </div>
+                        ) : (
+                          /* ─── DESKTOP LAYOUT ───
+                             Full editorial card. Topbar with archetype name,
+                             rule, and full № WK DATE metadata. 200×165 illo
+                             absolutely positioned to top-right corner.
+                             Body always visible. Metric strip + actions row
+                             at the bottom. "Unpack with Rai" as purple text
+                             link (no button background) + "Dismiss" muted. */
+                          <div style={{
+                            background: C.primarySoft,
+                            color: C.text,
+                            borderRadius: 14,
+                            border: "1px solid " + C.borderLight,
+                            padding: "24px 28px 22px",
+                            position: "relative",
+                            overflow: "hidden",
+                            boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
+                          }}>
+                            {/* Illustration — absolute corner placement */}
                             {illoSrc && (
                               <img
                                 src={illoSrc}
                                 alt=""
                                 aria-hidden="true"
-                                className="rt-obs-illo"
                                 style={{
-                                  width: 100,
-                                  height: 84,
-                                  flexShrink: 0,
+                                  position: "absolute",
+                                  top: 28, right: 36,
+                                  width: 200, height: 165,
                                   pointerEvents: "none",
                                   opacity: 0.9,
                                   objectFit: "contain",
                                 }}
                               />
                             )}
-                          </div>
 
-                          {/* ─── MOBILE METADATA ROW ───
-                              On mobile, the topbar's inline metadata is hidden
-                              (it would fight the graphic for the right side).
-                              We render the same № WK DATE string here as its own
-                              footnote row, between the topbar divider and the
-                              headline. Hidden on desktop where the inline
-                              version lives in the topbar. Also collapsible on
-                              mobile — only shown when the user taps "More". */}
-                          <div className={"rt-obs-meta-row rt-obs-collapsible" + (obsMobileExpanded ? " rt-obs-expanded" : "")} style={{
-                            fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                            fontSize: 10.5,
-                            letterSpacing: "0.14em",
-                            color: C.textMuted,
-                            marginBottom: 14,
-                            display: "none",
-                          }}>
-                            № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
-                          </div>
-
-                          {/* ─── HEADLINE ─── */}
-                          <h3 className="rt-obs-headline" style={{
-                            fontFamily: "'Fraunces', Georgia, serif",
-                            fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
-                            fontWeight: 400,
-                            fontStyle: "italic",
-                            fontSize: 25,
-                            lineHeight: 1.22,
-                            letterSpacing: "-0.005em",
-                            color: C.text,
-                            margin: "0 0 12px",
-                          }}>
-                            {obs.front_headline}
-                          </h3>
-
-                          {/* ─── BODY ─── */}
-                          <p className={"rt-obs-body rt-obs-collapsible" + (obsMobileExpanded ? " rt-obs-expanded" : "")} style={{
-                            fontSize: 13.5,
-                            lineHeight: 1.55,
-                            color: C.textSec,
-                            margin: "0 0 22px",
-                          }}>
-                            {obs.front_body}
-                          </p>
-                          </div>
-
-                          {/* ─── DIVIDER + BOTTOM ROW: metric strip on left, buttons on right ─── */}
-                          <div className="rt-obs-actions" style={{
-                            paddingTop: 16,
-                            borderTop: "1px solid " + C.borderLight,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 24,
-                          }}>
-                            {/* METRIC STRIP */}
-                            <div className={"rt-obs-metrics rt-obs-collapsible" + (obsMobileExpanded ? " rt-obs-expanded" : "")} style={{ display: "flex", gap: 28 }}>
-                              {metricEntries.map(([key, val]) => (
-                                <div key={key}>
-                                  <div style={{
-                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 18,
-                                    fontWeight: 600,
-                                    color: C.text,
-                                    lineHeight: 1,
-                                  }}>
-                                    {formatMetricValue(key, val)}
-                                  </div>
-                                  <div style={{
-                                    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                                    fontSize: 9.5,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.18em",
-                                    textTransform: "uppercase",
-                                    color: C.textMuted,
-                                    marginTop: 5,
-                                  }}>
-                                    {METRIC_LABELS[key] || key.replace(/_/g, " ")}
-                                  </div>
+                            {/* Content column — padding-right reserves space for the corner illo */}
+                            <div style={{ paddingRight: illoSrc ? 220 : 0 }}>
+                              {/* TOPBAR — dot + name + rule + metadata */}
+                              <div style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12,
+                                paddingBottom: 14,
+                                borderBottom: "1px dashed " + C.borderLight,
+                                marginBottom: 18,
+                              }}>
+                                <div style={{ width: 8, height: 8, borderRadius: 999, background: C.btn, flexShrink: 0 }} />
+                                <div style={{
+                                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  letterSpacing: "0.18em",
+                                  textTransform: "uppercase",
+                                  color: C.text,
+                                }}>
+                                  {archetype}
                                 </div>
-                              ))}
+                                <div style={{ flex: 1, height: 1, background: C.borderLight }} />
+                                <div style={{
+                                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                  fontSize: 11,
+                                  letterSpacing: "0.14em",
+                                  color: C.textMuted,
+                                  whiteSpace: "nowrap",
+                                }}>
+                                  № {obsNum}&nbsp;&nbsp;/&nbsp;&nbsp;WK {weekNum}&nbsp;&nbsp;/&nbsp;&nbsp;{firedDate}
+                                </div>
+                              </div>
+
+                              {/* HEADLINE */}
+                              <h3 style={{
+                                fontFamily: "'Fraunces', Georgia, serif",
+                                fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
+                                fontWeight: 400,
+                                fontStyle: "italic",
+                                fontSize: 25,
+                                lineHeight: 1.22,
+                                letterSpacing: "-0.005em",
+                                color: C.text,
+                                margin: "0 0 12px",
+                              }}>
+                                {obs.front_headline}
+                              </h3>
+
+                              {/* BODY */}
+                              <p style={{
+                                fontSize: 13.5,
+                                lineHeight: 1.55,
+                                color: C.textSec,
+                                margin: "0 0 22px",
+                              }}>
+                                {obs.front_body}
+                              </p>
                             </div>
 
-                            {/* SPACER */}
-                            <div className="rt-obs-spacer" style={{ flex: 1 }} />
+                            {/* ACTIONS ROW — metrics on left, links on right */}
+                            <div style={{
+                              paddingTop: 16,
+                              borderTop: "1px solid " + C.borderLight,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 24,
+                            }}>
+                              {/* Metric strip */}
+                              <div style={{ display: "flex", gap: 28 }}>
+                                {metricEntries.map(([key, val]) => (
+                                  <div key={key}>
+                                    <div style={{
+                                      fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                      fontSize: 18,
+                                      fontWeight: 600,
+                                      color: C.text,
+                                      lineHeight: 1,
+                                    }}>
+                                      {formatMetricValue(key, val)}
+                                    </div>
+                                    <div style={{
+                                      fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                      fontSize: 9.5,
+                                      fontWeight: 700,
+                                      letterSpacing: "0.18em",
+                                      textTransform: "uppercase",
+                                      color: C.textMuted,
+                                      marginTop: 5,
+                                    }}>
+                                      {METRIC_LABELS[key] || key.replace(/_/g, " ")}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
 
-                            {/* MORE/LESS TOGGLE — mobile only.
-                                Sits to the left of "Unpack with Rai" and toggles
-                                the collapsible state. Hidden on desktop (which
-                                always shows the full content inline). */}
-                            <button
-                              type="button"
-                              className="rt-obs-more"
-                              onClick={() => setObsMobileExpanded(v => !v)}
-                              style={{
-                                background: "transparent",
-                                color: C.textMuted,
-                                border: "none",
-                                padding: "10px 8px",
-                                fontSize: 12.5,
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                display: "none",
-                              }}
-                            >
-                              {obsMobileExpanded ? "Less" : "More"}
-                            </button>
+                              <div style={{ flex: 1 }} />
 
-                            {/* BUTTONS */}
-                            <button
-                              type="button"
-                              onClick={handleUnpack}
-                              className="rt-obs-unpack"
-                              style={{
-                                background: C.btn,
-                                color: "#FFFFFF",
-                                border: "none",
-                                padding: "8px 14px",
-                                borderRadius: 8,
-                                fontSize: 13,
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = C.btnHover}
-                              onMouseLeave={e => e.currentTarget.style.background = C.btn}
-                            >
-                              Unpack with Rai
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleDrop}
-                              className="rt-obs-dismiss"
-                              style={{
-                                background: "transparent",
-                                color: C.textMuted,
-                                border: "none",
-                                padding: "10px 8px",
-                                fontSize: 13,
-                                fontWeight: 500,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.color = C.text}
-                              onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                            >
-                              Dismiss
-                            </button>
+                              {/* Unpack as purple text link (no button background) */}
+                              <button
+                                type="button"
+                                onClick={handleUnpack}
+                                style={{
+                                  background: "transparent",
+                                  color: C.btn,
+                                  border: "none",
+                                  padding: "8px 4px",
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                              >
+                                Unpack with Rai
+                              </button>
+                              {/* Dismiss as muted text link */}
+                              <button
+                                type="button"
+                                onClick={handleDrop}
+                                style={{
+                                  background: "transparent",
+                                  color: C.textMuted,
+                                  border: "none",
+                                  padding: "8px 4px",
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  cursor: "pointer",
+                                  fontFamily: "inherit",
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.color = C.text}
+                                onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+                              >
+                                Dismiss
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })()}
