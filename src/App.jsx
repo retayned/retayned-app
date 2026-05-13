@@ -3147,6 +3147,12 @@ export default function App({ user }) {
   // ─── Workers state ──
   const [workersList, setWorkersList] = useState([]);
   const [workerCounts, setWorkerCounts] = useState({}); // { worker_id: { pending, done } }
+  // All historical completions attributed to workers. Read from
+  // task_completions table on hydration. The in-memory `tasks` array
+  // is only today's open tasks — completion history older than today
+  // would otherwise be lost the moment tasksDb.resetRecurring fires.
+  // This array is the source of truth for cross-time worker stats.
+  const [workerCompletions, setWorkerCompletions] = useState([]);
   const [newTaskWorkerId, setNewTaskWorkerId] = useState(null);   // composer: assigned worker for new task
   const [workerPickerOpen, setWorkerPickerOpen] = useState(false); // composer popover
   const [addWorkerOpen, setAddWorkerOpen] = useState(false);       // add-worker modal
@@ -3545,12 +3551,14 @@ export default function App({ user }) {
 
     // Workers — non-blocking, optional table
     try {
-      const [wRes, wcRes] = await Promise.all([
+      const [wRes, wcRes, wcompRes] = await Promise.all([
         workersDb.list(uid),
         workersDb.getCounts(uid),
+        workersDb.getAllCompletions(uid),
       ]);
       if (wRes?.data) setWorkersList(wRes.data);
       if (wcRes?.data) setWorkerCounts(wcRes.data);
+      if (wcompRes?.data) setWorkerCompletions(wcompRes.data);
     } catch (e) {
       console.warn("Workers load failed (table may not exist yet):", e);
     }
@@ -3633,6 +3641,15 @@ export default function App({ user }) {
           workersDb.getCounts(user.id).then(({ data }) => {
             if (data) setWorkerCounts(data);
           }).catch(() => {});
+          // Also refresh completion history — a worker-assigned task that
+          // just flipped to done will have a new task_completions row.
+          // Without this refetch the Workers page would show stale stats
+          // until full reload.
+          if (row.is_done) {
+            workersDb.getAllCompletions(user.id).then(({ data }) => {
+              if (data) setWorkerCompletions(data);
+            }).catch(() => {});
+          }
         }
       }
     });
@@ -10022,107 +10039,151 @@ export default function App({ user }) {
             return ret * conc * tenureBoost;
           };
 
-          // Compute per-worker stats
+          // Compute per-worker stats.
+          //
+          // Data sources:
+          //   (1) `allAssigned` — open tasks currently assigned to a worker.
+          //       From the in-memory `tasks` array (today's open set).
+          //       Used for: pending, overdue, currently-open client mix.
+          //   (2) `workerCompletions` — historical completion events from
+          //       the task_completions table. Persists across day rollovers
+          //       and resetRecurring (the in-memory tasks array loses these
+          //       on refresh). Used for: all-time completed counts, on-time
+          //       rates, time-windowed counts, completion-based client mix.
+          //
+          // Without (2), refreshing wiped historical completion data because
+          // resetRecurring nulls tasks.completed_at every morning.
           const computeStats = (workerId) => {
-            const wTasks = allAssigned.filter(t => t.assigned_worker_id === workerId);
-            const wTasksAll = wTasks.length;
-            const wDone = wTasks.filter(t => t.done).length;
+            const wOpen = allAssigned.filter(t => t.assigned_worker_id === workerId);
+            const wCompletions = workerCompletions.filter(c => c.assigned_worker_id === workerId);
 
-            // 30-day window — based on completed_at for done tasks, created_at for assigned
-            const wAssigned30 = wTasks.filter(t => {
+            // Pending + overdue come from currently-open tasks only.
+            const pending = wOpen.filter(t => !t.done).length;
+            const overdue = wOpen.filter(t => !t.done && t.due_date && String(t.due_date).slice(0, 10) < _todayStr).length;
+
+            // Completed counts come from task_completions (persistent history).
+            // Each completion row is a discrete event — recurring tasks
+            // completed N times produce N rows.
+            const completedAll = wCompletions.length;
+            const completed30 = wCompletions.filter(c => new Date(c.completed_at).getTime() >= _30dAgo.getTime()).length;
+
+            // "Done" count combines historical completions + tasks that are
+            // currently flagged done in the open set. Mostly redundant since
+            // a completed task will also have a completion row, but kept for
+            // safety in case of any in-flight state where the task row was
+            // toggled done but the completion insert hasn't landed yet.
+            const wDone = completedAll;
+            const wDone30 = completed30;
+
+            // Assigned counts: in-memory open + historical completions
+            // (each completion implies that task was assigned at some point).
+            // Sums across both axes; doesn't perfectly dedupe (recurring tasks
+            // get counted once per completion), which matches throughput
+            // semantics — "how many things has this worker done."
+            const wTasksAll = wOpen.length + completedAll;
+            const wAssigned30 = wOpen.filter(t => {
               const ts = t.created_at || 0;
               return new Date(ts).getTime() >= _30dAgo.getTime();
-            }).length;
-            const wDone30 = wTasks.filter(t => {
-              if (!t.done) return false;
-              const cAt = t.completed_at || t.worker_completed_at;
-              return cAt && new Date(cAt).getTime() >= _30dAgo.getTime();
-            }).length;
+            }).length + completed30;
 
-            // On-time: completed_at <= due_date (or no due_date counts as on-time if completed)
-            const completedTasks = wTasks.filter(t => t.done && (t.completed_at || t.worker_completed_at));
-            const onTimeAll = completedTasks.filter(t => {
-              if (!t.due_date) return true;
-              const cAt = t.completed_at || t.worker_completed_at;
-              return String(cAt).slice(0,10) <= String(t.due_date).slice(0,10);
-            }).length;
-            const onTimeRateAll = completedTasks.length ? Math.round((onTimeAll / completedTasks.length) * 100) : null;
+            // On-time rates come from completion rows directly. was_on_time
+            // is frozen at insert time so it's historically stable.
+            const onTimeAll = wCompletions.filter(c => c.was_on_time !== false).length;
+            const onTimeRateAll = completedAll > 0 ? Math.round((onTimeAll / completedAll) * 100) : null;
 
-            const completed30 = completedTasks.filter(t => {
-              const cAt = t.completed_at || t.worker_completed_at;
-              return new Date(cAt).getTime() >= _30dAgo.getTime();
-            });
-            const onTime30 = completed30.filter(t => {
-              if (!t.due_date) return true;
-              const cAt = t.completed_at || t.worker_completed_at;
-              return String(cAt).slice(0,10) <= String(t.due_date).slice(0,10);
-            }).length;
-            const onTimeRate30 = completed30.length ? Math.round((onTime30 / completed30.length) * 100) : null;
+            const wCompletions30 = wCompletions.filter(c => new Date(c.completed_at).getTime() >= _30dAgo.getTime());
+            const onTime30 = wCompletions30.filter(c => c.was_on_time !== false).length;
+            const onTimeRate30 = wCompletions30.length > 0 ? Math.round((onTime30 / wCompletions30.length) * 100) : null;
 
-            // Pending + overdue
-            const pending = wTasks.filter(t => !t.done).length;
-            const overdue = wTasks.filter(t => !t.done && t.due_date && String(t.due_date).slice(0,10) < _todayStr).length;
-
-            // Client mix
+            // Client mix — combine open and completed for an honest picture.
             const clientMap = {};
-            wTasks.forEach(t => {
+            wOpen.forEach(t => {
               const k = t.client || "(no client)";
+              clientMap[k] = (clientMap[k] || 0) + 1;
+            });
+            wCompletions.forEach(c => {
+              const k = c.client_name || "(no client)";
               clientMap[k] = (clientMap[k] || 0) + 1;
             });
             const clientEntries = Object.entries(clientMap).sort((a, b) => b[1] - a[1]);
             const topClient = clientEntries[0]?.[0] || null;
             const clientDiversity = clientEntries.filter(([k]) => k !== "(no client)").length;
 
-            // Top client (last 30d)
-            const wTasks30 = wTasks.filter(t => {
-              const ts = t.created_at || 0;
-              return new Date(ts).getTime() >= _30dAgo.getTime();
-            });
+            // Top client (last 30d) — same blend, time-windowed.
             const clientMap30 = {};
-            wTasks30.forEach(t => {
+            wOpen.forEach(t => {
+              const ts = t.created_at || 0;
+              if (new Date(ts).getTime() < _30dAgo.getTime()) return;
               const k = t.client || "(no client)";
+              clientMap30[k] = (clientMap30[k] || 0) + 1;
+            });
+            wCompletions30.forEach(c => {
+              const k = c.client_name || "(no client)";
               clientMap30[k] = (clientMap30[k] || 0) + 1;
             });
             const topClient30 = Object.entries(clientMap30).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
-            // Worker Impact Score
-            // For each completed task: weight = on-time bonus, multiplied by client_value.
-            // Penalty for overdue tasks (still open, past due).
-            // Normalize by total task count, then scale to 0-99.
+            // ─── Worker Impact Score ───────────────────────────────────
+            // Per-completion average impact, scaled to a 0-99 range.
+            //
+            // For each historical completion:
+            //   cv = clientValue(client_name) — 0 if no client mapped
+            //   ageDecay = exp(-ageDays / 180) — smooth half-life ~125d
+            //   weight = 1.5 if on-time non-recurring,
+            //            1.0 if on-time recurring,
+            //            0.7 if late (either type)
+            //   contribution = weight × cv × ageDecay
+            //
+            // For each currently-OPEN overdue task:
+            //   severity = min(1, daysOverdue / 14) — cap penalty at 14d
+            //   penalty = 0.5 × clientValue × severity
+            //
+            // Impact = average contribution per completion, ×50 to land in
+            // 0-99 range. Workers with <5 completions are flagged "building"
+            // and the score is shown as a placeholder until they have a
+            // real sample size.
             let rawImpact = 0;
-            completedTasks.forEach(t => {
-              const isOnTime = !t.due_date || (() => {
-                const cAt = t.completed_at || t.worker_completed_at;
-                return String(cAt).slice(0,10) <= String(t.due_date).slice(0,10);
-              })();
-              const taskWeight = t.recurring ? 1.0 : (isOnTime ? 1.5 : 0.7);
-              // Time decay: tasks > 90 days old count for half
-              const cAt = t.completed_at || t.worker_completed_at;
-              const ageDays = cAt ? (Date.now() - new Date(cAt).getTime()) / 86400000 : 0;
-              const decay = ageDays > 90 ? 0.5 : 1.0;
-              rawImpact += taskWeight * clientValue(t.client) * decay;
-            });
-            // Penalty for overdue
-            const overdueTasks = wTasks.filter(t => !t.done && t.due_date && String(t.due_date).slice(0,10) < _todayStr);
-            overdueTasks.forEach(t => {
-              rawImpact -= 0.5 * clientValue(t.client);
+            let scorableCompletions = 0; // completions with a real client (cv > 0)
+            wCompletions.forEach(c => {
+              const cv = clientValue(c.client_name);
+              if (cv <= 0) return; // "(no client)" tasks don't contribute to impact
+              const ageDays = (Date.now() - new Date(c.completed_at).getTime()) / 86400000;
+              const ageDecay = Math.exp(-ageDays / 180);
+              const isOnTime = c.was_on_time !== false;
+              let weight;
+              if (c.is_recurring) {
+                weight = isOnTime ? 1.0 : 0.7;
+              } else {
+                weight = isOnTime ? 1.5 : 0.7;
+              }
+              rawImpact += weight * cv * ageDecay;
+              scorableCompletions++;
             });
 
-            // Normalize. Empirical: scale by sqrt of total task count to dampen massive volume.
-            // Floor at 0, cap at 99.
-            const denom = Math.sqrt(Math.max(wTasksAll, 1));
-            let impact = denom ? Math.round((rawImpact / denom) * 35) : 0;
+            // Severity-scaled overdue penalty.
+            wOpen.filter(t => !t.done && t.due_date && String(t.due_date).slice(0, 10) < _todayStr).forEach(t => {
+              const cv = clientValue(t.client);
+              if (cv <= 0) return;
+              const dueMs = new Date(t.due_date).getTime();
+              const daysOverdue = Math.max(0, (Date.now() - dueMs) / 86400000);
+              const severity = Math.min(1, daysOverdue / 14);
+              rawImpact -= 0.5 * cv * severity;
+            });
+
+            // Per-completion average impact. Avoids the previous sqrt-divisor
+            // bug where doubling completions made the score go DOWN.
+            const avgImpact = scorableCompletions > 0 ? rawImpact / scorableCompletions : 0;
+            let impact = Math.round(avgImpact * 50);
             impact = Math.max(0, Math.min(99, impact));
 
-            // "Building track record" if < 5 completed
-            const isBuilding = completedTasks.length < 5;
+            // "Building track record" if < 5 scorable completions.
+            const isBuilding = scorableCompletions < 5;
 
             return {
               wTasksAll, wDone, wAssigned30, wDone30,
               pending, overdue,
               onTimeRateAll, onTimeRate30,
-              completedAll: completedTasks.length,
-              completed30: completed30.length,
+              completedAll, completed30,
               topClient, topClient30, clientDiversity,
               impact, isBuilding,
             };
