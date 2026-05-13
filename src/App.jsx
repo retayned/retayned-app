@@ -1,7 +1,20 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
 import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
+// d3-force for the live, physics-driven referral network. We import only
+// the force functions we use (not the full d3 bundle) — keeps the chunk
+// small. simulation runs on mount, pauses when the page isn't focused,
+// nodes drift naturally as users hover/drag.
+import {
+  forceSimulation,
+  forceManyBody,
+  forceLink,
+  forceCenter,
+  forceCollide,
+  forceX as d3forceX,
+  forceY as d3forceY,
+} from "d3-force";
 
 // ============================================================
 // PALETTE
@@ -2412,6 +2425,514 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
   );
 };
 
+// ============================================================
+// REFERRAL NETWORK · d3-force simulation
+// ============================================================
+//
+// A live, physics-driven SVG component that renders the referral
+// network as a graph. Replaces the static hub-and-spoke math
+// (which broke past ~6 referrers) with a force-directed layout
+// that scales to any number of nodes.
+//
+// Forces in play:
+//   • forceLink     — edges pull connected nodes together
+//   • forceManyBody — every node repels every other node
+//   • forceCenter   — soft anchor toward viewport center
+//   • forceCollide  — physical radii prevent overlap
+//   • forceX/Y      — gentle pull keeping the hub at center
+//
+// Animation: the simulation runs continuously at low alpha so
+// the graph subtly breathes. Hover-locking on a node bumps its
+// charge to make it "settle" momentarily for clean inspection.
+// New referrals (added in the last 60s) get a CSS pulse ring.
+//
+// Performance: the simulation runs ~30-60 ticks per second using
+// requestAnimationFrame. Stops on unmount to prevent leaks. Pauses
+// when document.hidden via the visibilitychange listener.
+//
+// Color scheme (status-driven):
+//   converted/active → C.retGood (green, solid edge)
+//   pending          → C.retWarn (amber, dashed edge)
+//   lost/rejected    → C.textMuted (gray, dotted edge)
+//
+// Predicted referrers (props.predictedReferrers): clients who
+// HAVEN'T referred but score high on likely-to-refer dimensions.
+// Rendered as ghost nodes — dashed border, faded fill, "Ask?" CTA.
+function ReferralNetworkD3({
+  referrers,
+  predictedReferrers = [],
+  asOfDate = null,
+  recentReferralWindowMs = 60_000,
+  onNodeClick,
+  onEdgeClick,
+  C,
+  getAvatarColor,
+  getInitials,
+}) {
+  // SVG viewport — fixed pixel size, scales via CSS width:100%.
+  const W = 820, H = 500;
+  const cx = W / 2, cy = H / 2;
+
+  // Filter to as-of date for time-travel slider. Each child carries an
+  // `on` (date string). We compare loosely — if no asOfDate, show all.
+  const visibleReferrers = useMemo(() => {
+    if (!asOfDate) return referrers;
+    const cutoff = new Date(asOfDate).getTime();
+    return referrers
+      .map(r => ({
+        ...r,
+        children: r.children.filter(ch => {
+          if (!ch.on) return true;
+          const d = new Date(ch.on).getTime();
+          return Number.isFinite(d) ? d <= cutoff : true;
+        }),
+      }))
+      .filter(r => r.children.length > 0);
+  }, [referrers, asOfDate]);
+
+  // Build node list + edges for the simulation.
+  //   • hub node (id='__hub__', fixed at center)
+  //   • referrer nodes (one per visible referrer)
+  //   • predicted-referrer nodes (ghost; if no predicted ones, skipped)
+  //   • child nodes (referred contacts/leads)
+  // Edges: hub → referrer, referrer → child, hub → ghost referrer (dotted)
+  const { nodes, links } = useMemo(() => {
+    const ns = [];
+    const ls = [];
+
+    // Hub — anchored. fx/fy = fixed position d3-force respects.
+    ns.push({ id: "__hub__", kind: "hub", fx: cx, fy: cy });
+
+    visibleReferrers.forEach(r => {
+      ns.push({
+        id: "ref:" + r.id,
+        kind: "referrer",
+        data: r,
+        radius: 22 + Math.min(8, Math.log(1 + r.revenue / 1000)),
+      });
+      ls.push({ source: "__hub__", target: "ref:" + r.id, kind: "hub-ref" });
+
+      r.children.forEach((ch, i) => {
+        ns.push({
+          id: "child:" + r.id + ":" + (ch.id || i),
+          kind: "child",
+          data: ch,
+          parentId: r.id,
+          radius: 11,
+        });
+        ls.push({
+          source: "ref:" + r.id,
+          target: "child:" + r.id + ":" + (ch.id || i),
+          kind: "ref-child",
+          status: ch.status,
+        });
+      });
+    });
+
+    // Predicted referrers — rendered as ghosts. Limited to top 4 to avoid
+    // cluttering the graph; assumes caller already pre-sorted.
+    predictedReferrers.slice(0, 4).forEach(p => {
+      ns.push({
+        id: "ghost:" + p.id,
+        kind: "ghost",
+        data: p,
+        radius: 18,
+      });
+      ls.push({ source: "__hub__", target: "ghost:" + p.id, kind: "hub-ghost" });
+    });
+
+    return { nodes: ns, links: ls };
+  }, [visibleReferrers, predictedReferrers, cx, cy]);
+
+  // Mutable refs to the simulation + nodes (d3 mutates node objects).
+  const simRef = useRef(null);
+  const nodesRef = useRef([]);
+  const [tickVersion, setTickVersion] = useState(0);
+  const [hoverId, setHoverId] = useState(null);
+  const [tooltipPos, setTooltipPos] = useState(null);
+
+  // Build / rebuild simulation when topology changes.
+  useEffect(() => {
+    // Stop any existing simulation.
+    if (simRef.current) simRef.current.stop();
+
+    // Clone node objects so d3 can mutate x/y/vx/vy without polluting
+    // upstream memo'd data. Carry forward old positions where possible
+    // (smooth transition when a node is added).
+    const oldById = new Map(nodesRef.current.map(n => [n.id, n]));
+    const simNodes = nodes.map(n => {
+      const old = oldById.get(n.id);
+      return {
+        ...n,
+        x: old?.x ?? cx + (Math.random() - 0.5) * 40,
+        y: old?.y ?? cy + (Math.random() - 0.5) * 40,
+        vx: old?.vx ?? 0,
+        vy: old?.vy ?? 0,
+        fx: n.fx ?? null,
+        fy: n.fy ?? null,
+      };
+    });
+    nodesRef.current = simNodes;
+
+    const sim = forceSimulation(simNodes)
+      .force("link", forceLink(links.map(l => ({ ...l })))
+        .id(d => d.id)
+        .distance(link => {
+          if (link.kind === "hub-ref") return 130;
+          if (link.kind === "hub-ghost") return 200; // ghosts orbit further out
+          return 60; // ref-child
+        })
+        .strength(link => link.kind === "ref-child" ? 0.9 : 0.4))
+      .force("charge", forceManyBody().strength(d => {
+        if (d.kind === "hub") return -800;
+        if (d.kind === "referrer") return -350;
+        if (d.kind === "ghost") return -150;
+        return -120; // child
+      }))
+      .force("center", forceCenter(cx, cy).strength(0.05))
+      .force("collide", forceCollide().radius(d => d.radius + 8).strength(0.9))
+      .force("x", d3forceX(cx).strength(0.04))
+      .force("y", d3forceY(cy).strength(0.04))
+      .alpha(1)
+      .alphaDecay(0.02)      // slow decay so the graph stays "alive"
+      .alphaMin(0.005)       // keeps it gently breathing even when "settled"
+      .velocityDecay(0.4);
+
+    sim.on("tick", () => {
+      // Bump version so React re-renders. We don't put nodes in state
+      // (would be huge re-renders) — instead store in ref and trigger
+      // a lightweight version increment.
+      setTickVersion(v => v + 1);
+    });
+
+    simRef.current = sim;
+
+    return () => {
+      sim.stop();
+    };
+  }, [nodes, links, cx, cy]);
+
+  // Pause simulation when tab is hidden to save CPU.
+  useEffect(() => {
+    const onVis = () => {
+      if (!simRef.current) return;
+      if (document.hidden) simRef.current.stop();
+      else simRef.current.alpha(0.1).restart();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  // Hover handler: bump alpha when hovering to "settle" the network.
+  const handleEnter = (id, evt) => {
+    setHoverId(id);
+    if (simRef.current) simRef.current.alphaTarget(0.05).restart();
+    if (evt && evt.currentTarget) {
+      const svgRect = evt.currentTarget.ownerSVGElement.getBoundingClientRect();
+      setTooltipPos({
+        x: evt.clientX - svgRect.left,
+        y: evt.clientY - svgRect.top,
+      });
+    }
+  };
+  const handleLeave = () => {
+    setHoverId(null);
+    setTooltipPos(null);
+    if (simRef.current) simRef.current.alphaTarget(0);
+  };
+
+  // Helper to look up a node by id (positions live in nodesRef).
+  const findNode = (id) => nodesRef.current.find(n => n.id === id);
+
+  // Helpers for child colors / edge styles by status.
+  const statusColor = (status) => {
+    if (status === "converted" || status === "active" || status === "closed") return C.retGood;
+    if (status === "pending") return "#D17A1B"; // amber
+    return C.textMuted; // lost / rejected / other
+  };
+  const edgeStrokeDash = (status) => {
+    if (status === "pending") return "4 4";
+    if (status === "lost" || status === "rejected") return "1 5";
+    return null;
+  };
+
+  // Recency check for pulse animation.
+  const now = Date.now();
+  const isRecent = (ch) => {
+    if (!ch?.on) return false;
+    const d = new Date(ch.on).getTime();
+    return Number.isFinite(d) && (now - d) < recentReferralWindowMs;
+  };
+
+  // Force a position read each render via the tickVersion trigger.
+  void tickVersion;
+
+  // Render
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: 520, display: "block" }} onMouseLeave={handleLeave}>
+        <defs>
+          <radialGradient id="hubGlowD3" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={C.primary} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={C.primary} stopOpacity="0" />
+          </radialGradient>
+          <filter id="softShadowD3" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />
+          </filter>
+        </defs>
+
+        {/* Hub glow */}
+        {(() => {
+          const hub = findNode("__hub__");
+          if (!hub) return null;
+          return <circle cx={hub.x} cy={hub.y} r="90" fill="url(#hubGlowD3)" />;
+        })()}
+
+        {/* Edges */}
+        {links.map((link, idx) => {
+          const s = findNode(typeof link.source === "object" ? link.source.id : link.source);
+          const t = findNode(typeof link.target === "object" ? link.target.id : link.target);
+          if (!s || !t) return null;
+          const dim = hoverId && hoverId !== s.id && hoverId !== t.id ? 0.15 : 1;
+          if (link.kind === "hub-ghost") {
+            return (
+              <line
+                key={"ln-" + idx}
+                x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+                stroke={C.textMuted}
+                strokeWidth="1.5"
+                strokeDasharray="1 6"
+                opacity={dim * 0.5}
+                strokeLinecap="round"
+              />
+            );
+          }
+          if (link.kind === "hub-ref") {
+            return (
+              <line
+                key={"ln-" + idx}
+                x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+                stroke={C.retGood}
+                strokeWidth="2.5"
+                opacity={dim * 0.55}
+                strokeLinecap="round"
+                onClick={() => onEdgeClick && onEdgeClick(link)}
+                style={{ cursor: onEdgeClick ? "pointer" : "default" }}
+              />
+            );
+          }
+          // ref-child edge
+          return (
+            <line
+              key={"ln-" + idx}
+              x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+              stroke={statusColor(link.status)}
+              strokeWidth="1.5"
+              strokeDasharray={edgeStrokeDash(link.status)}
+              opacity={dim * 0.55}
+              strokeLinecap="round"
+            />
+          );
+        })}
+
+        {/* Ghost referrer nodes (predicted) */}
+        {nodesRef.current.filter(n => n.kind === "ghost").map(n => {
+          const dim = hoverId && hoverId !== n.id ? 0.3 : 1;
+          const name = n.data?.name || "";
+          return (
+            <g
+              key={n.id}
+              opacity={dim}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={(e) => handleEnter(n.id, e)}
+              onClick={() => onNodeClick && onNodeClick({ kind: "ghost", data: n.data })}
+            >
+              <circle cx={n.x} cy={n.y} r={n.radius} fill={C.bg} stroke={C.btn} strokeWidth="2" strokeDasharray="4 3" opacity="0.85" />
+              <text x={n.x} y={n.y + 4} fontSize="11" fill={C.btn} textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
+              <text x={n.x} y={n.y - n.radius - 14} fontSize="10.5" fill={C.btn} textAnchor="middle" fontWeight="600" opacity="0.85">{name.length > 16 ? name.slice(0, 15) + "…" : name}</text>
+              <text x={n.x} y={n.y + n.radius + 16} fontSize="10" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
+            </g>
+          );
+        })}
+
+        {/* Referrer nodes */}
+        {nodesRef.current.filter(n => n.kind === "referrer").map(n => {
+          const dim = hoverId && hoverId !== n.id ? 0.4 : 1;
+          const highlighted = hoverId === n.id;
+          const name = n.data?.name || "Unknown";
+          const displayName = name.length > 18 ? name.slice(0, 17) + "…" : name;
+          return (
+            <g
+              key={n.id}
+              opacity={dim}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={(e) => handleEnter(n.id, e)}
+              onClick={() => onNodeClick && onNodeClick({ kind: "referrer", data: n.data })}
+            >
+              <circle cx={n.x} cy={n.y} r={highlighted ? n.radius + 4 : n.radius} fill={getAvatarColor(n.id)} stroke="#fff" strokeWidth="3" filter="url(#softShadowD3)" style={{ transition: "r 180ms" }} />
+              <text x={n.x} y={n.y + 4} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
+              <text x={n.x} y={n.y - n.radius - 14} fontSize="12" fill={C.text} textAnchor="middle" fontWeight="600">{displayName}</text>
+              {n.data?.revenue > 0 && (
+                <text x={n.x} y={n.y - n.radius - 28} fontSize="10" fill={C.retGood} textAnchor="middle" fontWeight="700">${(n.data.revenue / 1000).toFixed(n.data.revenue >= 10000 ? 0 : 1)}k/mo</text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Child nodes */}
+        {nodesRef.current.filter(n => n.kind === "child").map(n => {
+          const ch = n.data;
+          const color = statusColor(ch.status);
+          const parentHovered = hoverId === ("ref:" + n.parentId);
+          const meHovered = hoverId === n.id;
+          const dim = hoverId && !parentHovered && !meHovered ? 0.15 : 1;
+          const recent = isRecent(ch);
+          const hasName = ch.hasName;
+          const rawName = ch.name || "Untitled";
+          const displayName = rawName.length > 16 ? rawName.slice(0, 15) + "…" : rawName;
+          return (
+            <g
+              key={n.id}
+              opacity={dim}
+              style={{ cursor: "pointer" }}
+              onMouseEnter={(e) => handleEnter(n.id, e)}
+              onClick={() => onNodeClick && onNodeClick({ kind: "child", data: ch })}
+            >
+              {recent && (
+                <circle cx={n.x} cy={n.y} r="14">
+                  <animate attributeName="r" values="7;18;7" dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="fill" values={color + ";" + color + ";" + color} dur="2s" repeatCount="indefinite" />
+                </circle>
+              )}
+              <circle cx={n.x} cy={n.y} r={meHovered ? n.radius + 2 : n.radius} fill={color} filter="url(#softShadowD3)" style={{ transition: "r 180ms" }} />
+              <circle cx={n.x} cy={n.y} r="3" fill="#fff" opacity="0.9" />
+              {hasName ? (
+                <text x={n.x} y={n.y + n.radius + 14} fontSize="11" fill={C.text} textAnchor="middle" fontWeight="500">{displayName}</text>
+              ) : (
+                <text x={n.x} y={n.y + n.radius + 14} fontSize="10.5" fill={C.textMuted} textAnchor="middle" fontStyle="italic" fontWeight="500">? add name</text>
+              )}
+              {ch.mrr > 0 && (
+                <text x={n.x} y={n.y + n.radius + 28} fontSize="9.5" fill={C.textMuted} textAnchor="middle" fontWeight="500">${(ch.mrr / 1000).toFixed(ch.mrr >= 10000 ? 0 : 1)}k/mo</text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Hub (you) */}
+        {(() => {
+          const hub = findNode("__hub__");
+          if (!hub) return null;
+          return (
+            <g>
+              <circle cx={hub.x} cy={hub.y} r="42" fill={C.primary} stroke="#fff" strokeWidth="4" filter="url(#softShadowD3)" />
+              <text x={hub.x} y={hub.y + 4} fontSize="12" fill="#fff" textAnchor="middle" fontWeight="700" letterSpacing="0.8">YOU</text>
+            </g>
+          );
+        })()}
+      </svg>
+
+      {/* Tooltip — appears next to hovered node */}
+      {hoverId && tooltipPos && (() => {
+        const n = findNode(hoverId);
+        if (!n) return null;
+        if (n.kind === "referrer") {
+          const r = n.data;
+          const conv = r.children.filter(c => c.status === "converted" || c.status === "active" || c.status === "closed").length;
+          const pending = r.children.filter(c => c.status === "pending").length;
+          const lost = r.children.length - conv - pending;
+          return (
+            <div style={{
+              position: "absolute",
+              left: Math.min(tooltipPos.x + 14, W - 240),
+              top: Math.max(8, tooltipPos.y - 10),
+              background: C.card,
+              border: "1px solid " + C.border,
+              borderRadius: 10,
+              padding: "10px 12px",
+              boxShadow: "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
+              minWidth: 220,
+              maxWidth: 260,
+              pointerEvents: "none",
+              zIndex: 50,
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{r.name}</div>
+              <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.6 }}>
+                <div>{r.children.length} {r.children.length === 1 ? "referral" : "referrals"} sent</div>
+                {(conv > 0 || pending > 0 || lost > 0) && (
+                  <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                    {conv > 0 && <span style={{ color: C.retGood }}>● {conv} converted</span>}
+                    {pending > 0 && <span style={{ color: "#D17A1B" }}>● {pending} pending</span>}
+                    {lost > 0 && <span style={{ color: C.textMuted }}>● {lost} lost</span>}
+                  </div>
+                )}
+                {r.revenue > 0 && <div style={{ marginTop: 4, color: C.text, fontWeight: 600 }}>${r.revenue.toLocaleString()}/mo total</div>}
+              </div>
+            </div>
+          );
+        }
+        if (n.kind === "child") {
+          const ch = n.data;
+          return (
+            <div style={{
+              position: "absolute",
+              left: Math.min(tooltipPos.x + 14, W - 240),
+              top: Math.max(8, tooltipPos.y - 10),
+              background: C.card,
+              border: "1px solid " + C.border,
+              borderRadius: 10,
+              padding: "10px 12px",
+              boxShadow: "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
+              minWidth: 200,
+              maxWidth: 260,
+              pointerEvents: "none",
+              zIndex: 50,
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: ch.hasName ? C.text : C.textMuted, fontStyle: ch.hasName ? "normal" : "italic", marginBottom: 4 }}>
+                {ch.hasName ? ch.name : "Name not set — click to edit"}
+              </div>
+              <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.6 }}>
+                <div>Status: <span style={{ color: statusColor(ch.status), fontWeight: 600 }}>{ch.status}</span></div>
+                {ch.mrr > 0 && <div>${ch.mrr.toLocaleString()}/mo</div>}
+                {ch.totalRevenue > 0 && <div>${ch.totalRevenue.toLocaleString()} total</div>}
+                {ch.on && <div style={{ marginTop: 2, fontSize: 10.5 }}>Referred {ch.on}</div>}
+              </div>
+            </div>
+          );
+        }
+        if (n.kind === "ghost") {
+          const p = n.data;
+          return (
+            <div style={{
+              position: "absolute",
+              left: Math.min(tooltipPos.x + 14, W - 240),
+              top: Math.max(8, tooltipPos.y - 10),
+              background: C.card,
+              border: "1px solid " + C.btn + "55",
+              borderRadius: 10,
+              padding: "10px 12px",
+              boxShadow: "0 8px 20px rgba(91,33,182,0.12), 0 2px 4px rgba(10,10,10,0.06)",
+              minWidth: 200,
+              maxWidth: 260,
+              pointerEvents: "none",
+              zIndex: 50,
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{p.name}</div>
+              <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.6 }}>
+                <div style={{ color: C.btn, fontWeight: 600 }}>Likely to refer</div>
+                {p.reason && <div style={{ marginTop: 2 }}>{p.reason}</div>}
+                <div style={{ marginTop: 4, color: C.btn, fontWeight: 600 }}>Click to draft an ask →</div>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
+    </div>
+  );
+}
+
+
 export default function App({ user }) {
   // ─── ROUTING: Worker magic-link page lives at /w/{token} (no auth needed) ──
   // Detect this route before any auth-gated logic runs. Returns WorkerDashboard
@@ -4120,6 +4641,10 @@ export default function App({ user }) {
   const [refTotalRevenue, setRefTotalRevenue] = useState("");
   const [refEditing, setRefEditing] = useState(null);
   const [refEditData, setRefEditData] = useState({});
+  // Time-travel slider in the Referrals network. null = show the latest
+  // (default). An ISO date string filters the visualization to "show the
+  // network as it looked on this date." Set via the slider under the graph.
+  const [networkAsOf, setNetworkAsOf] = useState(null);
   // Referrals v2 — ask-next queue interaction state
   const [askActiveId, setAskActiveId] = useState(null);
   const [askTone, setAskTone] = useState("neutral"); // softer | neutral | firmer
@@ -5108,7 +5633,7 @@ export default function App({ user }) {
                         key={c.id}
                         className="r-convo-row"
                         onClick={() => openRaiChat(c.id)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 10px", borderRadius: 7, cursor: "pointer", background: isActive ? C.primarySoft : "transparent", color: isActive ? C.primary : C.text, fontSize: 12.5, fontWeight: isActive ? 600 : 500, position: "relative", transition: "background 0.12s" }}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 10px", borderRadius: 7, cursor: "pointer", background: isActive ? C.btnLight : "transparent", color: isActive ? C.btn : C.text, fontSize: 12.5, fontWeight: isActive ? 600 : 500, position: "relative", transition: "background 0.12s" }}
                       >
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
                         <button
@@ -10766,15 +11291,27 @@ export default function App({ user }) {
             setAskDraft("");
           };
 
-          // ─── Network Map (hub-and-spoke SVG) ────────────────────────────
+          // ─── Network Map data ────────────────────────────────────────────
           // Referrers = clients who have sent at least one referral.
-          // Build: { id, name, revenue, children: [{ name, mrr, status }] }
-          // Guard against missing/null `from` and `name` fields on logged refs.
+          // Build: { id, name, revenue, children: [{ id, name, mrr, status }] }
+          //
+          // Bug fix May 2026: the hydrated ref object has `to` (mapped from DB
+          // column `referred_to`), not `name`. Reading r.name fell through to
+          // "Untitled" for every saved referral. Order is r.to → r.name → fallback.
           const referrerMap = {};
           refs.forEach(r => {
             const fromName = r.from || "Unknown";
             if (!referrerMap[fromName]) referrerMap[fromName] = { id: fromName, name: fromName, revenue: 0, children: [] };
-            referrerMap[fromName].children.push({ id: r.id || Math.random(), name: r.name || "Untitled", mrr: r.revenue || 0, status: r.status || "pending", on: r.on });
+            const childName = r.to || r.name || null;
+            referrerMap[fromName].children.push({
+              id: r.id || "ref-" + Math.random().toString(36).slice(2, 8),
+              name: childName,
+              hasName: !!childName,
+              mrr: r.revenue || 0,
+              totalRevenue: r.totalRevenue || r.total_revenue || 0,
+              status: r.status || "pending",
+              on: r.on || r.date,
+            });
             referrerMap[fromName].revenue += (r.revenue || 0);
           });
           const referrers = Object.values(referrerMap);
@@ -10924,127 +11461,131 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {/* NETWORK MAP SVG */}
+                  {/* NETWORK MAP — d3-force live simulation */}
                   <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowSm, padding: "18px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, gap: 16, flexWrap: "wrap" }}>
                       <div>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Referral Network</div>
-                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 3 }}>Who your clients sent your way</div>
+                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 3 }}>Live — click any node to drill in</div>
                       </div>
-                      <div style={{ display: "flex", gap: 14, fontSize: 10.5, color: C.textMuted, alignItems: "center" }}>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Active</span>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: "#D17A1B" }} />Closed</span>
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 16, height: 1.5, background: C.border }} /> = referral</span>
+                      <div style={{ display: "flex", gap: 14, fontSize: 10.5, color: C.textMuted, alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Converted
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 4, background: "#D17A1B" }} />Pending
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 4, background: C.textMuted }} />Lost
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 12, height: 12, borderRadius: 6, border: "1.5px dashed " + C.btn }} />Likely
+                        </span>
                       </div>
                     </div>
+
                     {referrers.length === 0 ? (
                       <div style={{ padding: "60px 20px", textAlign: "center", color: C.textMuted }}>
                         <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>No referrals yet.</div>
                         <div style={{ fontSize: 12 }}>Log your first one to start building the network.</div>
                       </div>
                     ) : (() => {
-                      // Layout: hub center, referrers on inner ring, children on outer ring.
-                      // Angle offset prevents 2-node or 4-node layouts from collapsing to a
-                      // straight vertical line (the bug in v1). Offset is largest when n is
-                      // small and approaches 0 as n grows.
-                      const W = 820, H = 440;
-                      const cx = W / 2, cy = H / 2;
-                      const innerR = 140;
-                      const outerExtra = 110;
-                      const n = referrers.length;
-                      const angleOffset = n <= 2 ? Math.PI / 4 : (n <= 4 ? Math.PI / 6 : 0);
-                      const maxRev = Math.max(1, ...referrers.map(rr => rr.revenue));
-                      const nodes = referrers.map((r, i) => {
-                        const theta = (i / n) * Math.PI * 2 - Math.PI / 2 + angleOffset;
-                        const thickness = 1.5 + (r.revenue / maxRev) * 3.5;
-                        return { ...r, x: cx + Math.cos(theta) * innerR, y: cy + Math.sin(theta) * innerR, theta, thickness };
-                      });
-                      // Curved path from hub to referrer — bezier with control point offset
-                      // perpendicular to the line, creating a subtle arc.
-                      const curvedPath = (x1, y1, x2, y2, curvature = 0.15) => {
-                        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-                        const dx = x2 - x1, dy = y2 - y1;
-                        const len = Math.sqrt(dx * dx + dy * dy);
-                        const nx = -dy / len, ny = dx / len; // perpendicular unit vector
-                        const cpx = mx + nx * len * curvature;
-                        const cpy = my + ny * len * curvature;
-                        return `M ${x1} ${y1} Q ${cpx} ${cpy} ${x2} ${y2}`;
+                      // Compute predicted referrers — clients who haven't referred
+                      // anyone but score high on the same dimensions calcAskScore
+                      // uses for the "ask for a referral" rubric. Filter out
+                      // anyone already in the referrer set.
+                      const existingReferrerNames = new Set(referrers.map(r => r.name));
+                      const predicted = clients
+                        .filter(c => !existingReferrerNames.has(c.name))
+                        .map(c => ({ ...c, askScore: calcAskScore(c) }))
+                        .filter(c => c.askScore >= 60)
+                        .sort((a, b) => b.askScore - a.askScore)
+                        .slice(0, 4)
+                        .map(c => ({
+                          id: c.id,
+                          name: c.name,
+                          reason: (() => {
+                            const p = c.profile_scores || c.profile || {};
+                            const tags = [];
+                            if ((p.loyalty || 0) >= 8) tags.push("high loyalty");
+                            if ((p.relationship_depth || 0) >= 8) tags.push("deep relationship");
+                            return tags.join(", ") || "strong overall signals";
+                          })(),
+                        }));
+
+                      const handleNodeClick = (payload) => {
+                        if (payload.kind === "child") {
+                          const refId = payload.data.id;
+                          const r = refs.find(x => x.id === refId);
+                          if (r) {
+                            setRefEditData({ to: r.to, from: r.from, status: r.status, converted: r.converted, revenue: r.revenue, totalRevenue: r.totalRevenue });
+                            setRefEditing(refId);
+                          }
+                        } else if (payload.kind === "referrer") {
+                          // Scroll the referral-log section into view
+                          const logEl = document.getElementById("ref-log");
+                          if (logEl) logEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                        } else if (payload.kind === "ghost") {
+                          // Predicted referrer — prefill the referral form with them as "from"
+                          setRefFrom(payload.data.name);
+                          setRefForm(true);
+                        }
                       };
+
                       return (
-                        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: 460 }} onMouseLeave={() => setNetworkHoverId(null)}>
-                          <defs>
-                            <radialGradient id="hubGlow" cx="50%" cy="50%" r="50%">
-                              <stop offset="0%" stopColor={C.primary} stopOpacity="0.25" />
-                              <stop offset="100%" stopColor={C.primary} stopOpacity="0" />
-                            </radialGradient>
-                            <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
-                              <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />
-                            </filter>
-                          </defs>
-                          {/* Decorative concentric rings for depth */}
-                          <circle cx={cx} cy={cy} r={innerR + outerExtra + 30} fill="none" stroke={C.borderLight} strokeWidth="1" strokeDasharray="2 4" opacity="0.35" />
-                          <circle cx={cx} cy={cy} r={innerR + outerExtra} fill="none" stroke={C.borderLight} strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
-                          <circle cx={cx} cy={cy} r={innerR} fill="none" stroke={C.borderLight} strokeWidth="1" strokeDasharray="2 4" opacity="0.7" />
-                          {/* Hub glow aura */}
-                          <circle cx={cx} cy={cy} r="80" fill="url(#hubGlow)" />
-                          {/* Curved edges from hub to each referrer */}
-                          {nodes.map(node => {
-                            const dim = networkHoverId && networkHoverId !== node.id ? 0.2 : 1;
-                            const side = node.x < cx ? -1 : 1;
+                        <>
+                          <ReferralNetworkD3
+                            referrers={referrers}
+                            predictedReferrers={predicted}
+                            asOfDate={networkAsOf}
+                            onNodeClick={handleNodeClick}
+                            C={C}
+                            getAvatarColor={getAvatarColor}
+                            getInitials={getInitials}
+                          />
+
+                          {/* Time-as-of slider — drag to see the network grow.
+                              Range = earliest referral to today. Default = today (latest).
+                              Off when there are fewer than 3 referrals (no meaningful range). */}
+                          {(() => {
+                            const allDates = refs.map(r => r.date || r.on).filter(Boolean).map(d => new Date(d).getTime()).filter(t => Number.isFinite(t));
+                            if (allDates.length < 3) return null;
+                            const minMs = Math.min(...allDates);
+                            const maxMs = Date.now();
+                            const curMs = networkAsOf ? new Date(networkAsOf).getTime() : maxMs;
+                            const pct = ((curMs - minMs) / (maxMs - minMs)) * 100;
+                            const fmt = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
                             return (
-                              <g key={"edge-" + node.id} opacity={dim}>
-                                <path d={curvedPath(cx, cy, node.x, node.y, 0.1 * side)} stroke={C.retGood} strokeWidth={node.thickness} fill="none" opacity="0.45" strokeLinecap="round" />
-                              </g>
+                              <div style={{ marginTop: 14, padding: "10px 12px", background: C.bg, border: "1px solid " + C.borderLight, borderRadius: 10 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 11, color: C.textMuted }}>
+                                  <span style={{ fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>Time travel</span>
+                                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{networkAsOf ? `Showing as of ${fmt(curMs)}` : `Today (${fmt(maxMs)})`}</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min={minMs}
+                                  max={maxMs}
+                                  value={curMs}
+                                  onChange={(e) => {
+                                    const v = parseInt(e.target.value, 10);
+                                    setNetworkAsOf(v >= maxMs - 86400000 ? null : new Date(v).toISOString());
+                                  }}
+                                  style={{ width: "100%", accentColor: C.btn }}
+                                />
+                                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2, fontSize: 10, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>
+                                  <span>{fmt(minMs)}</span>
+                                  <span>now</span>
+                                </div>
+                              </div>
                             );
-                          })}
-                          {/* Curved edges from referrer to their children */}
-                          {nodes.map(node => {
-                            const dim = networkHoverId && networkHoverId !== node.id ? 0.12 : 1;
-                            const cn = node.children.length;
-                            const spread = cn === 1 ? 0 : Math.PI / 2.5;
-                            return node.children.map((ch, ci) => {
-                              const childTheta = node.theta + (cn === 1 ? 0 : (ci / (cn - 1) - 0.5) * spread);
-                              const childX = node.x + Math.cos(childTheta) * outerExtra;
-                              const childY = node.y + Math.sin(childTheta) * outerExtra;
-                              const color = ch.status === "converted" || ch.status === "active" ? C.retGood : "#D17A1B";
-                              const side = childX < node.x ? -1 : 1;
-                              const name = ch.name || "Untitled";
-                              const displayName = name.length > 16 ? name.slice(0, 15) + "…" : name;
-                              return (
-                                <g key={"ch-" + node.id + "-" + ci} opacity={dim}>
-                                  <path d={curvedPath(node.x, node.y, childX, childY, 0.12 * side)} stroke={color} strokeWidth="1.5" fill="none" opacity="0.55" strokeLinecap="round" />
-                                  <circle cx={childX} cy={childY} r="7" fill={color} filter="url(#softShadow)" />
-                                  <circle cx={childX} cy={childY} r="3" fill="#fff" opacity="0.9" />
-                                  <text x={childX} y={childY + 22} fontSize="11" fill={C.text} textAnchor="middle" fontWeight="500">{displayName}</text>
-                                  {ch.mrr > 0 && <text x={childX} y={childY + 36} fontSize="9.5" fill={C.textMuted} textAnchor="middle" fontWeight="500">${(ch.mrr / 1000).toFixed(ch.mrr >= 10000 ? 0 : 1)}k/mo</text>}
-                                </g>
-                              );
-                            });
-                          })}
-                          {/* Referrer nodes */}
-                          {nodes.map(node => {
-                            const highlighted = networkHoverId === node.id;
-                            const name = node.name || "Unknown";
-                            const displayName = name.length > 18 ? name.slice(0, 17) + "…" : name;
-                            return (
-                              <g key={"node-" + node.id} style={{ cursor: "pointer" }} onMouseEnter={() => setNetworkHoverId(node.id)}>
-                                <circle cx={node.x} cy={node.y} r={highlighted ? 26 : 22} fill={getAvatarColor(node.id)} stroke="#fff" strokeWidth="3" filter="url(#softShadow)" style={{ transition: "r 180ms" }} />
-                                <text x={node.x} y={node.y + 4} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
-                                <text x={node.x} y={node.y - 34} fontSize="12" fill={C.text} textAnchor="middle" fontWeight="600">{displayName}</text>
-                                {node.revenue > 0 && <text x={node.x} y={node.y - 48} fontSize="10" fill={C.retGood} textAnchor="middle" fontWeight="700">${(node.revenue / 1000).toFixed(node.revenue >= 10000 ? 0 : 1)}k/mo</text>}
-                              </g>
-                            );
-                          })}
-                          {/* Hub (you) */}
-                          <circle cx={cx} cy={cy} r="42" fill={C.primary} stroke="#fff" strokeWidth="4" filter="url(#softShadow)" />
-                          <text x={cx} y={cy + 4} fontSize="12" fill="#fff" textAnchor="middle" fontWeight="700" letterSpacing="0.8">YOU</text>
-                        </svg>
+                          })()}
+                        </>
                       );
                     })()}
                   </div>
 
                   {/* REFERRAL LOG (compact) */}
-                  <div>
+                  <div id="ref-log">
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 4px 10px" }}>
                       <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                         <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.textMuted }}>Log</span>
