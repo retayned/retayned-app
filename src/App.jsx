@@ -862,6 +862,52 @@ const TRAILING_PREP_REGEX =
 // words. "The Motley Fool" → "TMF" (or "MF" without the article). "Matte
 // Collection" → "MC". Single-word names → null (don't have abbreviations).
 const COMPOSER_STOP_WORDS = new Set(["the", "a", "an", "and", "of", "&", "for", "to"]);
+
+// Common English words that ALSO appear as tokens in multi-word client names
+// ("Backyard Discovery", "Initech", "Final Group"). Without this blocklist,
+// the score-90 single-token rule turns every task containing "discovery"
+// into a phantom match against Backyard Discovery — same for "initial",
+// "final", "weekly", and dozens more.
+//
+// Effect: users referencing a multi-word client by ONLY its common-word
+// token will no longer match. They must use the full name or an
+// abbreviation. The standalone-name (score 100) path is unaffected — a
+// client literally named "Range" still matches the word "range" because
+// it's the full client name, not just a token within one.
+//
+// Heuristic for additions: words an agency operator would type in normal
+// task text. Keep aggressive — the cost of a false negative (user sees
+// no client matched, can fix in UI) is far smaller than a false positive
+// (silent data corruption, task attached to wrong client).
+const COMPOSER_COMMON_WORDS = new Set([
+  // Adjectives often used as qualifiers
+  "final", "initial", "monthly", "weekly", "daily", "quarterly", "annual",
+  "first", "second", "third", "last", "latest", "next", "previous",
+  "new", "old", "draft", "rough", "polished", "preliminary",
+  // Common nouns in task text
+  "discovery", "review", "audit", "report", "summary", "analysis",
+  "research", "study", "test", "tests", "testing", "results",
+  "update", "updates", "kickoff", "intake", "launch", "release",
+  "renewal", "contract", "invoice", "proposal", "agenda", "notes",
+  "meeting", "call", "calls", "email", "emails", "message",
+  "feedback", "approval", "approvals", "estimate", "estimates",
+  "creative", "campaign", "campaigns", "performance", "tracking",
+  "client", "clients", "team", "teams", "project", "projects",
+  // Verbs that double as nouns
+  "approve", "send", "receive", "deliver", "deploy", "ship",
+  "build", "design", "develop",
+  // Time-y words
+  "today", "tomorrow", "yesterday", "later", "now", "soon",
+  "monday", "tuesday", "wednesday", "thursday", "friday",
+  "saturday", "sunday", "morning", "afternoon", "evening", "night",
+  // Range / distance / scope
+  "range", "scope", "size", "level",
+  // Marketing / agency vocabulary
+  "brand", "branding", "post", "posts", "content", "social",
+  "ads", "ad", "media", "image", "video", "copy", "page", "pages",
+  "data", "analytics", "metric", "metrics", "channel", "channels",
+]);
+
 function computeAbbreviations(name) {
   const tokens = name.split(/\s+/).filter(Boolean);
   if (tokens.length < 2) return [];
@@ -923,7 +969,13 @@ function parseComposer(rawText, clients, workers) {
   // Apply typo and casing dictionaries to the raw input BEFORE matching.
   // This means "teh" becomes "the", "google" becomes "Google", and so on,
   // throughout the rendered title — no special-casing needed downstream.
-  const text = normalizeComposerText(rawText || "");
+  //
+  // Collapse all whitespace runs (tabs, newlines, multi-space, nbsp) to
+  // single spaces. The date and recurrence regexes use literal single
+  // spaces between words ("every monday", "in 3 days") — pasted content
+  // from email or Slack containing &nbsp; or tab characters would
+  // otherwise silently fall through every pattern.
+  const text = normalizeComposerText(rawText || "").replace(/\s+/g, " ");
   const lower = text.toLowerCase();
   const matches = []; // {start, end, kind: 'client'|'worker'|'date'}
 
@@ -933,7 +985,12 @@ function parseComposer(rawText, clients, workers) {
   let matchedClient = null;
   let clientMatchSpan = null;
   if (clients && clients.length > 0) {
-    const sortedClients = [...clients].sort((a, b) => b.name.length - a.name.length);
+    // Skip clients with empty or whitespace-only names. An empty name
+    // would compile to an empty regex that matches every input at index
+    // 0, hijacking matchedClient. Defensive guard for partially-saved
+    // CSV imports or accidentally-blank client rows.
+    const validClients = clients.filter(c => c && c.name && c.name.trim());
+    const sortedClients = [...validClients].sort((a, b) => b.name.length - a.name.length);
 
     // Build the ranked candidate list per client. Higher score wins overall.
     // We collect ALL candidate matches across clients and pick the best.
@@ -941,7 +998,10 @@ function parseComposer(rawText, clients, workers) {
 
     for (const c of sortedClients) {
       // 100 — exact full-name (case-insensitive substring with word boundaries)
-      const fullRe = new RegExp(`\\b${escapeRegexChars(c.name.toLowerCase())}(?:'s)?\\b`, "i");
+      const fullRe = new RegExp(
+        `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(c.name.toLowerCase())}(?:'s)?(?=[^\\p{L}\\p{N}]|$)`,
+        "iu"
+      );
       const fullM = lower.match(fullRe);
       if (fullM && fullM.index !== undefined) {
         allCandidates.push({ client: c, score: 100, start: fullM.index, end: fullM.index + fullM[0].length });
@@ -953,8 +1013,19 @@ function parseComposer(rawText, clients, workers) {
       let tokenHit = null;
       for (const tok of tokens) {
         const clean = tok.replace(/[^\w]/g, "").toLowerCase();
-        if (clean.length >= 4 && !COMPOSER_STOP_WORDS.has(clean)) {
-          const re = new RegExp(`\\b${escapeRegexChars(clean)}(?:'s)?\\b`, "i");
+        // Skip tokens that are common English words. Otherwise "discovery"
+        // in any task text matches "Backyard Discovery", "review" matches
+        // any multi-word client containing the word "review", etc. The
+        // standalone-name (score-100) path is unaffected — a client whose
+        // FULL name is one of these common words still matches via that
+        // route. Only the multi-word-via-single-token path is gated.
+        if (clean.length >= 4
+            && !COMPOSER_STOP_WORDS.has(clean)
+            && !COMPOSER_COMMON_WORDS.has(clean)) {
+          const re = new RegExp(
+            `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(clean)}(?:'s)?(?=[^\\p{L}\\p{N}]|$)`,
+            "iu"
+          );
           const m = lower.match(re);
           if (m && m.index !== undefined) {
             tokenHit = { client: c, score: 90, start: m.index, end: m.index + m[0].length };
@@ -1004,23 +1075,39 @@ function parseComposer(rawText, clients, workers) {
       }
       let prefixHit = null;
       for (const ut of userTokens) {
-        if (ut.tok.length < 5) continue; // need real substance, not "go", "to"
+        // Raised from 4 → 6 chars. At 4 chars the prefix-namespace
+        // saturates across large catalogs ("init" hits Initech, "disc"
+        // hits Discovery). 6 chars is enough substance to make the
+        // match meaningful without being so strict that obvious typos
+        // miss ("whitemou" / "whitemount" still pass the reverse path).
+        if (ut.tok.length < 6) continue;
+        // Skip user tokens that are themselves common English words —
+        // they'd produce phantom matches the same way the score-90
+        // single-token rule did before COMPOSER_COMMON_WORDS landed.
+        if (COMPOSER_COMMON_WORDS.has(ut.tok)) continue;
         for (const ctok of tokens) {
           const cclean = ctok.replace(/[^\w]/g, "").toLowerCase();
-          if (cclean.length < 5 || COMPOSER_STOP_WORDS.has(cclean)) continue;
-          // User token starts with the FIRST 4+ chars of the client token,
-          // user token length is ≥ 60% of client token length.
-          const sharedPrefix = cclean.slice(0, Math.min(ut.tok.length, cclean.length));
-          if (ut.tok.startsWith(cclean.slice(0, 4)) && ut.tok.length >= cclean.length * 0.6) {
-            prefixHit = { client: c, score: 70, start: ut.start, end: ut.end };
+          if (cclean.length < 5) continue;
+          if (COMPOSER_STOP_WORDS.has(cclean)) continue;
+          if (COMPOSER_COMMON_WORDS.has(cclean)) continue;
+
+          // Reverse direction (strong signal): user token CONTAINS the
+          // full client token plus extra chars ("whitemou" contains
+          // "white"). This is essentially a 100% prefix match with typo
+          // — keep the 5-char threshold here, it's a legit-typo path.
+          if (ut.tok.startsWith(cclean) && ut.tok.length >= cclean.length + 1) {
+            prefixHit = { client: c, score: 75, start: ut.start, end: ut.end };
             break;
           }
-          // Reverse direction: user typed a longer prefix than first 4 ("whitemou"
-          // → "white" — user starts with "white", a full client token).
-          if (ut.tok.startsWith(cclean) && ut.tok.length >= cclean.length + 1) {
-            // The user's token contains the full client token plus extra chars
-            // (e.g. "whitemou" contains "white" + "mou"). Solid signal.
-            prefixHit = { client: c, score: 75, start: ut.start, end: ut.end };
+
+          // Forward direction (weaker): client token must be 6+ chars
+          // AND user token must start with its first 6 chars AND be
+          // ≥ 70% of its length. This is the rule that produced false
+          // positives at the old 4-char threshold; tightening here.
+          if (cclean.length >= 6
+              && ut.tok.startsWith(cclean.slice(0, 6))
+              && ut.tok.length >= cclean.length * 0.7) {
+            prefixHit = { client: c, score: 70, start: ut.start, end: ut.end };
             break;
           }
         }
@@ -1054,20 +1141,23 @@ function parseComposer(rawText, clients, workers) {
         userTokensSweep.push({ tok: sm[0].toLowerCase(), start: sm.index, end: sm.index + sm[0].length });
       }
       for (const ut of userTokensSweep) {
-        if (ut.tok.length < 5) continue;
+        if (ut.tok.length < 6) continue;
+        if (COMPOSER_COMMON_WORDS.has(ut.tok)) continue;
         // Skip if this span is already matched
         if (matches.some(m => m.start === ut.start && m.end === ut.end)) continue;
         // Skip if it overlaps the existing client span
         if (matches.some(m => m.kind === "client" && ut.start < m.end && ut.end > m.start)) continue;
         for (const ctok of winnerTokens) {
           const cclean = ctok.replace(/[^\w]/g, "").toLowerCase();
-          if (cclean.length < 5 || COMPOSER_STOP_WORDS.has(cclean)) continue;
-          // Apply the same prefix-typo rules as the primary match
-          const startsWithPrefix4 = ut.tok.startsWith(cclean.slice(0, 4)) && ut.tok.length >= cclean.length * 0.6;
+          if (cclean.length < 6) continue;
+          if (COMPOSER_STOP_WORDS.has(cclean)) continue;
+          if (COMPOSER_COMMON_WORDS.has(cclean)) continue;
+          // Apply the same tightened prefix-typo rules as the primary match
+          const startsWithPrefix6 = ut.tok.startsWith(cclean.slice(0, 6)) && ut.tok.length >= cclean.length * 0.7;
           const containsFullToken = ut.tok.startsWith(cclean) && ut.tok.length >= cclean.length + 1;
           // Also allow simple plural/singular variants (puzzle ↔ puzzles)
           const pluralVariant = ut.tok === cclean.replace(/s$/, "") || cclean === ut.tok.replace(/s$/, "");
-          if (startsWithPrefix4 || containsFullToken || pluralVariant) {
+          if (startsWithPrefix6 || containsFullToken || pluralVariant) {
             matches.push({ start: ut.start, end: ut.end, kind: "client" });
             break;
           }
@@ -1078,13 +1168,21 @@ function parseComposer(rawText, clients, workers) {
 
   // ─── Phase 3: Worker matching ────────────────────────────────────────
   // Match on first name. Skip if the span overlaps the client span.
+  //
+  // Unicode-aware boundary: JavaScript's \b is ASCII-only — `\bjosé\b`
+  // never matches `josé` in input text because é is not a \w character.
+  // We replace \b with letter/digit-class lookarounds and add the `u`
+  // flag so accented and non-Latin worker names match correctly.
   let matchedWorker = null;
   if (workers && workers.length > 0) {
     const clientSpans = matches.filter(m => m.kind === "client");
     for (const w of workers) {
       const firstName = (w.name || w.display_name || "").trim().split(/\s+/)[0];
       if (!firstName || firstName.length < 2) continue;
-      const re = new RegExp(`\\b${escapeRegexChars(firstName.toLowerCase())}\\b`, "i");
+      const re = new RegExp(
+        `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(firstName.toLowerCase())}(?=[^\\p{L}\\p{N}]|$)`,
+        "iu"
+      );
       const m = lower.match(re);
       if (m && m.index !== undefined) {
         const start = m.index, end = m.index + m[0].length;
@@ -1202,15 +1300,38 @@ function parseComposer(rawText, clients, workers) {
   for (const p of recurrencePatterns) {
     const m = lower.match(p.re);
     if (m && m.index !== undefined) {
+      // If the bare word "weekly" or "daily" is preceded by an article
+      // (the/a/an/this/that/possessives), it's being used as an adjective
+      // ("send the weekly report", "review the daily standup notes") and
+      // should NOT trigger recurrence. The unambiguous "every X" forms
+      // are unaffected.
+      const matched = m[0].toLowerCase();
+      if (matched === "weekly" || matched === "daily") {
+        const before = lower.slice(Math.max(0, m.index - 12), m.index);
+        if (/\b(the|a|an|this|that|our|my|your|their|its)\s+$/.test(before)) {
+          continue; // adjective use; skip this pattern, try the next
+        }
+      }
       matchedRecurrence = { pattern: p.pattern(m) };
-      matches.push({ start: m.index, end: m.index + m[0].length, kind: "recurrence" });
-      // If recurrence matched, void any previously-matched date — the two
-      // are mutually exclusive. Also drop the date match from the matches
-      // list so the strip pass doesn't double-strip.
+      const recStart = m.index, recEnd = m.index + m[0].length;
+      matches.push({ start: recStart, end: recEnd, kind: "recurrence" });
+      // Recurrence and date are mutually exclusive — void the matched
+      // date. Previously the date span was always removed from `matches`,
+      // leaving date words ("tomorrow", "+3d", "eow") stranded in the
+      // title. Now we keep the date span IF it doesn't overlap the
+      // recurrence span (the strip pass would double-strip), otherwise
+      // drop it.
       if (matchedDate) {
         matchedDate = null;
         const idx = matches.findIndex(x => x.kind === "date");
-        if (idx >= 0) matches.splice(idx, 1);
+        if (idx >= 0) {
+          const dateSpan = matches[idx];
+          const overlaps = dateSpan.start < recEnd && dateSpan.end > recStart;
+          if (overlaps) {
+            matches.splice(idx, 1); // would cause double-strip — drop it
+          }
+          // else keep it so the title-strip pass removes the word
+        }
       }
       break;
     }
