@@ -1094,6 +1094,17 @@ function parseComposer(rawText, clients, workers) {
 
   // ─── Phase 5: Title cleanup ──────────────────────────────────────────
   // Strip matched spans, then aggressively scrub leftover prepositions.
+  // Each strip also absorbs a directly-preceding preposition (e.g. "at",
+  // "for", "to") because once the noun is gone the preposition is
+  // orphaned ("Send Cristian at Ardath" → strip "Ardath" → "Send Cristian
+  // at " → without the absorb pass, "at" gets stranded mid-sentence and
+  // the trailing-prep regex can't see it because it's no longer at the
+  // end of the string).
+  const ORPHAN_PREPS = new Set([
+    "at", "for", "with", "by", "to", "from", "about",
+    "regarding", "re", "vs", "against", "on", "of", "over",
+    "under", "via", "per", "toward", "towards",
+  ]);
   let title = text;
   const sortedMatches = [...matches].sort((a, b) => b.start - a.start);
   for (const m of sortedMatches) {
@@ -1101,7 +1112,20 @@ function parseComposer(rawText, clients, workers) {
     if (m.kind === "client" && lower.slice(endIdx, endIdx + 2) === "'s") {
       endIdx += 2;
     }
-    title = title.slice(0, m.start) + title.slice(endIdx);
+    // Look back from m.start: if a single token sits directly before
+    // (with whitespace), and that token is a preposition, swallow it.
+    // We only swallow ONE preposition — chained "for at" is rare and
+    // catching just one usually leaves clean output.
+    let startIdx = m.start;
+    const before = title.slice(0, m.start);
+    const prepMatch = before.match(/(\s+)([A-Za-z]+)\s+$/);
+    if (prepMatch && ORPHAN_PREPS.has(prepMatch[2].toLowerCase())) {
+      // Move startIdx to before the preposition (keep the leading space
+      // so we don't fuse two words; subsequent double-space collapse
+      // cleans it up).
+      startIdx = m.start - prepMatch[0].length + prepMatch[1].length;
+    }
+    title = title.slice(0, startIdx) + title.slice(endIdx);
   }
   // Leading "have/for/with/by/tell" — common in voice-y inputs ("for Backyard, do X")
   title = title.replace(/^\s*(have|for|with|by|tell)\s+/i, "");
@@ -1120,6 +1144,10 @@ function parseComposer(rawText, clients, workers) {
   } while (title !== prev);
   // Strip orphaned trailing connectors like " — " or " - " or " :" left over
   title = title.replace(/\s*[—–\-:,;]\s*$/g, "").trim();
+  // Strip whitespace immediately before terminal punctuation. Happens when
+  // a match span is stripped and leaves " ." or " !" etc. Without this we'd
+  // emit "Send Cristian weekly report ." with a hanging space.
+  title = title.replace(/\s+([.!?])$/, "$1");
   // Capitalize first letter
   if (title.length > 0) {
     title = title.charAt(0).toUpperCase() + title.slice(1);
@@ -6306,7 +6334,6 @@ export default function App({ user }) {
                           }
                         }}
                         placeholder="Search clients…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 12.5, fontFamily: "inherit", color: C.text }} />
-                      <button onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }} style={{ padding: 2, background: "none", border: "none", cursor: "pointer", color: C.textMuted, display: "flex", alignItems: "center" }}><Icon name="x" size={14} /></button>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", paddingTop: 4, maxHeight: 300, overflow: "auto" }}>
                       {clientMatches.map((c, idx) => (
