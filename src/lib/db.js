@@ -1746,6 +1746,19 @@ export const buildRaiContext = async (userId, clientId = null) => {
     referrals.list(userId)
   ]);
 
+  // On Saturday/Sunday, drop recurring tasks from Rai's task list.
+  // Recurring tasks are still in the user's UI (they can complete them
+  // voluntarily), but Rai shouldn't treat their un-done state as neglect
+  // when scoring client fragility, picking the daily client, generating
+  // observations, or writing criticisms. A "check email daily" recurring
+  // task left open on Saturday isn't a signal — it's a weekend.
+  const _now = new Date();
+  const _dow = _now.getDay(); // 0=Sun, 6=Sat
+  const _isWeekend = _dow === 0 || _dow === 6;
+  const taskListForRai = _isWeekend
+    ? (taskList || []).filter(t => !t.is_recurring)
+    : (taskList || []);
+
   const context = {
     clients: (clientList || []).map(c => ({
       name: c.name,
@@ -1759,7 +1772,7 @@ export const buildRaiContext = async (userId, clientId = null) => {
       profile_score: c.profile_score,
       profile_scores: c.profile_scores
     })),
-    tasks_today: (taskList || []).map(t => ({
+    tasks_today: taskListForRai.map(t => ({
       text: t.text,
       client: t.client_name,
       done: t.is_done,
