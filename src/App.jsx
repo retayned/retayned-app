@@ -6301,7 +6301,7 @@ export default function App({ user }) {
                         <div className="rt-due-picker" style={{
                           position: "absolute",
                           top: "calc(100% + 6px)",
-                          right: 0,
+                          left: 0,
                           background: C.card,
                           border: "1px solid " + C.border,
                           borderRadius: 10,
