@@ -1079,7 +1079,7 @@ export const revenueHistoryDb = {
   // If newRate equals the current active rate, this is a no-op and returns
   // the existing row untouched — avoids creating noise history rows when the
   // user opens an edit form, doesn't change the rate, and saves.
-  changeRate: async (userId, clientId, newRate) => {
+  changeRate: async (userId, clientId, newRate, changeReason = null, changeNote = null) => {
     const numericRate = Number(newRate) || 0;
     if (numericRate < 0) return { data: null, error: new Error('Rate must be non-negative') };
 
@@ -1109,7 +1109,11 @@ export const revenueHistoryDb = {
       if (closeErr) return { data: null, error: closeErr };
     }
 
-    // Open new active row
+    // Open new active row. change_reason and change_note describe WHY this
+    // rate changed (expansion / contraction / annual_increase / etc).
+    // Lets Rai see the narrative behind revenue movement, not just the
+    // numbers. Both fields are optional — older code that calls changeRate
+    // without them still works (they default to null).
     const { data: newRow, error: insertErr } = await supabase
       .from('client_revenue_history')
       .insert({
@@ -1118,6 +1122,8 @@ export const revenueHistoryDb = {
         monthly_rate: numericRate,
         started_at: now,
         ended_at: null,
+        change_reason: changeReason,
+        change_note: changeNote,
       })
       .select()
       .single();
@@ -1206,6 +1212,88 @@ export const revenueHistoryDb = {
 //   createBatch(userId, clientId, items) → add multiple (recurring mirror)
 //   update(itemId, fields)              → edit description/amount/recurring/month
 //   remove(itemId)                      → hard-delete one item
+
+export const clientEngagementPausesDb = {
+  // List all pauses for one client (chronological).
+  list: async (userId, clientId) => {
+    const { data, error } = await supabase
+      .from('client_engagement_pauses')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .order('paused_at', { ascending: true });
+    return { data: data || [], error };
+  },
+
+  // List all pauses across all clients (used at hydration).
+  listAll: async (userId) => {
+    const { data, error } = await supabase
+      .from('client_engagement_pauses')
+      .select('*')
+      .eq('user_id', userId);
+    return { data: data || [], error };
+  },
+
+  // Start a new pause. Idempotency: if an open pause already exists for
+  // this client, return that row instead of creating a duplicate.
+  start: async (userId, clientId, reason = null, note = null) => {
+    const { data: existing } = await supabase
+      .from('client_engagement_pauses')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .is('resumed_at', null)
+      .maybeSingle();
+    if (existing) return { data: existing, error: null };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from('client_engagement_pauses')
+      .insert({
+        user_id: userId,
+        client_id: clientId,
+        paused_at: today,
+        reason,
+        note,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // End the current open pause for a client. Idempotency: if no open
+  // pause exists, return null (no error).
+  end: async (userId, clientId) => {
+    const { data: open } = await supabase
+      .from('client_engagement_pauses')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .is('resumed_at', null)
+      .maybeSingle();
+    if (!open) return { data: null, error: null };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from('client_engagement_pauses')
+      .update({ resumed_at: today })
+      .eq('id', open.id)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  // Hard-delete a pause record. Use only to undo a just-created pause
+  // (user mis-clicked). Doesn't touch resumed pauses — those are history.
+  remove: async (userId, pauseId) => {
+    const { error } = await supabase
+      .from('client_engagement_pauses')
+      .delete()
+      .eq('id', pauseId)
+      .eq('user_id', userId);
+    return { error };
+  },
+};
 
 export const clientBillingDb = {
   list: async (userId, clientId) => {
