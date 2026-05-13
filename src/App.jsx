@@ -4232,6 +4232,20 @@ export default function App({ user }) {
           width: auto !important;
           max-width: none !important;
         }
+        /* Client picker · mobile bottom sheet.
+           Same rationale as Due picker — anchored dropdown can't reliably
+           contain a 300px+ panel within a 393px viewport when the keyboard
+           is open. Pin to viewport, slide up from bottom. */
+        .rt-client-picker {
+          position: fixed !important;
+          top: auto !important;
+          bottom: 80px !important;
+          left: 16px !important;
+          right: 16px !important;
+          min-width: 0 !important;
+          width: auto !important;
+          max-width: none !important;
+        }
         .r-main { padding: 16px 16px 96px; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
@@ -4307,6 +4321,19 @@ export default function App({ user }) {
             left: auto !important;
             min-width: 240px !important;
             width: auto !important;
+            max-width: none !important;
+          }
+          /* Client picker · desktop reset.
+             Same pattern as Due picker — restore the "drop below button"
+             dropdown that was overridden by the mobile bottom-sheet rule. */
+          .rt-client-picker {
+            position: absolute !important;
+            top: calc(100% + 6px) !important;
+            bottom: auto !important;
+            left: 16px !important;
+            right: auto !important;
+            width: 300px !important;
+            min-width: 0 !important;
             max-width: none !important;
           }
         }
@@ -6301,7 +6328,7 @@ export default function App({ user }) {
                       onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
                       style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
                     />
-                    <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                    <div className="rt-client-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 16, width: 300, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
                       <input autoFocus value={composerQuery}
