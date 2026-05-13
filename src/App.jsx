@@ -2838,6 +2838,11 @@ export default function App({ user }) {
   // ─── Observer card state ──
   const [observation, setObservation] = useState(null);
   const [obsDismissing, setObsDismissing] = useState(false);
+  // Mobile observer "More" tap state. Default collapsed: card shows only
+  // topbar + headline + action row. Tap "More" → body, metadata, metric
+  // strip reveal. Desktop ignores this state (CSS always shows expanded
+  // content). Resets per observation (different obs.id → reset to false).
+  const [obsMobileExpanded, setObsMobileExpanded] = useState(false);
 
   // ─── Daybook state ── (right-rail notepad on Today page)
   const [daybookEntry, setDaybookEntry] = useState("");
@@ -2950,6 +2955,7 @@ export default function App({ user }) {
         const obsRes = await observationsDb.getCurrent(uid);
         if (obsRes?.data) {
           setObservation(obsRes.data);
+          setObsMobileExpanded(false);
         }
       }
     } catch (e) {
@@ -4157,25 +4163,43 @@ export default function App({ user }) {
                buttons full-width below (Unpack primary, Dismiss link).
            Important needed throughout to beat inline styles on the JSX. */
         .rt-obs-illo {
-          width: 100px !important;
-          height: 84px !important;
-          /* The 34 observation SVGs all have ~29% internal padding inside
-             their 360x300 viewBox (artwork centered, fills middle ~60%).
-             Using transform:translateX shifts the rendered SVG visually
-             right inside its box; the parent card has overflow:hidden,
-             which clips the now-overflowing empty right padding — net
-             effect is the visible artwork sits flush with the card's
-             right content edge. Works where margin-right does not
-             because margin doesn't bypass overflow:hidden the same way
-             a transform does (margin shifts position WITHIN the layout,
-             transform shifts the rendered pixels — overflow:hidden clips
-             the latter at the parent boundary). */
-          transform: translateX(18px) !important;
+          width: 60px !important;
+          height: 50px !important;
+          margin-right: 32px !important;
         }
+        .rt-obs-card { padding: 16px 18px !important; }
+        .rt-obs-headline { font-size: 19px !important; padding-right: 28px !important; }
         .rt-obs-content { padding-right: 0 !important; }
+        .rt-obs-topbar { border-bottom: none !important; padding-bottom: 0 !important; margin-bottom: 14px !important; }
         .rt-obs-topbar-rule { display: none !important; }
         .rt-obs-topbar-meta { display: none !important; }
-        .rt-obs-meta-row { display: block !important; }
+        /* Corner ✕ dismiss — mobile only. Hidden on desktop where the
+           inline "Dismiss" button at the end of the actions row handles
+           the same job. */
+        .rt-obs-dismiss-x { display: flex !important; }
+        /* Collapsible content on mobile. Base = collapsed (hidden).
+           When .rt-obs-expanded is added (user tapped "More"), it shows.
+           Desktop always shows via the min-width:768px override below. */
+        .rt-obs-collapsible { display: none !important; }
+        .rt-obs-collapsible.rt-obs-expanded { display: block !important; }
+        /* For flex containers we need to restore the original display value
+           when expanded. .rt-obs-metrics is the only flex collapsible. */
+        .rt-obs-metrics.rt-obs-expanded { display: flex !important; }
+        /* More/Less toggle — mobile only. */
+        .rt-obs-more { display: inline-flex !important; }
+        /* Mobile actions row: when collapsed, no border-top (it would
+           hang in empty space since the metric strip is hidden). When
+           expanded, the border returns naturally because it lives in
+           the inline style. We use a sibling-state hack: when none of
+           the collapsibles are expanded, suppress the border. Since we
+           can't easily target that, instead always suppress on mobile
+           and let the expanded state re-add it inline (handled via JS
+           is unnecessary — the visual transition without the border
+           reads fine even when expanded, since the spacing alone is
+           enough to separate). */
+        .rt-obs-actions { border-top: none !important; padding-top: 4px !important; }
+        /* Dismiss button hidden on mobile — replaced by corner ✕. */
+        .rt-obs-dismiss { display: none !important; }
         /* Due picker dropdown · mobile bottom sheet.
            Desktop anchors right:0 relative to the Due button — works
            because viewport is wide. On mobile the picker is 240px+
@@ -4292,12 +4316,25 @@ export default function App({ user }) {
             width: 200px !important;
             height: 165px !important;
             margin-right: 0 !important;
-            transform: none !important;
           }
+          .rt-obs-card { padding: 24px 28px 22px !important; }
+          .rt-obs-headline { font-size: 25px !important; padding-right: 0 !important; }
           .rt-obs-content { padding-right: 220px !important; }
+          .rt-obs-topbar { border-bottom: 1px dashed ${C.borderLight} !important; padding-bottom: 14px !important; margin-bottom: 18px !important; }
           .rt-obs-topbar-rule { display: block !important; }
           .rt-obs-topbar-meta { display: block !important; }
           .rt-obs-meta-row { display: none !important; }
+          /* Corner ✕ and More button — mobile-only. Hidden on desktop. */
+          .rt-obs-dismiss-x { display: none !important; }
+          .rt-obs-more { display: none !important; }
+          /* Collapsibles always shown on desktop, regardless of expanded
+             state. The original block/flex display values restored. */
+          .rt-obs-collapsible { display: block !important; }
+          .rt-obs-metrics.rt-obs-collapsible { display: flex !important; }
+          /* Meta-row is the one exception — it's the mobile-only version
+             of the same string that lives inline in the topbar on desktop.
+             Override the .rt-obs-collapsible default-block above. */
+          .rt-obs-meta-row.rt-obs-collapsible { display: none !important; }
           /* Due picker · desktop reset.
              Base/mobile pins it to viewport as bottom sheet. Desktop
              reverts to the original "drop below button, right-aligned"
@@ -4312,10 +4349,15 @@ export default function App({ user }) {
             width: auto !important;
             max-width: none !important;
           }
+          /* Inline Dismiss button visible on desktop. */
+          .rt-obs-dismiss { display: inline-flex !important; }
+          /* Actions row gets its border-top back on desktop. */
           .rt-obs-actions {
             flex-direction: row !important;
             align-items: center !important;
             gap: 24px !important;
+            border-top: 1px solid ${C.borderLight} !important;
+            padding-top: 16px !important;
           }
           .rt-obs-metrics { gap: 28px !important; }
           .rt-obs-spacer { display: block !important; }
@@ -8913,7 +8955,7 @@ export default function App({ user }) {
                           borderRadius: 14,
                         }}
                       >
-                        <div style={{
+                        <div className="rt-obs-card" style={{
                           background: C.primarySoft,
                           color: C.text,
                           borderRadius: 14,
@@ -8923,6 +8965,44 @@ export default function App({ user }) {
                           overflow: "hidden",
                           boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
                         }}>
+                          {/* ─── CORNER DISMISS (mobile only) ───
+                              On mobile the inline "Dismiss" button at the
+                              bottom of the actions row competes with the
+                              primary action. Replaced with a small ✕ in the
+                              top-right corner — matches iOS/Linear/Stripe
+                              notification dismiss pattern. Hidden on desktop
+                              via CSS (.rt-obs-dismiss-x). */}
+                          <button
+                            type="button"
+                            className="rt-obs-dismiss-x"
+                            onClick={handleDrop}
+                            aria-label="Dismiss observation"
+                            style={{
+                              position: "absolute",
+                              top: 10,
+                              right: 10,
+                              width: 28,
+                              height: 28,
+                              borderRadius: 14,
+                              background: "transparent",
+                              border: "none",
+                              color: C.textMuted,
+                              fontSize: 16,
+                              lineHeight: 1,
+                              cursor: "pointer",
+                              display: "none",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontFamily: "inherit",
+                              padding: 0,
+                              zIndex: 2,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = "rgba(28,50,36,0.06)"; e.currentTarget.style.color = C.text; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.textMuted; }}
+                          >
+                            ✕
+                          </button>
+
                           {/* ─── CONTENT (right-padded only when illo is present) ─── */}
                           {/* paddingRight scales with breakpoint via the .rt-obs-content */}
                           {/* class (see global style block). Desktop reserves 220px for  */}
@@ -8994,8 +9074,9 @@ export default function App({ user }) {
                               We render the same № WK DATE string here as its own
                               footnote row, between the topbar divider and the
                               headline. Hidden on desktop where the inline
-                              version lives in the topbar. */}
-                          <div className="rt-obs-meta-row" style={{
+                              version lives in the topbar. Also collapsible on
+                              mobile — only shown when the user taps "More". */}
+                          <div className={"rt-obs-meta-row rt-obs-collapsible" + (obsMobileExpanded ? " rt-obs-expanded" : "")} style={{
                             fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
                             fontSize: 10.5,
                             letterSpacing: "0.14em",
@@ -9007,7 +9088,7 @@ export default function App({ user }) {
                           </div>
 
                           {/* ─── HEADLINE ─── */}
-                          <h3 style={{
+                          <h3 className="rt-obs-headline" style={{
                             fontFamily: "'Fraunces', Georgia, serif",
                             fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
                             fontWeight: 400,
@@ -9022,7 +9103,7 @@ export default function App({ user }) {
                           </h3>
 
                           {/* ─── BODY ─── */}
-                          <p style={{
+                          <p className={"rt-obs-body rt-obs-collapsible" + (obsMobileExpanded ? " rt-obs-expanded" : "")} style={{
                             fontSize: 13.5,
                             lineHeight: 1.55,
                             color: C.textSec,
@@ -9041,7 +9122,7 @@ export default function App({ user }) {
                             gap: 24,
                           }}>
                             {/* METRIC STRIP */}
-                            <div className="rt-obs-metrics" style={{ display: "flex", gap: 28 }}>
+                            <div className={"rt-obs-metrics rt-obs-collapsible" + (obsMobileExpanded ? " rt-obs-expanded" : "")} style={{ display: "flex", gap: 28 }}>
                               {metricEntries.map(([key, val]) => (
                                 <div key={key}>
                                   <div style={{
@@ -9070,6 +9151,29 @@ export default function App({ user }) {
 
                             {/* SPACER */}
                             <div className="rt-obs-spacer" style={{ flex: 1 }} />
+
+                            {/* MORE/LESS TOGGLE — mobile only.
+                                Sits to the left of "Unpack with Rai" and toggles
+                                the collapsible state. Hidden on desktop (which
+                                always shows the full content inline). */}
+                            <button
+                              type="button"
+                              className="rt-obs-more"
+                              onClick={() => setObsMobileExpanded(v => !v)}
+                              style={{
+                                background: "transparent",
+                                color: C.textMuted,
+                                border: "none",
+                                padding: "10px 8px",
+                                fontSize: 12.5,
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                display: "none",
+                              }}
+                            >
+                              {obsMobileExpanded ? "Less" : "More"}
+                            </button>
 
                             {/* BUTTONS */}
                             <button
