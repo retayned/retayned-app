@@ -3691,7 +3691,7 @@ export default function App({ user }) {
     return 25;
   };
 
-  const getProfileSortScore = (clientName, hasRaiBoost = false, pickBoost = 0) => {
+  const getProfileSortScore = (clientName, hasRaiBoost = false, pickBoost = 0, daysLate = 0) => {
     if (!clientName || clientName === "All Clients") return 200; // All Clients tasks first
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
@@ -3707,7 +3707,18 @@ export default function App({ user }) {
     // function takes pickBoost as a parameter and the caller passes it in only
     // when the task being scored matches the active pick.
     const raiNudge = c.raiNudge || 0;
-    return Math.min(99, ps + boost + raiBoost + raiNudge + (pickBoost || 0));
+    // Late-task boost: overdue tasks surface aggressively, with fragile clients
+    // (low retention score) getting much larger lifts per day late than healthy
+    // clients. A 1d late task on a thriving client (ret=95) gets +1; same task
+    // on a fragile client (ret=30) gets +17. Caps at +60 so a long-stale task
+    // on a fragile client doesn't produce absurd ranks. Only applies when
+    // daysLate >= 1 — same-day tasks not counted as "late."
+    let lateBoost = 0;
+    if (daysLate >= 1) {
+      const ret = c.ret != null ? c.ret : 50;
+      lateBoost = Math.min(60, daysLate * (100 - ret) / 4);
+    }
+    return Math.min(99, ps + boost + raiBoost + raiNudge + (pickBoost || 0) + lateBoost);
   };
 
 
@@ -5055,8 +5066,26 @@ export default function App({ user }) {
             const bHeld = b.created_at && (now - b.created_at) < HOLD_MS;
             if (aHeld !== bHeld) return aHeld ? -1 : 1;
             if (aHeld && bHeld) return (b.created_at || 0) - (a.created_at || 0);
-            const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForClient(a.client));
-            const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForClient(b.client));
+            // Days late: integer count of days the task is overdue. Computed
+            // from the difference between today's local date and the task's
+            // due_date (date part only — time-of-day ignored to avoid timezone
+            // edge cases). Recurring tasks have no due_date and are not late.
+            // _now anchored to 2am local to match task soft-clear cron.
+            const _now = new Date();
+            if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
+            const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+            const computeDaysLate = (t) => {
+              if (!t.due_date || t.recurring) return 0;
+              const dueStr = String(t.due_date).slice(0, 10);
+              if (dueStr >= _todayStr) return 0;
+              const due = new Date(dueStr + "T00:00:00");
+              const today = new Date(_todayStr + "T00:00:00");
+              return Math.max(0, Math.floor((today - due) / 86400000));
+            };
+            const aDaysLate = computeDaysLate(a);
+            const bDaysLate = computeDaysLate(b);
+            const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForClient(a.client), aDaysLate);
+            const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForClient(b.client), bDaysLate);
             if (psA !== psB) return psB - psA;
             // Rai's tiebreak: larger nudge magnitude wins (positive = stronger
             // surface signal, negative = stronger demote signal — both meaningful).
