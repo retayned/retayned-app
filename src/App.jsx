@@ -1986,17 +1986,19 @@ const navItemsEnterprise = [
 const mobileNavCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
-  { id: "coach", icon: "rai", label: "Rai" },
   { id: "health", icon: "health", label: "Health" },
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
   { id: "workers", icon: "workers", label: "Workers" },
+  { id: "coach", icon: "rai", label: "Rai" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
 const mobileNavEnterprise = [
   { id: "today", icon: "today", label: "Today" },
   { id: "sweeps", icon: "sweeps", label: "Sweeps" },
   { id: "clients", icon: "clients", label: "Clients" },
+  { id: "health", icon: "health", label: "Health" },
+  { id: "referral_intel", icon: "target", label: "Referral Intel" },
   { id: "coach", icon: "rai", label: "Rai" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
@@ -8309,379 +8311,14 @@ export default function App({ user }) {
 
         {/* ═══ HEALTH CHECKS ═══ */}
         {page === "health" && (() => {
-          const hcQuestions = [
-            { q: "Has anything changed with this relationship?", weight: 0.40, options: [{ text: "Nothing — same as always", mod: 2 }, { text: "Something minor, could be nothing", mod: 0 }, { text: "Noticeably different from before", mod: -3 }, { text: "Something has clearly changed", mod: -5 }] },
-            { q: "Is this relationship better or worse than last month?", weight: 0.20, options: [{ text: "Better — things are trending up", mod: 3 }, { text: "About the same", mod: 0 }, { text: "Slightly worse", mod: -3 }, { text: "Noticeably worse", mod: -5 }] },
-            { q: "Has the way this client communicates with you changed?", weight: 0.20, options: [{ text: "No — same rhythm, same tone", mod: 2 }, { text: "Slightly different but nothing alarming", mod: 0 }, { text: "Noticeably different", mod: -3 }, { text: "Yes — clearly different from before", mod: -5 }] },
-            { q: "If they cancelled tomorrow, would you be surprised?", weight: 0.10, options: [{ text: "Very surprised — not on my radar at all", mod: 2 }, { text: "Somewhat surprised but I could see it", mod: 0 }, { text: "Not really surprised", mod: -3 }, { text: "I’ve had the thought myself", mod: -5 }] },
-            { q: "Is this client getting more or less value from your work than last quarter?", weight: 0.10, options: [{ text: "More — results are improving", mod: 3 }, { text: "About the same", mod: 0 }, { text: "Less — results are slipping", mod: -3 }, { text: "Significantly less", mod: -5 }] },
-          ];
-
-          const selectAnswer = (client, qIdx, mod) => {
-            const key = client;
-            const prev = hcAnswers[key] || [];
-            const alreadyAnswered = prev[qIdx] !== undefined;
-            const updated = [...prev];
-            updated[qIdx] = mod;
-            setHcAnswers({ ...hcAnswers, [key]: updated });
-            if (!alreadyAnswered) {
-              setTimeout(() => {
-                setHcStep(prev => ({ ...prev, [key]: qIdx + 1 }));
-              }, 300);
-            }
-          };
-
-          const calcDrift = (answers) => {
-            if (!answers || answers.length < 5) return null;
-            let delta = 0;
-            hcQuestions.forEach((q, i) => {
-              if (answers[i] != null) delta += answers[i] * q.weight;
-            });
-            delta = Math.round(delta);
-            if (delta >= 2) return "Improving";
-            if (delta >= 0) return "Stable";
-            if (delta >= -2) return "Something shifted";
-            if (delta >= -4) return "Declining";
-            return "At risk";
-          };
-
-          // Drift wall uses a 4-tier label set (Thriving / Stable / Shifted / Declining).
-          // calcDrift() returns 5 states; merge "At risk" into "Declining" and "Improving"
-          // into "Thriving" for plot + pill purposes.
-          const toDriftTier = (d) => {
-            if (!d) return "Stable";
-            if (d === "Improving") return "Thriving";
-            if (d === "Stable") return "Stable";
-            if (d === "Something shifted") return "Shifted";
-            if (d === "Declining" || d === "At risk") return "Declining";
-            return "Stable";
-          };
-          const driftTierColor = (t) => t === "Thriving" ? C.retElite : t === "Stable" ? C.retGood : t === "Shifted" ? C.retWarn : C.retCrit;
-          // Stubbed one-liner per drift tier (wired to real note field post-launch)
-          const driftStub = (t) => t === "Thriving" ? "Relationship trending up." : t === "Stable" ? "Steady. Nothing to flag." : t === "Shifted" ? "Something worth watching." : "Signals are declining.";
-
-          const submitHc = async (client) => {
-            const answers = hcAnswers[client] || [];
-            const drift = calcDrift(answers);
-            
-            // Update local state
-            setClientDrift(prev => ({ ...prev, [client]: drift }));
-            setClients(prev => prev.map(x => x.name === client ? { ...x, lastHC: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) } : x));
-            setHcDone(prev => ({ ...prev, [client]: true }));
-            setHcOpen(null);
-            
-            // Persist to Supabase
-            const clientObj = clients.find(c => c.name === client);
-            if (clientObj) {
-              // Find the HC record for this client
-              const hcRecord = hcQueue.find(h => h.client === client);
-              if (hcRecord?.id) {
-                // Complete the health check
-                const answersObj = {};
-                answers.forEach((a, i) => { answersObj["q" + (i + 1)] = a; });
-                await hcDb.complete(hcRecord.id, answersObj, null, drift);
-                // Schedule next HC (30 days)
-                await hcDb.scheduleNext(user.id, hcRecord.client_id || clientObj.id);
-              }
-              // Update client drift
-              await clientsDb.updateDrift(clientObj.id, drift, new Date().toISOString().split("T")[0]);
-            }
-          };
-
-          // Active = runnable NOW: overdue, due today, OR a first HC (Start Early-eligible)
-          const activeQueue = hcQueue.filter(h => h.runnable && !hcDone[h.client]).sort((a, b) => {
-            // Overdue first, then due today, then first-HCs (Start Early) sorted by soonest due
-            if (a.overdue !== b.overdue) return b.overdue - a.overdue;
-            if (a.due === "Today" && b.due !== "Today") return -1;
-            if (b.due === "Today" && a.due !== "Today") return 1;
-            return a.daysUntil - b.daysUntil;
-          });
-          const justCompleted = hcQueue.filter(h => h.runnable && hcDone[h.client]);
-          // Upcoming-locked: HC #2+ that aren't yet due. Visible but not tappable until due date.
-          const upcomingQueue = hcQueue.filter(h => !h.runnable).sort((a, b) => a.daysUntil - b.daysUntil);
-
-          const totalClients = clients.length;
-          const checkedThisMonth = hcQueue.filter(h => hcDone[h.client]).length;
-          const pctChecked = totalClients > 0 ? Math.round((checkedThisMonth / totalClients) * 100) : 0;
-          const now = new Date();
-          const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
-
-          // ─── Drift Wall stubs ────────────────────────────────────────────
-          const _hash = (s) => (s || "").split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
-          const _dwDelta = (name) => ((_hash(name) % 11) - 5); // -5..+5
-          const _dwCadenceTarget = (name) => (_hash(name) % 3 === 0) ? 14 : 7;
-          const _dwCadenceActual = (c) => {
-            const lc = (c.lastContact || "").toLowerCase();
-            if (lc.includes("today")) return 1;
-            const m = lc.match(/(\d+)\s*d/);
-            if (m) return parseInt(m[1], 10);
-            return (_hash(c.name) % 20) + 5;
-          };
-          // Cadence drift days: negative = on or ahead, positive = slower than target
-          const _dwCadenceDrift = (c) => _dwCadenceActual(c) - _dwCadenceTarget(c.name);
-
-          // Plot: X = cadence drift days (clamped -10..+20), Y = score delta (-5..+5)
-          const driftPoints = clients.map(c => {
-            const delta = _dwDelta(c.name);
-            const drift = _dwCadenceDrift(c);
-            return { c, delta, drift };
-          });
-
-          return (
-            <div style={{ width: "100%" }}>
-              {/* STATUS BAND */}
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                  <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Monthly cadence · {monthLabel}</div>
-                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Health</h1>
-                  <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ color: activeQueue.filter(h => h.overdue > 0).length > 0 ? C.retWarn : C.textMuted, fontWeight: 600 }}>
-                      <b>{activeQueue.filter(h => h.overdue > 0).length}</b> overdue
-                    </span>
-                    <span style={{ color: C.border }}>·</span>
-                    <span><b style={{ color: C.text, fontWeight: 700 }}>{activeQueue.filter(h => h.due === "Today").length}</b> due today</span>
-                    {justCompleted.length > 0 && <>
-                      <span style={{ color: C.border }}>·</span>
-                      <span style={{ color: C.retGood, fontWeight: 600 }}>
-                        <b>{justCompleted.length}</b> done today
-                      </span>
-                    </>}
-                  </div>
-                </div>
-                <div style={{ flexShrink: 0, textAlign: "right", minWidth: 140 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
-                    <span style={{ fontSize: 26, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
-                      {pctChecked}<span style={{ fontSize: 15, color: C.textMuted, fontWeight: 500 }}>%</span>
-                    </span>
-                    <span style={{ fontSize: 11, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>checked</span>
-                  </div>
-                  <div style={{ height: 4, background: C.borderLight, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pctChecked}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
-                  </div>
-                </div>
-              </div>
-
-
-              {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
-              <div className="rt-mob-strip" style={{ marginBottom: 16 }}>
-                {(() => {
-                  const today = new Date();
-                  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-                  const daysLeft = daysInMonth - today.getDate();
-                  const planned = hcQueue.filter(h => !h.runnable).length;
-                  const summary = `${checkedThisMonth} logged · ${planned} planned · ${daysLeft}d left`;
-                  const monthName = today.toLocaleString("en-US", { month: "long" });
-                  const year = today.getFullYear();
-                  const monthIdx = today.getMonth();
-                  const todayDay = today.getDate();
-                  const firstDay = new Date(year, monthIdx, 1);
-                  const startCol = firstDay.getDay();
-                  const byDay = {};
-                  hcQueue.forEach(h => {
-                    if (h.due_date) {
-                      const d = new Date(h.due_date);
-                      if (d.getFullYear() === year && d.getMonth() === monthIdx && d.getDate() >= todayDay) {
-                        byDay[d.getDate()] = "planned";
-                      }
-                    }
-                  });
-                  Object.keys(hcDone).forEach(cn => { if (hcDone[cn]) byDay[todayDay] = "logged"; });
-                  const cells = [];
-                  for (let i = 0; i < startCol; i++) cells.push(null);
-                  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-                  while (cells.length % 7 !== 0) cells.push(null);
-                  const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
-                  return (
-                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, overflow: "hidden" }}>
-                      <div onClick={() => setHealthStripOpen(!healthStripOpen)} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <Icon name="health" size={14} color={C.primary} />
-                          </div>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>{monthName} rhythm</div>
-                            <div style={{ fontSize: 13.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>
-                          </div>
-                        </div>
-                        <Icon name={healthStripOpen ? "chevron-up" : "chevron-down"} size={14} color={C.textMuted} />
-                      </div>
-                      {healthStripOpen && (
-                        <div style={{ padding: 14, borderTop: "1px solid " + C.borderLight }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 6 }}>
-                            {daysHdr.map((d, i) => <div key={"h-" + i} style={{ fontSize: 9.5, color: C.textMuted, textAlign: "center", fontWeight: 500 }}>{d}</div>)}
-                          </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
-                            {cells.map((d, i) => {
-                              if (d === null) return <div key={"c-" + i} />;
-                              const state = d === todayDay ? "today" : byDay[d] || null;
-                              const isToday = state === "today";
-                              const isLogged = state === "logged";
-                              const isPlanned = state === "planned";
-                              return (
-                                <div key={"c-" + i} style={{
-                                  aspectRatio: "1",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: 11,
-                                  fontWeight: isToday || isLogged ? 700 : 500,
-                                  fontVariantNumeric: "tabular-nums",
-                                  borderRadius: 4,
-                                  color: isToday || isLogged ? "#fff" : isPlanned ? C.textSec : C.textMuted,
-                                  background: isToday ? C.btn : isLogged ? C.retGood : "transparent",
-                                  border: isPlanned ? "1px dashed " + C.border : "1px solid transparent",
-                                }}>{d}</div>
-                              );
-                            })}
-                          </div>
-                          <div style={{ display: "flex", gap: 10, marginTop: 10, fontSize: 10, color: C.textMuted, flexWrap: "wrap" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.retGood }} />logged</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "transparent", border: "1px dashed " + C.border }} />planned</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.btn }} />today</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
-              <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
-
-                {/* LEFT RAIL — calendar + queue */}
-                <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-                  {/* ─── Calendar — current month rhythm ─── */}
-                  {(() => {
-                    const today = new Date();
-                    const year = today.getFullYear();
-                    const monthIdx = today.getMonth();
-                    const todayDay = today.getDate();
-                    const firstDay = new Date(year, monthIdx, 1);
-                    const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
-                    const startCol = firstDay.getDay(); // 0=Sun
-                    // Build day states from hcQueue: due_date in current month (not yet done) → planned.
-                    // Logged days require a completed-HC fetch which we don't do yet; they'll
-                    // light up when that fetch gets wired in. "Today" always wins over planned.
-                    const byDay = {};
-                    hcQueue.forEach(h => {
-                      if (h.due_date) {
-                        const d = new Date(h.due_date);
-                        if (d.getFullYear() === year && d.getMonth() === monthIdx && d.getDate() >= todayDay) {
-                          byDay[d.getDate()] = "planned";
-                        }
-                      }
-                    });
-                    // Mark just-completed sessions so the user gets immediate visual feedback
-                    Object.keys(hcDone).forEach(clientName => {
-                      if (hcDone[clientName]) byDay[todayDay] = "logged";
-                    });
-                    const loggedCount = Object.values(byDay).filter(s => s === "logged").length;
-                    const monthName = today.toLocaleString("en-US", { month: "long" });
-                    // Build the grid: 6 rows × 7 cols, fill with null where out-of-month
-                    const cells = [];
-                    for (let i = 0; i < startCol; i++) cells.push(null);
-                    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-                    while (cells.length % 7 !== 0) cells.push(null);
-                    const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
-                    return (
-                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
-                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-                          <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>{monthName} rhythm</span>
-                          <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}><b style={{ color: C.text }}>{loggedCount}</b> checks · <b style={{ color: C.text }}>{todayDay}</b>/{daysInMonth}</span>
-                        </div>
-                        {/* Day-of-week header */}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 6 }}>
-                          {daysHdr.map((d, i) => (
-                            <div key={"h-" + i} style={{ fontSize: 9.5, color: C.textMuted, textAlign: "center", fontWeight: 500 }}>{d}</div>
-                          ))}
-                        </div>
-                        {/* Day grid */}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-                          {cells.map((d, i) => {
-                            if (d === null) return <div key={"c-" + i} />;
-                            const state = d === todayDay ? "today" : byDay[d] || null;
-                            const isToday = state === "today";
-                            const isLogged = state === "logged";
-                            const isPlanned = state === "planned";
-                            return (
-                              <div key={"c-" + i} style={{
-                                aspectRatio: "1",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontSize: 11,
-                                fontWeight: isToday || isLogged ? 700 : 500,
-                                fontVariantNumeric: "tabular-nums",
-                                borderRadius: 6,
-                                color: isToday ? "#fff" : isLogged ? "#fff" : isPlanned ? C.textSec : C.textMuted,
-                                background: isToday ? C.btn : isLogged ? C.retGood : "transparent",
-                                border: isPlanned ? "1px dashed " + C.border : "1px solid transparent",
-                              }}>{d}</div>
-                            );
-                          })}
-                        </div>
-                        {/* Legend */}
-                        <div style={{ display: "flex", gap: 10, marginTop: 12, fontSize: 10, color: C.textMuted, flexWrap: "wrap" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.retGood }} />logged</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "transparent", border: "1px dashed " + C.border }} />planned</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.btn }} />today</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Queue</span>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{activeQueue.length}</span>
-                    </div>
-                    {activeQueue.length === 0 && (
-                      <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "10px 0" }}>All caught up.</div>
-                    )}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {activeQueue.map((h, i) => {
-                        const isOpen = hcOpen === h.client;
-                        const overdueDays = h.overdue;
-                        const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
-                        const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Start early · in ${h.daysUntil}d`;
-                        const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.btn : C.retOk;
-                        return (
-                          <div key={i} onClick={() => setHcOpen(isOpen ? null : h.client)}
-                            className="rc-queue-item"
-                            style={{
-                            position: "relative",
-                            padding: "10px 12px", borderRadius: 8, cursor: "pointer",
-                            background: isOpen ? C.primarySoft : "transparent",
-                            border: "1px solid " + (isOpen ? C.primary + "55" : "transparent"),
-                            display: "flex", alignItems: "center", gap: 10,
-                            transition: "background 140ms",
-                          }}>
-                            {/* Overdue red dot — top right */}
-                            {overdueDays > 0 && (
-                              <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: 4, background: C.retCrit }} />
-                            )}
-                            <div style={{ width: 24, height: 24, borderRadius: 12, background: retColor(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
-                              {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.client}</div>
-                              <div style={{ fontSize: 10.5, color: subColor, marginTop: 1 }}>{subLabel}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* MAIN COLUMN */}
-                <div style={{ minWidth: 0 }}>
-                  {/* ═══════════════════════════════════════════════════════════════
-                      OBSERVER CARD — single dark green panel, no flip.
-                      Top bar: card name + observation number/week/date.
-                      Headline + body, then divider, then metric strip + actions.
-                  ═══════════════════════════════════════════════════════════════ */}
-                  {observation && !obsDismissing && (() => {
+          // ─── Observer card renderer ───
+          // Rendered TWICE in the JSX below: once above the mobile calendar
+          // widget (rt-mob-strip), once inside the desktop rc-grid main column.
+          // The two callsites are mutually exclusive via the isMobile flag, so
+          // only one instance ever renders at a time. Returns null when there's
+          // no current observation or one is being dismissed.
+          const renderObserver = () => {
+            if (!observation || obsDismissing) return null;
                     const obs = observation;
                     const rawName = obs.card_name || "Observation";
                     const archetype = /^the\s/i.test(rawName) ? rawName : `The ${rawName}`;
@@ -9185,7 +8822,386 @@ export default function App({ user }) {
                         )}
                       </div>
                     );
+          };
+
+          const hcQuestions = [
+            { q: "Has anything changed with this relationship?", weight: 0.40, options: [{ text: "Nothing — same as always", mod: 2 }, { text: "Something minor, could be nothing", mod: 0 }, { text: "Noticeably different from before", mod: -3 }, { text: "Something has clearly changed", mod: -5 }] },
+            { q: "Is this relationship better or worse than last month?", weight: 0.20, options: [{ text: "Better — things are trending up", mod: 3 }, { text: "About the same", mod: 0 }, { text: "Slightly worse", mod: -3 }, { text: "Noticeably worse", mod: -5 }] },
+            { q: "Has the way this client communicates with you changed?", weight: 0.20, options: [{ text: "No — same rhythm, same tone", mod: 2 }, { text: "Slightly different but nothing alarming", mod: 0 }, { text: "Noticeably different", mod: -3 }, { text: "Yes — clearly different from before", mod: -5 }] },
+            { q: "If they cancelled tomorrow, would you be surprised?", weight: 0.10, options: [{ text: "Very surprised — not on my radar at all", mod: 2 }, { text: "Somewhat surprised but I could see it", mod: 0 }, { text: "Not really surprised", mod: -3 }, { text: "I’ve had the thought myself", mod: -5 }] },
+            { q: "Is this client getting more or less value from your work than last quarter?", weight: 0.10, options: [{ text: "More — results are improving", mod: 3 }, { text: "About the same", mod: 0 }, { text: "Less — results are slipping", mod: -3 }, { text: "Significantly less", mod: -5 }] },
+          ];
+
+          const selectAnswer = (client, qIdx, mod) => {
+            const key = client;
+            const prev = hcAnswers[key] || [];
+            const alreadyAnswered = prev[qIdx] !== undefined;
+            const updated = [...prev];
+            updated[qIdx] = mod;
+            setHcAnswers({ ...hcAnswers, [key]: updated });
+            if (!alreadyAnswered) {
+              setTimeout(() => {
+                setHcStep(prev => ({ ...prev, [key]: qIdx + 1 }));
+              }, 300);
+            }
+          };
+
+          const calcDrift = (answers) => {
+            if (!answers || answers.length < 5) return null;
+            let delta = 0;
+            hcQuestions.forEach((q, i) => {
+              if (answers[i] != null) delta += answers[i] * q.weight;
+            });
+            delta = Math.round(delta);
+            if (delta >= 2) return "Improving";
+            if (delta >= 0) return "Stable";
+            if (delta >= -2) return "Something shifted";
+            if (delta >= -4) return "Declining";
+            return "At risk";
+          };
+
+          // Drift wall uses a 4-tier label set (Thriving / Stable / Shifted / Declining).
+          // calcDrift() returns 5 states; merge "At risk" into "Declining" and "Improving"
+          // into "Thriving" for plot + pill purposes.
+          const toDriftTier = (d) => {
+            if (!d) return "Stable";
+            if (d === "Improving") return "Thriving";
+            if (d === "Stable") return "Stable";
+            if (d === "Something shifted") return "Shifted";
+            if (d === "Declining" || d === "At risk") return "Declining";
+            return "Stable";
+          };
+          const driftTierColor = (t) => t === "Thriving" ? C.retElite : t === "Stable" ? C.retGood : t === "Shifted" ? C.retWarn : C.retCrit;
+          // Stubbed one-liner per drift tier (wired to real note field post-launch)
+          const driftStub = (t) => t === "Thriving" ? "Relationship trending up." : t === "Stable" ? "Steady. Nothing to flag." : t === "Shifted" ? "Something worth watching." : "Signals are declining.";
+
+          const submitHc = async (client) => {
+            const answers = hcAnswers[client] || [];
+            const drift = calcDrift(answers);
+            
+            // Update local state
+            setClientDrift(prev => ({ ...prev, [client]: drift }));
+            setClients(prev => prev.map(x => x.name === client ? { ...x, lastHC: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) } : x));
+            setHcDone(prev => ({ ...prev, [client]: true }));
+            setHcOpen(null);
+            
+            // Persist to Supabase
+            const clientObj = clients.find(c => c.name === client);
+            if (clientObj) {
+              // Find the HC record for this client
+              const hcRecord = hcQueue.find(h => h.client === client);
+              if (hcRecord?.id) {
+                // Complete the health check
+                const answersObj = {};
+                answers.forEach((a, i) => { answersObj["q" + (i + 1)] = a; });
+                await hcDb.complete(hcRecord.id, answersObj, null, drift);
+                // Schedule next HC (30 days)
+                await hcDb.scheduleNext(user.id, hcRecord.client_id || clientObj.id);
+              }
+              // Update client drift
+              await clientsDb.updateDrift(clientObj.id, drift, new Date().toISOString().split("T")[0]);
+            }
+          };
+
+          // Active = runnable NOW: overdue, due today, OR a first HC (Start Early-eligible)
+          const activeQueue = hcQueue.filter(h => h.runnable && !hcDone[h.client]).sort((a, b) => {
+            // Overdue first, then due today, then first-HCs (Start Early) sorted by soonest due
+            if (a.overdue !== b.overdue) return b.overdue - a.overdue;
+            if (a.due === "Today" && b.due !== "Today") return -1;
+            if (b.due === "Today" && a.due !== "Today") return 1;
+            return a.daysUntil - b.daysUntil;
+          });
+          const justCompleted = hcQueue.filter(h => h.runnable && hcDone[h.client]);
+          // Upcoming-locked: HC #2+ that aren't yet due. Visible but not tappable until due date.
+          const upcomingQueue = hcQueue.filter(h => !h.runnable).sort((a, b) => a.daysUntil - b.daysUntil);
+
+          const totalClients = clients.length;
+          const checkedThisMonth = hcQueue.filter(h => hcDone[h.client]).length;
+          const pctChecked = totalClients > 0 ? Math.round((checkedThisMonth / totalClients) * 100) : 0;
+          const now = new Date();
+          const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+
+          // ─── Drift Wall stubs ────────────────────────────────────────────
+          const _hash = (s) => (s || "").split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
+          const _dwDelta = (name) => ((_hash(name) % 11) - 5); // -5..+5
+          const _dwCadenceTarget = (name) => (_hash(name) % 3 === 0) ? 14 : 7;
+          const _dwCadenceActual = (c) => {
+            const lc = (c.lastContact || "").toLowerCase();
+            if (lc.includes("today")) return 1;
+            const m = lc.match(/(\d+)\s*d/);
+            if (m) return parseInt(m[1], 10);
+            return (_hash(c.name) % 20) + 5;
+          };
+          // Cadence drift days: negative = on or ahead, positive = slower than target
+          const _dwCadenceDrift = (c) => _dwCadenceActual(c) - _dwCadenceTarget(c.name);
+
+          // Plot: X = cadence drift days (clamped -10..+20), Y = score delta (-5..+5)
+          const driftPoints = clients.map(c => {
+            const delta = _dwDelta(c.name);
+            const drift = _dwCadenceDrift(c);
+            return { c, delta, drift };
+          });
+
+          return (
+            <div style={{ width: "100%" }}>
+              {/* STATUS BAND */}
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
+                <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                  <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Monthly cadence · {monthLabel}</div>
+                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Health</h1>
+                  <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ color: activeQueue.filter(h => h.overdue > 0).length > 0 ? C.retWarn : C.textMuted, fontWeight: 600 }}>
+                      <b>{activeQueue.filter(h => h.overdue > 0).length}</b> overdue
+                    </span>
+                    <span style={{ color: C.border }}>·</span>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{activeQueue.filter(h => h.due === "Today").length}</b> due today</span>
+                    {justCompleted.length > 0 && <>
+                      <span style={{ color: C.border }}>·</span>
+                      <span style={{ color: C.retGood, fontWeight: 600 }}>
+                        <b>{justCompleted.length}</b> done today
+                      </span>
+                    </>}
+                  </div>
+                </div>
+                <div style={{ flexShrink: 0, textAlign: "right", minWidth: 140 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
+                    <span style={{ fontSize: 26, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
+                      {pctChecked}<span style={{ fontSize: 15, color: C.textMuted, fontWeight: 500 }}>%</span>
+                    </span>
+                    <span style={{ fontSize: 11, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>checked</span>
+                  </div>
+                  <div style={{ height: 4, background: C.borderLight, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pctChecked}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
+                  </div>
+                </div>
+              </div>
+
+
+
+              {/* Mobile observation — placed ABOVE the calendar widget. Desktop renders the same observation inside the rc-grid main column below. Mutually exclusive via isMobile. */}
+              {isMobile && renderObserver()}
+
+              {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
+              <div className="rt-mob-strip" style={{ marginBottom: 16 }}>
+                {(() => {
+                  const today = new Date();
+                  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+                  const daysLeft = daysInMonth - today.getDate();
+                  const planned = hcQueue.filter(h => !h.runnable).length;
+                  const summary = `${checkedThisMonth} logged · ${planned} planned · ${daysLeft}d left`;
+                  const monthName = today.toLocaleString("en-US", { month: "long" });
+                  const year = today.getFullYear();
+                  const monthIdx = today.getMonth();
+                  const todayDay = today.getDate();
+                  const firstDay = new Date(year, monthIdx, 1);
+                  const startCol = firstDay.getDay();
+                  const byDay = {};
+                  hcQueue.forEach(h => {
+                    if (h.due_date) {
+                      const d = new Date(h.due_date);
+                      if (d.getFullYear() === year && d.getMonth() === monthIdx && d.getDate() >= todayDay) {
+                        byDay[d.getDate()] = "planned";
+                      }
+                    }
+                  });
+                  Object.keys(hcDone).forEach(cn => { if (hcDone[cn]) byDay[todayDay] = "logged"; });
+                  const cells = [];
+                  for (let i = 0; i < startCol; i++) cells.push(null);
+                  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                  while (cells.length % 7 !== 0) cells.push(null);
+                  const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
+                  return (
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, overflow: "hidden" }}>
+                      <div onClick={() => setHealthStripOpen(!healthStripOpen)} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <Icon name="health" size={14} color={C.primary} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>{monthName} rhythm</div>
+                            <div style={{ fontSize: 13.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</div>
+                          </div>
+                        </div>
+                        <Icon name={healthStripOpen ? "chevron-up" : "chevron-down"} size={14} color={C.textMuted} />
+                      </div>
+                      {healthStripOpen && (
+                        <div style={{ padding: 14, borderTop: "1px solid " + C.borderLight }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 6 }}>
+                            {daysHdr.map((d, i) => <div key={"h-" + i} style={{ fontSize: 9.5, color: C.textMuted, textAlign: "center", fontWeight: 500 }}>{d}</div>)}
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+                            {cells.map((d, i) => {
+                              if (d === null) return <div key={"c-" + i} />;
+                              const state = d === todayDay ? "today" : byDay[d] || null;
+                              const isToday = state === "today";
+                              const isLogged = state === "logged";
+                              const isPlanned = state === "planned";
+                              return (
+                                <div key={"c-" + i} style={{
+                                  aspectRatio: "1",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 11,
+                                  fontWeight: isToday || isLogged ? 700 : 500,
+                                  fontVariantNumeric: "tabular-nums",
+                                  borderRadius: 4,
+                                  color: isToday || isLogged ? "#fff" : isPlanned ? C.textSec : C.textMuted,
+                                  background: isToday ? C.btn : isLogged ? C.retGood : "transparent",
+                                  border: isPlanned ? "1px dashed " + C.border : "1px solid transparent",
+                                }}>{d}</div>
+                              );
+                            })}
+                          </div>
+                          <div style={{ display: "flex", gap: 10, marginTop: 10, fontSize: 10, color: C.textMuted, flexWrap: "wrap" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.retGood }} />logged</span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "transparent", border: "1px dashed " + C.border }} />planned</span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.btn }} />today</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
+              <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
+
+                {/* LEFT RAIL — calendar + queue */}
+                <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                  {/* ─── Calendar — current month rhythm ─── */}
+                  {(() => {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const monthIdx = today.getMonth();
+                    const todayDay = today.getDate();
+                    const firstDay = new Date(year, monthIdx, 1);
+                    const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+                    const startCol = firstDay.getDay(); // 0=Sun
+                    // Build day states from hcQueue: due_date in current month (not yet done) → planned.
+                    // Logged days require a completed-HC fetch which we don't do yet; they'll
+                    // light up when that fetch gets wired in. "Today" always wins over planned.
+                    const byDay = {};
+                    hcQueue.forEach(h => {
+                      if (h.due_date) {
+                        const d = new Date(h.due_date);
+                        if (d.getFullYear() === year && d.getMonth() === monthIdx && d.getDate() >= todayDay) {
+                          byDay[d.getDate()] = "planned";
+                        }
+                      }
+                    });
+                    // Mark just-completed sessions so the user gets immediate visual feedback
+                    Object.keys(hcDone).forEach(clientName => {
+                      if (hcDone[clientName]) byDay[todayDay] = "logged";
+                    });
+                    const loggedCount = Object.values(byDay).filter(s => s === "logged").length;
+                    const monthName = today.toLocaleString("en-US", { month: "long" });
+                    // Build the grid: 6 rows × 7 cols, fill with null where out-of-month
+                    const cells = [];
+                    for (let i = 0; i < startCol; i++) cells.push(null);
+                    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                    while (cells.length % 7 !== 0) cells.push(null);
+                    const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
+                    return (
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                          <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>{monthName} rhythm</span>
+                          <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}><b style={{ color: C.text }}>{loggedCount}</b> checks · <b style={{ color: C.text }}>{todayDay}</b>/{daysInMonth}</span>
+                        </div>
+                        {/* Day-of-week header */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 6 }}>
+                          {daysHdr.map((d, i) => (
+                            <div key={"h-" + i} style={{ fontSize: 9.5, color: C.textMuted, textAlign: "center", fontWeight: 500 }}>{d}</div>
+                          ))}
+                        </div>
+                        {/* Day grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                          {cells.map((d, i) => {
+                            if (d === null) return <div key={"c-" + i} />;
+                            const state = d === todayDay ? "today" : byDay[d] || null;
+                            const isToday = state === "today";
+                            const isLogged = state === "logged";
+                            const isPlanned = state === "planned";
+                            return (
+                              <div key={"c-" + i} style={{
+                                aspectRatio: "1",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 11,
+                                fontWeight: isToday || isLogged ? 700 : 500,
+                                fontVariantNumeric: "tabular-nums",
+                                borderRadius: 6,
+                                color: isToday ? "#fff" : isLogged ? "#fff" : isPlanned ? C.textSec : C.textMuted,
+                                background: isToday ? C.btn : isLogged ? C.retGood : "transparent",
+                                border: isPlanned ? "1px dashed " + C.border : "1px solid transparent",
+                              }}>{d}</div>
+                            );
+                          })}
+                        </div>
+                        {/* Legend */}
+                        <div style={{ display: "flex", gap: 10, marginTop: 12, fontSize: 10, color: C.textMuted, flexWrap: "wrap" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.retGood }} />logged</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "transparent", border: "1px dashed " + C.border }} />planned</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.btn }} />today</span>
+                        </div>
+                      </div>
+                    );
                   })()}
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Queue</span>
+                      <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{activeQueue.length}</span>
+                    </div>
+                    {activeQueue.length === 0 && (
+                      <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "10px 0" }}>All caught up.</div>
+                    )}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {activeQueue.map((h, i) => {
+                        const isOpen = hcOpen === h.client;
+                        const overdueDays = h.overdue;
+                        const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
+                        const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Start early · in ${h.daysUntil}d`;
+                        const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.btn : C.retOk;
+                        return (
+                          <div key={i} onClick={() => setHcOpen(isOpen ? null : h.client)}
+                            className="rc-queue-item"
+                            style={{
+                            position: "relative",
+                            padding: "10px 12px", borderRadius: 8, cursor: "pointer",
+                            background: isOpen ? C.primarySoft : "transparent",
+                            border: "1px solid " + (isOpen ? C.primary + "55" : "transparent"),
+                            display: "flex", alignItems: "center", gap: 10,
+                            transition: "background 140ms",
+                          }}>
+                            {/* Overdue red dot — top right */}
+                            {overdueDays > 0 && (
+                              <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: 4, background: C.retCrit }} />
+                            )}
+                            <div style={{ width: 24, height: 24, borderRadius: 12, background: retColor(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                              {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.client}</div>
+                              <div style={{ fontSize: 10.5, color: subColor, marginTop: 1 }}>{subLabel}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* MAIN COLUMN */}
+                <div style={{ minWidth: 0 }}>
+                  {/* ═══════════════════════════════════════════════════════════════
+                      OBSERVER CARD — single dark green panel, no flip.
+                      Top bar: card name + observation number/week/date.
+                      Headline + body, then divider, then metric strip + actions.
+                  ═══════════════════════════════════════════════════════════════ */}
+                  {/* Observation — rendered TWICE (once for mobile above calendar, once for desktop in this main column). renderObserver returns null when conditions aren't met. */}
+                  {!isMobile && renderObserver()}
                   {activeQueue.length === 0 && justCompleted.length === 0 && (
                     <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm }}>
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: C.text }}>All caught up</div>
