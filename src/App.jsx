@@ -4126,7 +4126,6 @@ export default function App({ user }) {
         .row-hover { transition: background 0.1s; cursor: pointer; }
         .row-hover:hover { background: ${C.primarySoft}; }
         .r-desk { display: none; }
-        .r-mob-top { display: flex; }
         .r-mob-bot { display: flex; }
         /* Mobile bottom nav strip is horizontally scrollable. Hide the
            native scrollbar across all browsers — affordance is the icon
@@ -4250,7 +4249,6 @@ export default function App({ user }) {
           html, body { background: ${C.bg} !important; }
           .app-root { background: ${C.bg} !important; }
           .r-desk { display: flex !important; }
-          .r-mob-top { display: none !important; }
           .r-mob-bot { display: none !important; }
           .r-today-panel { display: block !important; }
           .r-client-modal { top: 50% !important; left: 50% !important; right: auto !important; bottom: auto !important; transform: translate(-50%, -50%) !important; max-width: 520px !important; max-height: 90vh !important; border-radius: 16px !important; }
@@ -4486,7 +4484,6 @@ export default function App({ user }) {
 
         /* Dim sidebar contents */
         body:has(.rt-focus-on) .r-desk > *,
-        body:has(.rt-focus-on) .r-mob-top > *,
         body:has(.rt-focus-on) .r-mob-bot > * {
           opacity: 0.06 !important;
           transition: opacity 280ms ease;
@@ -5084,12 +5081,11 @@ export default function App({ user }) {
       </div>
 
       {/* MOBILE TOP */}
-      <div className="r-mob-top" style={{ justifyContent: "space-between", alignItems: "center", padding: "10px 16px", background: C.card, borderBottom: "1px solid " + C.borderLight }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 18, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FAFAF7" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
-        </div>
-        <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff" }}>{getUserInitial(user)}</div>
-      </div>
+      {/* Mobile top bar deliberately removed (May 2026).
+          Page identity is established by each page's own h1/eyebrow;
+          account-level actions (profile, sign out, theme, integrations)
+          live in Settings, reachable via the mobile bottom nav.
+          Removing the bar reclaims ~52px of vertical real estate. */}
 
       <div className="r-main">
 
