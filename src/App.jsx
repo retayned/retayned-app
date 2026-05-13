@@ -2251,7 +2251,7 @@ export default function App({ user }) {
   // tasksDb.getCompletedCounts. Period toggles between week/month/year and
   // is local state — resets to 'week' on each session.
   const [taskCompletedCounts, setTaskCompletedCounts] = useState({
-    week: 0, month: 0, year: 0,
+    today: 0, week: 0, month: 0, year: 0,
     weekHistory: Array(12).fill(0),
     monthHistory: Array(12).fill(0),
     dayStreak: 0,
@@ -3518,11 +3518,12 @@ export default function App({ user }) {
         const mh = [...(c.monthHistory || Array(12).fill(0))];
         wh[11] = (wh[11] || 0) + 1;
         mh[11] = (mh[11] || 0) + 1;
-        return { ...c, week: c.week + 1, month: c.month + 1, year: c.year + 1, weekHistory: wh, monthHistory: mh };
+        return { ...c, today: (c.today || 0) + 1, week: c.week + 1, month: c.month + 1, year: c.year + 1, weekHistory: wh, monthHistory: mh };
       });
     } else if (task.completed_at) {
       const completed = new Date(task.completed_at);
       const now = Date.now();
+      const inToday = completed.toISOString().slice(0,10) === new Date(now).toISOString().slice(0,10);
       const inWeek  = now - completed.getTime() < 7  * 86400000;
       const inMonth = now - completed.getTime() < 30 * 86400000;
       const inYear  = now - completed.getTime() < 365 * 86400000;
@@ -3533,6 +3534,7 @@ export default function App({ user }) {
         if (inMonth) mh[11] = Math.max(0, (mh[11] || 0) - 1);
         return {
           ...c,
+          today: Math.max(0, (c.today || 0) - (inToday ? 1 : 0)),
           week:  Math.max(0, c.week  - (inWeek  ? 1 : 0)),
           month: Math.max(0, c.month - (inMonth ? 1 : 0)),
           year:  Math.max(0, c.year  - (inYear  ? 1 : 0)),
@@ -4921,74 +4923,15 @@ export default function App({ user }) {
           //
           // Each branch returns { line1, line2 } or null. If null, no callout
           // shows. The circle around the number is gated on the same condition.
+          // Sidebar callout: "+N today" — the count of tasks the user has
+          // completed today. Always honest, works for new accounts, stays
+          // true across week/month/year toggles (the callout describes
+          // today regardless of which period the big number shows).
+          // Silent if zero — the widget says nothing rather than show "+0".
           const computeCallout = () => {
-            const wh = taskCompletedCounts.weekHistory || [];
-            const mh = taskCompletedCounts.monthHistory || [];
-            const streak = taskCompletedCounts.dayStreak || 0;
-
-            if (taskCompletedPeriod === "year") {
-              // Year milestones — fire when current year count >= a milestone.
-              // We don't know if user already saw it (no persistence yet), so
-              // it shows continuously while the count sits in that band.
-              // Floor: 100 (anything below feels like the system is grasping).
-              const year = taskCompletedCounts.year || 0;
-              const milestones = [5000, 4000, 3000, 2500, 2000, 1500, 1000, 500, 250, 100];
-              const hit = milestones.find(m => year >= m);
-              if (hit) {
-                return { line1: hit.toLocaleString() + "+ tasks", line2: "↙ this year" };
-              }
-              return null;
-            }
-
-            if (taskCompletedPeriod === "week") {
-              const current = wh[11] || 0;
-              const lastWeek = wh[10] || 0;
-              if (current === 0) return null;
-
-              // "Fastest in N weeks" — current must be strictly greater than
-              // every prior bucket, and N must be ≥ 6 to feel earned.
-              let n = 0;
-              for (let i = 10; i >= 0; i--) {
-                if ((wh[i] || 0) >= current) break;
-                n++;
-              }
-              if (n >= 6) return { line1: "fastest week", line2: "↙ in " + n + " weeks" };
-
-              // "+N vs last week" — only when delta ≥ 3.
-              const delta = current - lastWeek;
-              if (delta >= 3) return { line1: "+" + delta + " this week", line2: "↙ vs last" };
-
-              // Streak — ≥ 3 days
-              if (streak >= 3) return { line1: streak + " days straight", line2: "↙ keep going" };
-
-              // Recovery — last week 0, this week non-zero
-              if (lastWeek === 0 && current > 0) return { line1: "back at it", line2: "↙ " + current + " this week" };
-
-              return null;
-            }
-
-            if (taskCompletedPeriod === "month") {
-              const current = mh[11] || 0;
-              const lastMonth = mh[10] || 0;
-              if (current === 0) return null;
-
-              // "Biggest month in N months" — current must be strictly greater
-              // than every prior bucket, and N must be ≥ 6.
-              let n = 0;
-              for (let i = 10; i >= 0; i--) {
-                if ((mh[i] || 0) >= current) break;
-                n++;
-              }
-              if (n >= 6) return { line1: "biggest month", line2: "↙ in " + n + " months" };
-
-              // "+N vs last month" — delta ≥ 10
-              const delta = current - lastMonth;
-              if (delta >= 10) return { line1: "+" + delta + " this month", line2: "↙ vs last" };
-
-              return null;
-            }
-
-            return null;
+            const today = taskCompletedCounts.today || 0;
+            if (today < 1) return null;
+            return { line1: "+" + today + " today", line2: "" };
           };
 
           const callout = computeCallout();
@@ -5015,9 +4958,11 @@ export default function App({ user }) {
                   }}
                 >
                   {callout.line1}
-                  <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
-                    {callout.line2}
-                  </span>
+                  {callout.line2 && (
+                    <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
+                      {callout.line2}
+                    </span>
+                  )}
                 </div>
               )}
 
