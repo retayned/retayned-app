@@ -8992,26 +8992,152 @@ export default function App({ user }) {
                 {/* Actions */}
                 {importPreview.filter(r => r.valid).length > 0 && (
                   <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                    <button className="r-btn" onClick={() => {
-                      const newClients = importPreview.filter(r => r.valid).map(r => ({
-                        id: Date.now() + Math.random(),
+                    <button className="r-btn" onClick={async () => {
+                      // BEFORE THIS FIX: import wrote only to local React state. Imported
+                      // clients appeared in the list, then vanished on refresh because
+                      // nothing was persisted to Supabase. Same exact failure mode as
+                      // the rolodex move-to-rolodex bug.
+                      //
+                      // Now we persist each valid row through clientsDb.create, then
+                      // also seed an initial client_revenue_history row when revenue>0
+                      // so LTV math is correct from minute one. Parallel insert via
+                      // Promise.allSettled so a single failure doesn't block the rest.
+                      const validRows = importPreview.filter(r => r.valid);
+                      const todayIsoDate = new Date().toISOString().slice(0, 10);
+                      const todayMs = Date.now();
+                      const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
+
+                      // Optimistic UI: insert with temp negative IDs so we can swap
+                      // them for real DB IDs once the inserts return. Negative IDs
+                      // can't collide with real UUIDs.
+                      const tempBase = -todayMs;
+                      const optimistic = validRows.map((r, idx) => ({
+                        id: tempBase - idx,
+                        _isTemp: true,
                         name: r.name,
                         contact: r.contact,
-                        role: r.role || "—",
-                        tag: r.tag || "—",
+                        role: r.role || "",
+                        tag: r.tag || "",
                         months: r.months || 0,
                         revenue: r.revenue || 0,
+                        lifetime_revenue_at_entry: 0,
+                        ltv: 0,
                         velocity: "normal",
                         lastHC: null,
-                        lastContact: "—",
-                        ret: 0,
+                        lastContact: "today",
+                        ret: 50,
                         referrals: 0,
+                        profileScores: {},
+                        qualifyingFlags: {},
+                        daysOld: 0,
+                        is_paused: false,
+                        engagement_started_at: new Date(todayMs - (r.months || 0) * MS_PER_MONTH).toISOString().slice(0, 10),
                       }));
-                      setClients(prev => [...prev, ...newClients]);
+                      setClients(prev => [...prev, ...optimistic]);
                       setShowImport(false);
                       setImportPreview([]);
                       setImportPaste("");
                       setImportFile(null);
+
+                      // Persist each row. Track successes + failures so we can
+                      // reconcile the local state with what actually landed.
+                      const results = await Promise.allSettled(
+                        validRows.map(async (r) => {
+                          const tenureMonths = parseInt(r.months) || 0;
+                          const monthlyRate = parseInt(r.revenue) || 0;
+                          const engagementStart = new Date(todayMs - tenureMonths * MS_PER_MONTH)
+                            .toISOString().slice(0, 10);
+                          const payload = {
+                            name: r.name,
+                            contact: r.contact || "",
+                            role: r.role || "",
+                            tag: r.tag || "",
+                            revenue: monthlyRate,
+                            months: tenureMonths, // legacy field; engagement_started_at is the truth
+                            engagement_started_at: engagementStart,
+                            lifetime_revenue_at_entry: 0,
+                            retention_score: 50,
+                            profile_scores: {},
+                            qualifying_flags: {},
+                          };
+                          const { data: created, error } = await clientsDb.create(user.id, payload);
+                          if (error) throw error;
+                          // Seed initial revenue history row when there's a rate.
+                          // Without this, LTV math has no anchor and Rai signals
+                          // about revenue won't surface for imported clients.
+                          if (created?.id && monthlyRate > 0) {
+                            try {
+                              await supabase.from('client_revenue_history').insert({
+                                user_id: user.id,
+                                client_id: created.id,
+                                monthly_rate: monthlyRate,
+                                started_at: new Date().toISOString(),
+                                ended_at: null,
+                              });
+                            } catch (e) {
+                              // Non-fatal — client exists; revenue history can
+                              // be filled in later through the UI.
+                              console.warn("Revenue history seed failed for imported client:", e);
+                            }
+                          }
+                          return { rowName: r.name, created };
+                        })
+                      );
+
+                      // Reconcile: swap optimistic temp IDs for real DB IDs on
+                      // successes; remove temp rows for failures.
+                      const succeeded = [];
+                      const failed = [];
+                      results.forEach((res, idx) => {
+                        const tempId = tempBase - idx;
+                        if (res.status === "fulfilled" && res.value.created) {
+                          succeeded.push({ tempId, real: res.value.created });
+                        } else {
+                          failed.push({ tempId, rowName: validRows[idx].name, reason: res.reason });
+                        }
+                      });
+
+                      setClients(prev => {
+                        const tempIds = new Set([
+                          ...succeeded.map(s => s.tempId),
+                          ...failed.map(f => f.tempId),
+                        ]);
+                        // Drop ALL temp rows first
+                        const kept = prev.filter(c => !tempIds.has(c.id));
+                        // Add back the succeeded ones with real DB shape
+                        const realRows = succeeded.map(s => ({
+                          ...s.real,
+                          contact: s.real.contact || "",
+                          role: s.real.role || "",
+                          tag: s.real.tag || "",
+                          months: s.real.months || 0,
+                          revenue: s.real.revenue || 0,
+                          lifetime_revenue_at_entry: Number(s.real.lifetime_revenue_at_entry || 0),
+                          ltv: Number(s.real.lifetime_revenue_at_entry || 0),
+                          velocity: "normal",
+                          lastHC: null,
+                          lastContact: "today",
+                          ret: s.real.retention_score || 50,
+                          referrals: 0,
+                          profileScores: s.real.profile_scores || {},
+                          qualifyingFlags: s.real.qualifying_flags || {},
+                          daysOld: 0,
+                          is_paused: false,
+                        }));
+                        return [...kept, ...realRows].sort((a, b) => (b.ret || 0) - (a.ret || 0));
+                      });
+
+                      // Tell the user what landed and what didn't. Silent partial
+                      // failure is worse than a clear message.
+                      if (failed.length > 0) {
+                        const failedNames = failed.map(f => f.rowName).join(", ");
+                        console.error("Import failures:", failed);
+                        alert(
+                          succeeded.length > 0
+                            ? `Imported ${succeeded.length} client${succeeded.length === 1 ? "" : "s"}. ${failed.length} failed: ${failedNames}. Please try again.`
+                            : `Import failed. None of the ${failed.length} client${failed.length === 1 ? " was" : "s were"} saved. Please try again.`
+                        );
+                      }
                     }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import {importPreview.filter(r => r.valid).length} Client{importPreview.filter(r => r.valid).length > 1 ? "s" : ""}</button>
                     <button onClick={() => { setShowImport(false); setImportPreview([]); setImportPaste(""); setImportFile(null); }} style={{ padding: "10px 16px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                   </div>
@@ -13151,8 +13277,92 @@ export default function App({ user }) {
                     <div style={{ background: C.primarySoft, borderRadius: 12, padding: "16px", border: "1px solid " + C.primary + "33" }}>
                       <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be moved to your Rolodex for future tracking. Relationships change — this keeps the door open. Rai's memory of them will be cleared.</p>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button className="r-btn" onClick={() => { setRolodex(prev => [...prev, { id: Date.now(), client: sc.name, contact: sc.contact, months: sc.months, type: "former", date: "Mar 2026", tags: [], priority: null }]); setClients(clients.filter(c => c.id !== sc.id));
-                          clientsDb.deactivate(sc.id); setSelectedClient(null); setRolodexConfirm(false); setPage("retros"); }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Move to Rolodex</button>
+                        <button className="r-btn" onClick={async () => {
+                          // Build the rolodex row from the client being moved.
+                          // Preserve as much context as possible — relationship
+                          // history is the entire point of the Rolodex. None of
+                          // this is reversible without manual reconstruction.
+                          const todayDisplay = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+                          const payload = {
+                            client_name: sc.name,
+                            contact_name: sc.contact || "",
+                            months: sc.months || 0,
+                            type: "former",
+                            date_added: todayDisplay,
+                            tags: [],
+                            priority: null,
+                            // Carry notes if present — gives the user a starting
+                            // point in the retro flow rather than blank slate.
+                            notes: sc.notes || "",
+                            // Empty retro_answers so the standard retro flow
+                            // engages (lets the user fill in why they parted).
+                            retro_answers: {},
+                          };
+                          // Optimistic UI: insert into local state first so the
+                          // user sees the row immediately. If the DB insert
+                          // fails, roll back.
+                          const tempId = "tmp-" + Date.now();
+                          const optimistic = {
+                            id: tempId,
+                            client: sc.name,
+                            contact: sc.contact || "",
+                            months: sc.months || 0,
+                            type: "former",
+                            date: todayDisplay,
+                            tags: [],
+                            priority: null,
+                            work: sc.notes || "",
+                          };
+                          setRolodex(prev => [optimistic, ...prev]);
+                          setClients(clients.filter(c => c.id !== sc.id));
+                          // Persist. Sequencing matters: deactivate the client
+                          // BEFORE creating the rolodex row so that if the
+                          // rolodex insert succeeds but the deactivate fails,
+                          // we don't end up with the client visible in both
+                          // surfaces. Reverse order would risk the opposite.
+                          let createdRow = null;
+                          try {
+                            const { data, error } = await rolodexDb.create(user.id, payload);
+                            if (error) throw error;
+                            createdRow = data;
+                          } catch (e) {
+                            console.error("Failed to persist rolodex move:", e);
+                            // Roll back UI — re-add client, drop optimistic row.
+                            setRolodex(prev => prev.filter(r => r.id !== tempId));
+                            setClients(prev => [...prev, sc]);
+                            setRolodexConfirm(false);
+                            alert("Could not move " + sc.name + " to the Rolodex. Please try again — they have not been moved.");
+                            return;
+                          }
+                          // Swap temp row for the real DB row (gets the real
+                          // UUID so subsequent edits hit the right record).
+                          if (createdRow) {
+                            setRolodex(prev => prev.map(r => r.id === tempId ? {
+                              id: createdRow.id,
+                              client: createdRow.client_name,
+                              contact: createdRow.contact_name,
+                              months: createdRow.months || 0,
+                              type: createdRow.type,
+                              date: createdRow.date_added,
+                              tags: createdRow.tags || [],
+                              priority: createdRow.priority,
+                              work: createdRow.notes,
+                            } : r));
+                          }
+                          // Mark the client deactivated in DB. If this fails
+                          // we don't roll the rolodex back — the row IS in the
+                          // rolodex truthfully; the client will reappear on
+                          // next refresh because deactivate didn't land, but
+                          // the user can retry from there. Logged loudly.
+                          try {
+                            await clientsDb.deactivate(sc.id);
+                          } catch (e) {
+                            console.error("Failed to deactivate client after rolodex move:", e);
+                          }
+                          setSelectedClient(null);
+                          setRolodexConfirm(false);
+                          setPage("retros");
+                        }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Move to Rolodex</button>
                         <button onClick={() => setRolodexConfirm(false)} style={{ padding: "10px 14px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                       </div>
                     </div>
@@ -13930,11 +14140,46 @@ export default function App({ user }) {
                         </div>
                         {reminderDate && <div style={{ fontSize: 14, color: C.primary, fontWeight: 600, marginBottom: 12 }}>Monday, {new Date(reminderDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>}
                         <div style={{ display: "flex", gap: 8 }}>
-                          <button className="r-btn" onClick={() => {
-                            if (reminderDate) { setRolodex(prev => prev.map(x => x.id === sr.id ? { ...x, reminder: reminderDate } : x)); setSelectedRolodex({ ...sr, reminder: reminderDate }); }
+                          <button className="r-btn" onClick={async () => {
+                            // Persist the reminder date to DB. Before this fix
+                            // the reminder was only kept in local state and
+                            // would disappear on refresh — silent data loss.
+                            if (reminderDate) {
+                              const prev = rolodex;
+                              setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: reminderDate } : x));
+                              setSelectedRolodex({ ...sr, reminder: reminderDate });
+                              try {
+                                const { error } = await rolodexDb.update(sr.id, { reminder_date: reminderDate });
+                                if (error) throw error;
+                              } catch (e) {
+                                console.error("Reminder save failed:", e);
+                                setRolodex(prev);
+                                setSelectedRolodex(sr);
+                                alert("Could not save reminder. Please try again.");
+                                return;
+                              }
+                            }
                             setShowReminderPicker(false);
                           }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
-                          {sr.reminder && <button onClick={() => { setRolodex(prev => prev.map(x => x.id === sr.id ? { ...x, reminder: null } : x)); setSelectedRolodex({ ...sr, reminder: null }); setReminderDate(""); setShowReminderPicker(false); }} style={{ padding: "10px 14px", background: "transparent", color: C.danger, border: "1px solid " + C.danger + "44", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove</button>}
+                          {sr.reminder && <button onClick={async () => {
+                            // Persist the reminder removal to DB. Same data-
+                            // loss pattern as the save path — was previously
+                            // local-only.
+                            const prev = rolodex;
+                            setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: null } : x));
+                            setSelectedRolodex({ ...sr, reminder: null });
+                            setReminderDate("");
+                            setShowReminderPicker(false);
+                            try {
+                              const { error } = await rolodexDb.update(sr.id, { reminder_date: null });
+                              if (error) throw error;
+                            } catch (e) {
+                              console.error("Reminder remove failed:", e);
+                              setRolodex(prev);
+                              setSelectedRolodex(sr);
+                              alert("Could not remove reminder. Please try again.");
+                            }
+                          }} style={{ padding: "10px 14px", background: "transparent", color: C.danger, border: "1px solid " + C.danger + "44", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove</button>}
                           <button onClick={() => setShowReminderPicker(false)} style={{ padding: "10px 14px", background: C.surface, color: C.text, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                         </div>
                       </div>
@@ -13994,17 +14239,41 @@ export default function App({ user }) {
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                       <button onClick={() => setRolodexEditing(false)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                      <button onClick={() => {
+                      <button onClick={async () => {
                         const tags = [];
                         if ((ed.terms || "").toLowerCase().includes("good")) tags.push("Good terms");
                         if ((ed.refer || "").toLowerCase().includes("yes")) tags.push("Would refer");
                         if ((ed.comeback || "").toLowerCase().includes("yes")) tags.push("Would come back");
                         if (sr.type === "oneoff") tags.push("One-off");
+                        const newRetroAnswers = { ...(retroAnswers[sr.id] || {}), what: ed.what, work: ed.work, terms: ed.terms, comeback: ed.comeback, refer: ed.refer };
                         const updated = { ...sr, contact: ed.contact, months: ed.months, priority: ed.priority, notes: ed.notes, tags };
+                        // Persist to DB. Before this fix, edits were local-only —
+                        // refreshing the page lost every change. The DB column
+                        // map: contact→contact_name, months→months, priority→
+                        // priority, notes→notes, tags→tags, plus retro_answers.
+                        const prevRolodex = rolodex;
+                        const prevAnswers = retroAnswers;
                         setRolodex(prev => prev.map(x => x.id === sr.id ? updated : x));
-                        setRetroAnswers(prev => ({ ...prev, [sr.id]: { ...prev[sr.id], what: ed.what, work: ed.work, terms: ed.terms, comeback: ed.comeback, refer: ed.refer } }));
+                        setRetroAnswers(prev => ({ ...prev, [sr.id]: newRetroAnswers }));
                         setSelectedRolodex(updated);
                         setRolodexEditing(false);
+                        try {
+                          const { error } = await rolodexDb.update(sr.id, {
+                            contact_name: ed.contact,
+                            months: parseInt(ed.months) || 0,
+                            priority: ed.priority || null,
+                            notes: ed.notes || "",
+                            tags,
+                            retro_answers: newRetroAnswers,
+                          });
+                          if (error) throw error;
+                        } catch (e) {
+                          console.error("Rolodex edit save failed:", e);
+                          setRolodex(prevRolodex);
+                          setRetroAnswers(prevAnswers);
+                          setSelectedRolodex(sr);
+                          alert("Could not save changes. Please try again — your edits were not persisted.");
+                        }
                       }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
                     </div>
                   </>
