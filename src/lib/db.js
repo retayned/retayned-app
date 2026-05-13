@@ -1824,15 +1824,58 @@ export const buildRaiContext = async (userId, clientId = null) => {
     { data: clientList },
     { data: taskList },
     { data: hcList },
-    { data: refList }
+    { data: refList },
+    { data: pauseList },
+    { data: revHistList }
   ] = await Promise.all([
     clients.list(userId),
     tasks.listToday(userId),
     clientId
       ? healthChecks.listForClient(clientId)
       : supabase.from('health_checks').select('*').eq('user_id', userId).not('completed_at', 'is', null).order('completed_at', { ascending: false }).limit(20).then(r => r),
-    referrals.list(userId)
+    referrals.list(userId),
+    // Engagement pauses — let Rai know which clients are paused (so she
+    // doesn't surface tasks for them) and how long they've been paused
+    // historically (signal of relationship pattern).
+    supabase.from('client_engagement_pauses').select('client_id, paused_at, resumed_at, reason').eq('user_id', userId).then(r => r, () => ({ data: [] })),
+    // Recent revenue changes with reasons — let Rai see WHY money moved.
+    // "Their rate doubled last month due to expansion" reads very different
+    // from "Their rate halved due to contraction." Cap at most recent 30.
+    supabase.from('client_revenue_history').select('client_id, monthly_rate, started_at, change_reason, change_note').eq('user_id', userId).order('started_at', { ascending: false }).limit(30).then(r => r, () => ({ data: [] }))
   ]);
+
+  // Build pause-by-client and most-recent-revenue-change-by-client maps
+  const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  const pausesByClient = {};
+  for (const p of (pauseList || [])) {
+    if (!pausesByClient[p.client_id]) pausesByClient[p.client_id] = [];
+    pausesByClient[p.client_id].push(p);
+  }
+  const totalPausedMonths = (id) => {
+    const arr = pausesByClient[id] || [];
+    let totalMs = 0;
+    for (const p of arr) {
+      const start = new Date(p.paused_at).getTime();
+      const end = p.resumed_at ? new Date(p.resumed_at).getTime() : nowMs;
+      totalMs += Math.max(0, end - start);
+    }
+    return Math.floor(totalMs / MS_PER_MONTH);
+  };
+  const isCurrentlyPaused = (id) => (pausesByClient[id] || []).some(p => !p.resumed_at);
+
+  // Most recent revenue change per client (revHistList is desc by started_at)
+  const lastRevChangeByClient = {};
+  for (const r of (revHistList || [])) {
+    if (!lastRevChangeByClient[r.client_id]) {
+      lastRevChangeByClient[r.client_id] = {
+        rate: r.monthly_rate,
+        started_at: r.started_at,
+        reason: r.change_reason,
+        note: r.change_note
+      };
+    }
+  }
 
   // On Saturday/Sunday, drop recurring tasks from Rai's task list.
   // Recurring tasks are still in the user's UI (they can complete them
@@ -1858,7 +1901,15 @@ export const buildRaiContext = async (userId, clientId = null) => {
       drift: c.drift_status,
       tag: c.tag,
       profile_score: c.profile_score,
-      profile_scores: c.profile_scores
+      profile_scores: c.profile_scores,
+      // Engagement pause status. is_paused: true means Rai should not
+      // suggest tasks for this client. total_paused_months: cumulative
+      // time spent paused across the relationship (signal of pattern).
+      is_paused: isCurrentlyPaused(c.id),
+      total_paused_months: totalPausedMonths(c.id),
+      // Most recent revenue change with reason. Lets Rai narrate WHY
+      // revenue moved, not just THAT it moved. null if no change history.
+      last_revenue_change: lastRevChangeByClient[c.id] || null
     })),
     tasks_today: taskListForRai.map(t => ({
       text: t.text,
