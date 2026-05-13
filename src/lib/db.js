@@ -224,9 +224,12 @@ export const tasks = {
   toggle: async (taskId, isDone) => {
     // Read the row to capture task metadata for the completion record
     // (denormalized snapshots). Also tells us the user_id and client_id.
+    // assigned_worker_id and due_date are pulled so task_completions can
+    // store complete worker-attribution + on-time data — without these
+    // the Workers page can't reconstruct history across refreshes.
     const { data: existing, error: readErr } = await supabase
       .from('tasks')
-      .select('id, user_id, client_id, text, is_recurring')
+      .select('id, user_id, client_id, text, is_recurring, assigned_worker_id, due_date')
       .eq('id', taskId)
       .single();
     if (readErr) return { data: null, error: readErr };
@@ -269,6 +272,13 @@ export const tasks = {
             .single();
           clientName = cli?.name ?? null;
         }
+        // on-time computed at insert time so it's frozen historically.
+        // If the task has no due_date it counts as on-time (no deadline
+        // to miss). Date comparison uses YYYY-MM-DD slice to ignore
+        // timezone noise.
+        const wasOnTime = !existing.due_date
+          ? true
+          : (nowIso.slice(0, 10) <= String(existing.due_date).slice(0, 10));
         // Fire-and-forget — completion record is non-critical to UI
         // responsiveness. Errors logged but don't block.
         const { error: insErr } = await supabase
@@ -281,6 +291,9 @@ export const tasks = {
             task_text: existing.text,
             is_recurring: existing.is_recurring || false,
             completed_at: nowIso,
+            assigned_worker_id: existing.assigned_worker_id || null,
+            due_date: existing.due_date || null,
+            was_on_time: wasOnTime,
           });
         if (insErr) console.warn('task_completions insert failed:', insErr);
       }
@@ -507,6 +520,9 @@ export const tasks = {
           .single();
         clientName = cli?.name ?? null;
       }
+      const wasOnTime = !data.due_date
+        ? true
+        : (nowIso.slice(0, 10) <= String(data.due_date).slice(0, 10));
       const { error: insErr } = await supabase
         .from('task_completions')
         .insert({
@@ -517,6 +533,9 @@ export const tasks = {
           task_text: data.text,
           is_recurring: data.is_recurring || false,
           completed_at: nowIso,
+          assigned_worker_id: data.assigned_worker_id || null,
+          due_date: data.due_date || null,
+          was_on_time: wasOnTime,
         });
       if (insErr) console.warn('task_completions insert (worker) failed:', insErr);
     }
@@ -2020,6 +2039,28 @@ export const workers = {
       else counts[wid].pending++;
     });
     return { data: counts, error: null };
+  },
+
+  // ALL historical completions attributed to workers. Used by the Workers
+  // page to compute long-running stats that the in-memory `tasks` array
+  // can't preserve — once tasks.resetRecurring nulls completed_at each
+  // morning, the only way to know "worker X completed task Y" is to read
+  // task_completions.
+  //
+  // Returns the raw rows (sorted newest-first). Workers page composes
+  // them with the in-memory open tasks to compute pending/overdue/etc.
+  //
+  // Capacity: ~13k rows/year per heavy user. Even at 5 years (~65k rows),
+  // this query returns in <100ms on Supabase Pro and payload is ~10MB
+  // uncompressed. Fetched once on Workers page mount, held in state.
+  getAllCompletions: async (userId) => {
+    const { data, error } = await supabase
+      .from('task_completions')
+      .select('id, task_id, assigned_worker_id, client_id, client_name, task_text, is_recurring, completed_at, due_date, was_on_time')
+      .eq('user_id', userId)
+      .not('assigned_worker_id', 'is', null)
+      .order('completed_at', { ascending: false });
+    return { data: data || [], error };
   },
 };
 
