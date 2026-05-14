@@ -138,16 +138,6 @@ const THEME_CSS = `
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
-  html {
-    /* Reserve the vertical scrollbar's gutter permanently. Without this,
-       switching between Clients-page views (Table is tall, so the page
-       scrollbar is present; Columns and Heatmap can be short with no
-       scrollbar) adds and removes the ~15px scrollbar gutter, shifting
-       the whole layout horizontally on every toggle. The stable value
-       keeps the gutter reserved whether or not content overflows, so
-       the layout never jumps. */
-    scrollbar-gutter: stable;
-  }
 `;
 
 const Icon = ({ name, size = 18, color = "currentColor" }) => {
@@ -509,30 +499,6 @@ const sweepTasks = [
   { id: "st5", client: "Northvane Studios", signal: "Referral opportunity", action: "Sarah's engagement is at an all-time high. Ask about referrals — she's your strongest advocate.", priority: "medium", timeframe: "This month" },
 ];
 
-const integrations = [
-  { cat: "Communication", items: [
-    { name: "Slack", icon: "💬", connected: true, meta: "3 workspaces" },
-    { name: "Microsoft Teams", icon: "📱", connected: false },
-    { name: "Gmail / Google", icon: "📧", connected: true, meta: "2 accounts" },
-    { name: "Outlook / Microsoft", icon: "📨", connected: false },
-  ]},
-  { cat: "Meetings", items: [
-    { name: "Zoom", icon: "🎥", connected: true, meta: "Connected" },
-    { name: "Google Meet", icon: "📹", connected: false },
-    { name: "Microsoft Teams", icon: "📞", connected: false },
-  ]},
-  { cat: "CRM", items: [
-    { name: "HubSpot", icon: "🟠", connected: false },
-    { name: "Salesforce", icon: "☁️", connected: false },
-    { name: "Pipedrive", icon: "📊", connected: false },
-  ]},
-  { cat: "Billing", items: [
-    { name: "Stripe", icon: "💳", connected: false },
-    { name: "QuickBooks", icon: "📗", connected: false },
-    { name: "FreshBooks", icon: "📘", connected: false },
-  ]},
-];
-
 // ============================================================
 // OBSERVATION_ILLUSTRATIONS
 // Maps observations.card_name → SVG asset URL.
@@ -783,6 +749,11 @@ function recurrenceMatchesDate(pattern, date) {
   if (!pattern || !pattern.kind) return true; // legacy daily — always shows
   const dow = date.getDay(); // 0=Sun, 6=Sat
   const dom = date.getDate();
+  // Days in the current month — used to clamp monthly patterns so a task
+  // targeting a day that doesn't exist this month (the 31st in April, the
+  // 5th Monday when there are only 4) still surfaces on the last valid day
+  // instead of silently never appearing.
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   switch (pattern.kind) {
     case "daily":
       return true;
@@ -790,13 +761,25 @@ function recurrenceMatchesDate(pattern, date) {
       return dow >= 1 && dow <= 5;
     case "weekly":
       return Array.isArray(pattern.days) && pattern.days.includes(dow);
-    case "monthly_date":
-      return dom === (pattern.day || 1);
+    case "monthly_date": {
+      // "Nth of the month." If N exceeds this month's length (e.g. the
+      // 31st in a 30-day month), clamp to the last day so the task still
+      // fires once a month rather than being skipped entirely.
+      const targetDom = Math.min(pattern.day || 1, daysInMonth);
+      return dom === targetDom;
+    }
     case "monthly_weekday": {
-      // "Nth weekday of month" — week is 1..5, day is 0..6
-      if (date.getDay() !== pattern.day) return false;
+      // "Nth weekday of month" — week is 1..5, day is 0..6.
+      if (dow !== pattern.day) return false;
       const occurrence = Math.ceil(dom / 7);
-      return occurrence === pattern.week;
+      // Clamp the requested week to the LAST occurrence that actually
+      // exists this month. "5th Monday" in a month with only 4 Mondays
+      // fires on the 4th instead of being silently skipped.
+      const firstDow = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+      const firstOfWeekday = ((pattern.day - firstDow + 7) % 7) + 1; // dom of 1st occurrence
+      const occurrencesThisMonth = Math.floor((daysInMonth - firstOfWeekday) / 7) + 1;
+      const targetOccurrence = Math.min(pattern.week, occurrencesThisMonth);
+      return occurrence === targetOccurrence;
     }
     default:
       return true;
@@ -820,7 +803,12 @@ function formatRecurrenceLabel(pattern) {
       if (days.length === 0) return "Weekly";
       if (days.length === 7) return "Daily";
       if (days.length === 5 && [1,2,3,4,5].every(d => days.includes(d))) return "Mon–Fri";
-      return days.sort().map(d => dayShort[d]).join("/");
+      // Copy before sorting — Array.sort mutates in place, and pattern.days
+      // is the live stored pattern object. Also use a numeric comparator:
+      // the default sort is lexicographic, which happens to work for single
+      // digits 0-6 but is wrong practice and would break if the shape ever
+      // changed. Sort a copy, numerically.
+      return [...days].sort((a, b) => a - b).map(d => dayShort[d]).join("/");
     }
     case "monthly_date": return `${ordinal(pattern.day || 1)} of month`;
     case "monthly_weekday": return `${weekOrd[pattern.week]} ${dayShort[pattern.day]} of month`;
@@ -1329,7 +1317,22 @@ function parseComposer(rawText, clients, workers) {
     // every weekday / every weekdays / weekdays
     { re: /\bevery (?:weekday|weekdays)\b/i, pattern: () => ({ kind: "weekdays" }) },
     { re: /\bweekdays?\b/i, pattern: () => ({ kind: "weekdays" }) },
-    // every Mon/Tue/.../Sunday and full names
+    // Multi-weekday: "every monday and wednesday", "every mon, wed, fri",
+    // "every tue & thu". Captures "every" + a run of weekday tokens joined
+    // by commas / "and" / "&" / whitespace. Must come BEFORE the single-
+    // weekday rules so it gets first crack at multi-day phrases. The
+    // pattern function pulls every weekday token out of the matched span.
+    {
+      re: /\bevery ((?:mon|tues?|wed|thur?s?|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s*(?:,|&|and|\/|\s)\s*(?:mon|tues?|wed|thur?s?|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday))+)\b/i,
+      pattern: (m) => {
+        // Extract each weekday token from the captured run, map to index,
+        // dedupe, sort numerically.
+        const tokens = m[1].match(/mon|tues?|wed|thur?s?|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday/gi) || [];
+        const days = [...new Set(tokens.map(t => weekdayIndex(expandWeekday(t))))].sort((a, b) => a - b);
+        return { kind: "weekly", days };
+      },
+    },
+    // every Mon/Tue/.../Sunday and full names (single day)
     { re: /\bevery (monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i, pattern: (m) => ({ kind: "weekly", days: [weekdayIndex(m[1])] }) },
     { re: /\bevery (mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)\b/i, pattern: (m) => ({ kind: "weekly", days: [weekdayIndex(expandWeekday(m[1]))] }) },
     // every week / weekly → weekly on today's day-of-week
@@ -3944,6 +3947,16 @@ export default function App({ user }) {
   // Stores YYYY-MM-DD string. Mutually exclusive with newTaskRecurring (selecting
   // recurring clears due date; selecting due date clears recurring).
   const [newTaskDueDate, setNewTaskDueDate] = useState(null);
+  // Provenance tracking for parser-set recurrence/date. When the parser
+  // detects "every thursday" it sets the recurrence chip AND records what
+  // it set here. On a later keystroke, if the parser no longer finds a
+  // recurrence/date phrase AND the current chip state still matches what
+  // the parser last set, we know the user deleted the trigger phrase —
+  // so we clear the chip. If the state DIFFERS from the parser's last
+  // value, the user changed it manually via the chip menu — we leave it
+  // alone. null = parser hasn't set anything (any current state is manual).
+  const parserSetRecurrenceRef = useRef(null); // last pattern the parser set
+  const parserSetDueDateRef = useRef(null);    // last YMD the parser set
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   // Calendar grid: which month is currently shown in the date picker.
@@ -6688,6 +6701,9 @@ export default function App({ user }) {
             setDuePickerOpen(false);
             setWorkerPickerOpen(false);
             setComposerMenuOpen(false);
+            // Clear parser provenance — next task starts fresh.
+            parserSetRecurrenceRef.current = null;
+            parserSetDueDateRef.current = null;
           };
 
           // ─── RENDER ──────────────────────────────────────────────────────
@@ -6899,11 +6915,39 @@ export default function App({ user }) {
                             setNewTaskRecurrencePattern(parsed.matchedRecurrence.pattern);
                           }
                           if (newTaskDueDate) setNewTaskDueDate(null);
+                          // Record what the parser set so we can detect later
+                          // if the user deletes the trigger phrase.
+                          parserSetRecurrenceRef.current = parsed.matchedRecurrence.pattern;
+                          parserSetDueDateRef.current = null;
                         } else if (parsed.matchedDate && parsed.matchedDate.date) {
                           const ymd = dateToYmd(parsed.matchedDate.date);
                           if (ymd && newTaskDueDate !== ymd) {
                             setNewTaskDueDate(ymd);
                             setNewTaskRecurring(false);
+                          }
+                          parserSetDueDateRef.current = ymd;
+                          parserSetRecurrenceRef.current = null;
+                        } else {
+                          // No recurrence/date phrase in the text right now.
+                          // If the current chip state still matches what the
+                          // PARSER last set, the user just deleted the trigger
+                          // phrase — clear the chip. If it differs, the user
+                          // set it manually via the chip menu — leave it.
+                          if (
+                            parserSetRecurrenceRef.current &&
+                            newTaskRecurring &&
+                            JSON.stringify(newTaskRecurrencePattern) === JSON.stringify(parserSetRecurrenceRef.current)
+                          ) {
+                            setNewTaskRecurring(false);
+                            setNewTaskRecurrencePattern({ kind: "daily" });
+                            parserSetRecurrenceRef.current = null;
+                          }
+                          if (
+                            parserSetDueDateRef.current &&
+                            newTaskDueDate === parserSetDueDateRef.current
+                          ) {
+                            setNewTaskDueDate(null);
+                            parserSetDueDateRef.current = null;
                           }
                         }
                       }}
@@ -12313,8 +12357,14 @@ export default function App({ user }) {
             // Derive and save tags + priority
             const finalAnswers = { ...currentAnswers, _priority: priority };
             const tags = deriveTags({ ...active, retro_answers: finalAnswers });
-            setRolodex(prev => prev.map(r => r.id === active.id ? { ...r, priority, retro_answers: finalAnswers, tags, priority_set_at: new Date().toISOString() } : r));
-            try { await rolodexDb.update(active.id, { priority, retro_answers: finalAnswers, tags }); } catch (e) { console.warn("Priority save failed:", e); }
+            // Single timestamp used for BOTH local state and the DB write,
+            // so the retro-queue "last touched" sort stays consistent
+            // across refreshes. Previously priority_set_at was set in local
+            // state only — the DB update omitted it, so on refresh the
+            // sort fell back to created_at.
+            const setAt = new Date().toISOString();
+            setRolodex(prev => prev.map(r => r.id === active.id ? { ...r, priority, retro_answers: finalAnswers, tags, priority_set_at: setAt } : r));
+            try { await rolodexDb.update(active.id, { priority, retro_answers: finalAnswers, tags, priority_set_at: setAt }); } catch (e) { console.warn("Priority save failed:", e); }
             advanceAfterRetro();
           };
 
@@ -12865,35 +12915,11 @@ export default function App({ user }) {
               </div>
             ))}
 
-            {/* Enterprise: Integrations */}
+            {/* Enterprise: Automated Sweep */}
             {tier === "enterprise" && (
               <div style={{ marginTop: 20 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }}>Integrations</div>
-                {integrations.map((cat, ci) => (
-                  <div key={ci} style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 6 }}>{cat.cat}</div>
-                    <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, overflow: "hidden" }}>
-                      {cat.items.map((item, ii) => (
-                        <div key={ii} className="row-hover" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: ii < cat.items.length - 1 ? "1px solid " + C.borderLight : "none" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={{ fontSize: 14, width: 24, textAlign: "center" }}>{item.icon}</span>
-                            <span style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {item.connected ? (
-                              <span style={{ fontSize: 12, color: C.success, fontWeight: 600 }}>🟢 {item.meta}</span>
-                            ) : (
-                              <button className="r-btn" style={{ padding: "5px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Connect</button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
                 {/* Sweep Schedule */}
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>Automated Sweep</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }}>Automated Sweep</div>
                 <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
