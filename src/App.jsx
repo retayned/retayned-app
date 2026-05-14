@@ -5343,7 +5343,23 @@ export default function App({ user }) {
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
         .nav-item { transition: all 0.12s; cursor: pointer; }
-        .nav-item:hover { background: var(--rt-deep-cream); }
+        .nav-item:hover:not(.is-active) { background: var(--rt-surface-warm); }
+        /* Period toggle (Week/Month/Year) — inactive options only. The
+           active option carries its own inline color + primaryDeep
+           underline. Inactive options rest muted with a transparent
+           underline; on hover the text darkens one step and a faint
+           hairline underline previews the active-state underline. */
+        .r-period-opt {
+          color: var(--rt-text-muted);
+          border-bottom: 1px solid transparent;
+          transition: color 0.12s, border-color 0.12s;
+        }
+        @media (hover: hover) {
+          .r-period-opt:hover {
+            color: var(--rt-text-sec);
+            border-bottom-color: var(--rt-ink-300);
+          }
+        }
         .r-btn { transition: all 0.15s ease; cursor: pointer; }
         @media (hover: hover) {
           .r-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(91,33,182,0.18); }
@@ -5896,7 +5912,7 @@ export default function App({ user }) {
           {(tier === "enterprise" ? navItemsEnterprise : navItemsCore).map(n => {
             const active = page === n.id;
             return (
-              <div key={n.id} className="nav-item" onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, marginBottom: 2, background: active ? C.deepCream : "transparent", color: active ? C.text : C.text, fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
+              <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, marginBottom: 2, ...(active ? { background: C.deepCream } : {}), color: C.text, fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
                 <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
                 {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.surfaceWarm, flexShrink: 0 }} />}
               </div>
@@ -6045,14 +6061,16 @@ export default function App({ user }) {
                     return (
                       <div
                         key={p.id}
+                        className={active ? undefined : "r-period-opt"}
                         onClick={() => setTaskCompletedPeriod(p.id)}
                         style={{
                           padding: "5px 0",
                           fontSize: 10.5,
                           fontWeight: active ? 600 : 500,
-                          color: active ? C.text : C.textMuted,
                           cursor: "pointer",
-                          borderBottom: active ? "1px solid " + C.primaryDeep : "1px solid transparent",
+                          ...(active
+                            ? { color: C.text, borderBottom: "1px solid " + C.primaryDeep }
+                            : {}),
                         }}
                       >
                         {p.label}
@@ -6104,7 +6122,7 @@ export default function App({ user }) {
             const active = page === "settings";
             return (
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div className="nav-item" onClick={() => goTo("settings")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, color: active ? C.text : C.text, background: active ? C.deepCream : "transparent", fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
+                <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, color: C.text, ...(active ? { background: C.deepCream } : {}), fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
                   <span style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="settings" size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
                 </div>
               </div>
