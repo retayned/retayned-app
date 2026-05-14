@@ -7922,6 +7922,27 @@ export default function App({ user }) {
                       renderTasks.filter(t => bucketOf(t) === "later" && !collapsedDoneIds[t.id])
                         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
                     );
+                    // Tomorrow ghosts — recurring tasks that ALSO occur tomorrow but
+                    // live in the Today bucket (dailies, weekdays-on-a-weekday, a
+                    // weekly task that happens to hit both today and tomorrow, etc).
+                    // The Tomorrow section is supposed to answer "what does tomorrow
+                    // look like" — without these, standing recurring load is invisible
+                    // there and tomorrow reads lighter than it actually is.
+                    //
+                    // These are GHOSTS, not real rows: the completable instance lives
+                    // in Today. Here they render dimmed + inert (no checkbox action,
+                    // no swipe, no drag) purely as forward-looking context. They sort
+                    // BELOW genuinely-tomorrow tasks so the real "new tomorrow" work
+                    // keeps the top of the section.
+                    //
+                    // Selection: recurring + not done + buckets as "today" (so it's
+                    // not already a real Tomorrow row) + its pattern matches tomorrow.
+                    const _tomorrowGhosts = renderTasks.filter(t => {
+                      if (!t.recurring || t.done) return false;
+                      if (collapsedDoneIds[t.id]) return false;
+                      if (bucketOf(t) !== "today") return false; // already a real Tomorrow/Later row otherwise
+                      return recurrenceMatchesDate(t.recurrence_pattern, _tomorrow);
+                    });
                     // Tasks that were completed and have collapsed out of the active list.
                     // They appear in the "Completed today" group below all buckets.
                     // Tasks that were completed and have collapsed out of the active list.
@@ -8480,6 +8501,71 @@ export default function App({ user }) {
                         );
                     };
 
+                    // Ghost row — a recurring task previewed in the Tomorrow section.
+                    // The real, completable instance lives in Today; this is a
+                    // read-only "this is also on your plate tomorrow" reminder.
+                    // Deliberately inert: no checkbox handler, no swipe, no drag,
+                    // no Rai badge, no dismiss. Visually quiet (extra-dimmed,
+                    // dashed border, no shadow) so it reads as context, not a
+                    // task you act on here.
+                    const renderGhostRow = (t) => {
+                      const client = clients.find(c => c.name === t.client);
+                      return (
+                        <div
+                          key={"ghost-" + t.id}
+                          className="rt-row rt-row-ghost"
+                          aria-hidden="true"
+                          title="Recurring — complete it in Today"
+                          style={{
+                            display: "flex", alignItems: "center", gap: 12,
+                            padding: "9px 14px",
+                            background: "transparent",
+                            border: "1px dashed " + C.borderSoft,
+                            borderRadius: 12,
+                            boxShadow: "none",
+                            cursor: "default",
+                            userSelect: "none",
+                          }}>
+                          {/* Inert checkbox glyph — placeholder so the row aligns
+                              with real task rows, but not a button. */}
+                          <div
+                            aria-hidden="true"
+                            style={{
+                              width: 22, height: 22, borderRadius: 6,
+                              border: "2px dashed " + C.ink300,
+                              background: "transparent", flexShrink: 0,
+                            }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 500, color: C.textMuted, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden" }}>
+                              <span style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>
+                                {t.text}
+                              </span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
+                              {client
+                                ? <div style={{ display: "flex", flexShrink: 0, opacity: 0.7 }}><ClientAvatar client={client} size={16} /></div>
+                                : <div style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
+                            </div>
+                          </div>
+                          {/* Recurring marker — same infinity treatment as a real
+                              recurring row, kept muted. */}
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "3px 9px", borderRadius: 999,
+                            fontSize: 11, fontWeight: 600, flexShrink: 0,
+                            color: C.textMuted,
+                            border: "1px dashed " + C.borderLight,
+                            background: "transparent",
+                          }} title={formatRecurrenceLabel(t.recurrence_pattern)}>
+                            <Icon name="infinity" size={12} color={C.textMuted} />
+                            <span>{formatRecurrenceLabel(t.recurrence_pattern)}</span>
+                          </span>
+                        </div>
+                      );
+                    };
+
                     // Bucket header component (inline).
                     const BucketHeader = ({ name, dimmed }) => (
                       <div className="rt-bucket-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
@@ -8495,11 +8581,14 @@ export default function App({ user }) {
                           {_todayBucket.map(t => renderRow(t, "today"))}
                         </div>
 
-                        {/* TOMORROW bucket */}
-                        {_tomorrowBucket.length > 0 && (<>
+                        {/* TOMORROW bucket — real tomorrow tasks first, then
+                            recurring-task ghosts (standing load that also runs
+                            tomorrow). Section shows if EITHER exists. */}
+                        {(_tomorrowBucket.length > 0 || _tomorrowGhosts.length > 0) && (<>
                           <BucketHeader name="Tomorrow" dimmed={true} />
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
+                            {_tomorrowGhosts.map(t => renderGhostRow(t))}
                           </div>
                         </>)}
 
