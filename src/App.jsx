@@ -623,13 +623,11 @@ function addDays(d, n) {
   return out;
 }
 
-// Returns "today" anchored to 2am local — between midnight and 2am, "today" is
-// still yesterday's calendar date. This matches the bucket logic in the today
-// page so parseComposer's "tomorrow" lands in the same bucket the UI calls
-// "tomorrow", not in "later" by being one day off.
+// Returns today's calendar date at noon local. Used by parseComposer so
+// natural-language dates like "tomorrow" or "in 3 days" resolve against
+// the same day boundary the UI uses (midnight local rollover).
 function todayAnchored() {
   const d = new Date();
-  if (d.getHours() < 2) d.setDate(d.getDate() - 1);
   // Reset time-of-day to start of day so addDays() math is clean
   d.setHours(12, 0, 0, 0);
   return d;
@@ -4187,7 +4185,7 @@ export default function App({ user }) {
     }
 
     if (taskRes.data) {
-      // Auto-cleanup at the most recent 2 AM local time:
+      // Auto-cleanup at midnight local (the most recent 00:00):
       //   - Recurring tasks completed before cutoff → reset is_done (they reappear fresh)
       //   - Non-recurring tasks completed before cutoff → SOFT-CLEARED via cleared_at
       //     timestamp. Row stays in DB so Rai/detectors can still count historical
@@ -4195,13 +4193,12 @@ export default function App({ user }) {
       //     active Today list.
       //   - Open tasks (not done) → preserved regardless of age (carry forward)
       //
-      // Cutoff is today at 2 AM local; if it's currently before 2 AM, cutoff is
-      // yesterday at 2 AM (so user's late-night completed tasks survive into the
-      // morning until the natural 2 AM rollover).
+      // Cutoff is today at midnight local (00:00). Any recurring task
+      // completed before midnight resets; any non-recurring task completed
+      // before midnight soft-clears from the active Today view.
       const now = new Date();
-      const today2am = new Date(now);
-      today2am.setHours(2, 0, 0, 0);
-      const cutoff = now < today2am ? new Date(today2am.getTime() - 86400000) : today2am;
+      const cutoff = new Date(now);
+      cutoff.setHours(0, 0, 0, 0);
 
       // Recurring + done + completed before cutoff → reset to incomplete
       const toReset = taskRes.data.filter(t =>
@@ -4641,26 +4638,30 @@ export default function App({ user }) {
     return () => { cancelled = true; };
   }, [user]);
 
-  // Schedule automatic recurring-task reset at 2 AM local, every day
-  // Fires even if the tab stays open across midnight — ensures no one sees stale "done" checkmarks
+  // Schedule automatic daily rollover at midnight local. Reloads data so
+  // tasks re-bucket (Today → Overdue, Tomorrow → Today, etc), Rai's pick
+  // and the calendar all flip together at 00:00.
+  // Fires even if the tab stays open across midnight — ensures no one sees stale state.
   useEffect(() => {
     if (!user) return;
     let timeoutId;
-    const scheduleNext2am = () => {
+    const scheduleNextMidnight = () => {
       const now = new Date();
-      const next2am = new Date(now);
-      next2am.setHours(2, 0, 0, 0);
-      if (next2am <= now) next2am.setDate(next2am.getDate() + 1);
-      const msUntil = next2am.getTime() - now.getTime();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(0, 0, 0, 0);
+      // setHours(0,...) gives midnight at the START of today — already past.
+      // Always advance to the next midnight (tomorrow at 00:00).
+      nextMidnight.setDate(nextMidnight.getDate() + 1);
+      const msUntil = nextMidnight.getTime() - now.getTime();
       timeoutId = setTimeout(() => {
         loadData();
-        scheduleNext2am();
+        scheduleNextMidnight();
       }, msUntil);
     };
-    scheduleNext2am();
+    scheduleNextMidnight();
 
     // Also refresh when tab regains focus — catches laptop-sleep case where setTimeout
-    // may have paused across system sleep and missed the 2 AM fire
+    // may have paused across system sleep and missed the midnight fire
     const onVisible = () => { if (document.visibilityState === "visible") loadData(); };
     document.addEventListener("visibilitychange", onVisible);
 
@@ -4777,9 +4778,8 @@ export default function App({ user }) {
     //       complete, prevents stale-state confetti if the optimistic update
     //       didn't apply for some reason (we explicitly verify the count
     //       went from < total to === total).
-    // Day boundary anchored to 2am local — matches task soft-clear cron.
+    // Day boundary at midnight local (matches task rollover at 00:00).
     const _now = new Date();
-    if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
     const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
     const isTodayBucket = (t) => {
       if (t.recurring) return true;
@@ -6354,9 +6354,8 @@ export default function App({ user }) {
             // from the difference between today's local date and the task's
             // due_date (date part only — time-of-day ignored to avoid timezone
             // edge cases). Recurring tasks have no due_date and are not late.
-            // _now anchored to 2am local to match task soft-clear cron.
+            // Day boundary at midnight local (matches task rollover at 00:00).
             const _now = new Date();
-            if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
             const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
             const computeDaysLate = (t) => {
               if (!t.due_date || t.recurring) return 0;
@@ -6587,11 +6586,9 @@ export default function App({ user }) {
           };
 
           // ─── DATE BOUNDARIES (hoisted so status band can count today-only tasks) ──
-          // Day boundary anchored to 2am local — between midnight and 2am, "today"
-          // still refers to yesterday's calendar date (matches task soft-clear cron
-          // and worker dashboard logic).
+          // Day boundary at midnight local. Tasks bucket and "today" labels
+          // flip at 00:00 to match the calendar's real-time view.
           const _now = new Date();
-          if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
           const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _tomorrow = new Date(_now);
           _tomorrow.setDate(_tomorrow.getDate() + 1);
@@ -6730,7 +6727,7 @@ export default function App({ user }) {
             const text = finalParse.title || newTask.trim();
             const clientName = composerClient || "";
             const clientObj = clients.find(c => c.name === clientName);
-            // Recurring tasks cannot have a due_date — they reset daily at 2am local.
+            // Recurring tasks cannot have a due_date — they reset daily at midnight local.
             // For non-recurring tasks: if no due date was picked, default to today
             // so the task is anchored (not free-floating) and renders in the Today bucket.
             const dueDateForCreate = newTaskRecurring
@@ -11150,9 +11147,8 @@ export default function App({ user }) {
           // ─── Stats engine ──────────────────────────────────────────────
           // For each worker, compute throughput, reliability, client mix,
           // and a Worker Impact Score that weights completions by client value.
-          // Day boundary anchored to 2am local — matches task soft-clear cron.
+          // Day boundary at midnight local (matches task rollover at 00:00).
           const _now = new Date();
-          if (_now.getHours() < 2) _now.setDate(_now.getDate() - 1);
           const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _30dAgo = new Date(_now); _30dAgo.setDate(_30dAgo.getDate() - 30);
           const _30dAgoIso = _30dAgo.toISOString();
