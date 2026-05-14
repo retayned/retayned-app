@@ -5369,11 +5369,12 @@ export default function App({ user }) {
            Inactive variants use :not(.is-active) for segmented toggles. */
 
         /* Purple inline links — Magic Scoop client name, Connect Google Calendar.
-           Shared treatment: dotted → solid underline, fontWeight 500 → 600,
-           btn → btnHover color. */
+           Hover signal: color darkens + underline dotted → solid. Font-weight
+           stays at 600 at rest AND hover so the box geometry never shifts —
+           hovering can't push neighboring text or change the link's footprint. */
         .rt-purple-link {
           color: ${C.btn};
-          font-weight: 500;
+          font-weight: 600;
           border-bottom: 1px dotted ${C.btn};
           transition: color 0.12s, border-bottom-color 0.12s;
         }
@@ -5381,7 +5382,6 @@ export default function App({ user }) {
           .rt-purple-link:hover {
             color: ${C.btnHover};
             border-bottom: 1px solid ${C.btnHover};
-            font-weight: 600;
           }
         }
 
