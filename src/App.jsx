@@ -19,10 +19,9 @@ import {
 // ============================================================
 // PALETTE
 // ============================================================
-// Surface tones (bg, card, text, borders) reference CSS variables so
-// theme can swap at runtime by toggling `data-theme="dark"` on <html>.
-// Accent colors (purple, green, gold, danger) stay as hex — they look
-// good in both light and warm-dark, no variant needed (Direction A).
+// Surface tones (bg, card, text, borders) reference CSS variables,
+// defined once at :root. Accent colors (purple, green, gold, danger)
+// stay as hex.
 //
 // The CSS variable definitions live in a <style> block injected at App
 // mount-time so they're available before any component reads them.
@@ -64,10 +63,10 @@ const C = {
   shadowMd: "var(--rt-shadow-md)",
 };
 
-// CSS variable definitions for both themes. Injected in the App component's
+// CSS variable definitions. Injected in the App component's
 // style block so they're authoritative at the document root.
 const THEME_CSS = `
-  :root, :root[data-theme="light"] {
+  :root {
     --rt-bg: #FAFAF7;
     --rt-card: #FFFFFF;
     --rt-surface: #EEEFEB;
@@ -90,42 +89,10 @@ const THEME_CSS = `
     --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
     --rt-shadow-sm: 0 1px 2px rgba(10,10,10,0.04), 0 1px 3px rgba(10,10,10,0.03);
     --rt-shadow-md: 0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05);
-    /* Editorial nav-icon palette. Light mode: cream paper, near-black ink,
+    /* Editorial nav-icon palette: cream paper, near-black ink,
        primary-light green accent (matches the SVG art's hand-drawn style). */
     --rt-icon-fill: #FCFCFE;
     --rt-icon-stroke: #2F2F31;
-    --rt-icon-accent: #558B68;
-  }
-  :root[data-theme="dark"] {
-    /* Editorial Black — cream and gold on near-black. The journal at midnight. */
-    --rt-bg: #0D0D0B;
-    --rt-card: #18170E;
-    --rt-surface: #1F1E15;
-    --rt-surface-warm: #1F1E15;
-    --rt-deep-cream: #2A2820;
-    --rt-sidebar: #0D0D0B;
-    --rt-text: #EDE6D6;
-    --rt-text-sec: #B5A788;
-    --rt-text-muted: #807766;
-    --rt-ink-900: #EDE6D6;
-    --rt-ink-700: #B5A788;
-    --rt-ink-500: #807766;
-    --rt-ink-400: #6B6452;
-    --rt-ink-300: #4A4338;
-    --rt-border: rgba(237, 230, 214, 0.10);
-    --rt-border-light: rgba(237, 230, 214, 0.06);
-    --rt-border-soft: rgba(237, 230, 214, 0.06);
-    --rt-surface-selected: #2C2820;
-    --rt-btn-light: rgba(91,33,182,0.22);
-    --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.50), 0 4px 16px rgba(0,0,0,0.40);
-    --rt-shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 1px 3px rgba(0,0,0,0.30);
-    --rt-shadow-md: 0 2px 4px rgba(0,0,0,0.50), 0 4px 12px rgba(0,0,0,0.45);
-    /* Editorial nav-icon palette — dark mode. Fill flips from white to a
-       deep warm-black, stroke flips to cream so the line work stays visible
-       against the dark sidebar. Green accent stays — it reads identically
-       on either theme. */
-    --rt-icon-fill: #1F1E15;
-    --rt-icon-stroke: #B5A788;
     --rt-icon-accent: #558B68;
   }
   html, body {
@@ -146,7 +113,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
   // mode. The `color` prop is intentionally ignored for these icons — they
   // don't recolor on active state; the active state is signalled by the
   // surrounding row's background fill.
-  const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "sun", "moon", "due"]);
+  const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "due"]);
   const isEditorial = editorialNames.has(name);
 
   const paths = {
@@ -238,31 +205,6 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
         <path d="M16 3 L18 6.5 L22 5.5 L22.5 9.5 L26 11 L24.5 14.5 L27 17.5 L24 20 L24.5 24 L20.5 24.5 L18.5 28 L15 26 L11.5 28 L9.5 24.5 L5.5 24 L6 20 L3 17.5 L5.5 14.5 L4 11 L7.5 9.5 L8 5.5 L12 6.5 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
         <circle cx="16" cy="16" r="6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
         <circle cx="16" cy="16" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      </g>
-    </>),
-    sun: (<>
-      <g strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="16" cy="16" r="6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <circle cx="14" cy="14" r="1.4" fill="var(--rt-icon-fill)" stroke="none"/>
-        <line x1="16" y1="3" x2="16" y2="6.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="16" y1="25.5" x2="16" y2="29" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="3" y1="16" x2="6.5" y2="16" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="25.5" y1="16" x2="29" y2="16" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="6.5" y1="6.5" x2="9" y2="9" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="23" y1="23" x2="25.5" y2="25.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="6.5" y1="25.5" x2="9" y2="23" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <line x1="23" y1="9" x2="25.5" y2="6.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      </g>
-    </>),
-    moon: (<>
-      <g strokeLinejoin="round" strokeLinecap="round">
-        <path d="M22 6 Q14 6 11 12 Q8 18 12 24 Q16 28 22 26 Q14 24 12 18 Q10 12 22 6 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
-        <g fill="var(--rt-icon-stroke)" stroke="none">
-          <circle cx="8" cy="8" r="1.2"/>
-          <circle cx="26" cy="14" r="1.2"/>
-          <circle cx="24" cy="24" r="1"/>
-        </g>
-        <path d="M7 18 L8 20 L10 21 L8 22 L7 24 L6 22 L4 21 L6 20 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.2"/>
       </g>
     </>),
     due: (<>
@@ -3272,25 +3214,6 @@ export default function App({ user }) {
   const [tier, setTier] = useState("core");  // "core" | "enterprise"
   const [page, setPage] = useState("today");
 
-  // ─── Theme (light / dark) ───────────────────────────────────────────
-  // Persisted in localStorage. Applies `data-theme` to <html> so CSS
-  // variables flip without re-render. Defaults to user's system preference
-  // on first visit; then the choice sticks.
-  const [theme, setTheme] = useState(() => {
-    if (typeof window === "undefined") return "light";
-    try {
-      const saved = window.localStorage.getItem("rt-theme");
-      if (saved === "light" || saved === "dark") return saved;
-      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    } catch { return "light"; }
-  });
-  useEffect(() => {
-    try {
-      document.documentElement.setAttribute("data-theme", theme);
-      window.localStorage.setItem("rt-theme", theme);
-    } catch {}
-  }, [theme]);
-  const toggleTheme = () => setTheme(t => t === "dark" ? "light" : "dark");
   // Scroll to top on page change. .r-main is now a fixed-positioned scroll
   // container (not the document), so we reset its scrollTop plus the Rai
   // chat's internal scroller. The document itself no longer scrolls, so no
@@ -5956,7 +5879,7 @@ export default function App({ user }) {
       <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 2px 6px rgba(10,10,10,0.04)" }}>
         {/* Logo — fixed at top */}
         <div style={{ padding: "20px 18px 18px", flexShrink: 0 }}>
-          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: theme === "dark" ? "#FAFAF7" : C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
         </div>
 
         {/* Nav items — fixed, always visible */}
@@ -6175,24 +6098,6 @@ export default function App({ user }) {
                 <div className="nav-item" onClick={() => goTo("settings")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, color: active ? C.text : C.text, background: active ? C.deepCream : "transparent", fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
                   <span style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="settings" size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
                 </div>
-                <button
-                  onClick={toggleTheme}
-                  title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                  aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                  style={{
-                    width: 34, height: 34, border: 0,
-                    background: "transparent",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    display: "grid", placeItems: "center",
-                    color: C.ink500,
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = C.deepCream}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                >
-                  <Icon name={theme === "dark" ? "sun" : "moon"} size={16} color={C.ink500} />
-                </button>
               </div>
             );
           })()}
@@ -12905,30 +12810,6 @@ export default function App({ user }) {
         {page === "settings" && (
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
-
-            {/* Appearance — theme toggle. Lives here because mobile has no
-                sidebar where the desktop toggle button lives, so this is
-                the only theme control reachable on phones. */}
-            <div className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Appearance</div>
-                <div style={{ fontSize: 12, color: C.textMuted }}>{theme === "dark" ? "Dark mode" : "Light mode"}</div>
-              </div>
-              <button
-                onClick={toggleTheme}
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "6px 12px",
-                  background: C.btnLight, color: C.btn,
-                  border: "none", borderRadius: 7,
-                  fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
-              >
-                <Icon name={theme === "dark" ? "sun" : "moon"} size={12} color={C.btn} />
-                {theme === "dark" ? "Switch to light" : "Switch to dark"}
-              </button>
-            </div>
 
             {/* Integrations — real, all-tiers. Currently just Google
                 Calendar. This is the permanent home for the connection:
