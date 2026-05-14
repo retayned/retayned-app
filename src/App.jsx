@@ -2082,9 +2082,10 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                       borderBottom: `1px dotted ${C.btn}`,
                       paddingBottom: 1,
                       fontWeight: 500,
+                      whiteSpace: "nowrap",
                     }}
                   >
-                    Connect Google Calendar
+                    Connect Google
                   </button>
                 </>
               ) : null}
@@ -2092,40 +2093,42 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           </div>
           {/* Segmented Today / Tomorrow toggle. Two-state only — no week
               view (out of scope for Retayned's mental model), no
-              yesterday view (calendar is forward-looking). */}
-          <div style={{ display: "inline-flex", background: C.surfaceWarm, borderRadius: 8, padding: 3, gap: 2, flexShrink: 0 }}>
+              yesterday view (calendar is forward-looking). Styled to
+              match the "Ranked by Rai / Manual" toggle exactly so the
+              app's toggle pattern stays consistent. */}
+          <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0, flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setSelectedDay("today")}
               style={{
-                fontSize: 12,
-                padding: "5px 11px",
+                padding: "6px 14px",
+                borderRadius: 999,
                 border: "none",
                 background: selectedDay === "today" ? C.card : "transparent",
-                borderRadius: 6,
-                fontWeight: selectedDay === "today" ? 600 : 500,
-                cursor: "pointer",
-                color: selectedDay === "today" ? C.text : C.textSec,
-                boxShadow: selectedDay === "today" ? C.shadowSm : "none",
                 fontFamily: "inherit",
-                transition: "all 0.15s",
+                fontSize: 12,
+                fontWeight: 600,
+                color: selectedDay === "today" ? C.text : C.textSec,
+                cursor: "pointer",
+                boxShadow: selectedDay === "today" ? C.shadowSm : "none",
+                transition: "background 120ms",
               }}
             >Today</button>
             <button
               type="button"
               onClick={() => setSelectedDay("tomorrow")}
               style={{
-                fontSize: 12,
-                padding: "5px 11px",
+                padding: "6px 14px",
+                borderRadius: 999,
                 border: "none",
                 background: selectedDay === "tomorrow" ? C.card : "transparent",
-                borderRadius: 6,
-                fontWeight: selectedDay === "tomorrow" ? 600 : 500,
-                cursor: "pointer",
-                color: selectedDay === "tomorrow" ? C.text : C.textSec,
-                boxShadow: selectedDay === "tomorrow" ? C.shadowSm : "none",
                 fontFamily: "inherit",
-                transition: "all 0.15s",
+                fontSize: 12,
+                fontWeight: 600,
+                color: selectedDay === "tomorrow" ? C.text : C.textSec,
+                cursor: "pointer",
+                boxShadow: selectedDay === "tomorrow" ? C.shadowSm : "none",
+                transition: "background 120ms",
               }}
             >Tomorrow</button>
           </div>
