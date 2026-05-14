@@ -2092,6 +2092,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           <div style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, border: "1px solid " + C.border, borderRadius: 8, flexShrink: 0 }}>
             <button
               type="button"
+              className={"rt-day-opt" + (selectedDay === "today" ? " is-active" : "")}
               onClick={() => setSelectedDay("today")}
               style={{
                 display: "inline-flex",
@@ -2103,13 +2104,14 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontFamily: "inherit",
                 fontSize: 12,
                 fontWeight: 500,
-                background: selectedDay === "today" ? C.card : "transparent",
-                color: selectedDay === "today" ? C.text : C.textMuted,
-                boxShadow: selectedDay === "today" ? C.shadowSm : "none",
+                ...(selectedDay === "today"
+                  ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                  : {}),
               }}
             >Today</button>
             <button
               type="button"
+              className={"rt-day-opt" + (selectedDay === "tomorrow" ? " is-active" : "")}
               onClick={() => setSelectedDay("tomorrow")}
               style={{
                 display: "inline-flex",
@@ -2121,9 +2123,9 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontFamily: "inherit",
                 fontSize: 12,
                 fontWeight: 500,
-                background: selectedDay === "tomorrow" ? C.card : "transparent",
-                color: selectedDay === "tomorrow" ? C.text : C.textMuted,
-                boxShadow: selectedDay === "tomorrow" ? C.shadowSm : "none",
+                ...(selectedDay === "tomorrow"
+                  ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                  : {}),
               }}
             >Tomorrow</button>
           </div>
@@ -2427,6 +2429,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             <Icon name="calendar" size={13} color={C.textMuted} />
             <button
               type="button"
+              className="rt-purple-link"
               onClick={onConnectClick}
               style={{
                 background: "transparent",
@@ -2434,11 +2437,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 padding: 0,
                 paddingBottom: 1,
                 cursor: "pointer",
-                color: C.btn,
                 fontFamily: "inherit",
                 fontSize: 12,
-                fontWeight: 500,
-                borderBottom: `1px dotted ${C.btn}`,
                 whiteSpace: "nowrap",
               }}
             >
@@ -2448,13 +2448,13 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           {onDismissConnectPrompt && (
             <button
               type="button"
+              className="rt-quiet-link"
               onClick={onDismissConnectPrompt}
               style={{
                 background: "transparent",
                 border: "none",
                 padding: 0,
                 cursor: "pointer",
-                color: C.textMuted,
                 fontFamily: "inherit",
                 fontSize: 12,
                 fontWeight: 500,
@@ -5364,6 +5364,86 @@ export default function App({ user }) {
             border-bottom-color: var(--rt-ink-300);
           }
         }
+        /* ─── TODAY PAGE HOVERS ───
+           All scoped to (hover: hover) so touch devices don't get stuck states.
+           Inactive variants use :not(.is-active) for segmented toggles. */
+
+        /* Purple inline links — Magic Scoop client name, Connect Google Calendar.
+           Shared treatment: dotted → solid underline, fontWeight 500 → 600,
+           btn → btnHover color. */
+        .rt-purple-link {
+          color: ${C.btn};
+          font-weight: 500;
+          border-bottom: 1px dotted ${C.btn};
+          transition: color 0.12s, border-bottom-color 0.12s;
+        }
+        @media (hover: hover) {
+          .rt-purple-link:hover {
+            color: ${C.btnHover};
+            border-bottom: 1px solid ${C.btnHover};
+            font-weight: 600;
+          }
+        }
+
+        /* Quiet dismiss links — "Not now". Muted → textSec on hover.
+           Deliberately understated so it doesn't compete with the primary
+           action next to it. */
+        .rt-quiet-link {
+          color: var(--rt-text-muted);
+          transition: color 0.12s;
+        }
+        @media (hover: hover) {
+          .rt-quiet-link:hover { color: var(--rt-text-sec); }
+        }
+
+        /* Today/Tomorrow timeline toggle — inactive option gets a translucent
+           white wash + full-text color on hover, previewing the active fill. */
+        .rt-day-opt {
+          background: transparent;
+          color: var(--rt-text-muted);
+          box-shadow: none;
+          transition: background 0.12s, color 0.12s;
+        }
+        @media (hover: hover) {
+          .rt-day-opt:hover:not(.is-active) {
+            background: rgba(255,255,255,0.55);
+            color: var(--rt-text);
+          }
+        }
+
+        /* Ranked by Rai / Manual toggle — same translucent-white preview as
+           the day toggle. Inactive resting color is textSec. */
+        .rt-rank-opt {
+          background: transparent;
+          color: var(--rt-text-sec);
+          box-shadow: none;
+          transition: background 0.12s, color 0.12s;
+        }
+        @media (hover: hover) {
+          .rt-rank-opt:hover:not(.is-active) { background: rgba(255,255,255,0.55); }
+        }
+
+        /* Focus button — inactive previews the active dark-green color
+           (border + text → primaryDeep) before committing to the fill. */
+        .rt-focus-btn {
+          background: transparent;
+          color: var(--rt-text-sec);
+          border: 1px solid var(--rt-ink-300);
+          box-shadow: none;
+          transition: background 0.12s, color 0.12s, border-color 0.12s;
+        }
+        @media (hover: hover) {
+          .rt-focus-btn:hover:not(.is-active) {
+            color: #1C3224;
+            border-color: #1C3224;
+          }
+        }
+
+        /* "3 events" stats button — mobile only (desktop sets pointer-events:
+           none on this class). Subtle wash, matches composer chip hover. */
+        @media (max-width: 768px) and (hover: hover) {
+          .rt-band-sub-events:hover { background: rgba(0,0,0,0.04); border-radius: 4px; }
+        }
         .r-btn { transition: all 0.15s ease; cursor: pointer; }
         @media (hover: hover) {
           .r-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(91,33,182,0.18); }
@@ -6772,8 +6852,9 @@ export default function App({ user }) {
                       }}>
                         Today&rsquo;s client is{" "}
                         <span
+                          className="rt-purple-link"
                           onClick={handleAddTask}
-                          style={{ color: C.btn, cursor: "pointer", borderBottom: `1px dotted ${C.btn}`, paddingBottom: 1, fontWeight: 500 }}
+                          style={{ cursor: "pointer", paddingBottom: 1 }}
                         >
                           {pickClient.name}
                         </span>
@@ -7670,40 +7751,40 @@ export default function App({ user }) {
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
                       <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
                         <button
+                          className={"rt-rank-opt" + (rankMode === "rai" ? " is-active" : "")}
                           onClick={() => setRankMode("rai")}
                           style={{
                             padding: "6px 14px",
                             borderRadius: 999,
                             border: "none",
-                            background: rankMode === "rai" ? C.card : "transparent",
                             fontFamily: "inherit",
                             fontSize: 12,
                             fontWeight: 600,
-                            color: rankMode === "rai" ? C.btn : C.textSec,
                             cursor: "pointer",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 5,
-                            boxShadow: rankMode === "rai" ? C.shadowSm : "none",
-                            transition: "background 120ms"
+                            ...(rankMode === "rai"
+                              ? { background: C.card, color: C.btn, boxShadow: C.shadowSm }
+                              : {}),
                           }}
                         >
                           <span style={{}}>Ranked by Rai</span>
                         </button>
                         <button
+                          className={"rt-rank-opt" + (rankMode === "manual" ? " is-active" : "")}
                           onClick={() => setRankMode("manual")}
                           style={{
                             padding: "6px 14px",
                             borderRadius: 999,
                             border: "none",
-                            background: rankMode === "manual" ? C.card : "transparent",
                             fontFamily: "inherit",
                             fontSize: 12,
                             fontWeight: 600,
-                            color: rankMode === "manual" ? C.text : C.textSec,
                             cursor: "pointer",
-                            boxShadow: rankMode === "manual" ? C.shadowSm : "none",
-                            transition: "background 120ms"
+                            ...(rankMode === "manual"
+                              ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                              : {}),
                           }}
                         >
                           Manual
@@ -7729,16 +7810,20 @@ export default function App({ user }) {
                             alignItems: "center",
                             padding: "6px 14px",
                             borderRadius: 999,
-                            background: focusMode ? C.primaryDeep : "transparent",
-                            border: "1px solid " + (focusMode ? C.primaryDeep : C.ink300),
-                            color: focusMode ? "#fff" : C.textSec,
                             fontSize: 12,
                             fontWeight: 600,
                             fontFamily: "inherit",
                             cursor: "pointer",
-                            boxShadow: focusMode ? "0 1px 2px rgba(28,50,36,0.18), 0 2px 6px rgba(28,50,36,0.22)" : "none",
-                            transition: "background 120ms, color 120ms, border-color 120ms"
+                            ...(focusMode
+                              ? {
+                                  background: C.primaryDeep,
+                                  border: "1px solid " + C.primaryDeep,
+                                  color: "#fff",
+                                  boxShadow: "0 1px 2px rgba(28,50,36,0.18), 0 2px 6px rgba(28,50,36,0.22)",
+                                }
+                              : {}),
                           }}
+                          className={"rt-focus-btn" + (focusMode ? " is-active" : "")}
                         >
                           {focusMode ? "Focusing" : "Focus"}
                         </button>
@@ -8476,10 +8561,18 @@ export default function App({ user }) {
                                 fontWeight: 500,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
-                                transition: "background 120ms ease",
+                                transition: "background 120ms ease, border-color 120ms ease, color 120ms ease",
                               }}
-                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
-                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = C.primarySoft;
+                                e.currentTarget.style.borderColor = C.primaryLight;
+                                e.currentTarget.style.color = C.primary;
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = "transparent";
+                                e.currentTarget.style.borderColor = C.border;
+                                e.currentTarget.style.color = C.textSec;
+                              }}
                             >
                               <span>
                                 <span style={{ color: C.textMuted, marginRight: 4 }}>{_collapsedDoneTasks.length}</span>
