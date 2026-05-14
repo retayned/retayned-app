@@ -816,6 +816,48 @@ function formatRecurrenceLabel(pattern) {
   }
 }
 
+// Find the next date (today or later) on which a recurring task occurs.
+// A recurring task is "standing work" with a next-due date, exactly like
+// a one-off task has a due_date — bucketOf treats them identically once
+// it knows this date.
+//
+// `fromDate` is the day boundary anchor (the app's 2am-adjusted "today").
+// `includeToday`:
+//   - true  → if the pattern matches `fromDate` itself, return fromDate.
+//             Used for OPEN recurring tasks: a task due today buckets today.
+//   - false → start scanning from tomorrow. Used for tasks already
+//             COMPLETED today — we don't want a just-finished daily task
+//             to immediately re-surface; it stays in today's completed
+//             section and the 2am reset brings it back. (bucketOf never
+//             actually needs includeToday=false because completed-today
+//             tasks bucket "today" by the t.done path — but the helper
+//             supports it for correctness / future use.)
+//
+// Scans at most 366 days forward, which covers every pattern kind
+// (daily, weekdays, weekly, monthly_date, monthly_weekday). Returns a
+// Date at noon local (clean for date math) or null if pattern is empty.
+function nextOccurrenceDate(pattern, fromDate, includeToday = true) {
+  if (!pattern || !pattern.kind) {
+    // Legacy/no-pattern recurring task — treat as daily (always today).
+    const d = new Date(fromDate);
+    d.setHours(12, 0, 0, 0);
+    return d;
+  }
+  const start = new Date(fromDate);
+  start.setHours(12, 0, 0, 0);
+  const offsetStart = includeToday ? 0 : 1;
+  for (let i = offsetStart; i <= 366; i++) {
+    const candidate = new Date(start);
+    candidate.setDate(candidate.getDate() + i);
+    if (recurrenceMatchesDate(pattern, candidate)) {
+      return candidate;
+    }
+  }
+  // No match within a year — shouldn't happen for valid patterns. Fall
+  // back to fromDate so the task at least stays visible.
+  return start;
+}
+
 // ─── Composer lexicon dictionaries ──────────────────────────────────────
 // Used by parseComposer's normalization phase to fix common typos and
 // auto-cap industry acronyms / proper nouns. Small lists by design — the
@@ -6531,10 +6573,26 @@ export default function App({ user }) {
           const _tomorrowStr = `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
 
           const bucketOf = (t) => {
-            // Recurring tasks: only show in today bucket if today matches the pattern.
-            // Otherwise hide entirely (returns "hidden" — buckets filter that out).
+            // Recurring tasks are standing work with a "next occurrence"
+            // date — bucketed exactly like a one-off task is bucketed by
+            // its due_date. The recurrence_pattern is NOT a show/hide
+            // switch; it just tells us when the task next comes due.
+            //
+            //   - recurring + done       → "today" (sits in today's
+            //     completed section like any finished task; the 2am reset
+            //     brings it back fresh on its next matching day)
+            //   - recurring + not done   → find the next occurrence date,
+            //     bucket by today / tomorrow / later. So "every Thursday"
+            //     created on a Wednesday lands in TOMORROW, not hidden.
+            //     "every Monday" created Wednesday lands in LATER.
+            //     "daily" always lands in TODAY.
             if (t.recurring) {
-              return recurrenceMatchesDate(t.recurrence_pattern, _now) ? "today" : "hidden";
+              if (t.done) return "today";
+              const next = nextOccurrenceDate(t.recurrence_pattern, _now, true);
+              const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+              if (nextStr <= _todayStr) return "today";
+              if (nextStr === _tomorrowStr) return "tomorrow";
+              return "later";
             }
             if (!t.due_date) return "today";
             const dateStr = String(t.due_date).slice(0, 10);
