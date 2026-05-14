@@ -5344,14 +5344,6 @@ export default function App({ user }) {
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
         .nav-item { transition: all 0.12s; cursor: pointer; }
         .nav-item:hover { background: var(--rt-deep-cream); }
-        /* Period toggle (Week/Month/Year) in the sidebar Done widget.
-           Inactive options only — the active one carries its own underline
-           + dark text, so a hover bg on top would muddy it. Matches the
-           .nav-item hover language: deepCream background + text darkens. */
-        .r-period-opt { transition: background 0.12s, color 0.12s; }
-        @media (hover: hover) {
-          .r-period-opt:hover { background: var(--rt-deep-cream); color: var(--rt-text); }
-        }
         .r-btn { transition: all 0.15s ease; cursor: pointer; }
         @media (hover: hover) {
           .r-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(91,33,182,0.18); }
@@ -5593,15 +5585,6 @@ export default function App({ user }) {
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover { background: rgba(91,33,182,0.06); }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
-        /* Direct-hover on the revealed action buttons — color-shift gives
-           feedback once you're actually on the button (not just the row).
-           Star brightens to gold (previews the on-state); trash goes danger
-           red (the universal "this deletes" convention). !important is
-           needed because the buttons set color inline. */
-        @media (hover: hover) {
-          .r-convo-star:hover { color: #E6B800 !important; }
-          .r-convo-del:hover { color: ${C.danger} !important; }
-        }
         /* ═══════════════════════════════════════════════════════════════
            FOCUS MODE
            Page stays cream. Everything dims to 0.06 opacity except:
@@ -5947,7 +5930,7 @@ export default function App({ user }) {
                       >
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
                         <button
-                          className="r-convo-action r-convo-star"
+                          className="r-convo-action"
                           onClick={e => { e.stopPropagation(); toggleRaiChatStar(c.id, c.is_starred); }}
                           style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: c.is_starred ? "#E6B800" : C.textMuted, display: "flex", opacity: c.is_starred ? 1 : 0, transition: "opacity 0.12s" }}
                           title={c.is_starred ? "Unstar" : "Star"}
@@ -5955,7 +5938,7 @@ export default function App({ user }) {
                           <Icon name={c.is_starred ? "starFill" : "star"} size={12} />
                         </button>
                         <button
-                          className="r-convo-action r-convo-del"
+                          className="r-convo-action"
                           onClick={e => { e.stopPropagation(); deleteRaiChat(c.id); }}
                           style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: C.textMuted, display: "flex", opacity: 0, transition: "opacity 0.12s" }}
                           title="Delete"
@@ -6056,17 +6039,15 @@ export default function App({ user }) {
               {/* TASKS COMPLETED section */}
               <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
-                <div style={{ display: "flex", justifyContent: "flex-start", gap: 6, marginBottom: 12, marginLeft: -8 }}>
+                <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
                   {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
                     const active = taskCompletedPeriod === p.id;
                     return (
                       <div
                         key={p.id}
-                        className={active ? undefined : "r-period-opt"}
                         onClick={() => setTaskCompletedPeriod(p.id)}
                         style={{
-                          padding: "5px 8px",
-                          borderRadius: 6,
+                          padding: "5px 0",
                           fontSize: 10.5,
                           fontWeight: active ? 600 : 500,
                           color: active ? C.text : C.textMuted,
