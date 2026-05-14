@@ -2063,72 +2063,53 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             </div>
             <div style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span>{isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}</span>
-              {googleConnected ? (
-                <span style={{ color: C.primary }}>· Google connected</span>
-              ) : onConnectClick ? (
-                <>
-                  <span style={{ color: C.borderLight }}>·</span>
-                  <button
-                    type="button"
-                    onClick={onConnectClick}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      color: C.btn,
-                      fontFamily: "inherit",
-                      fontSize: "inherit",
-                      borderBottom: `1px dotted ${C.btn}`,
-                      paddingBottom: 1,
-                      fontWeight: 500,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Connect Google
-                  </button>
-                </>
-              ) : null}
+              {googleConnected && <span style={{ color: C.primary }}>· Google connected</span>}
             </div>
           </div>
           {/* Segmented Today / Tomorrow toggle. Two-state only — no week
               view (out of scope for Retayned's mental model), no
-              yesterday view (calendar is forward-looking). Styled to
-              match the "Ranked by Rai / Manual" toggle exactly so the
-              app's toggle pattern stays consistent. */}
-          <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0, flexShrink: 0 }}>
+              yesterday view (calendar is forward-looking).
+              SHAPE STANDARD: this toggle lives inside a contained widget
+              surface, so it uses the square/rectangular table-style shape
+              (matching the Table/Columns/Heatmap toggle on the Clients
+              page) — NOT the circular pill used for freely-exposed
+              toggles. Rule: inside tables/contained surfaces = square;
+              freely exposed = circular. */}
+          <div style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, border: "1px solid " + C.border, borderRadius: 8, flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setSelectedDay("today")}
               style={{
-                padding: "6px 14px",
-                borderRadius: 999,
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "5px 10px",
+                borderRadius: 6,
                 border: "none",
-                background: selectedDay === "today" ? C.card : "transparent",
+                cursor: "pointer",
                 fontFamily: "inherit",
                 fontSize: 12,
-                fontWeight: 600,
-                color: selectedDay === "today" ? C.text : C.textSec,
-                cursor: "pointer",
+                fontWeight: 500,
+                background: selectedDay === "today" ? C.card : "transparent",
+                color: selectedDay === "today" ? C.text : C.textMuted,
                 boxShadow: selectedDay === "today" ? C.shadowSm : "none",
-                transition: "background 120ms",
               }}
             >Today</button>
             <button
               type="button"
               onClick={() => setSelectedDay("tomorrow")}
               style={{
-                padding: "6px 14px",
-                borderRadius: 999,
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "5px 10px",
+                borderRadius: 6,
                 border: "none",
-                background: selectedDay === "tomorrow" ? C.card : "transparent",
+                cursor: "pointer",
                 fontFamily: "inherit",
                 fontSize: 12,
-                fontWeight: 600,
-                color: selectedDay === "tomorrow" ? C.text : C.textSec,
-                cursor: "pointer",
+                fontWeight: 500,
+                background: selectedDay === "tomorrow" ? C.card : "transparent",
+                color: selectedDay === "tomorrow" ? C.text : C.textMuted,
                 boxShadow: selectedDay === "tomorrow" ? C.shadowSm : "none",
-                transition: "background 120ms",
               }}
             >Tomorrow</button>
           </div>
@@ -2416,6 +2397,36 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           )}
         </div>
       </div>
+
+      {/* Connect Google Calendar — sits below the timeline grid, above
+          the composer. Quiet centered row; reads as a calendar-level
+          setting rather than a primary action. Disappears entirely once
+          connected (googleConnected true → header shows the status
+          instead). Only rendered when an onConnectClick handler is wired. */}
+      {!googleConnected && onConnectClick && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0 4px", marginTop: 2 }}>
+          <Icon name="calendar" size={13} color={C.textMuted} />
+          <button
+            type="button"
+            onClick={onConnectClick}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              paddingBottom: 1,
+              cursor: "pointer",
+              color: C.btn,
+              fontFamily: "inherit",
+              fontSize: 11.5,
+              fontWeight: 500,
+              borderBottom: `1px dotted ${C.btn}`,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Connect Google Calendar
+          </button>
+        </div>
+      )}
 
       {/* Composer — rendered as a div (not a form) to avoid nested-form
           interactions. The position:relative + zIndex:5 lifts the composer
