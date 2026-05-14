@@ -5343,7 +5343,11 @@ export default function App({ user }) {
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
         .nav-item { transition: all 0.12s; cursor: pointer; }
-        .nav-item:hover:not(.is-active) { background: var(--rt-surface-warm); }
+        /* Hover uses deepCream — the same fill as the selected state.
+           The selected item is distinguished by its inset shadow and
+           bold font-weight, not by a different background. This matches
+           the Linear / Notion sidebar convention. */
+        .nav-item:hover:not(.is-active) { background: var(--rt-deep-cream); }
         /* Period toggle (Week/Month/Year) — inactive options only. The
            active option carries its own inline color + primaryDeep
            underline. Inactive options rest muted with a transparent
