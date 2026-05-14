@@ -1847,6 +1847,12 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
   const [hoveredId, setHoveredId] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
   const inputRef = useRef(null);
+  // Which day the timeline is viewing. Toggle in the header switches
+  // between today and tomorrow. Calendar is forward-looking only — no
+  // yesterday view (nobody plans their yesterday) and no week view
+  // (that's not what Retayned is for; mental model is today is sacred,
+  // tomorrow is preparation, everything else is later).
+  const [selectedDay, setSelectedDay] = useState("today");
 
   // ─── Drag-to-move / resize state ───────────────────────────────────────
   // Google-Calendar-style direct manipulation. While the user drags an
@@ -1953,8 +1959,18 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
   const now = new Date(nowTick);
   const nowFractional = now.getHours() + now.getMinutes() / 60;
 
-  // Filter to events whose start falls on today (local date match).
-  const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  // Filter events to the selected day (today or tomorrow). anchorDate
+  // is a date object pointing at the user's chosen day at midnight local;
+  // we compare the local YMD between each event's start and the anchor.
+  // Same `now` used elsewhere for the NOW marker — that always reflects
+  // ACTUAL now, regardless of which day the user is viewing.
+  const anchorDate = new Date(now);
+  if (selectedDay === "tomorrow") {
+    anchorDate.setDate(anchorDate.getDate() + 1);
+  }
+  anchorDate.setHours(0, 0, 0, 0);
+  const anchorYmd = `${anchorDate.getFullYear()}-${String(anchorDate.getMonth() + 1).padStart(2, "0")}-${String(anchorDate.getDate()).padStart(2, "0")}`;
+
   const todayEvents = events
     .map(e => ({
       ...e,
@@ -1964,7 +1980,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
     .filter(e => {
       const d = e._start;
       const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      return ymd === todayYmd;
+      return ymd === anchorYmd;
     })
     .sort((a, b) => a._start - b._start);
 
@@ -1987,7 +2003,13 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
   // Compose
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
-    const parsed = parseCalendarEntry(composerText, now);
+    // Parser anchor: when viewing Tomorrow, "2pm" should mean tomorrow at
+    // 2pm, not today. The parser already understands "tomorrow", but bare
+    // times default to today unless we swap the anchor. parseAnchor uses
+    // tomorrow's date when the view is Tomorrow, with hh:mm matching now.
+    const parseAnchor = new Date(now);
+    if (selectedDay === "tomorrow") parseAnchor.setDate(parseAnchor.getDate() + 1);
+    const parsed = parseCalendarEntry(composerText, parseAnchor);
     if (!parsed) {
       setComposerError("Add a time (e.g. 2pm, 9:30am, noon)");
       return;
@@ -2036,7 +2058,9 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
           <Icon name="due" size={26} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>Today</div>
+            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
+              {selectedDay === "today" ? "Today" : "Tomorrow"}
+            </div>
             <div style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span>{isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}</span>
               {googleConnected ? (
@@ -2065,6 +2089,45 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 </>
               ) : null}
             </div>
+          </div>
+          {/* Segmented Today / Tomorrow toggle. Two-state only — no week
+              view (out of scope for Retayned's mental model), no
+              yesterday view (calendar is forward-looking). */}
+          <div style={{ display: "inline-flex", background: C.surfaceWarm, borderRadius: 8, padding: 3, gap: 2, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setSelectedDay("today")}
+              style={{
+                fontSize: 12,
+                padding: "5px 11px",
+                border: "none",
+                background: selectedDay === "today" ? C.card : "transparent",
+                borderRadius: 6,
+                fontWeight: selectedDay === "today" ? 600 : 500,
+                cursor: "pointer",
+                color: selectedDay === "today" ? C.text : C.textSec,
+                boxShadow: selectedDay === "today" ? C.shadowSm : "none",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}
+            >Today</button>
+            <button
+              type="button"
+              onClick={() => setSelectedDay("tomorrow")}
+              style={{
+                fontSize: 12,
+                padding: "5px 11px",
+                border: "none",
+                background: selectedDay === "tomorrow" ? C.card : "transparent",
+                borderRadius: 6,
+                fontWeight: selectedDay === "tomorrow" ? 600 : 500,
+                cursor: "pointer",
+                color: selectedDay === "tomorrow" ? C.text : C.textSec,
+                boxShadow: selectedDay === "tomorrow" ? C.shadowSm : "none",
+                fontFamily: "inherit",
+                transition: "all 0.15s",
+              }}
+            >Tomorrow</button>
           </div>
         </div>
       )}
@@ -2293,8 +2356,10 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             );
           })}
 
-          {/* NOW marker */}
-          {nowFractional >= earliestHour && nowFractional <= latestHour && (
+          {/* NOW marker — only renders on TODAY view. When the user is
+              looking at Tomorrow, the current time doesn't belong on that
+              timeline (it's not "now" relative to tomorrow's hours). */}
+          {selectedDay === "today" && nowFractional >= earliestHour && nowFractional <= latestHour && (
             <div style={{
               position: "absolute",
               top: yForDate(now),
@@ -2377,7 +2442,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           onClick={e => e.stopPropagation()}
           autoComplete="off"
           spellCheck={false}
-          placeholder="2pm Sarah · noon lunch · 9-10am sync"
+          placeholder={selectedDay === "tomorrow" ? "2pm Sarah · noon lunch · adds to tomorrow" : "2pm Sarah · noon lunch · 9-10am sync"}
           style={{
             flex: 1,
             border: "none",
