@@ -5605,6 +5605,15 @@ export default function App({ user }) {
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover { background: rgba(91,33,182,0.06); }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
+        /* Direct-hover on the revealed icons. Star brightens to gold
+           (previews the on-state). Trash goes danger red (the universal
+           "this deletes" signal). !important needed — the buttons set
+           color inline so the cascade alone won't reach them. Scoped to
+           hover-capable devices so touch doesn't get stuck states. */
+        @media (hover: hover) {
+          .r-convo-star:hover { color: #E6B800 !important; }
+          .r-convo-del:hover { color: ${C.danger} !important; }
+        }
         /* ═══════════════════════════════════════════════════════════════
            FOCUS MODE
            Page stays cream. Everything dims to 0.06 opacity except:
@@ -5950,7 +5959,7 @@ export default function App({ user }) {
                       >
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
                         <button
-                          className="r-convo-action"
+                          className="r-convo-action r-convo-star"
                           onClick={e => { e.stopPropagation(); toggleRaiChatStar(c.id, c.is_starred); }}
                           style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: c.is_starred ? "#E6B800" : C.textMuted, display: "flex", opacity: c.is_starred ? 1 : 0, transition: "opacity 0.12s" }}
                           title={c.is_starred ? "Unstar" : "Star"}
@@ -5958,7 +5967,7 @@ export default function App({ user }) {
                           <Icon name={c.is_starred ? "starFill" : "star"} size={12} />
                         </button>
                         <button
-                          className="r-convo-action"
+                          className="r-convo-action r-convo-del"
                           onClick={e => { e.stopPropagation(); deleteRaiChat(c.id); }}
                           style={{ background: "none", border: "none", padding: 3, cursor: "pointer", color: C.textMuted, display: "flex", opacity: 0, transition: "opacity 0.12s" }}
                           title="Delete"
