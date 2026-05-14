@@ -138,6 +138,16 @@ const THEME_CSS = `
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
+  html {
+    /* Reserve the vertical scrollbar's gutter permanently. Without this,
+       switching between Clients-page views (Table is tall, so the page
+       scrollbar is present; Columns and Heatmap can be short with no
+       scrollbar) adds and removes the ~15px scrollbar gutter, shifting
+       the whole layout horizontally on every toggle. The stable value
+       keeps the gutter reserved whether or not content overflows, so
+       the layout never jumps. */
+    scrollbar-gutter: stable;
+  }
 `;
 
 const Icon = ({ name, size = 18, color = "currentColor" }) => {
@@ -285,6 +295,23 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
     more: (<><circle cx="12" cy="5" r="1.5" fill={color}/><circle cx="12" cy="12" r="1.5" fill={color}/><circle cx="12" cy="19" r="1.5" fill={color}/></>),
     chevron: (<><polyline points="9 18 15 12 9 6" stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     bento: (<><rect x="3" y="3" width="7" height="7" rx="1.5" fill={color}/><rect x="14" y="3" width="7" height="7" rx="1.5" fill={color}/><rect x="3" y="14" width="7" height="7" rx="1.5" fill={color}/><rect x="14" y="14" width="7" height="7" rx="1.5" fill={color}/></>),
+    // heatmapGrid — 3×3 grid of cells at varying opacity, reads as a
+    // heatmap. Uses the `color` prop and simple shapes so it sits in the
+    // same minimal family as `sweeps` (Table) and `bento` (Columns) in
+    // the Clients-page view toggle. The Health page's `health` icon is a
+    // rich multi-color illustration meant for nav at large size — wrong
+    // for a 14px toggle glyph, which is why this exists separately.
+    heatmapGrid: (<>
+      <rect x="3"  y="3"  width="5.5" height="5.5" rx="1" fill={color} opacity="0.35"/>
+      <rect x="9.5" y="3"  width="5.5" height="5.5" rx="1" fill={color} opacity="0.7"/>
+      <rect x="16" y="3"  width="5.5" height="5.5" rx="1" fill={color} opacity="0.5"/>
+      <rect x="3"  y="9.5" width="5.5" height="5.5" rx="1" fill={color} opacity="0.7"/>
+      <rect x="9.5" y="9.5" width="5.5" height="5.5" rx="1" fill={color} opacity="1"/>
+      <rect x="16" y="9.5" width="5.5" height="5.5" rx="1" fill={color} opacity="0.35"/>
+      <rect x="3"  y="16" width="5.5" height="5.5" rx="1" fill={color} opacity="0.5"/>
+      <rect x="9.5" y="16" width="5.5" height="5.5" rx="1" fill={color} opacity="0.35"/>
+      <rect x="16" y="16" width="5.5" height="5.5" rx="1" fill={color} opacity="0.7"/>
+    </>),
     plus: (<><line x1="12" y1="5" x2="12" y2="19" stroke={color} strokeWidth="2" strokeLinecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     check: (<><polyline points="20 6 9 17 4 12" stroke={color} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></>),
     x: (<><line x1="18" y1="6" x2="6" y2="18" stroke={color} strokeWidth="2" strokeLinecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
@@ -8839,7 +8866,7 @@ export default function App({ user }) {
           const viewOptions = [
             { id: "table",   label: "Table",   icon: "sweeps" },
             { id: "columns", label: "Columns", icon: "bento" },
-            { id: "heatmap", label: "Heatmap", icon: "health" },
+            { id: "heatmap", label: "Heatmap", icon: "heatmapGrid" },
           ];
 
           return (
