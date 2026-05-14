@@ -5647,6 +5647,15 @@ export default function App({ user }) {
           pointer-events: none !important;
           transition: opacity 280ms ease;
         }
+        /* Dim the "Completed today" log (toggle button + expandable list)
+           in focus mode. Its inner rows dim via the .rt-row rule, but the
+           toggle button isn't an .rt-row and the wrapper isn't a direct
+           grid child, so without this it stays bright. */
+        .rt-focus-on .rt-completed-log {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
 
         /* Lightning flash — single white burst when toggling focus on */
         .rt-flash {
@@ -8421,7 +8430,7 @@ export default function App({ user }) {
                             completed work is reference, not action. Collapsed
                             by default; the line doubles as the toggle button. */}
                         {_collapsedDoneTasks.length > 0 && (
-                          <div style={{ marginTop: 24 }}>
+                          <div className="rt-completed-log" style={{ marginTop: 24 }}>
                             <button
                               onClick={() => setCompletedLogOpen(!completedLogOpen)}
                               style={{
