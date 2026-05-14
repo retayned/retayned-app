@@ -412,9 +412,33 @@ export const tasks = {
     const sevenDaysAgo  = new Date(nowMs - 7  * DAY_MS);
     const thirtyDaysAgo = new Date(nowMs - 30 * DAY_MS);
 
+    // ─── "Today" boundary ────────────────────────────────────────────
+    // The app's day boundary is 2am LOCAL time, not midnight, and not
+    // UTC. Recurring tasks reset at 2am local; the sidebar "tasks today"
+    // callout has to use the same boundary or it desyncs.
+    //
+    // Bug this fixes: the old code used `now.toISOString().slice(0,10)`
+    // (UTC date string). For a user in a negative-offset timezone (e.g.
+    // US Eastern), late-evening local time is already the NEXT calendar
+    // day in UTC — so todayKey rolled forward hours early and the count
+    // reset to 0 around 7-8pm local. Now we anchor to local 2am.
+    const todayCutoff = new Date(now);
+    todayCutoff.setHours(2, 0, 0, 0);
+    // If it's currently before 2am local, the "current day" actually
+    // started at 2am YESTERDAY.
+    if (now.getHours() < 2) {
+      todayCutoff.setDate(todayCutoff.getDate() - 1);
+    }
+    const todayCutoffMs = todayCutoff.getTime();
+
+    // Local YYYY-MM-DD for a Date — used for streak day keys so they
+    // match the user's calendar, not UTC.
+    const localDayKey = (d) => {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
     // Roll-up counts for the active toggle
     let today = 0, week = 0, month = 0, year = 0;
-    const todayKey = now.toISOString().slice(0, 10);
 
     // 12 rolling weekly buckets — index 0 = oldest (84 days ago → 77 days ago),
     // index 11 = current (7 days ago → now). Each bucket spans 7 days.
@@ -425,8 +449,8 @@ export const tasks = {
     // model of "last 30 days."
     const monthHistory = Array(12).fill(0);
 
-    // For the streak: collect set of YYYY-MM-DD strings where at least one task
-    // was completed. Then walk backwards from today.
+    // For the streak: collect set of local YYYY-MM-DD strings where at
+    // least one task was completed. Then walk backwards from today.
     const daysWithCompletions = new Set();
 
     for (const row of (data || [])) {
@@ -436,7 +460,8 @@ export const tasks = {
       year++;
       if (t >= thirtyDaysAgo) month++;
       if (t >= sevenDaysAgo)  week++;
-      if (t.toISOString().slice(0, 10) === todayKey) today++;
+      // Today = completed at or after the local 2am boundary.
+      if (tMs >= todayCutoffMs) today++;
 
       // Weekly bucket: how many full 7-day windows ago?
       const daysAgo = (nowMs - tMs) / DAY_MS;
@@ -447,8 +472,8 @@ export const tasks = {
       const monthIdx = 11 - Math.floor(daysAgo / 30);
       if (monthIdx >= 0 && monthIdx < 12) monthHistory[monthIdx]++;
 
-      // Day key for streak
-      daysWithCompletions.add(t.toISOString().slice(0, 10));
+      // Day key for streak — local calendar day.
+      daysWithCompletions.add(localDayKey(t));
     }
 
     // Compute day streak — walk back from today as long as each day has ≥1 completion.
@@ -456,11 +481,12 @@ export const tasks = {
     // break just because the user hasn't worked yet today).
     let dayStreak = 0;
     let cursor = new Date(now);
+    const todayKey = localDayKey(now);
     if (!daysWithCompletions.has(todayKey)) {
       cursor = new Date(nowMs - DAY_MS);
     }
     while (true) {
-      const key = cursor.toISOString().slice(0, 10);
+      const key = localDayKey(cursor);
       if (daysWithCompletions.has(key)) {
         dayStreak++;
         cursor = new Date(cursor.getTime() - DAY_MS);
