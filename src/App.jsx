@@ -1841,7 +1841,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 //
 // Note: this component reads `C` from a closure-free import-only style —
 // since `C` is declared inside the App function, we pass it via props.
-function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null }) {
+function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null, promptDismissed = false, onDismissConnectPrompt = null }) {
   const [composerText, setComposerText] = useState("");
   const [composerError, setComposerError] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -2402,29 +2402,54 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           the composer. Quiet centered row; reads as a calendar-level
           setting rather than a primary action. Disappears entirely once
           connected (googleConnected true → header shows the status
-          instead). Only rendered when an onConnectClick handler is wired. */}
-      {!googleConnected && onConnectClick && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "11px 0 4px", marginTop: 2 }}>
-          <Icon name="calendar" size={13} color={C.textMuted} />
-          <button
-            type="button"
-            onClick={onConnectClick}
-            style={{
-              background: "transparent",
-              border: "none",
-              padding: 0,
-              paddingBottom: 1,
-              cursor: "pointer",
-              color: C.btn,
-              fontFamily: "inherit",
-              fontSize: 11.5,
-              fontWeight: 500,
-              borderBottom: `1px dotted ${C.btn}`,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Connect Google Calendar
-          </button>
+          instead) OR once the user dismisses it via "Not now"
+          (promptDismissed). Settings → Integrations always keeps a
+          Google Calendar row regardless, so dismissing here is not
+          permanent — it just clears the nudge. Only rendered when an
+          onConnectClick handler is wired. */}
+      {!googleConnected && !promptDismissed && onConnectClick && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "11px 0 4px", marginTop: 2 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Icon name="calendar" size={13} color={C.textMuted} />
+            <button
+              type="button"
+              onClick={onConnectClick}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                paddingBottom: 1,
+                cursor: "pointer",
+                color: C.btn,
+                fontFamily: "inherit",
+                fontSize: 12,
+                fontWeight: 500,
+                borderBottom: `1px dotted ${C.btn}`,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Connect Google Calendar
+            </button>
+          </div>
+          {onDismissConnectPrompt && (
+            <button
+              type="button"
+              onClick={onDismissConnectPrompt}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                color: C.textMuted,
+                fontFamily: "inherit",
+                fontSize: 12,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Not now
+            </button>
+          )}
         </div>
       )}
 
@@ -3343,6 +3368,11 @@ export default function App({ user }) {
   // Currently only manual rows are written from the app. The TodayTimeline
   // widget reads from this state to render the timeline view of today.
   const [personalEvents, setPersonalEvents] = useState([]);
+  // Whether the user has dismissed the "Connect Google Calendar" nudge
+  // on the Today page. Persisted to profiles.google_cal_prompt_dismissed
+  // so it stays dismissed across refreshes/devices. The Settings →
+  // Integrations row is unaffected — it always offers the connection.
+  const [googleCalPromptDismissed, setGoogleCalPromptDismissed] = useState(false);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -4591,6 +4621,9 @@ export default function App({ user }) {
         const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
         const profRes = await profileDb.get(user.id);
         if (cancelled) return;
+        // Hydrate the Google Calendar prompt dismissal flag. Defaults to
+        // false (show the prompt) if the column or row is missing.
+        setGoogleCalPromptDismissed(!!profRes?.data?.google_cal_prompt_dismissed);
         const storedTz = profRes?.data?.timezone || 'UTC';
         if (detectedTz && detectedTz !== storedTz) {
           await profileDb.update(user.id, { timezone: detectedTz });
@@ -5202,6 +5235,21 @@ export default function App({ user }) {
 
   // Toggle star. Optimistic update — flip local state first, then persist.
   // If the DB write fails, revert. Keeps the sidebar snappy.
+  // Dismiss the "Connect Google Calendar" nudge on the Today page.
+  // Optimistic: hide immediately, persist to profile. On failure we
+  // revert so the prompt reappears (better the user sees it again than
+  // thinks they dismissed it and it silently comes back next session).
+  const dismissGoogleCalPrompt = async () => {
+    setGoogleCalPromptDismissed(true);
+    try {
+      const { error } = await profileDb.update(user.id, { google_cal_prompt_dismissed: true });
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to persist Google Calendar prompt dismissal:", e);
+      setGoogleCalPromptDismissed(false);
+    }
+  };
+
   const toggleRaiChatStar = async (convoId, currentStarred) => {
     const nextStarred = !currentStarred;
     setRaiConvoList(prev => {
@@ -6739,6 +6787,8 @@ export default function App({ user }) {
                         compact={true}
                         googleConnected={false}
                         onConnectClick={() => setPage("settings")}
+                        promptDismissed={googleCalPromptDismissed}
+                        onDismissConnectPrompt={dismissGoogleCalPrompt}
                         onCreate={async (entry) => {
                           const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                           setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
@@ -7671,6 +7721,8 @@ export default function App({ user }) {
                         compact={true}
                         googleConnected={false}
                         onConnectClick={() => setPage("settings")}
+                        promptDismissed={googleCalPromptDismissed}
+                        onDismissConnectPrompt={dismissGoogleCalPrompt}
                         onCreate={async (entry) => {
                           const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                           setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
@@ -8400,6 +8452,8 @@ export default function App({ user }) {
                     compact={false}
                     googleConnected={false}
                         onConnectClick={() => setPage("settings")}
+                        promptDismissed={googleCalPromptDismissed}
+                        onDismissConnectPrompt={dismissGoogleCalPrompt}
                     onCreate={async (entry) => {
                       const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                       setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
@@ -12739,6 +12793,42 @@ export default function App({ user }) {
                 <Icon name={theme === "dark" ? "sun" : "moon"} size={12} color={C.btn} />
                 {theme === "dark" ? "Switch to light" : "Switch to dark"}
               </button>
+            </div>
+
+            {/* Integrations — real, all-tiers. Currently just Google
+                Calendar. This is the permanent home for the connection:
+                the Today-page nudge can be dismissed, but this row is
+                always here. When real Google OAuth ships (TODO I), the
+                Connect button + connected state light up from the same
+                googleConnected source the Today page reads. */}
+            <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Integrations</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Icon name="calendar" size={16} color={C.textSec} />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Google Calendar</div>
+                    <div style={{ fontSize: 12, color: C.textMuted }}>Show your events alongside tasks on the Today page</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { /* TODO I: real Google OAuth flow */ }}
+                  style={{
+                    padding: "6px 14px",
+                    background: C.btn,
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 7,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    flexShrink: 0,
+                  }}
+                >
+                  Connect
+                </button>
+              </div>
             </div>
 
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
