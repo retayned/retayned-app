@@ -4915,7 +4915,7 @@ export default function App({ user }) {
     } else if (task.completed_at) {
       const completed = new Date(task.completed_at);
       const now = Date.now();
-      const inToday = completed.toISOString().slice(0,10) === new Date(now).toISOString().slice(0,10);
+      const inToday = localYmd(completed) === localYmd(new Date(now));
       const inWeek  = now - completed.getTime() < 7  * 86400000;
       const inMonth = now - completed.getTime() < 30 * 86400000;
       const inYear  = now - completed.getTime() < 365 * 86400000;
@@ -5043,8 +5043,7 @@ export default function App({ user }) {
   // ANY future task is incomplete, which is misleading: "today" is finished
   // but the dot says otherwise.
   const _todayDotNow = new Date();
-  if (_todayDotNow.getHours() < 2) _todayDotNow.setDate(_todayDotNow.getDate() - 1);
-  const _todayDotStr = `${_todayDotNow.getFullYear()}-${String(_todayDotNow.getMonth() + 1).padStart(2, "0")}-${String(_todayDotNow.getDate()).padStart(2, "0")}`;
+  const _todayDotStr = localYmd(_todayDotNow);
   const todayBucketCountable = countableTasks.filter(t => {
     if (t.recurring) return true;
     if (!t.due_date) return true;
@@ -9741,8 +9740,7 @@ export default function App({ user }) {
                         validRows.map(async (r) => {
                           const tenureMonths = parseInt(r.months) || 0;
                           const monthlyRate = parseInt(r.revenue) || 0;
-                          const engagementStart = new Date(todayMs - tenureMonths * MS_PER_MONTH)
-                            .toISOString().slice(0, 10);
+                          const engagementStart = localYmd(new Date(todayMs - tenureMonths * MS_PER_MONTH));
                           const payload = {
                             name: r.name,
                             contact: r.contact || "",
@@ -14115,7 +14113,7 @@ export default function App({ user }) {
                             // Refresh pauses map so subsequent reads see the new pause
                             setEngagementPausesByClient(prev => ({
                               ...prev,
-                              [sc.id]: [...(prev[sc.id] || []), { paused_at: new Date().toISOString().slice(0,10), resumed_at: null }],
+                              [sc.id]: [...(prev[sc.id] || []), { paused_at: localYmd(), resumed_at: null }],
                             }));
                           } catch (e) {
                             console.error("Failed to pause:", e);
@@ -14138,7 +14136,7 @@ export default function App({ user }) {
                             // Update pauses map: set resumed_at on the open one
                             setEngagementPausesByClient(prev => {
                               const list = prev[sc.id] || [];
-                              const today = new Date().toISOString().slice(0,10);
+                              const today = localYmd();
                               const updated = list.map(p => p.resumed_at ? p : { ...p, resumed_at: today });
                               return { ...prev, [sc.id]: updated };
                             });
