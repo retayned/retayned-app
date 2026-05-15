@@ -2564,7 +2564,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               page) — NOT the circular pill used for freely-exposed
               toggles. Rule: inside tables/contained surfaces = square;
               freely exposed = circular. */}
-          <div style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, border: "1px solid " + C.border, borderRadius: 8, flexShrink: 0 }}>
+          <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.surfaceWarm, borderRadius: 999, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
             <button
               type="button"
               className={"rt-day-opt" + (selectedDay === "today" ? " is-active" : "")}
@@ -2572,8 +2572,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                padding: "5px 10px",
-                borderRadius: 6,
+                padding: "5px 12px",
+                borderRadius: 999,
                 border: "none",
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -2591,8 +2591,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                padding: "5px 10px",
-                borderRadius: 6,
+                padding: "5px 12px",
+                borderRadius: 999,
                 border: "none",
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -5925,31 +5925,43 @@ export default function App({ user }) {
           .rt-quiet-link:hover { color: var(--rt-text-sec); }
         }
 
-        /* Today/Tomorrow timeline toggle — inactive option gets a translucent
-           white wash + full-text color on hover, previewing the active fill. */
+        /* Today/Tomorrow timeline toggle — text-only hover (no fill), so
+           hovering an inactive option doesn't create a "second oval" next
+           to the active one. Press-state scale gives tactile feedback so
+           toggles feel as responsive to clicks as the Focus button. */
         .rt-day-opt {
           background: transparent;
           color: var(--rt-text-muted);
           box-shadow: none;
-          transition: background 0.12s, color 0.12s;
+          transition: color 180ms var(--rt-ease-out), transform 200ms var(--rt-ease-out);
         }
         @media (hover: hover) {
           .rt-day-opt:hover:not(.is-active) {
-            background: rgba(255,255,255,0.55);
             color: var(--rt-text);
           }
         }
+        .rt-day-opt:active:not(.is-active) {
+          transform: scale(0.96);
+          transition: transform 80ms var(--rt-ease-press);
+        }
 
-        /* Ranked by Rai / Manual toggle — same translucent-white preview as
-           the day toggle. Inactive resting color is textSec. */
+        /* Ranked by Rai / Manual toggle — same text-only hover + press
+           scale. Active state styling is set inline (gradient for Rai mode,
+           white card for Manual). */
         .rt-rank-opt {
           background: transparent;
           color: var(--rt-text-sec);
           box-shadow: none;
-          transition: background 0.12s, color 0.12s;
+          transition: color 180ms var(--rt-ease-out), transform 200ms var(--rt-ease-out);
         }
         @media (hover: hover) {
-          .rt-rank-opt:hover:not(.is-active) { background: rgba(255,255,255,0.55); }
+          .rt-rank-opt:hover:not(.is-active) {
+            color: var(--rt-text);
+          }
+        }
+        .rt-rank-opt:active:not(.is-active) {
+          transform: scale(0.96);
+          transition: transform 80ms var(--rt-ease-press);
         }
 
         /* Focus button — soft shadow surface, no border. Active state
@@ -6025,6 +6037,24 @@ export default function App({ user }) {
            ════════════════════════════════════════════════════ */
 
         /* ── BUTTONS ─────────────────────────────────────── */
+        /* Add Task composer submit — two-state (disabled = warm neutral,
+           enabled = purple gradient). Hover/press transitions defined here
+           so the inline two-state styling stays clean. */
+        .rt-add-task-btn {
+          transition: background 220ms var(--rt-ease-out),
+                      box-shadow 220ms var(--rt-ease-out),
+                      color 220ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
+        }
+        .rt-add-task-btn:not(:disabled):hover {
+          background: var(--rt-grad-btn-hover) !important;
+          box-shadow: var(--rt-sh-purple-hover) !important;
+          transform: translateY(-1px);
+        }
+        .rt-add-task-btn:not(:disabled):active {
+          transform: translateY(0) scale(0.97);
+          transition: transform 80ms var(--rt-ease-press);
+        }
         .rt-btn {
           transition: background 200ms var(--rt-ease-out),
                       box-shadow 200ms var(--rt-ease-out),
@@ -6664,6 +6694,34 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
+        }
+        /* ── COMPOSER CHIPS — Client / Worker / Due ──
+           Each chip is its own soft-shadow card with hover lift + press
+           scale. Matches the Add Task button's shape and motion language.
+           Filled state (inline background: C.btnLight from JSX) wins via
+           inline precedence; on .is-filled it gets a purple-tinted shadow
+           so the filled state reads as polished too. */
+        .rt-composer-pill {
+          background: var(--rt-card);
+          box-shadow: var(--rt-sh-xs);
+          transition: box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out),
+                      color 200ms var(--rt-ease-out);
+        }
+        .rt-composer-pill:hover {
+          box-shadow: var(--rt-sh-card) !important;
+          transform: translateY(-1px);
+          color: var(--rt-text);
+        }
+        .rt-composer-pill:active {
+          transform: translateY(0) scale(0.97);
+          transition: transform 80ms var(--rt-ease-press);
+        }
+        .rt-composer-pill.is-filled {
+          box-shadow: 0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08) !important;
+        }
+        .rt-composer-pill.is-filled:hover {
+          box-shadow: 0 0 0 1px rgba(91,33,182,0.18), 0 4px 12px rgba(91,33,182,0.20) !important;
         }
         /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
         @media (min-width: 1440px) {
@@ -7929,22 +7987,19 @@ export default function App({ user }) {
                         <div style={{ position: "relative", flexShrink: 0 }}>
                           <button
                             onClick={() => setComposerMenuOpen(!composerMenuOpen)}
-                            className={"rt-composer-pill" + (pulseChip === "client" ? " chip-pulse" : "")}
+                            className={"rt-composer-pill" + (selectedClientObj ? " is-filled" : "") + (pulseChip === "client" ? " chip-pulse" : "")}
                             style={{
                               display: "inline-flex", alignItems: "center", gap: 5,
                               padding: selectedClientObj ? "0 4px 0 4px" : "0 10px",
                               height: 28,
                               border: "none",
-                              borderRadius: 7,
+                              borderRadius: 8,
                               fontSize: 12,
                               color: selectedClientObj ? C.btn : C.textSec,
-                              background: selectedClientObj ? C.btnLight : (composerMenuOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                              background: selectedClientObj ? C.btnLight : C.card,
                               cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
                               fontWeight: selectedClientObj ? 600 : 500,
-                              transition: "background 120ms ease, color 120ms ease",
                             }}
-                            onMouseEnter={e => { if (!selectedClientObj && !composerMenuOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                            onMouseLeave={e => { if (!selectedClientObj && !composerMenuOpen) e.currentTarget.style.background = "transparent"; }}
                           >
                             {selectedClientObj ? (
                               <>
@@ -8067,22 +8122,19 @@ export default function App({ user }) {
                           <button
                             type="button"
                             onClick={() => setWorkerPickerOpen(!workerPickerOpen)}
-                            className={"rt-composer-pill" + (pulseChip === "worker" ? " chip-pulse" : "")}
+                            className={"rt-composer-pill" + (selectedWorker ? " is-filled" : "") + (pulseChip === "worker" ? " chip-pulse" : "")}
                             style={{
                               display: "inline-flex", alignItems: "center", gap: 5,
                               padding: "0 10px",
                               height: 28,
                               border: "none",
-                              borderRadius: 7,
+                              borderRadius: 8,
                               fontSize: 12,
                               color: selectedWorker ? C.btn : C.textSec,
-                              background: selectedWorker ? C.btnLight : (workerPickerOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                              background: selectedWorker ? C.btnLight : C.card,
                               cursor: "pointer", fontFamily: "inherit",
                               fontWeight: selectedWorker ? 600 : 500,
-                              transition: "background 120ms ease, color 120ms ease",
                             }}
-                            onMouseEnter={e => { if (!selectedWorker && !workerPickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                            onMouseLeave={e => { if (!selectedWorker && !workerPickerOpen) e.currentTarget.style.background = "transparent"; }}
                             title={selectedWorker ? `Assigned to ${selectedWorker.name}` : "Assign to a worker"}
                           >
                             <Icon name="workers" size={14} color={selectedWorker ? C.btn : C.textMuted} />
@@ -8184,22 +8236,19 @@ export default function App({ user }) {
                       <button
                         type="button"
                         onClick={() => setDuePickerOpen(!duePickerOpen)}
-                        className={"rt-composer-pill" + (pulseChip === "due" ? " chip-pulse" : "")}
+                        className={"rt-composer-pill" + ((newTaskDueDate || newTaskRecurring) ? " is-filled" : "") + (pulseChip === "due" ? " chip-pulse" : "")}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
                           padding: "0 10px",
                           height: 28,
                           border: "none",
-                          borderRadius: 7,
+                          borderRadius: 8,
                           fontSize: 12,
                           color: (newTaskDueDate || newTaskRecurring) ? C.btn : C.textSec,
-                          background: (newTaskDueDate || newTaskRecurring) ? C.btnLight : (duePickerOpen ? "rgba(0,0,0,0.04)" : "transparent"),
+                          background: (newTaskDueDate || newTaskRecurring) ? C.btnLight : C.card,
                           cursor: "pointer", fontFamily: "inherit",
                           fontWeight: (newTaskDueDate || newTaskRecurring) ? 600 : 500,
-                          transition: "background 120ms ease, color 120ms ease",
                         }}
-                        onMouseEnter={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                        onMouseLeave={e => { if (!newTaskDueDate && !newTaskRecurring && !duePickerOpen) e.currentTarget.style.background = "transparent"; }}
                       >
                         <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
                         <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
@@ -8558,19 +8607,29 @@ export default function App({ user }) {
                     <button
                       onClick={submitComposer}
                       disabled={!newTask.trim()}
-                      className="rt-add-task-btn rt-btn rt-btn-primary"
+                      className="rt-add-task-btn"
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
                         padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
                         height: 28,
-                        borderRadius: 7,
+                        borderRadius: 8,
+                        border: "none",
                         fontSize: 12,
                         fontWeight: 600,
                         fontFamily: "inherit",
                         marginLeft: "auto",
                         flexShrink: 0,
+                        cursor: newTask.trim() ? "pointer" : "default",
+                        // Two-state treatment: at rest = warm-neutral box with
+                        // soft shadow (no fake-purple). When armed = full purple
+                        // gradient with halo. Same shape across both — only the
+                        // color does the work.
+                        background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
+                        color: newTask.trim() ? "#fff" : C.textMuted,
+                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "var(--rt-sh-xs)",
+                        transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
                       Add Task
@@ -8617,7 +8676,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 5,
                             ...(rankMode === "rai"
-                              ? { background: C.card, color: C.btn, boxShadow: "var(--rt-sh-card)" }
+                              ? { background: "var(--rt-grad-btn)", color: "#fff", boxShadow: "var(--rt-sh-purple)" }
                               : {}),
                           }}
                         >
@@ -9553,7 +9612,7 @@ export default function App({ user }) {
                   events with inline composer. Google events will render alongside manual
                   ones once sync ships. */}
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
-                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px 16px" }}>
+                <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "14px 16px" }}>
                   <TodayTimeline
                     events={personalEvents}
                     C={C}
