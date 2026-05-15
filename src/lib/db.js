@@ -429,22 +429,15 @@ export const tasks = {
     const thirtyDaysAgo = new Date(nowMs - 30 * DAY_MS);
 
     // ─── "Today" boundary ────────────────────────────────────────────
-    // The app's day boundary is 2am LOCAL time, not midnight, and not
-    // UTC. Recurring tasks reset at 2am local; the sidebar "tasks today"
-    // callout has to use the same boundary or it desyncs.
+    // The app's day boundary is midnight LOCAL time. Tasks bucket
+    // and "today" counts flip at 00:00 to match the calendar view.
     //
-    // Bug this fixes: the old code used `now.toISOString().slice(0,10)`
-    // (UTC date string). For a user in a negative-offset timezone (e.g.
-    // US Eastern), late-evening local time is already the NEXT calendar
-    // day in UTC — so todayKey rolled forward hours early and the count
-    // reset to 0 around 7-8pm local. Now we anchor to local 2am.
+    // Why local-not-UTC: a user in a negative-offset timezone
+    // (e.g. US Mountain) hits the next UTC date hours before their
+    // local midnight. Using a UTC anchor here makes today-counts
+    // roll forward 5-7 hours early.
     const todayCutoff = new Date(now);
-    todayCutoff.setHours(2, 0, 0, 0);
-    // If it's currently before 2am local, the "current day" actually
-    // started at 2am YESTERDAY.
-    if (now.getHours() < 2) {
-      todayCutoff.setDate(todayCutoff.getDate() - 1);
-    }
+    todayCutoff.setHours(0, 0, 0, 0);
     const todayCutoffMs = todayCutoff.getTime();
 
     // Local YYYY-MM-DD for a Date — used for streak day keys so they
