@@ -89,6 +89,25 @@ const THEME_CSS = `
     --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
     --rt-shadow-sm: 0 1px 2px rgba(10,10,10,0.04), 0 1px 3px rgba(10,10,10,0.03);
     --rt-shadow-md: 0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05);
+    /* ────────────── POLISH LAYER ──────────────
+       Same palette, just enhanced with gradients, layered shadows for
+       hover-lift, and a uniform motion curve. Applied across the Today
+       page interactive surfaces. */
+    --rt-grad-btn: linear-gradient(135deg, #6D2BD9 0%, #5B21B6 55%, #4C1D95 100%);
+    --rt-grad-btn-hover: linear-gradient(135deg, #7B3AE0 0%, #6028C2 55%, #5421A8 100%);
+    --rt-grad-green: linear-gradient(135deg, #6BA37C 0%, #558B68 100%);
+    --rt-grad-green-deep: linear-gradient(135deg, #33543E 0%, #1C3224 100%);
+    --rt-grad-warm-card: linear-gradient(180deg, #FFFFFF 0%, #FBFAF6 100%);
+    --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
+    --rt-sh-row: 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
+    --rt-sh-row-hover: 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
+    --rt-sh-card: 0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03);
+    --rt-sh-card-hover: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
+    --rt-sh-purple: 0 0 0 1px rgba(91,33,182,0.10), 0 2px 8px rgba(91,33,182,0.20), 0 1px 2px rgba(91,33,182,0.10);
+    --rt-sh-purple-hover: 0 0 0 1px rgba(91,33,182,0.22), 0 8px 22px rgba(91,33,182,0.34), 0 2px 4px rgba(91,33,182,0.16);
+    --rt-sh-green-glow: 0 0 0 1px rgba(51,84,62,0.10), 0 2px 6px rgba(51,84,62,0.16);
+    --rt-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --rt-ease-press: cubic-bezier(0.4, 0, 0.6, 1);
     /* Editorial nav-icon palette: cream paper, near-black ink,
        primary-light green accent (matches the SVG art's hand-drawn style). */
     --rt-icon-fill: #FCFCFE;
@@ -2428,22 +2447,29 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               timeColor = C.textMuted;
               titleWeight = 400;
             } else if (state === "now") {
+              // The currently-happening event. Stays warm cream with the purple
+              // left-border anchor, but gains a soft purple-tinted shadow so
+              // it reads as a "live, active" surface.
               containerStyle = {
                 background: C.deepCream,
                 borderLeft: `3px solid ${C.btn}`,
-                borderRadius: "0 6px 6px 0",
+                borderRadius: "0 8px 8px 0",
                 paddingLeft: 8,
-                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.04)",
+                boxShadow: "var(--rt-sh-card), 0 0 0 1px rgba(91,33,182,0.08)",
               };
               titleColor = C.text;
               timeColor = C.textSec;
               titleWeight = 600;
             } else { // upcoming
+              // Soft white-cream gradient surface + shadow for depth.
+              // Removed the visible border in favor of the shadow chrome
+              // (matches the polish-layer language used elsewhere).
               containerStyle = {
-                background: C.bg,
-                border: `1px solid ${C.borderLight}`,
-                borderRadius: 6,
+                background: "var(--rt-grad-warm-card)",
+                border: "none",
+                borderRadius: 8,
                 paddingLeft: 8,
+                boxShadow: "var(--rt-sh-row)",
               };
               titleColor = C.text;
               timeColor = C.textMuted;
@@ -2581,13 +2607,25 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 padding: "0 4px",
                 zIndex: 2,
               }}>NOW</div>
+              {/* Pulsing dot anchored to the start of the line */}
+              <div className="rt-now-pulse" style={{
+                position: "absolute",
+                left: 26,
+                top: -4,
+                width: 9,
+                height: 9,
+                borderRadius: "50%",
+                background: C.btn,
+                zIndex: 3,
+              }} />
+              {/* Line itself — gradient that fades to transparent on the right */}
               <div style={{
                 position: "absolute",
-                left: 32,
+                left: 36,
                 right: 0,
                 top: 0,
                 height: 1.5,
-                background: C.btn,
+                background: "linear-gradient(90deg, #5B21B6 0%, rgba(91,33,182,0.55) 35%, rgba(91,33,182,0) 100%)",
               }} />
             </div>
           )}
@@ -2794,14 +2832,18 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
   return (
     <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
       <div style={{
-        background: C.card,
-        border: "1px solid " + C.borderLight,
+        background: "var(--rt-grad-warm-card)",
+        border: "1px solid transparent",
         borderRadius: 14,
         overflow: "hidden",
-        boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
+        boxShadow: "var(--rt-sh-card)",
         display: "flex",
         flexDirection: "column",
-      }}>
+        transition: "box-shadow 200ms var(--rt-ease-out)",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-card-hover)"; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-card)"; }}
+      >
         {/* Masthead — beige (cream) gradient that auto-themes light/dark */}
         <div style={{
           padding: "16px 18px 14px",
@@ -2818,7 +2860,12 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
                 display: "inline-flex", alignItems: "center", gap: 5,
                 fontWeight: 500,
               }}>
-                <span style={{ width: 5, height: 5, borderRadius: 999, background: C.success }} />
+                {/* Pulsing dot signals the autosave loop is alive */}
+                <span className="rt-save-pulse" style={{
+                  width: 5, height: 5, borderRadius: 999,
+                  background: C.success,
+                  boxShadow: "0 0 0 2px " + C.primarySoft,
+                }} />
                 Saved
               </div>
             )}
@@ -5686,6 +5733,115 @@ export default function App({ user }) {
            Clients Table view (both mobile + desktop variants). */
         .row-hover-neutral { transition: background 0.1s; cursor: pointer; }
         .row-hover-neutral:hover { background: rgba(0,0,0,0.03); }
+
+        /* ────────────────── POLISH LAYER ──────────────────
+           Reusable classes applied across the Today page. Approach:
+           - rt-lift:        shadow-sm → shadow-md, translateY(-1px) on hover, scale(0.97) on press
+           - rt-btn-grad:    purple gradient + purple halo + lift
+           - rt-btn-grad-green: deep-green gradient + green halo + lift
+           - rt-chk:         checkbox with hover halo and animated check-in
+           - rt-rai-pill:    Ask Rai-style purple gradient pill
+           - rt-task-row:    task row card with shadow-row → shadow-row-hover, lift
+           - rt-rai-boost:   client-of-the-day rail (purple inset bar + ✦ medallion)
+           Motion is uniform: 200ms cubic-bezier(0.22, 1, 0.36, 1) on hover,
+           80ms ease on press. All from the same set of CSS variables. */
+        .rt-lift {
+          transition: box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out);
+        }
+        .rt-lift:hover { transform: translateY(-1px); }
+        .rt-lift:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+
+        .rt-btn-grad {
+          background: var(--rt-grad-btn);
+          color: #fff;
+          border: none;
+          box-shadow: var(--rt-sh-purple);
+          transition: background 200ms var(--rt-ease-out),
+                      box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
+          cursor: pointer;
+        }
+        .rt-btn-grad:hover { background: var(--rt-grad-btn-hover); box-shadow: var(--rt-sh-purple-hover); transform: translateY(-1px); }
+        .rt-btn-grad:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+        .rt-btn-grad:disabled { background: var(--rt-surface-warm); color: var(--rt-text-muted); box-shadow: none; cursor: default; transform: none; }
+
+        .rt-btn-grad-green {
+          background: var(--rt-grad-green-deep);
+          color: #fff;
+          border: none;
+          box-shadow: var(--rt-sh-green-glow);
+          transition: box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
+          cursor: pointer;
+        }
+        .rt-btn-grad-green:hover { box-shadow: 0 0 0 1px rgba(51,84,62,0.18), 0 6px 18px rgba(51,84,62,0.28); transform: translateY(-1px); }
+        .rt-btn-grad-green:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+
+        .rt-btn-soft {
+          background: var(--rt-card);
+          border: none;
+          box-shadow: var(--rt-sh-card);
+          transition: box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out), color 200ms var(--rt-ease-out);
+          cursor: pointer;
+        }
+        .rt-btn-soft:hover { box-shadow: var(--rt-sh-card-hover); transform: translateY(-1px); }
+        .rt-btn-soft:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+
+        /* Animated checkbox check-in */
+        @keyframes rtChkIn {
+          from { transform: scale(0) rotate(-12deg); opacity: 0; }
+          to { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        .rt-chk-mark { animation: rtChkIn 280ms var(--rt-ease-out) both; }
+
+        /* Pulsing NOW dot on calendar */
+        @keyframes rtNowPulse {
+          0%, 100% { box-shadow: 0 0 0 1px rgba(91,33,182,0.18), 0 2px 8px rgba(91,33,182,0.28); }
+          50%      { box-shadow: 0 0 0 1px rgba(91,33,182,0.24), 0 2px 14px rgba(91,33,182,0.42); }
+        }
+        .rt-now-pulse { animation: rtNowPulse 2.4s ease-in-out infinite; }
+
+        /* Daybook saved-indicator pulse */
+        @keyframes rtSavePulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
+        }
+        .rt-save-pulse { animation: rtSavePulse 2s ease-in-out infinite; }
+
+        /* Rai client-of-the-day rail — applied to every task whose client
+           is today's Rai pick. Inset 2px purple bar on the left + small
+           ✦ medallion pinned just outside the left edge. Quiet but
+           unmistakable: the user can scan a list and know which tasks
+           belong to the boosted client without reading. */
+        .rt-rai-boost {
+          box-shadow: var(--rt-sh-row), inset 2px 0 0 0 #5B21B6 !important;
+          position: relative;
+        }
+        .rt-rai-boost:hover {
+          box-shadow: var(--rt-sh-row-hover), inset 2px 0 0 0 #5B21B6 !important;
+        }
+        .rt-rai-boost::before {
+          content: '✦';
+          position: absolute;
+          left: -7px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 18px;
+          height: 18px;
+          background: var(--rt-grad-btn);
+          color: #fff;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 9px;
+          line-height: 1;
+          font-weight: 700;
+          box-shadow: var(--rt-sh-purple);
+          z-index: 2;
+          pointer-events: none;
+        }
+
         /* Composer chip auto-fill pulse — fires when parseComposer
            catches a typed phrase and auto-fills the Client / Worker / Due
            chip. Brief brighten then settle. No scale (would push neighbors
@@ -5851,11 +6007,34 @@ export default function App({ user }) {
           100% { transform: translate(var(--tx), 70vh) rotate(var(--rot)); opacity: 0; }
         }
         .rt-row:hover .rt-dismiss { opacity: 1 !important; }
+        /* Composer "Add task" submit — gradient + lift on hover */
+        .rt-add-task-btn:not(:disabled):hover {
+          background: var(--rt-grad-btn-hover) !important;
+          box-shadow: var(--rt-sh-purple-hover) !important;
+          transform: translateY(-1px);
+        }
+        .rt-add-task-btn:not(:disabled):active {
+          transform: translateY(0) scale(0.96);
+          transition: transform 80ms var(--rt-ease-press) !important;
+        }
+        /* Polish layer: rows lift via shadow on hover (no green tint). The
+           !important is required because the row's box-shadow is set inline
+           and inline beats CSS by default. Press state scales down 97%. */
+        .rt-row:hover {
+          box-shadow: var(--rt-sh-row-hover) !important;
+          transform: translateY(-1px) !important;
+        }
+        .rt-row.is-done:hover {
+          transform: none !important;
+        }
+        .rt-row:active {
+          transform: translateY(0) scale(0.98) !important;
+          transition: transform 80ms var(--rt-ease-press) !important;
+        }
         /* Composer focus-within — soft purple glow when the user is creating a task */
-        .rt-composer { transition: border-color 200ms ease, box-shadow 200ms ease; }
+        .rt-composer { transition: border-color 200ms ease, box-shadow 200ms var(--rt-ease-out); }
         .rt-composer:focus-within {
-          border-color: rgba(91,33,182,0.32) !important;
-          box-shadow: 0 0 0 4px rgba(91,33,182,0.08), ${C.shadowMd} !important;
+          box-shadow: var(--rt-sh-card-hover), 0 0 0 3px rgba(91,33,182,0.10) !important;
         }
         /* ASMR completion — done state styling */
         .rt-row.is-done {
@@ -5864,7 +6043,11 @@ export default function App({ user }) {
           transition: background 320ms ease, border-color 320ms ease;
         }
         .rt-row .rt-check {
-          transition: background 240ms ease, border-color 240ms ease, transform 280ms cubic-bezier(.34,1.56,.64,1);
+          transition: background 240ms ease, border-color 240ms ease, box-shadow 200ms var(--rt-ease-out), transform 280ms cubic-bezier(.34,1.56,.64,1);
+        }
+        .rt-row:not(.is-done) .rt-check:hover {
+          border-color: var(--rt-primary-light, #558B68) !important;
+          box-shadow: 0 0 0 4px var(--rt-primary-soft, #E6EFE9);
         }
         .rt-row .rt-check svg {
           opacity: 0;
@@ -5872,8 +6055,9 @@ export default function App({ user }) {
           transition: opacity 220ms ease 60ms, transform 320ms cubic-bezier(.34,1.56,.64,1) 60ms;
         }
         .rt-row.is-done .rt-check {
-          background: #C4C4BC !important;
-          border-color: #C4C4BC !important;
+          background: var(--rt-grad-green-deep) !important;
+          border-color: #33543E !important;
+          box-shadow: var(--rt-sh-green-glow);
           transform: scale(1);
         }
         .rt-row.is-done .rt-check svg { opacity: 1; transform: scale(1); }
@@ -6865,9 +7049,17 @@ export default function App({ user }) {
                      : score >= 45 ? "#F3F0D8"   // Ok   — mustard tint
                      : score >= 30 ? "#FDF4DC"   // Warn — amber tint
                      :              "#FBE6DE";   // Crit — red tint
-            const sizes = size === "sm" ? { fs: 11, pad: "2px 7px" } : { fs: 13, pad: "4px 10px" };
+            const sizes = size === "sm" ? { fs: 11, pad: "2px 8px" } : { fs: 13, pad: "4px 11px" };
             return (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: bg, color, fontSize: sizes.fs, fontWeight: 700, fontVariantNumeric: "tabular-nums", padding: sizes.pad, borderRadius: 5 }}>
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                background: bg, color,
+                fontSize: sizes.fs, fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+                padding: sizes.pad,
+                borderRadius: 999,
+                boxShadow: "var(--rt-sh-xs)",
+              }}>
                 <span>{score}</span>
                 {delta !== null && delta !== 0 && (
                   <span style={{ fontWeight: 600, fontSize: sizes.fs - 1, opacity: 0.85 }}>
@@ -6883,8 +7075,20 @@ export default function App({ user }) {
             if (!client) return null;
             const initials = client.name.split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
             const color = retColor(client.ret || 60);
+            // Polish: keep the score-driven base color (carries information —
+            // red=at-risk, green=healthy) and overlay a soft top-light /
+            // bottom-shade gradient sheen for depth. Plus a 1px shadow so the
+            // avatar reads as a small physical chip rather than a flat circle.
             return (
-              <div style={{ width: size, height: size, borderRadius: "50%", background: color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, flexShrink: 0, letterSpacing: 0.2 }}>
+              <div style={{
+                width: size, height: size, borderRadius: "50%",
+                background: `linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.12) 100%), ${color}`,
+                color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: size * 0.35, fontWeight: 700,
+                flexShrink: 0, letterSpacing: 0.2,
+                boxShadow: "var(--rt-sh-xs)",
+              }}>
                 {initials}
               </div>
             );
@@ -7275,7 +7479,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowMd, position: "relative" }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid transparent", borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", transition: "box-shadow 200ms var(--rt-ease-out)" }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -7791,14 +7995,16 @@ export default function App({ user }) {
                                               style={{
                                                 width: "100%", height: 24,
                                                 border: "none",
-                                                background: isSel ? C.btn : "transparent",
+                                                background: isSel ? "var(--rt-grad-btn)" : "transparent",
                                                 color: isSel ? "#fff" : (isToday ? C.btn : C.text),
-                                                borderRadius: 4,
+                                                borderRadius: 6,
                                                 fontSize: 11,
                                                 fontWeight: isToday || isSel ? 700 : 500,
                                                 cursor: "pointer",
                                                 fontFamily: "inherit",
                                                 padding: 0,
+                                                boxShadow: isSel ? "var(--rt-sh-purple)" : "none",
+                                                transition: "all 160ms var(--rt-ease-out)",
                                               }}
                                               onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(0,0,0,0.06)"; }}
                                               onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
@@ -8013,7 +8219,7 @@ export default function App({ user }) {
                         gap: 8,
                         padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
                         height: 28,
-                        background: newTask.trim() ? C.btn : "#DBD0EF",
+                        background: newTask.trim() ? "var(--rt-grad-btn)" : "#DBD0EF",
                         color: "#fff",
                         borderRadius: 7,
                         fontSize: 12,
@@ -8023,10 +8229,8 @@ export default function App({ user }) {
                         fontFamily: "inherit",
                         marginLeft: "auto",
                         flexShrink: 0,
-                        boxShadow: newTask.trim()
-                          ? "0 1px 2px rgba(91,33,182,0.20), 0 4px 12px rgba(91,33,182,0.18)"
-                          : "none",
-                        transition: "transform 200ms cubic-bezier(.2,.7,.3,1), box-shadow 200ms ease, background 200ms ease, padding 200ms ease",
+                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
+                        transition: "transform 200ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), background 200ms ease, padding 200ms ease",
                       }}
                       onMouseEnter={e => {
                         if (newTask.trim()) {
@@ -8136,10 +8340,10 @@ export default function App({ user }) {
                             cursor: "pointer",
                             ...(focusMode
                               ? {
-                                  background: C.primaryDeep,
-                                  border: "1px solid " + C.primaryDeep,
+                                  background: "var(--rt-grad-green-deep)",
+                                  border: "none",
                                   color: "#fff",
-                                  boxShadow: "0 1px 2px rgba(28,50,36,0.18), 0 2px 6px rgba(28,50,36,0.22)",
+                                  boxShadow: "var(--rt-sh-green-glow)",
                                 }
                               : {}),
                           }}
@@ -8331,7 +8535,15 @@ export default function App({ user }) {
                           return null;
                         })();
                         const isFocusTop = focusMode && t.id === focusTopId;
-                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "");
+                        // Rai's client-of-the-day: every task assigned to the boosted
+                        // client gets the purple inset bar + ✦ medallion. Client-level
+                        // designation, not task-level — see UX spec.
+                        const raiBoostClient = (() => {
+                          if (!raiPicks || !raiPicks.client_id) return null;
+                          return clients.find(c => c.id === raiPicks.client_id) || null;
+                        })();
+                        const isRaiBoosted = !!(raiBoostClient && t.client && t.client === raiBoostClient.name);
+                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "") + (isRaiBoosted ? " rt-rai-boost" : "");
   
                         // Reorder handler: when dropping onto target, move dragging task to target's position
                         const handleDrop = (e) => {
@@ -8544,15 +8756,15 @@ export default function App({ user }) {
                               display: "flex", alignItems: "center", gap: 12,
                               padding: "9px 14px",
                               background: C.card,
-                              border: isDragOver ? "1px solid " + C.btn : "1px solid " + C.borderSoft,
+                              border: isDragOver ? "1px solid " + C.btn : "1px solid transparent",
                               borderRadius: 12,
-                              boxShadow: isDragOver ? "0 0 0 2px " + C.btnLight + ", " + C.shadowSm : C.shadowSm,
+                              boxShadow: isDragOver ? "0 0 0 2px " + C.btnLight + ", var(--rt-sh-row-hover)" : "var(--rt-sh-row)",
                               opacity: isDragging ? 0.4 : 1,
                               cursor: isManual ? "grab" : "default",
                               transform: offset !== 0 ? `translateX(${offset}px)` : undefined,
                               transition: swipeStartX[t.id] != null
-                                ? "border-color 120ms, box-shadow 120ms, opacity 120ms"
-                                : "border-color 120ms, box-shadow 120ms, opacity 120ms, transform 200ms ease",
+                                ? "border-color 120ms, box-shadow 200ms var(--rt-ease-out), opacity 120ms"
+                                : "border-color 120ms, box-shadow 200ms var(--rt-ease-out), opacity 120ms, transform 200ms var(--rt-ease-out)",
                               touchAction: swipeable ? "pan-y" : "auto",
                               position: "relative",
                               zIndex: 2,
@@ -8805,8 +9017,9 @@ export default function App({ user }) {
                                 fontWeight: 600,
                                 flexShrink: 0,
                                 color: C.textMuted,
-                                border: "1px solid " + C.borderLight,
-                                background: "transparent",
+                                border: "none",
+                                background: C.surfaceWarm,
+                                boxShadow: "var(--rt-sh-xs)",
                               }} title={formatRecurrenceLabel(t.recurrence_pattern)}>
                                 <Icon name="infinity" size={12} color={C.textMuted} />
                                 <span className="rt-row-text">{formatRecurrenceLabel(t.recurrence_pattern)}</span>
@@ -8836,9 +9049,10 @@ export default function App({ user }) {
                                   // (transparent bg, hairline border, muted text)
                                   // so it visually matches the rest of the dimmed
                                   // task row instead of staying full-color.
-                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : "transparent"),
+                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : C.surfaceWarm),
                                   color: isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted),
-                                  border: isDone ? "1px solid " + C.borderLight : (isOverdue || isToday ? "none" : "1px solid " + C.borderLight),
+                                  border: "none",
+                                  boxShadow: isDone ? "none" : "var(--rt-sh-xs)",
                                 }}>
                                   <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted)} />
                                   <span className="rt-row-text">{label}</span>
@@ -8899,11 +9113,22 @@ export default function App({ user }) {
                     };
 
                     // Bucket header component (inline).
-                    const BucketHeader = ({ name, dimmed }) => (
-                      <div className="rt-bucket-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
-                        <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>{name}</div>
-                      </div>
-                    );
+                    const BucketHeader = ({ name, dimmed }) => {
+                      // Polish layer: each bucket gets a tiny color-coded dot
+                      // with a soft halo. Green-light for today (the active surface),
+                      // muted ink for tomorrow/later. Same primary palette.
+                      const isToday = name === "Today";
+                      const dotColor = isToday ? C.primaryLight : C.ink300;
+                      const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
+                      return (
+                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>
+                            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: "0 0 0 3px " + dotHalo }} />
+                            {name}
+                          </div>
+                        </div>
+                      );
+                    };
 
 
                     return (
