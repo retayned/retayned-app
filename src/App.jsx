@@ -633,6 +633,17 @@ function todayAnchored() {
   return d;
 }
 
+// Convert a Date to a YYYY-MM-DD string using LOCAL timezone.
+// CRITICAL: `new Date().toISOString().slice(0,10)` returns UTC date, which
+// flips a day early/late at edge hours (e.g. 11pm MST = 6am UTC tomorrow).
+// Use this anywhere a "today" string anchors task or sweep queries.
+function localYmd(d = new Date()) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 // ============================================================
 // EmptyState — shared empty-state component
 // ============================================================
@@ -3929,7 +3940,7 @@ export default function App({ user }) {
     // start date. From there, tenure grows automatically over time.
     const engagementStart = new Date();
     engagementStart.setMonth(engagementStart.getMonth() - tenureMonths);
-    const engagementStartedAt = engagementStart.toISOString().slice(0, 10);
+    const engagementStartedAt = localYmd(engagementStart);
 
     // Insert into Supabase first
     const { data: created, error } = await clientsDb.create(user.id, {
@@ -3998,7 +4009,7 @@ export default function App({ user }) {
       const offsetDays = 10 + Math.floor(Math.random() * 31); // 10..40 inclusive
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + offsetDays);
-      const dueDateStr = dueDate.toISOString().split('T')[0];
+      const dueDateStr = localYmd(dueDate);
 
       const clientId = created?.id || client.id;
       let hcResult = null;
@@ -4765,7 +4776,7 @@ export default function App({ user }) {
     const evaluate = async () => {
       const SETTLE_MS = 60 * 1000;
       const now = Date.now();
-      const todayIso = new Date().toISOString().slice(0, 10);
+      const todayIso = localYmd();
 
       // raiPicks is a single pick row (or null, gated above). The original
       // code was written as if multiple picks could land at once; the
@@ -9688,7 +9699,7 @@ export default function App({ user }) {
                       // so LTV math is correct from minute one. Parallel insert via
                       // Promise.allSettled so a single failure doesn't block the rest.
                       const validRows = importPreview.filter(r => r.valid);
-                      const todayIsoDate = new Date().toISOString().slice(0, 10);
+                      const todayIsoDate = localYmd();
                       const todayMs = Date.now();
                       const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
 
@@ -9716,7 +9727,7 @@ export default function App({ user }) {
                         qualifyingFlags: {},
                         daysOld: 0,
                         is_paused: false,
-                        engagement_started_at: new Date(todayMs - (r.months || 0) * MS_PER_MONTH).toISOString().slice(0, 10),
+                        engagement_started_at: localYmd(new Date(todayMs - (r.months || 0) * MS_PER_MONTH)),
                       }));
                       setClients(prev => [...prev, ...optimistic]);
                       setShowImport(false);
@@ -10971,7 +10982,7 @@ export default function App({ user }) {
                 await hcDb.scheduleNext(user.id, hcRecord.client_id || clientObj.id);
               }
               // Update client drift
-              await clientsDb.updateDrift(clientObj.id, drift, new Date().toISOString().split("T")[0]);
+              await clientsDb.updateDrift(clientObj.id, drift, localYmd());
             }
           };
 
@@ -14996,7 +15007,7 @@ export default function App({ user }) {
                             const dow = target.getDay();
                             const diff = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
                             const monday = new Date(target.getTime() + diff * 24 * 60 * 60 * 1000);
-                            const d = monday.toISOString().split("T")[0];
+                            const d = localYmd(monday);
                             const sel = reminderDate === d;
                             return (
                               <button key={q.label} onClick={() => setReminderDate(d)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1.5px solid " + (sel ? C.primary : C.border), background: sel ? C.primarySoft : C.bg, color: sel ? C.primary : C.text, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{q.label}</button>
