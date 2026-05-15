@@ -5,6 +5,22 @@
 
 import { supabase } from './supabase';
 
+// ──────────────────────────────────────────────────────────────
+// localYmd — convert a Date to a YYYY-MM-DD string using the
+// browser's LOCAL timezone, not UTC. Critical for "today"-style
+// queries: at 11pm MST, new Date().toISOString() returns
+// tomorrow's UTC date, which makes any "completed_at >= today"
+// or "due_date === today" filter pull the wrong day's data.
+// Every place in this file that anchors to "today" or stores a
+// user-picked date must go through this helper.
+// ──────────────────────────────────────────────────────────────
+function localYmd(d = new Date()) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 
 
 
@@ -183,7 +199,7 @@ export const tasks = {
   // Get today's tasks (including completed ones for progress count)
   // Recurring tasks always included — they persist across days and auto-reset in app
   listToday: async (userId) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = localYmd();
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
@@ -323,7 +339,7 @@ export const tasks = {
     const dateStr = dueDate == null
       ? null
       : (dueDate instanceof Date
-        ? dueDate.toISOString().split('T')[0]
+        ? localYmd(dueDate)
         : (typeof dueDate === 'string' && dueDate.includes('T'))
           ? dueDate.split('T')[0]
           : dueDate);
@@ -718,7 +734,7 @@ export const healthChecks = {
   // For standard "next HC" scheduling after completion, use scheduleNext instead.
   create: async (userId, { client_id, due_date }) => {
     const dateStr = due_date instanceof Date
-      ? due_date.toISOString().split('T')[0]
+      ? localYmd(due_date)
       : (typeof due_date === 'string' && due_date.includes('T'))
         ? due_date.split('T')[0]
         : due_date;
@@ -754,7 +770,7 @@ export const healthChecks = {
   scheduleNext: async (userId, clientId, daysOut = 30) => {
     const due = new Date();
     due.setDate(due.getDate() + daysOut);
-    return healthChecks.schedule(userId, clientId, due.toISOString().split('T')[0]);
+    return healthChecks.schedule(userId, clientId, localYmd(due));
   }
 };
 
@@ -1291,7 +1307,7 @@ export const clientEngagementPausesDb = {
       .maybeSingle();
     if (existing) return { data: existing, error: null };
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localYmd();
     const { data, error } = await supabase
       .from('client_engagement_pauses')
       .insert({
@@ -1318,7 +1334,7 @@ export const clientEngagementPausesDb = {
       .maybeSingle();
     if (!open) return { data: null, error: null };
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localYmd();
     const { data, error } = await supabase
       .from('client_engagement_pauses')
       .update({ resumed_at: today })
