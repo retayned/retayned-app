@@ -5000,7 +5000,15 @@ export default function App({ user }) {
     const _now = new Date();
     const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
     const isTodayBucket = (t) => {
-      if (t.recurring) return true;
+      if (t.recurring) {
+        // Recurring tasks only count toward "today" if their next occurrence
+        // IS today. Weekly/monthly tasks not due today are hidden from the UI
+        // (see bucketOf) and shouldn't inflate today's counts either.
+        if (t.done) return true; // done recurring tasks live in today's done list
+        const next = nextOccurrenceDate(t.recurrence_pattern, _now, true);
+        const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+        return nextStr <= _todayStr;
+      }
       if (!t.due_date) return true;
       const d = String(t.due_date).slice(0, 10);
       return d <= _todayStr;
@@ -5045,7 +5053,12 @@ export default function App({ user }) {
   const _todayDotNow = new Date();
   const _todayDotStr = localYmd(_todayDotNow);
   const todayBucketCountable = countableTasks.filter(t => {
-    if (t.recurring) return true;
+    if (t.recurring) {
+      if (t.done) return true;
+      const next = nextOccurrenceDate(t.recurrence_pattern, _todayDotNow, true);
+      const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+      return nextStr <= _todayDotStr;
+    }
     if (!t.due_date) return true;
     const d = String(t.due_date).slice(0, 10);
     return d <= _todayDotStr;
@@ -6905,8 +6918,16 @@ export default function App({ user }) {
               const next = nextOccurrenceDate(t.recurrence_pattern, _now, true);
               const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
               if (nextStr <= _todayStr) return "today";
-              if (nextStr === _tomorrowStr) return "tomorrow";
-              return "later";
+              // Daily recurring tasks always re-appear tomorrow in Today —
+              // surfacing them in Tomorrow is duplicative noise. Hide them
+              // from the future view; they're implicit.
+              const isDaily = !t.recurrence_pattern || !t.recurrence_pattern.kind || t.recurrence_pattern.kind === "daily";
+              if (nextStr === _tomorrowStr) return isDaily ? "hidden" : "tomorrow";
+              // Non-daily recurring more than 1 day out: hide entirely.
+              // Otherwise weekly/monthly tasks would clog Later every day
+              // of the week. They reappear in Tomorrow the day before
+              // they're due, and in Today on the day itself.
+              return "hidden";
             }
             if (!t.due_date) return "today";
             const dateStr = String(t.due_date).slice(0, 10);
@@ -8920,10 +8941,10 @@ export default function App({ user }) {
                                 width: "100%",
                                 display: "flex", alignItems: "center", justifyContent: "space-between",
                                 padding: "12px 14px",
-                                background: "transparent",
-                                border: "1px dashed " + C.border,
+                                background: completedLogOpen ? C.primarySoft : "transparent",
+                                border: "1px dashed " + (completedLogOpen ? C.primaryLight : C.border),
                                 borderRadius: 10,
-                                color: C.textSec,
+                                color: completedLogOpen ? C.primary : C.textSec,
                                 fontSize: 13,
                                 fontWeight: 500,
                                 cursor: "pointer",
@@ -8931,11 +8952,13 @@ export default function App({ user }) {
                                 transition: "background 120ms ease, border-color 120ms ease, color 120ms ease",
                               }}
                               onMouseEnter={e => {
+                                if (completedLogOpen) return; // already in green state
                                 e.currentTarget.style.background = C.primarySoft;
                                 e.currentTarget.style.borderColor = C.primaryLight;
                                 e.currentTarget.style.color = C.primary;
                               }}
                               onMouseLeave={e => {
+                                if (completedLogOpen) return; // keep green while open
                                 e.currentTarget.style.background = "transparent";
                                 e.currentTarget.style.borderColor = C.border;
                                 e.currentTarget.style.color = C.textSec;
