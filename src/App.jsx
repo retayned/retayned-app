@@ -2580,7 +2580,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 500,
                 ...(selectedDay === "today"
-                  ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                   : {}),
               }}
             >Today</button>
@@ -2599,7 +2599,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 500,
                 ...(selectedDay === "tomorrow"
-                  ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                   : {}),
               }}
             >Tomorrow</button>
@@ -5952,21 +5952,26 @@ export default function App({ user }) {
           .rt-rank-opt:hover:not(.is-active) { background: rgba(255,255,255,0.55); }
         }
 
-        /* Focus button — inactive previews the active dark-green color
-           (border + text → primaryDeep) before committing to the fill. */
+        /* Focus button — soft shadow surface, no border. Active state
+           gets a green-glow shadow (set inline) matching the polish
+           language. Inactive previews the active green color on hover. */
         .rt-focus-btn {
-          background: transparent;
+          background: var(--rt-card);
           color: var(--rt-text-sec);
-          border: 1px solid var(--rt-ink-300);
-          box-shadow: none;
-          transition: background 0.12s, color 0.12s, border-color 0.12s;
+          border: none;
+          box-shadow: var(--rt-sh-card);
+          transition: box-shadow 200ms var(--rt-ease-out),
+                      color 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
         }
         @media (hover: hover) {
           .rt-focus-btn:hover:not(.is-active) {
             color: #1C3224;
-            border-color: #1C3224;
+            box-shadow: var(--rt-sh-card-hover);
+            transform: translateY(-1px);
           }
         }
+        .rt-focus-btn:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
 
         /* "3 events" stats button — mobile only (desktop sets pointer-events:
            none on this class). Subtle wash, matches composer chip hover. */
@@ -8612,7 +8617,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 5,
                             ...(rankMode === "rai"
-                              ? { background: C.card, color: C.btn, boxShadow: C.shadowSm }
+                              ? { background: C.card, color: C.btn, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}
                         >
@@ -8630,7 +8635,7 @@ export default function App({ user }) {
                             fontWeight: 600,
                             cursor: "pointer",
                             ...(rankMode === "manual"
-                              ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}
                         >
