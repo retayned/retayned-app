@@ -2580,7 +2580,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 500,
                 ...(selectedDay === "today"
-                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                  ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
                   : {}),
               }}
             >Today</button>
@@ -2599,7 +2599,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 500,
                 ...(selectedDay === "tomorrow"
-                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                  ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
                   : {}),
               }}
             >Tomorrow</button>
@@ -2703,33 +2703,34 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               timeColor = C.textMuted;
               titleWeight = 400;
             } else if (state === "now") {
-              // The currently-happening event. Stays warm cream with the purple
-              // left-border anchor, but gains a soft purple-tinted shadow so
-              // it reads as a "live, active" surface.
+              // The currently-happening event. Cream surface with purple
+              // left-border anchor + purple-tinted shadow so it reads as
+              // a "live, active" surface.
               containerStyle = {
                 background: C.deepCream,
                 borderLeft: `3px solid ${C.btn}`,
                 borderRadius: "0 8px 8px 0",
-                paddingLeft: 8,
-                boxShadow: "var(--rt-sh-card), 0 0 0 1px rgba(91,33,182,0.08)",
+                paddingLeft: 10,
+                boxShadow: "0 1px 3px rgba(91,33,182,0.12), 0 4px 12px rgba(91,33,182,0.16)",
               };
               titleColor = C.text;
               timeColor = C.textSec;
               titleWeight = 600;
             } else { // upcoming
-              // Soft white-cream gradient surface + shadow for depth.
-              // Removed the visible border in favor of the shadow chrome
-              // (matches the polish-layer language used elsewhere).
+              // Soft green-tinted gradient block with shadow + bright
+              // left-edge highlight (inset). Reads as a real event card
+              // on the timeline, not as text on lines. White text for
+              // the title; muted-on-dark time text.
               containerStyle = {
-                background: "var(--rt-grad-warm-card)",
+                background: "linear-gradient(135deg, #6BA37C 0%, #4F7D5E 100%)",
                 border: "none",
                 borderRadius: 8,
-                paddingLeft: 8,
-                boxShadow: "var(--rt-sh-row)",
+                paddingLeft: 11,
+                boxShadow: "0 1px 2px rgba(20,30,22,0.10), 0 4px 12px rgba(51,84,62,0.20), inset 3px 0 0 0 rgba(255,255,255,0.40)",
               };
-              titleColor = C.text;
-              timeColor = C.textMuted;
-              titleWeight = 500;
+              titleColor = "#fff";
+              timeColor = "rgba(255,255,255,0.78)";
+              titleWeight = 600;
             }
 
             // While dragging this event, add a soft shadow + slightly elevated
@@ -8626,9 +8627,9 @@ export default function App({ user }) {
                         // soft shadow (no fake-purple). When armed = full purple
                         // gradient with halo. Same shape across both — only the
                         // color does the work.
-                        background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
-                        color: newTask.trim() ? "#fff" : C.textMuted,
-                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "var(--rt-sh-xs)",
+                        background: newTask.trim() ? "var(--rt-grad-btn)" : C.btnLight,
+                        color: newTask.trim() ? "#fff" : C.btn,
+                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)",
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
@@ -8676,7 +8677,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 5,
                             ...(rankMode === "rai"
-                              ? { background: "var(--rt-grad-btn)", color: "#fff", boxShadow: "var(--rt-sh-purple)" }
+                              ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
                               : {}),
                           }}
                         >
@@ -8694,7 +8695,7 @@ export default function App({ user }) {
                             fontWeight: 600,
                             cursor: "pointer",
                             ...(rankMode === "manual"
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                              ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
                               : {}),
                           }}
                         >
