@@ -2367,9 +2367,33 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
     return () => clearInterval(id);
   }, []);
 
-  const SLOT_HEIGHT = 44; // pixels per hour row
+  const SLOT_HEIGHT = 64; // pixels per hour row (was 44 — bumped to make
+                          // 30-min drag targets comfortable: 32px tall)
   const SNAP_MINUTES = 15;
   const PX_PER_MINUTE = SLOT_HEIGHT / 60;
+
+  // Responsive visible-hour count. Calendar shrinks vertically on smaller
+  // surfaces so it doesn't dominate the page. Mobile (≤768px) shows 4h,
+  // laptop (≤1440px) shows 6h, wide desktop shows 8h. The user scrolls
+  // through the rest of the 17-hour day inside the viewport.
+  const [visibleHours, setVisibleHours] = useState(() => {
+    if (typeof window === "undefined") return 8;
+    const w = window.innerWidth;
+    if (w <= 768) return 4;
+    if (w <= 1440) return 6;
+    return 8;
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const onResize = () => {
+      const w = window.innerWidth;
+      if (w <= 768) setVisibleHours(4);
+      else if (w <= 1440) setVisibleHours(6);
+      else setVisibleHours(8);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // ─── Global pointer listeners during drag ──────────────────────────────
   // We attach to window (not the event block) so the drag continues even
@@ -2520,9 +2544,10 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
   }
 
   const timelineHeight = totalHours * SLOT_HEIGHT;
-  // Fixed 8-hour viewport on every surface. User scrolls to see the rest
-  // of the 17-hour day.
-  const visibleHeight = 8 * SLOT_HEIGHT;
+  // Responsive viewport — see `visibleHours` declared above. Calendar
+  // shows 4 hours on mobile, 6 on laptop, 8 on wide desktop. User scrolls
+  // inside that viewport to reach the rest of the 17-hour day.
+  const visibleHeight = visibleHours * SLOT_HEIGHT;
 
   // Auto-scroll the visible window to center NOW on mount / when hour
   // range or now-tick changes. Runs on every surface — desktop and
@@ -2580,7 +2605,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 500,
                 ...(selectedDay === "today"
-                  ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
+                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                   : {}),
               }}
             >Today</button>
@@ -2599,7 +2624,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 500,
                 ...(selectedDay === "tomorrow"
-                  ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
+                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                   : {}),
               }}
             >Tomorrow</button>
@@ -2717,19 +2742,21 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               timeColor = C.textSec;
               titleWeight = 600;
             } else { // upcoming
-              // Soft green-tinted gradient block with shadow + bright
-              // left-edge highlight (inset). Reads as a real event card
-              // on the timeline, not as text on lines. White text for
-              // the title; muted-on-dark time text.
+              // Deep cream gradient block with dark ink text + cream-toned
+              // shadow + bright left-edge highlight (inset). Reads as a
+              // warm sticky-note on the timeline — calm, friendly, doesn't
+              // compete with the rest of the page. Cream sits between
+              // purple (Rai) and green (retention) without claiming
+              // hierarchy it shouldn't have.
               containerStyle = {
-                background: "linear-gradient(135deg, #6BA37C 0%, #4F7D5E 100%)",
+                background: "linear-gradient(135deg, #EAE4D6 0%, #D2C6A8 100%)",
                 border: "none",
                 borderRadius: 8,
                 paddingLeft: 11,
-                boxShadow: "0 1px 2px rgba(20,30,22,0.10), 0 4px 12px rgba(51,84,62,0.20), inset 3px 0 0 0 rgba(255,255,255,0.40)",
+                boxShadow: "0 1px 2px rgba(80,60,30,0.10), 0 4px 12px rgba(120,90,40,0.14), inset 3px 0 0 0 rgba(255,255,255,0.50)",
               };
-              titleColor = "#fff";
-              timeColor = "rgba(255,255,255,0.78)";
+              titleColor = C.text;
+              timeColor = C.textMuted;
               titleWeight = 600;
             }
 
@@ -2897,7 +2924,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               textAlign: "center",
               fontFamily: "'Fraunces', Georgia, serif",
               fontStyle: "italic",
-              fontWeight: 400,
+              fontWeight: 500,
               fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
               fontSize: 13,
               color: C.textMuted,
@@ -3179,7 +3206,7 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
               lineHeight: 1.5,
               fontFamily: "'Fraunces', Georgia, serif",
               fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
-              fontWeight: 400,
+              fontWeight: 500,
               fontStyle: "italic",
               display: "-webkit-box",
               WebkitLineClamp: 3,
@@ -3882,7 +3909,9 @@ export default function App({ user }) {
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
-  const [focusFlash, setFocusFlash] = useState(false);
+  // (Removed focusFlash state — the lightning entry animation was retired
+  // in favor of the calmer/subtler UI language. Focus mode now just toggles
+  // its button + dims non-top tasks; no full-screen white burst.)
   // Debug overlay — shows priority score breakdown inline on each task row.
   // Toggle with Cmd+Shift+D (Mac) or Ctrl+Shift+D (Windows). Internal tool;
   // not user-facing.
@@ -6632,22 +6661,8 @@ export default function App({ user }) {
           transition: opacity 280ms ease;
         }
 
-        /* Lightning flash — single white burst when toggling focus on */
-        .rt-flash {
-          position: fixed;
-          top: 0; right: 0; bottom: 0; left: 0;
-          background: rgba(255, 255, 255, 0);
-          pointer-events: none;
-          z-index: 100;
-        }
-        .rt-flash.is-firing {
-          animation: rt-flash-anim 380ms ease-out;
-        }
-        @keyframes rt-flash-anim {
-          0%   { background: rgba(255, 255, 255, 0); }
-          8%   { background: rgba(255, 255, 255, 0.85); }
-          100% { background: rgba(255, 255, 255, 0); }
-        }
+        /* (rt-flash lightning animation removed — retired in favor of the
+           calmer UI language. Focus mode now toggles silently.) */
 
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
@@ -6810,7 +6825,7 @@ export default function App({ user }) {
       `}</style>
 
       {/* Lightning flash — fires when focus mode toggles on */}
-      {focusFlash && <div className="rt-flash is-firing" />}
+      {/* (Lightning flash removed — too loud for the polish-layer aesthetic) */}
 
       {/* Fireworks */}
       {confetti && (
@@ -7084,7 +7099,7 @@ export default function App({ user }) {
               {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 400, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -7766,7 +7781,7 @@ export default function App({ user }) {
                         color: C.textMuted,
                         fontFamily: "'Fraunces', Georgia, serif",
                         fontStyle: "italic",
-                        fontWeight: 400,
+                        fontWeight: 500,
                         fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
                       }}>
                         Today&rsquo;s client is{" "}
@@ -8695,7 +8710,7 @@ export default function App({ user }) {
                             fontWeight: 600,
                             cursor: "pointer",
                             ...(rankMode === "manual"
-                              ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}
                         >
@@ -8710,12 +8725,7 @@ export default function App({ user }) {
                       {rankMode === "rai" && (
                         <button
                           onClick={() => {
-                            const next = !focusMode;
-                            setFocusMode(next);
-                            if (next) {
-                              setFocusFlash(true);
-                              setTimeout(() => setFocusFlash(false), 900);
-                            }
+                            setFocusMode(!focusMode);
                           }}
                           style={{
                             display: "inline-flex",
@@ -8853,7 +8863,7 @@ export default function App({ user }) {
                         fontFamily: "'Fraunces', Georgia, serif",
                         fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
                         fontStyle: "italic",
-                        fontWeight: 400,
+                        fontWeight: 500,
                         fontSize: 14,
                         lineHeight: 1.55,
                         color: C.textSec,
@@ -11265,7 +11275,7 @@ export default function App({ user }) {
                             <h3 style={{
                               fontFamily: "'Fraunces', Georgia, serif",
                               fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
-                              fontWeight: 400,
+                              fontWeight: 500,
                               fontStyle: "italic",
                               fontSize: 19,
                               lineHeight: 1.25,
@@ -11437,7 +11447,7 @@ export default function App({ user }) {
                               <h3 style={{
                                 fontFamily: "'Fraunces', Georgia, serif",
                                 fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
-                                fontWeight: 400,
+                                fontWeight: 500,
                                 fontStyle: "italic",
                                 fontSize: 25,
                                 lineHeight: 1.22,
