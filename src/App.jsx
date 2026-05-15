@@ -8642,9 +8642,9 @@ export default function App({ user }) {
                         // soft shadow (no fake-purple). When armed = full purple
                         // gradient with halo. Same shape across both — only the
                         // color does the work.
-                        background: newTask.trim() ? "var(--rt-grad-btn)" : C.btnLight,
-                        color: newTask.trim() ? "#fff" : C.btn,
-                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)",
+                        background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
+                        color: newTask.trim() ? "#fff" : C.textMuted,
+                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
