@@ -633,6 +633,197 @@ function todayAnchored() {
   return d;
 }
 
+// ============================================================
+// EmptyState — shared empty-state component
+// ============================================================
+// Used by Clients, Health, Rolodex, Referrals page-level emptiness.
+// Today's empty state is rendered inline (Fraunces italic, no icon)
+// because it's Rai's home and reads as her voice — see line ~7965.
+//
+// Props:
+//   - icon: one of "clients" | "health" | "rolodex" | "referrals"
+//   - headline: bold title
+//   - body: 1-2 sentence description (string)
+//   - cta: { label, onClick } — primary purple button
+//   - secondaryCta: { label, onClick } — optional outlined green button
+// ============================================================
+const EMPTY_STATE_ICONS = {
+  clients: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  health: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+    </svg>
+  ),
+  rolodex: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2"/>
+      <circle cx="12" cy="11" r="3"/>
+      <path d="M7 20v-1.5a3.5 3.5 0 0 1 3.5-3.5h3a3.5 3.5 0 0 1 3.5 3.5V20"/>
+    </svg>
+  ),
+  referrals: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3"/>
+      <circle cx="6" cy="12" r="3"/>
+      <circle cx="18" cy="19" r="3"/>
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+    </svg>
+  ),
+};
+
+// ============================================================
+// Skeleton loaders — row-shaped placeholders for initial load
+// ============================================================
+// Used while `dataLoaded` is false. Each variant mirrors the geometry
+// of the rows it stands in for, so when real data arrives the layout
+// doesn't shift.
+// ============================================================
+
+function SkeletonTaskList({ rows = 4 }) {
+  const widths = ["78%", "65%", "45%", "70%", "55%", "82%"];
+  return (
+    <div style={{ background: "#fff", border: "1px solid #EFEFEA", borderRadius: 12, overflow: "hidden" }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "14px 16px",
+          borderBottom: i < rows - 1 ? "1px solid #EFEFEA" : "none",
+        }}>
+          <span className="rt-sk" style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="rt-sk" style={{ height: 13, width: widths[i % widths.length] }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <span className="rt-sk" style={{ height: 10, width: 48, borderRadius: 3 }} />
+              <span className="rt-sk" style={{ height: 10, width: 72, borderRadius: 3 }} />
+            </div>
+          </div>
+          <span className="rt-sk" style={{ width: 28, height: 16, borderRadius: 4, flexShrink: 0 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SkeletonClientList({ rows = 5 }) {
+  const widths = ["55%", "42%", "62%", "48%", "58%", "50%"];
+  return (
+    <div style={{ background: "#fff", border: "1px solid #EFEFEA", borderRadius: 12, overflow: "hidden" }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "12px 14px",
+          borderBottom: i < rows - 1 ? "1px solid #EFEFEA" : "none",
+        }}>
+          <span className="rt-sk" style={{ width: 32, height: 32, borderRadius: 16, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="rt-sk" style={{ height: 13, width: widths[i % widths.length] }} />
+            <span className="rt-sk" style={{ height: 10, width: "32%" }} />
+          </div>
+          <span className="rt-sk" style={{ height: 11, width: 70, flexShrink: 0 }} />
+          <span className="rt-sk" style={{ width: 36, height: 20, borderRadius: 5, flexShrink: 0 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SkeletonHealthQueue({ rows = 3 }) {
+  const widths = ["50%", "42%", "58%"];
+  const subWidths = ["38%", "32%", "40%"];
+  return (
+    <div style={{ background: "#fff", border: "1px solid #EFEFEA", borderRadius: 12, overflow: "hidden" }}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} style={{
+          display: "flex", alignItems: "center", gap: 14,
+          padding: "14px 16px",
+          borderBottom: i < rows - 1 ? "1px solid #EFEFEA" : "none",
+        }}>
+          <span className="rt-sk" style={{ width: 40, height: 40, borderRadius: 20, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="rt-sk" style={{ height: 14, width: widths[i % widths.length] }} />
+            <span className="rt-sk" style={{ height: 11, width: subWidths[i % subWidths.length] }} />
+          </div>
+          <span className="rt-sk" style={{ width: 80, height: 28, borderRadius: 7, flexShrink: 0 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ icon, headline, body, cta, secondaryCta }) {
+  return (
+    <div style={{
+      background: "#FFFFFF",
+      border: "1px solid #EFEFEA",
+      borderRadius: 12,
+      padding: "56px 24px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      textAlign: "center",
+      minHeight: 220,
+    }}>
+      {icon && EMPTY_STATE_ICONS[icon] && (
+        <div style={{
+          width: 56, height: 56, borderRadius: "50%",
+          background: "#E6EFE9",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 18,
+        }}>
+          {EMPTY_STATE_ICONS[icon]}
+        </div>
+      )}
+      <h2 style={{
+        fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em",
+        margin: "0 0 8px", color: "#1E261F",
+      }}>{headline}</h2>
+      <p style={{
+        fontSize: 14, lineHeight: 1.55,
+        color: "#6B6B66", margin: 0, maxWidth: 380,
+      }}>{body}</p>
+      {(cta || secondaryCta) && (
+        <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap", justifyContent: "center" }}>
+          {cta && (
+            <button
+              className="r-btn"
+              onClick={cta.onClick}
+              style={{
+                padding: "9px 16px", background: "#5B21B6", color: "#fff",
+                border: "none", borderRadius: 8,
+                fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+              }}
+            >{cta.label}</button>
+          )}
+          {secondaryCta && (
+            <button
+              onClick={secondaryCta.onClick}
+              style={{
+                padding: "9px 16px", background: "transparent", color: "#33543E",
+                border: "1px solid rgba(51,84,62,0.27)", borderRadius: 8,
+                fontSize: 13, fontWeight: 500,
+                cursor: "pointer", fontFamily: "inherit",
+                transition: "background 120ms ease, border-color 120ms ease",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(51,84,62,0.06)"; e.currentTarget.style.borderColor = "rgba(51,84,62,0.55)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "rgba(51,84,62,0.27)"; }}
+            >{secondaryCta.label}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function nextWeekdayDate(name) {
   const lookup = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
   const target = lookup[name.toLowerCase()];
@@ -3458,6 +3649,11 @@ export default function App({ user }) {
   const [showAddClient, setShowAddClient] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [clientsSort, setClientsSort] = useState("retention");
+  // Clients page filter chips — see toolbar render. Both default to "all".
+  // Drift: one of "all" | "Improving" | "Stable" | "Something shifted" | "Declining" | "At risk"
+  // Score: one of "all" | "thriving" | "healthy" | "watch" | "atrisk"
+  const [clientsDriftFilter, setClientsDriftFilter] = useState("all");
+  const [clientsScoreFilter, setClientsScoreFilter] = useState("all");
   const [clientsView, setClientsView] = useState(() => {
     try { return localStorage.getItem("clients-view") || "table"; } catch (e) { return "table"; }
   });
@@ -3920,6 +4116,17 @@ export default function App({ user }) {
   // alone. null = parser hasn't set anything (any current state is manual).
   const parserSetRecurrenceRef = useRef(null); // last pattern the parser set
   const parserSetDueDateRef = useRef(null);    // last YMD the parser set
+  // Pulse-chip state: the most recent chip auto-filled by parseComposer.
+  // Triggers a one-shot CSS pulse on the chip button so the user gets a
+  // visible confirmation when the parser catches something they typed.
+  // Auto-clears after the animation finishes so the next pulse fires fresh.
+  const [pulseChip, setPulseChip] = useState(null); // "client" | "worker" | "due" | null
+  const pulseTimerRef = useRef(null);
+  const triggerChipPulse = (which) => {
+    setPulseChip(which);
+    if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = setTimeout(() => setPulseChip(null), 600);
+  };
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   // Calendar grid: which month is currently shown in the date picker.
@@ -5451,6 +5658,81 @@ export default function App({ user }) {
         .r-btn:active { transform: scale(0.98); }
         .row-hover { transition: background 0.1s; cursor: pointer; }
         .row-hover:hover { background: ${C.primarySoft}; }
+        /* Neutral row-hover variant — for table rows where green is too
+           loud / fights with status pills inside the row. Used in the
+           Clients Table view (both mobile + desktop variants). */
+        .row-hover-neutral { transition: background 0.1s; cursor: pointer; }
+        .row-hover-neutral:hover { background: rgba(0,0,0,0.03); }
+        /* Composer chip auto-fill pulse — fires when parseComposer
+           catches a typed phrase and auto-fills the Client / Worker / Due
+           chip. Brief brighten then settle. No scale (would push neighbors
+           mid-line). The chip is already animating its color/bg change via
+           the existing 120ms transition; this pulse layers ON TOP via a
+           pseudo-element ring that fades in then out. ~500ms total. */
+        /* Skeleton loading placeholders — row-shaped shimmers that
+           mirror the real row geometry, so when data arrives nothing
+           jumps. Used on Today (tasks), Clients (rows), Health (queue).
+           Light grey base on a paler sweep at ~1.4s cycle. */
+        @keyframes rtShimmer {
+          0%   { background-position: -480px 0; }
+          100% { background-position: 480px 0; }
+        }
+        .rt-sk {
+          background-color: #EFEFEA;
+          background-image: linear-gradient(90deg, #EFEFEA 0%, #F7F5F0 50%, #EFEFEA 100%);
+          background-size: 480px 100%;
+          background-repeat: no-repeat;
+          animation: rtShimmer 1.4s ease-in-out infinite;
+          border-radius: 4px;
+          display: inline-block;
+        }
+        @keyframes chipPulse {
+          0%   { box-shadow: 0 0 0 0 rgba(91,33,182,0.55); }
+          40%  { box-shadow: 0 0 0 6px rgba(91,33,182,0.18); }
+          100% { box-shadow: 0 0 0 10px rgba(91,33,182,0); }
+        }
+        .chip-pulse {
+          animation: chipPulse 500ms ease-out;
+        }
+        /* Shared icon-close button — any × that dismisses a chip, clears
+           a field, or closes a modal. Faint grey wash under the icon +
+           icon darkens muted → text. Single source of truth so every
+           close button feels the same. */
+        .rt-icon-close { transition: background 120ms ease, color 120ms ease; cursor: pointer; }
+        @media (hover: hover) {
+          .rt-icon-close:hover { background: rgba(0,0,0,0.05); color: ${C.text} !important; }
+        }
+        /* Clients page sort pills — inactive variant only. Hairline
+           outlined pill at rest, faint grey wash + darker border on hover.
+           Active pill (black fill) has its own inline styles, untouched. */
+        .rt-sort-opt {
+          background: transparent;
+          color: ${C.textMuted};
+          border: 1px solid ${C.borderLight};
+          transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+        }
+        @media (hover: hover) {
+          .rt-sort-opt:hover {
+            background: rgba(0,0,0,0.04);
+            color: ${C.text};
+            border-color: ${C.border};
+          }
+        }
+        /* Clients page view toggle — inactive variant. Translucent white
+           wash on hover, text darkens muted → full. Same pattern as the
+           Today/Tomorrow toggle. */
+        .rt-view-opt {
+          background: transparent;
+          color: ${C.textMuted};
+          box-shadow: none;
+          transition: background 120ms ease, color 120ms ease;
+        }
+        @media (hover: hover) {
+          .rt-view-opt:hover {
+            background: rgba(255,255,255,0.55);
+            color: ${C.text};
+          }
+        }
         .r-desk { display: none; }
         .r-mob-bot { display: flex; }
         /* Mobile bottom nav strip is horizontally scrollable. Hide the
@@ -6983,15 +7265,20 @@ export default function App({ user }) {
                         const parsed = parseComposer(v, clients, workersList);
                         if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
                           setComposerClient(parsed.matchedClient.name);
+                          triggerChipPulse("client");
                         }
                         if (parsed.matchedWorker && newTaskWorkerId !== parsed.matchedWorker.id) {
                           setNewTaskWorkerId(parsed.matchedWorker.id);
+                          triggerChipPulse("worker");
                         }
                         // Recurrence wins over due_date: they're mutually
                         // exclusive in the data model, and the parser already
                         // voided matchedDate when matchedRecurrence fired.
                         if (parsed.matchedRecurrence) {
-                          if (!newTaskRecurring) setNewTaskRecurring(true);
+                          if (!newTaskRecurring) {
+                            setNewTaskRecurring(true);
+                            triggerChipPulse("due");
+                          }
                           if (JSON.stringify(newTaskRecurrencePattern) !== JSON.stringify(parsed.matchedRecurrence.pattern)) {
                             setNewTaskRecurrencePattern(parsed.matchedRecurrence.pattern);
                           }
@@ -7005,6 +7292,7 @@ export default function App({ user }) {
                           if (ymd && newTaskDueDate !== ymd) {
                             setNewTaskDueDate(ymd);
                             setNewTaskRecurring(false);
+                            triggerChipPulse("due");
                           }
                           parserSetDueDateRef.current = ymd;
                           parserSetRecurrenceRef.current = null;
@@ -7060,7 +7348,7 @@ export default function App({ user }) {
                         <div style={{ position: "relative", flexShrink: 0 }}>
                           <button
                             onClick={() => setComposerMenuOpen(!composerMenuOpen)}
-                            className="rt-composer-pill"
+                            className={"rt-composer-pill" + (pulseChip === "client" ? " chip-pulse" : "")}
                             style={{
                               display: "inline-flex", alignItems: "center", gap: 5,
                               padding: selectedClientObj ? "0 4px 0 4px" : "0 10px",
@@ -7169,12 +7457,12 @@ export default function App({ user }) {
                           style={{
                             display: "flex", alignItems: "center", gap: 10,
                             padding: "7px 8px", borderRadius: 6, textAlign: "left",
-                            background: idx === composerHighlight ? C.btnLight : "none",
+                            background: idx === composerHighlight ? "rgba(0,0,0,0.04)" : "none",
                             border: "none", cursor: "pointer", fontFamily: "inherit",
                           }}>
                           <ClientAvatar client={c} size={22} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: idx === composerHighlight ? 600 : 500, color: idx === composerHighlight ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                            <div style={{ fontSize: 12.5, fontWeight: idx === composerHighlight ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
                             <div style={{ fontSize: 10.5, color: C.textMuted }}>{c.industry || "Client"}</div>
                           </div>
                           <ScoreChip score={c.ret} size="sm" />
@@ -7198,7 +7486,7 @@ export default function App({ user }) {
                           <button
                             type="button"
                             onClick={() => setWorkerPickerOpen(!workerPickerOpen)}
-                            className="rt-composer-pill"
+                            className={"rt-composer-pill" + (pulseChip === "worker" ? " chip-pulse" : "")}
                             style={{
                               display: "inline-flex", alignItems: "center", gap: 5,
                               padding: "0 10px",
@@ -7262,7 +7550,7 @@ export default function App({ user }) {
                                     width: "100%",
                                     display: "flex", alignItems: "center", gap: 10,
                                     padding: "8px 9px",
-                                    background: !newTaskWorkerId ? C.btnLight : "transparent",
+                                    background: !newTaskWorkerId ? "rgba(0,0,0,0.04)" : "transparent",
                                     border: "none", borderRadius: 6,
                                     cursor: "pointer", fontFamily: "inherit",
                                     textAlign: "left",
@@ -7274,7 +7562,7 @@ export default function App({ user }) {
                                     {getUserInitial(user)}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: !newTaskWorkerId ? 600 : 500, color: !newTaskWorkerId ? C.btn : C.text }}>Just me</div>
+                                    <div style={{ fontSize: 13, fontWeight: !newTaskWorkerId ? 600 : 500, color: C.text }}>Just me</div>
                                     <div style={{ fontSize: 11, color: C.textMuted }}>Default — keep on my list</div>
                                   </div>
                                 </button>
@@ -7287,7 +7575,7 @@ export default function App({ user }) {
                                       width: "100%",
                                       display: "flex", alignItems: "center", gap: 10,
                                       padding: "8px 9px",
-                                      background: newTaskWorkerId === w.id ? C.btnLight : "transparent",
+                                      background: newTaskWorkerId === w.id ? "rgba(0,0,0,0.04)" : "transparent",
                                       border: "none", borderRadius: 6,
                                       cursor: "pointer", fontFamily: "inherit",
                                       textAlign: "left",
@@ -7299,7 +7587,7 @@ export default function App({ user }) {
                                       {getWorkerInitials(w.name)}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ fontSize: 13, fontWeight: newTaskWorkerId === w.id ? 600 : 500, color: newTaskWorkerId === w.id ? C.btn : C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</div>
+                                      <div style={{ fontSize: 13, fontWeight: newTaskWorkerId === w.id ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</div>
                                       <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.email}</div>
                                     </div>
                                   </button>
@@ -7315,7 +7603,7 @@ export default function App({ user }) {
                       <button
                         type="button"
                         onClick={() => setDuePickerOpen(!duePickerOpen)}
-                        className="rt-composer-pill"
+                        className={"rt-composer-pill" + (pulseChip === "due" ? " chip-pulse" : "")}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
                           padding: "0 10px",
@@ -7398,11 +7686,11 @@ export default function App({ user }) {
                                       style={{
                                         textAlign: "left",
                                         padding: "8px 10px",
-                                        background: isSel ? C.btnLight : "transparent",
+                                        background: isSel ? "rgba(0,0,0,0.04)" : "transparent",
                                         border: "none",
                                         borderRadius: 6,
                                         fontSize: 13,
-                                        color: isSel ? C.btn : C.text,
+                                        color: C.text,
                                         fontWeight: isSel ? 600 : 500,
                                         cursor: "pointer",
                                         fontFamily: "inherit",
@@ -7752,7 +8040,11 @@ export default function App({ user }) {
                           onClick={() => setRankMode("rai")}
                           style={{
                             padding: "6px 14px",
-                            borderRadius: 999,
+                            // Option B "perfectly nested" geometry: inner radius
+                            // = (outer height ÷ 2) − container padding. Locked
+                            // to current button dimensions (padding 6/14, fontSize 12,
+                            // container padding 3); if you resize either, recompute.
+                            borderRadius: 13,
                             border: "none",
                             fontFamily: "inherit",
                             fontSize: 12,
@@ -7773,7 +8065,7 @@ export default function App({ user }) {
                           onClick={() => setRankMode("manual")}
                           style={{
                             padding: "6px 14px",
-                            borderRadius: 999,
+                            borderRadius: 13,
                             border: "none",
                             fontFamily: "inherit",
                             fontSize: 12,
@@ -7914,17 +8206,38 @@ export default function App({ user }) {
                     </div>
                   )}
 
+                  {!dataLoaded && (
+                    <div style={{ padding: "12px 0 4px" }}>
+                      <SkeletonTaskList rows={4} />
+                    </div>
+                  )}
+
                   {dataLoaded && openTasks.length === 0 && completedTasks.length === 0 && (
-                    <div style={{ padding: "28px 4px 20px", borderTop: "1px solid " + C.borderLight }}>
+                    <div style={{ padding: "40px 4px 28px", borderTop: "1px solid " + C.borderLight, textAlign: "center" }}>
+                      <div style={{
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                        fontStyle: "italic",
+                        fontWeight: 500,
+                        fontSize: 22,
+                        letterSpacing: "-0.015em",
+                        color: C.text,
+                        marginBottom: 8,
+                      }}>
+                        Nothing on the list yet.
+                      </div>
                       <div style={{
                         fontFamily: "'Fraunces', Georgia, serif",
                         fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
                         fontStyle: "italic",
                         fontWeight: 400,
-                        fontSize: 15,
-                        color: C.textMuted,
+                        fontSize: 14,
+                        lineHeight: 1.55,
+                        color: C.textSec,
+                        maxWidth: 380,
+                        margin: "0 auto",
                       }}>
-                        No tasks for today.
+                        Add the first one — a call, a check-in, a thing you've been meaning to do. I'll pick up from there.
                       </div>
                     </div>
                   )}
@@ -8174,6 +8487,7 @@ export default function App({ user }) {
                             )}
                           <div
                             className={cls}
+                            data-task-id={t.id}
                             draggable={isManual}
                             onDragStart={isManual ? (e) => {
                               setDraggingTaskId(t.id);
@@ -8215,6 +8529,51 @@ export default function App({ user }) {
                             {isManual && (
                               <div
                                 aria-hidden="true"
+                                onTouchStart={(e) => {
+                                  // Mobile drag-to-reorder: initiate from grip only.
+                                  // Stops touch-start from propagating to row swipe handlers
+                                  // (left/right swipe = complete/delete).
+                                  e.stopPropagation();
+                                  setDraggingTaskId(t.id);
+                                }}
+                                onTouchMove={(e) => {
+                                  if (!draggingTaskId) return;
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  // Find which task row sits under the current touch point.
+                                  // Walks up the DOM looking for a [data-task-id] ancestor.
+                                  const touch = e.touches[0];
+                                  if (!touch) return;
+                                  let el = document.elementFromPoint(touch.clientX, touch.clientY);
+                                  while (el && !el.dataset?.taskId) el = el.parentElement;
+                                  const overId = el?.dataset?.taskId;
+                                  if (overId && overId !== draggingTaskId && overId !== dragOverTaskId) {
+                                    setDragOverTaskId(overId);
+                                  }
+                                }}
+                                onTouchEnd={(e) => {
+                                  if (!draggingTaskId) return;
+                                  e.stopPropagation();
+                                  // Commit reorder using the same logic as desktop drop.
+                                  const targetId = dragOverTaskId;
+                                  if (targetId && targetId !== draggingTaskId) {
+                                    const currentOrder = renderTasks.map(rt => rt.id);
+                                    const fromIdx = currentOrder.indexOf(draggingTaskId);
+                                    const toIdx   = currentOrder.indexOf(targetId);
+                                    if (fromIdx !== -1 && toIdx !== -1) {
+                                      const newOrder = [...currentOrder];
+                                      newOrder.splice(fromIdx, 1);
+                                      newOrder.splice(toIdx, 0, draggingTaskId);
+                                      setManualTaskOrder(newOrder);
+                                    }
+                                  }
+                                  setDraggingTaskId(null);
+                                  setDragOverTaskId(null);
+                                }}
+                                onTouchCancel={() => {
+                                  setDraggingTaskId(null);
+                                  setDragOverTaskId(null);
+                                }}
                                 style={{
                                   color: C.textMuted,
                                   fontSize: 14,
@@ -8224,6 +8583,7 @@ export default function App({ user }) {
                                   flexShrink: 0,
                                   cursor: "grab",
                                   padding: "0 2px",
+                                  touchAction: "none",
                                 }}>
                                 ⋮⋮
                               </div>
@@ -8941,6 +9301,14 @@ export default function App({ user }) {
             atRisk:   activeClients.filter(c => stubStage(c.ret || 0) === "at-risk").length,
             critical: activeClients.filter(c => stubStage(c.ret || 0) === "critical").length,
           };
+          // Drift counts for filter-chip badges. Missing drift_status defaults to "Stable".
+          const byDrift = {
+            Improving: activeClients.filter(c => (c.drift_status || "Stable") === "Improving").length,
+            Stable:    activeClients.filter(c => (c.drift_status || "Stable") === "Stable").length,
+            "Something shifted": activeClients.filter(c => (c.drift_status || "Stable") === "Something shifted").length,
+            Declining: activeClients.filter(c => (c.drift_status || "Stable") === "Declining").length,
+            "At risk": activeClients.filter(c => (c.drift_status || "Stable") === "At risk").length,
+          };
           const portfolioTrend = activeClients.reduce((a, c) => {
             const t = stubTrend(c);
             return a + (t[t.length - 1] - t[0]);
@@ -8968,6 +9336,21 @@ export default function App({ user }) {
                 (c.tag || "").toLowerCase().includes(q) ||
                 stubOwner(c.name).name.toLowerCase().includes(q)
               );
+            }
+            // Drift filter — exact match against c.drift_status. "all" passes everything.
+            if (clientsDriftFilter !== "all") {
+              xs = xs.filter(c => (c.drift_status || "Stable") === clientsDriftFilter);
+            }
+            // Score-bucket filter — bands match the Drift Wall thresholds.
+            if (clientsScoreFilter !== "all") {
+              xs = xs.filter(c => {
+                const s = c.ret || 0;
+                if (clientsScoreFilter === "thriving") return s >= 80;
+                if (clientsScoreFilter === "healthy")  return s >= 65 && s < 80;
+                if (clientsScoreFilter === "watch")    return s >= 45 && s < 65;
+                if (clientsScoreFilter === "atrisk")   return s < 45;
+                return true;
+              });
             }
             const copy = [...xs];
             // Retention: highest score first (your healthiest clients at top).
@@ -9023,7 +9406,12 @@ export default function App({ user }) {
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   {tier === "enterprise" && (
-                    <button onClick={() => { setShowImport(!showImport); setShowAddClient(false); }} style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Import Clients</button>
+                    <button
+                      onClick={() => { setShowImport(!showImport); setShowAddClient(false); }}
+                      style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background 120ms ease, border-color 120ms ease" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(51,84,62,0.06)"; e.currentTarget.style.borderColor = C.primary + "88"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = C.primary + "44"; }}
+                    >Import Clients</button>
                   )}
                   <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
                     Add Client
@@ -9559,31 +9947,101 @@ export default function App({ user }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Icon name="search" size={14} color={C.textMuted} />
                       <input value={clientSearch} onChange={e => setClientSearch(e.target.value)} placeholder="Search clients, owners, industries…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, padding: "2px 0", fontFamily: "inherit", color: C.text }} />
-                      {clientSearch && <button onClick={() => setClientSearch("")} style={{ width: 22, height: 22, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, background: "none", border: "none", cursor: "pointer" }}><Icon name="x" size={11} /></button>}
+                      {clientSearch && <button className="rt-icon-close" onClick={() => setClientSearch("")} style={{ width: 22, height: 22, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, background: "none", border: "none", cursor: "pointer" }}><Icon name="x" size={11} /></button>}
+                    </div>
+                    {/* Drift filter row — single-select. Counts based on activeClients (pre-filter)
+                        so users can preview bucket size before clicking. */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 10, borderTop: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Drift</span>
+                      {[
+                        { id: "all", label: "All", count: activeClients.length },
+                        { id: "Improving", label: "Improving", count: byDrift.Improving },
+                        { id: "Stable", label: "Stable", count: byDrift.Stable },
+                        { id: "Something shifted", label: "Shifted", count: byDrift["Something shifted"] },
+                        { id: "Declining", label: "Declining", count: byDrift.Declining },
+                        { id: "At risk", label: "At risk", count: byDrift["At risk"] },
+                      ].map(f => {
+                        const isActive = clientsDriftFilter === f.id;
+                        return (
+                          <button
+                            key={f.id}
+                            onClick={() => setClientsDriftFilter(f.id)}
+                            className={isActive ? "" : "rt-sort-opt"}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: "4px 10px", fontSize: 11.5, borderRadius: 999,
+                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
+                              ...(isActive ? { background: C.text, color: "#fff", border: "1px solid " + C.text } : {}),
+                            }}
+                          >
+                            <span>{f.label}</span>
+                            <span style={{
+                              background: isActive ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.05)",
+                              color: isActive ? "#fff" : C.textMuted,
+                              padding: "1px 6px", borderRadius: 999,
+                              fontSize: 10, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                            }}>{f.count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Score-bucket filter row */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Score</span>
+                      {[
+                        { id: "all", label: "All", count: activeClients.length },
+                        { id: "thriving", label: "Thriving 80+", count: byStage.thriving },
+                        { id: "healthy", label: "Healthy 65–79", count: byStage.healthy },
+                        { id: "watch", label: "Watch 45–64", count: byStage.watch },
+                        { id: "atrisk", label: "At risk <45", count: byStage.atRisk + byStage.critical },
+                      ].map(f => {
+                        const isActive = clientsScoreFilter === f.id;
+                        return (
+                          <button
+                            key={f.id}
+                            onClick={() => setClientsScoreFilter(f.id)}
+                            className={isActive ? "" : "rt-sort-opt"}
+                            style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: "4px 10px", fontSize: 11.5, borderRadius: 999,
+                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
+                              ...(isActive ? { background: C.text, color: "#fff", border: "1px solid " + C.text } : {}),
+                            }}
+                          >
+                            <span>{f.label}</span>
+                            <span style={{
+                              background: isActive ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.05)",
+                              color: isActive ? "#fff" : C.textMuted,
+                              padding: "1px 6px", borderRadius: 999,
+                              fontSize: 10, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+                            }}>{f.count}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Sort</span>
                         {sortOptions.map(s => (
-                          <button key={s.id} onClick={() => setClientsSort(s.id)} className={s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : ""} style={{
+                          <button key={s.id} onClick={() => setClientsSort(s.id)} className={(sortId === s.id ? "" : "rt-sort-opt ") + (s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : "")} style={{
                             padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
                             // Active = filled black with white text (matches the
                             // Referrals page email-tone toggle's active state).
-                            // Inactive stays as a hairline outlined pill, muted.
-                            background: sortId === s.id ? C.text : "transparent",
-                            color: sortId === s.id ? "#fff" : C.textMuted,
-                            border: "1px solid " + (sortId === s.id ? C.text : C.borderLight),
+                            // Inactive resting + hover styles live in .rt-sort-opt.
+                            ...(sortId === s.id
+                              ? { background: C.text, color: "#fff", border: "1px solid " + C.text }
+                              : {}),
                           }}>{s.label}</button>
                         ))}
                       </div>
                       <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, border: "1px solid " + C.border, borderRadius: 8 }}>
                         {viewOptions.map(v => (
-                          <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} style={{
+                          <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} className={variant === v.id ? "" : "rt-view-opt"} style={{
                             display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
-                            background: variant === v.id ? C.card : "transparent",
-                            color: variant === v.id ? C.text : C.textMuted,
-                            boxShadow: variant === v.id ? C.shadowSm : "none",
                             border: "none",
+                            ...(variant === v.id
+                              ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                              : {}),
                           }}>
                             <Icon name={v.icon} size={14} color={variant === v.id ? C.text : C.textMuted} />
                             <span style={{ fontSize: 12, fontWeight: 500 }}>{v.label}</span>
@@ -9603,6 +10061,7 @@ export default function App({ user }) {
                   {/* COMPARE SURFACE — 3 variants */}
 
                   {/* Mobile card list — always rendered, CSS reveals only <=768px */}
+                  {dataLoaded && (
                   <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
                     {filteredClients.map((c, i, arr) => {
                       const delta = stubDelta(c.name);
@@ -9610,7 +10069,7 @@ export default function App({ user }) {
                       const months = c.months || 0;
                       const tenureDisplay = months < 12 ? `${months}mo` : `${(months / 12).toFixed(1)}yr`;
                       return (
-                        <div key={c.id} onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
+                        <div key={c.id} className="row-hover-neutral" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             <ScoreRing2 client={c} size={32} />
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -9626,10 +10085,18 @@ export default function App({ user }) {
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 2 }}>
                               <div style={{ fontSize: 16, fontWeight: 700, color: scoreColor, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{c.ret || 0}</div>
-                              {delta !== 0 && (
-                                <div style={{ fontSize: 10.5, fontWeight: 600, color: delta > 0 ? C.retGood : C.retWarn, fontVariantNumeric: "tabular-nums" }}>
-                                  {delta > 0 ? "↑" : "↓"} {Math.abs(delta)}
-                                </div>
+                              {/* Score delta — Treatment B. Threshold-gated: only |Δ| ≥ 3 renders.
+                                  Down moves get a loud red pill (catches the scan); up moves get
+                                  quiet green text (good news shouldn't compete with bad news). */}
+                              {Math.abs(delta) >= 3 && delta < 0 && (
+                                <span style={{ background: "#FBE6DE", color: C.retWarn, fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 999, fontVariantNumeric: "tabular-nums" }}>
+                                  ↓ {Math.abs(delta)}
+                                </span>
+                              )}
+                              {Math.abs(delta) >= 3 && delta > 0 && (
+                                <span style={{ color: C.retGood, fontSize: 10.5, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                                  ↑ {delta}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -9637,8 +10104,9 @@ export default function App({ user }) {
                       );
                     })}
                   </div>
+                  )}
 
-                  {variant === "table" && (
+                  {dataLoaded && variant === "table" && (
                     <div className="rc-desktop-view" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.bg }}>
                         <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
@@ -9663,7 +10131,7 @@ export default function App({ user }) {
                           const renewUrgent = renewDays <= 14;
                           const delta = stubDelta(c.name);
                           return (
-                            <div key={c.id} className="row-hover" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
+                            <div key={c.id} className="row-hover-neutral" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
                               <div style={{ width: 32, display: "flex", alignItems: "center" }}>
                                 <ScoreRing2 client={c} size={28} />
                               </div>
@@ -9678,9 +10146,15 @@ export default function App({ user }) {
                               </div>
                               <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 3 }}>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums" }}>{c.ret || 0}</span>
-                                {delta !== 0 && (
-                                  <span style={{ fontSize: 10, fontWeight: 500, color: delta > 0 ? C.retGood : C.retWarn }}>
-                                    {delta > 0 ? "+" : ""}{delta}
+                                {/* Treatment B — threshold-gated, asymmetric. */}
+                                {Math.abs(delta) >= 3 && delta < 0 && (
+                                  <span style={{ background: "#FBE6DE", color: C.retWarn, fontSize: 9.5, fontWeight: 700, padding: "1px 5px", borderRadius: 999, fontVariantNumeric: "tabular-nums" }}>
+                                    ↓{Math.abs(delta)}
+                                  </span>
+                                )}
+                                {Math.abs(delta) >= 3 && delta > 0 && (
+                                  <span style={{ color: C.retGood, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                                    +{delta}
                                   </span>
                                 )}
                               </div>
@@ -9728,7 +10202,7 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {variant === "columns" && (
+                  {dataLoaded && variant === "columns" && (
                     /* Columns view — five retention-stage buckets side-by-side.
                        The buckets are the whole point of this view (Thriving →
                        Healthy → Watch → At risk → Critical), so we don't let
@@ -9806,7 +10280,7 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {variant === "heatmap" && (
+                  {dataLoaded && variant === "heatmap" && (
                     <div className="rc-desktop-view" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
                       {filteredClients.map(c => {
                         const trend = stubTrend(c);
@@ -9861,10 +10335,34 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {filteredClients.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.primaryGhost, border: "1px dashed " + C.border, borderRadius: 14 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>No clients match.</div>
-                      <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>Try clearing the search or switching sort.</div>
+                  {!dataLoaded && (
+                    <SkeletonClientList rows={5} />
+                  )}
+
+                  {dataLoaded && filteredClients.length === 0 && activeClients.length === 0 && (
+                    <EmptyState
+                      icon="clients"
+                      headline="Your client book starts here."
+                      body="Add the people you work with and Retayned starts reading the room — drift, cadence, who needs a check-in. Most users add 10 to start."
+                      cta={{ label: "Add Client", onClick: () => { setShowAddClient(true); setShowImport(false); } }}
+                      secondaryCta={{ label: "Import Clients", onClick: () => { setShowImport(true); setShowAddClient(false); } }}
+                    />
+                  )}
+
+                  {dataLoaded && filteredClients.length === 0 && activeClients.length > 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12 }}>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 6 }}>
+                        No clients match {clientSearch ? `"${clientSearch}"` : "your filters"}.
+                      </div>
+                      <div style={{ fontSize: 14, color: C.textSec }}>
+                        Check the spelling, or{" "}
+                        <span
+                          onClick={() => setClientSearch("")}
+                          className="rt-purple-link"
+                          style={{ cursor: "pointer", paddingBottom: 1 }}
+                        >clear the search</span>
+                        {" "}to see your full list.
+                      </div>
                     </div>
                   )}
                 </div>
@@ -10518,6 +11016,24 @@ export default function App({ user }) {
 
           return (
             <div style={{ width: "100%" }}>
+              {!dataLoaded && (
+                <div style={{ width: "100%", padding: "20px 4px" }}>
+                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 20px", letterSpacing: -0.4, color: C.text, padding: "0 4px" }}>Health</h1>
+                  <SkeletonHealthQueue rows={3} />
+                </div>
+              )}
+              {dataLoaded && totalClients === 0 && (
+                <div style={{ width: "100%", padding: "20px 4px" }}>
+                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 20px", letterSpacing: -0.4, color: C.text, padding: "0 4px" }}>Health</h1>
+                  <EmptyState
+                    icon="health"
+                    headline="No health checks yet."
+                    body="A health check is five quick questions — trust, expectations, communication. Scores update from your answers, so the model gets sharper the more you do."
+                    cta={{ label: "Start First Check", onClick: () => goTo("clients") }}
+                  />
+                </div>
+              )}
+              {dataLoaded && totalClients > 0 && (<>
               {/* STATUS BAND */}
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -10994,6 +11510,7 @@ export default function App({ user }) {
                   />
                 </div>
               </div>
+              </>)}
             </div>
           );
         })()}
@@ -11926,6 +12443,34 @@ export default function App({ user }) {
           // ─── Render ─────────────────────────────────────────────────────
           return (
             <div style={{ width: "100%" }}>
+              {!dataLoaded && (
+                <div style={{ width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Word of mouth · this quarter</div>
+                      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Referrals</h1>
+                    </div>
+                  </div>
+                  <SkeletonClientList rows={4} />
+                </div>
+              )}
+              {dataLoaded && totalRefs === 0 && (
+                <>
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Word of mouth · this quarter</div>
+                      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Referrals</h1>
+                    </div>
+                  </div>
+                  <EmptyState
+                    icon="referrals"
+                    headline="No referrals tracked yet."
+                    body="Log who sent you to whom and Retayned starts surfacing your quiet sources — the clients quietly compounding your book without ever being asked."
+                    cta={{ label: "Log Referral", onClick: () => setRefForm(true) }}
+                  />
+                </>
+              )}
+              {dataLoaded && totalRefs > 0 && (<>
               {/* STATUS BAND */}
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -12267,6 +12812,7 @@ export default function App({ user }) {
                   </div>
                 </div>
               )}
+              </>)}
             </div>
           );
           } catch (err) {
@@ -12467,6 +13013,34 @@ export default function App({ user }) {
           // ─── Render ─────────────────────────────────────────────────────
           return (
             <div style={{ width: "100%" }}>
+              {!dataLoaded && (
+                <div style={{ width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
+                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Past clients · one-offs · kept warm</div>
+                      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Rolodex</h1>
+                    </div>
+                  </div>
+                  <SkeletonClientList rows={4} />
+                </div>
+              )}
+              {dataLoaded && rolodex.length === 0 && (
+                <>
+                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
+                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Past clients · one-offs · kept warm</div>
+                      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Rolodex</h1>
+                    </div>
+                  </div>
+                  <EmptyState
+                    icon="rolodex"
+                    headline="Your Rolodex is empty."
+                    body="The people behind the logos — the buyer, the operator, the assistant who actually forwards the email. Adding contacts lets Rai narrate at the human level, not just the account level."
+                    cta={{ label: "Add Contact", onClick: () => setShowAddRolodex(true) }}
+                  />
+                </>
+              )}
+              {dataLoaded && rolodex.length > 0 && (<>
               {/* STATUS BAND */}
               <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
@@ -12771,6 +13345,7 @@ export default function App({ user }) {
                   </div>
                 </div>
               )}
+              </>)}
             </div>
           );
           } catch (err) {
