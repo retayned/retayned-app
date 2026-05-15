@@ -664,6 +664,262 @@ function localYmd(d = new Date()) {
 }
 
 // ============================================================
+// DESIGN LANGUAGE PRIMITIVES
+// ============================================================
+// The polish layer expressed as components, not patches. Every
+// button/card/pill/toggle in the app goes through these. The
+// styling lives in ONE place. To change the look of every button
+// in the app, edit Btn — not 200 inline styles.
+//
+// Available primitives:
+//   Btn      — variant: "primary" | "primaryGreen" | "secondary" | "ghost"
+//                       | "icon" | "danger"
+//              size:    "sm" | "md" | "lg"
+//   Card     — surface with soft shadow + hover lift (optional)
+//   Pill     — small status/info pill with soft shadow
+//   Toggle   — segmented control with lifted active state
+//   IconBtn  — icon-only button with hover halo
+//
+// Pass-through: every primitive accepts `style` for one-off overrides,
+// `className` for additional class hooks, and standard event handlers.
+//
+// Design tokens used (all defined in :root, see THEME_CSS):
+//   --rt-grad-btn         purple gradient (light → dark)
+//   --rt-grad-btn-hover   purple gradient (hover state)
+//   --rt-grad-green-deep  deep-green gradient
+//   --rt-sh-purple        purple halo shadow
+//   --rt-sh-purple-hover  purple halo, intense
+//   --rt-sh-green-glow    green halo shadow
+//   --rt-sh-card          card shadow at rest
+//   --rt-sh-card-hover    card shadow on hover
+//   --rt-sh-row           row shadow at rest
+//   --rt-sh-row-hover     row shadow on hover
+//   --rt-ease-out         cubic-bezier(0.22, 1, 0.36, 1)
+//   --rt-ease-press       cubic-bezier(0.4, 0, 0.6, 1)
+// ============================================================
+
+function Btn({
+  variant = "secondary",
+  size = "md",
+  disabled = false,
+  onClick,
+  children,
+  style: styleOverride,
+  className: extraClass = "",
+  type = "button",
+  title,
+  ...rest
+}) {
+  const sizes = {
+    sm: { pad: "6px 12px", fs: 12, radius: 8, gap: 6 },
+    md: { pad: "9px 16px", fs: 13, radius: 10, gap: 7 },
+    lg: { pad: "11px 20px", fs: 14, radius: 12, gap: 8 },
+  };
+  const s = sizes[size] || sizes.md;
+  // variant → class on the button. The CSS below (in the global style
+  // block) handles all hover/active/disabled states uniformly.
+  const variantClass = "rt-btn rt-btn-" + variant;
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={variantClass + (extraClass ? " " + extraClass : "")}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: s.gap,
+        padding: s.pad,
+        fontSize: s.fs,
+        fontWeight: 600,
+        borderRadius: s.radius,
+        border: "none",
+        cursor: disabled ? "default" : "pointer",
+        fontFamily: "inherit",
+        whiteSpace: "nowrap",
+        userSelect: "none",
+        ...styleOverride,
+      }}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Card({
+  children,
+  hoverable = false,
+  padding = "16px",
+  style: styleOverride,
+  className: extraClass = "",
+  onClick,
+  ...rest
+}) {
+  return (
+    <div
+      className={"rt-card" + (hoverable ? " rt-card-hoverable" : "") + (extraClass ? " " + extraClass : "")}
+      onClick={onClick}
+      style={{
+        background: "#FFFFFF",
+        borderRadius: 12,
+        padding,
+        boxShadow: "var(--rt-sh-card)",
+        transition: "box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)",
+        ...styleOverride,
+      }}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Pill({
+  children,
+  tone = "neutral",      // neutral | purple | green | warn | danger | muted
+  size = "sm",
+  style: styleOverride,
+  className: extraClass = "",
+  ...rest
+}) {
+  const tones = {
+    neutral: { bg: "var(--rt-surface-warm)", fg: "var(--rt-text-sec)" },
+    purple:  { bg: "var(--rt-btn-light)",    fg: "#5B21B6" },
+    green:   { bg: "var(--rt-primary-soft, #E6EFE9)", fg: "#33543E" },
+    warn:    { bg: "#FAF1D6",                fg: "#B88B15" },
+    danger:  { bg: "#FBE6DE",                fg: "#C4432B" },
+    muted:   { bg: "transparent",            fg: "var(--rt-text-muted)" },
+  };
+  const t = tones[tone] || tones.neutral;
+  const sizes = {
+    xs: { pad: "1px 6px", fs: 10 },
+    sm: { pad: "3px 9px", fs: 11 },
+    md: { pad: "4px 11px", fs: 12 },
+  };
+  const s = sizes[size] || sizes.sm;
+  return (
+    <span
+      className={"rt-pill" + (extraClass ? " " + extraClass : "")}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: s.pad,
+        fontSize: s.fs,
+        fontWeight: 600,
+        fontVariantNumeric: "tabular-nums",
+        background: t.bg,
+        color: t.fg,
+        borderRadius: 999,
+        boxShadow: tone === "muted" ? "none" : "var(--rt-sh-xs)",
+        ...styleOverride,
+      }}
+      {...rest}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Toggle({
+  options = [],       // [{value, label, icon?}]
+  value,
+  onChange,
+  style: styleOverride,
+  className: extraClass = "",
+}) {
+  return (
+    <div
+      className={"rt-toggle" + (extraClass ? " " + extraClass : "")}
+      style={{
+        display: "inline-flex",
+        padding: 3,
+        background: "var(--rt-surface-warm)",
+        borderRadius: 999,
+        boxShadow: "var(--rt-sh-xs)",
+        ...styleOverride,
+      }}
+    >
+      {options.map(opt => {
+        const isActive = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange && onChange(opt.value)}
+            className={"rt-toggle-opt" + (isActive ? " is-active" : "")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 13px",
+              fontSize: 12,
+              fontWeight: 600,
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              transition: "all 180ms var(--rt-ease-out)",
+              ...(isActive
+                ? { background: "#FFFFFF", color: "var(--rt-text)", boxShadow: "var(--rt-sh-card)" }
+                : { background: "transparent", color: "var(--rt-text-muted)" }),
+            }}
+          >
+            {opt.icon}
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function IconBtn({
+  children,
+  onClick,
+  title,
+  size = 28,
+  tone = "neutral",  // neutral | purple
+  style: styleOverride,
+  className: extraClass = "",
+  ...rest
+}) {
+  const isPurple = tone === "purple";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={"rt-icon-btn" + (isPurple ? " rt-icon-btn-purple" : "") + (extraClass ? " " + extraClass : "")}
+      style={{
+        width: size,
+        height: size,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: isPurple ? "var(--rt-grad-btn)" : "transparent",
+        color: isPurple ? "#fff" : "var(--rt-text-sec)",
+        border: "none",
+        borderRadius: "50%",
+        cursor: "pointer",
+        boxShadow: isPurple ? "var(--rt-sh-purple)" : "none",
+        transition: "all 200ms var(--rt-ease-out)",
+        fontFamily: "inherit",
+        flexShrink: 0,
+        ...styleOverride,
+      }}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+
+// ============================================================
 // EmptyState — shared empty-state component
 // ============================================================
 // Used by Clients, Health, Rolodex, Referrals page-level emptiness.
@@ -824,7 +1080,7 @@ function EmptyState({ icon, headline, body, cta, secondaryCta }) {
         <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap", justifyContent: "center" }}>
           {cta && (
             <button
-              className="r-btn"
+              className="r-btn" data-tone="purple"
               onClick={cta.onClick}
               style={{
                 padding: "9px 16px", background: "#5B21B6", color: "#fff",
@@ -2832,18 +3088,14 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
   return (
     <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
       <div style={{
-        background: "var(--rt-grad-warm-card)",
-        border: "1px solid transparent",
+        background: C.card,
+        border: "1px solid " + C.borderLight,
         borderRadius: 14,
         overflow: "hidden",
-        boxShadow: "var(--rt-sh-card)",
+        boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
         display: "flex",
         flexDirection: "column",
-        transition: "box-shadow 200ms var(--rt-ease-out)",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-card-hover)"; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-card)"; }}
-      >
+      }}>
         {/* Masthead — beige (cream) gradient that auto-themes light/dark */}
         <div style={{
           padding: "16px 18px 14px",
@@ -5721,11 +5973,36 @@ export default function App({ user }) {
         @media (max-width: 768px) and (hover: hover) {
           .rt-band-sub-events:hover { background: rgba(0,0,0,0.04); border-radius: 4px; }
         }
-        .r-btn { transition: all 0.15s ease; cursor: pointer; }
+        /* ── LEGACY .r-btn — base motion + lift ────────────
+           Buttons that use .r-btn get hover lift + press scale. The
+           background gradient is applied via the data-tone="purple"
+           attribute on the element. To migrate an existing flat-purple
+           button to the gradient: add data-tone="purple" and drop the
+           inline background:C.btn. */
+        .r-btn { transition: all 200ms var(--rt-ease-out); cursor: pointer; }
         @media (hover: hover) {
-          .r-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(91,33,182,0.18); }
+          .r-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+          }
         }
-        .r-btn:active { transform: scale(0.98); }
+        .r-btn:active:not(:disabled) { transform: scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+        .r-btn[data-tone="purple"] {
+          background: var(--rt-grad-btn) !important;
+          color: #fff !important;
+          box-shadow: var(--rt-sh-purple) !important;
+        }
+        .r-btn[data-tone="purple"]:hover:not(:disabled) {
+          background: var(--rt-grad-btn-hover) !important;
+          box-shadow: var(--rt-sh-purple-hover) !important;
+        }
+        .r-btn[data-tone="green"] {
+          background: var(--rt-grad-green-deep) !important;
+          color: #fff !important;
+          box-shadow: var(--rt-sh-green-glow) !important;
+        }
+        .r-btn[data-tone="green"]:hover:not(:disabled) {
+          box-shadow: 0 0 0 1px rgba(51,84,62,0.18), 0 6px 18px rgba(51,84,62,0.28) !important;
+        }
         .row-hover { transition: background 0.1s; cursor: pointer; }
         .row-hover:hover { background: ${C.primarySoft}; }
         /* Neutral row-hover variant — for table rows where green is too
@@ -5734,90 +6011,182 @@ export default function App({ user }) {
         .row-hover-neutral { transition: background 0.1s; cursor: pointer; }
         .row-hover-neutral:hover { background: rgba(0,0,0,0.03); }
 
-        /* ────────────────── POLISH LAYER ──────────────────
-           Reusable classes applied across the Today page. Approach:
-           - rt-lift:        shadow-sm → shadow-md, translateY(-1px) on hover, scale(0.97) on press
-           - rt-btn-grad:    purple gradient + purple halo + lift
-           - rt-btn-grad-green: deep-green gradient + green halo + lift
-           - rt-chk:         checkbox with hover halo and animated check-in
-           - rt-rai-pill:    Ask Rai-style purple gradient pill
-           - rt-task-row:    task row card with shadow-row → shadow-row-hover, lift
-           - rt-rai-boost:   client-of-the-day rail (purple inset bar + ✦ medallion)
-           Motion is uniform: 200ms cubic-bezier(0.22, 1, 0.36, 1) on hover,
-           80ms ease on press. All from the same set of CSS variables. */
-        .rt-lift {
-          transition: box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out);
-        }
-        .rt-lift:hover { transform: translateY(-1px); }
-        .rt-lift:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+        /* ════════════════════════════════════════════════════
+           DESIGN LANGUAGE — single source of truth.
+           Every Btn / Card / Pill / Toggle / IconBtn renders
+           through these rules. The primitives in App.jsx (Btn,
+           Card, Pill, Toggle, IconBtn) attach the relevant class
+           and pass through user style overrides.
+           ════════════════════════════════════════════════════ */
 
-        .rt-btn-grad {
-          background: var(--rt-grad-btn);
-          color: #fff;
-          border: none;
-          box-shadow: var(--rt-sh-purple);
+        /* ── BUTTONS ─────────────────────────────────────── */
+        .rt-btn {
           transition: background 200ms var(--rt-ease-out),
                       box-shadow 200ms var(--rt-ease-out),
+                      color 200ms var(--rt-ease-out),
                       transform 200ms var(--rt-ease-out);
-          cursor: pointer;
         }
-        .rt-btn-grad:hover { background: var(--rt-grad-btn-hover); box-shadow: var(--rt-sh-purple-hover); transform: translateY(-1px); }
-        .rt-btn-grad:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
-        .rt-btn-grad:disabled { background: var(--rt-surface-warm); color: var(--rt-text-muted); box-shadow: none; cursor: default; transform: none; }
+        .rt-btn:active:not(:disabled) {
+          transform: translateY(0) scale(0.97);
+          transition: transform 80ms var(--rt-ease-press) !important;
+        }
 
-        .rt-btn-grad-green {
+        /* Primary — purple gradient pill with halo */
+        .rt-btn-primary {
+          background: var(--rt-grad-btn);
+          color: #fff;
+          box-shadow: var(--rt-sh-purple);
+        }
+        .rt-btn-primary:hover:not(:disabled) {
+          background: var(--rt-grad-btn-hover);
+          box-shadow: var(--rt-sh-purple-hover);
+          transform: translateY(-1px);
+        }
+        .rt-btn-primary:disabled {
+          background: var(--rt-surface-warm);
+          color: var(--rt-text-muted);
+          box-shadow: none;
+        }
+
+        /* PrimaryGreen — deep-green gradient with green glow */
+        .rt-btn-primaryGreen {
           background: var(--rt-grad-green-deep);
           color: #fff;
-          border: none;
           box-shadow: var(--rt-sh-green-glow);
+        }
+        .rt-btn-primaryGreen:hover:not(:disabled) {
+          box-shadow: 0 0 0 1px rgba(51,84,62,0.18), 0 6px 18px rgba(51,84,62,0.28);
+          transform: translateY(-1px);
+        }
+        .rt-btn-primaryGreen:disabled {
+          background: var(--rt-surface-warm);
+          color: var(--rt-text-muted);
+          box-shadow: none;
+        }
+
+        /* Secondary — white card with soft shadow */
+        .rt-btn-secondary {
+          background: #FFFFFF;
+          color: var(--rt-text);
+          box-shadow: var(--rt-sh-card);
+        }
+        .rt-btn-secondary:hover:not(:disabled) {
+          box-shadow: var(--rt-sh-card-hover);
+          transform: translateY(-1px);
+        }
+
+        /* Ghost — transparent, no shadow, hover gets soft fill */
+        .rt-btn-ghost {
+          background: transparent;
+          color: var(--rt-text-sec);
+          box-shadow: none;
+        }
+        .rt-btn-ghost:hover:not(:disabled) {
+          background: rgba(0,0,0,0.04);
+          color: var(--rt-text);
+        }
+
+        /* Danger — red outline that turns into filled red on hover */
+        .rt-btn-danger {
+          background: #FBE6DE;
+          color: #C4432B;
+          box-shadow: var(--rt-sh-xs);
+        }
+        .rt-btn-danger:hover:not(:disabled) {
+          background: #C4432B;
+          color: #fff;
+          box-shadow: 0 2px 6px rgba(196,67,43,0.32);
+          transform: translateY(-1px);
+        }
+
+        /* ── ICON BUTTON ─────────────────────────────────── */
+        .rt-icon-btn { transition: all 200ms var(--rt-ease-out); }
+        .rt-icon-btn:hover {
+          background: rgba(0,0,0,0.04);
+          transform: translateY(-1px) scale(1.05);
+        }
+        .rt-icon-btn:active { transform: translateY(0) scale(0.95); transition: transform 80ms var(--rt-ease-press); }
+        .rt-icon-btn-purple:hover {
+          background: var(--rt-grad-btn-hover) !important;
+          box-shadow: var(--rt-sh-purple-hover) !important;
+          transform: translateY(-1px) scale(1.05);
+        }
+
+        /* ── CARD ────────────────────────────────────────── */
+        .rt-card-hoverable {
+          cursor: pointer;
+        }
+        .rt-card-hoverable:hover {
+          box-shadow: var(--rt-sh-card-hover) !important;
+          transform: translateY(-1px);
+        }
+        .rt-card-hoverable:active {
+          transform: translateY(0) scale(0.995);
+          transition: transform 80ms var(--rt-ease-press) !important;
+        }
+
+        /* ── TOGGLE — segmented control ──────────────────── */
+        .rt-toggle-opt:not(.is-active):hover {
+          color: var(--rt-text-sec) !important;
+          background: rgba(0,0,0,0.03) !important;
+        }
+
+        /* ── PILL — generic small status/info chip ───────── */
+        /* Most pills are presentational. If interactive, wrap in a button. */
+
+        /* ── ROW (task row, client row, queue row) ──────── */
+        /* Generic row that gets the same treatment as a card but
+           with the geometry of a horizontal list item. */
+        .rt-row {
           transition: box-shadow 200ms var(--rt-ease-out),
                       transform 200ms var(--rt-ease-out);
-          cursor: pointer;
         }
-        .rt-btn-grad-green:hover { box-shadow: 0 0 0 1px rgba(51,84,62,0.18), 0 6px 18px rgba(51,84,62,0.28); transform: translateY(-1px); }
-        .rt-btn-grad-green:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
-
-        .rt-btn-soft {
-          background: var(--rt-card);
-          border: none;
-          box-shadow: var(--rt-sh-card);
-          transition: box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out), color 200ms var(--rt-ease-out);
-          cursor: pointer;
+        .rt-row:hover:not(.is-done) {
+          box-shadow: var(--rt-sh-row-hover) !important;
+          transform: translateY(-1px);
         }
-        .rt-btn-soft:hover { box-shadow: var(--rt-sh-card-hover); transform: translateY(-1px); }
-        .rt-btn-soft:active { transform: translateY(0) scale(0.97); transition: transform 80ms var(--rt-ease-press); }
+        .rt-row:hover .rt-dismiss { opacity: 1 !important; }
 
-        /* Animated checkbox check-in */
-        @keyframes rtChkIn {
-          from { transform: scale(0) rotate(-12deg); opacity: 0; }
-          to { transform: scale(1) rotate(0); opacity: 1; }
+        /* ── COMPOSER ────────────────────────────────────── */
+        .rt-composer {
+          transition: box-shadow 200ms var(--rt-ease-out);
         }
-        .rt-chk-mark { animation: rtChkIn 280ms var(--rt-ease-out) both; }
-
-        /* Pulsing NOW dot on calendar */
-        @keyframes rtNowPulse {
-          0%, 100% { box-shadow: 0 0 0 1px rgba(91,33,182,0.18), 0 2px 8px rgba(91,33,182,0.28); }
-          50%      { box-shadow: 0 0 0 1px rgba(91,33,182,0.24), 0 2px 14px rgba(91,33,182,0.42); }
+        .rt-composer:focus-within {
+          box-shadow: var(--rt-sh-card-hover), 0 0 0 3px rgba(91,33,182,0.10) !important;
         }
-        .rt-now-pulse { animation: rtNowPulse 2.4s ease-in-out infinite; }
 
-        /* Daybook saved-indicator pulse */
-        @keyframes rtSavePulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.45; }
+        /* ── CHECKBOX ────────────────────────────────────── */
+        .rt-row .rt-check {
+          transition: background 240ms ease, border-color 240ms ease,
+                      box-shadow 200ms var(--rt-ease-out),
+                      transform 280ms cubic-bezier(.34,1.56,.64,1);
         }
-        .rt-save-pulse { animation: rtSavePulse 2s ease-in-out infinite; }
+        .rt-row:not(.is-done) .rt-check:hover {
+          border-color: #558B68 !important;
+          box-shadow: 0 0 0 4px var(--rt-primary-soft, #E6EFE9);
+        }
+        .rt-row .rt-check svg {
+          opacity: 0;
+          transform: scale(0.4);
+          transition: opacity 220ms ease 60ms, transform 320ms cubic-bezier(.34,1.56,.64,1) 60ms;
+        }
+        .rt-row.is-done .rt-check {
+          background: var(--rt-grad-green-deep) !important;
+          border-color: #33543E !important;
+          box-shadow: var(--rt-sh-green-glow);
+          transform: scale(1);
+        }
+        .rt-row.is-done .rt-check svg { opacity: 1; transform: scale(1); }
 
-        /* Rai client-of-the-day rail — applied to every task whose client
-           is today's Rai pick. Inset 2px purple bar on the left + small
-           ✦ medallion pinned just outside the left edge. Quiet but
-           unmistakable: the user can scan a list and know which tasks
-           belong to the boosted client without reading. */
+        /* ── RAI CLIENT-OF-THE-DAY RAIL ──────────────────── */
+        /* Applied via class .rt-rai-boost to every task whose client is
+           today's Rai pick. Purple inset bar on the left + ✦ medallion
+           just outside the left edge. Quiet but unmistakable. */
         .rt-rai-boost {
           box-shadow: var(--rt-sh-row), inset 2px 0 0 0 #5B21B6 !important;
           position: relative;
         }
-        .rt-rai-boost:hover {
+        .rt-rai-boost:hover:not(.is-done) {
           box-shadow: var(--rt-sh-row-hover), inset 2px 0 0 0 #5B21B6 !important;
         }
         .rt-rai-boost::before {
@@ -5841,6 +6210,22 @@ export default function App({ user }) {
           z-index: 2;
           pointer-events: none;
         }
+
+        /* ── ANIMATIONS ──────────────────────────────────── */
+        @keyframes rtChkIn {
+          from { transform: scale(0) rotate(-12deg); opacity: 0; }
+          to { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        @keyframes rtNowPulse {
+          0%, 100% { box-shadow: 0 0 0 1px rgba(91,33,182,0.18), 0 2px 8px rgba(91,33,182,0.28); }
+          50%      { box-shadow: 0 0 0 1px rgba(91,33,182,0.24), 0 2px 14px rgba(91,33,182,0.42); }
+        }
+        .rt-now-pulse { animation: rtNowPulse 2.4s ease-in-out infinite; }
+        @keyframes rtSavePulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.45; }
+        }
+        .rt-save-pulse { animation: rtSavePulse 2s ease-in-out infinite; }
 
         /* Composer chip auto-fill pulse — fires when parseComposer
            catches a typed phrase and auto-fills the Client / Worker / Due
@@ -6006,61 +6391,17 @@ export default function App({ user }) {
           0%   { transform: translate(0,0) rotate(0); opacity: 1; }
           100% { transform: translate(var(--tx), 70vh) rotate(var(--rot)); opacity: 0; }
         }
-        .rt-row:hover .rt-dismiss { opacity: 1 !important; }
-        /* Composer "Add task" submit — gradient + lift on hover */
-        .rt-add-task-btn:not(:disabled):hover {
-          background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-purple-hover) !important;
-          transform: translateY(-1px);
-        }
-        .rt-add-task-btn:not(:disabled):active {
-          transform: translateY(0) scale(0.96);
-          transition: transform 80ms var(--rt-ease-press) !important;
-        }
-        /* Polish layer: rows lift via shadow on hover (no green tint). The
-           !important is required because the row's box-shadow is set inline
-           and inline beats CSS by default. Press state scales down 97%. */
-        .rt-row:hover {
-          box-shadow: var(--rt-sh-row-hover) !important;
-          transform: translateY(-1px) !important;
-        }
-        .rt-row.is-done:hover {
-          transform: none !important;
-        }
-        .rt-row:active {
-          transform: translateY(0) scale(0.98) !important;
-          transition: transform 80ms var(--rt-ease-press) !important;
-        }
-        /* Composer focus-within — soft purple glow when the user is creating a task */
-        .rt-composer { transition: border-color 200ms ease, box-shadow 200ms var(--rt-ease-out); }
-        .rt-composer:focus-within {
-          box-shadow: var(--rt-sh-card-hover), 0 0 0 3px rgba(91,33,182,0.10) !important;
-        }
+        /* (rt-row, rt-composer, rt-check, rt-add-task-btn rules consolidated
+           above in DESIGN LANGUAGE block — these CSS rules are not duplicated
+           here. The .rt-add-task-btn class points to .rt-btn-primary semantics
+           via JSX; see App.jsx composer JSX for the migration.) */
         /* ASMR completion — done state styling */
         .rt-row.is-done {
           background: ${C.bg} !important;
           border-color: ${C.borderLight} !important;
           transition: background 320ms ease, border-color 320ms ease;
         }
-        .rt-row .rt-check {
-          transition: background 240ms ease, border-color 240ms ease, box-shadow 200ms var(--rt-ease-out), transform 280ms cubic-bezier(.34,1.56,.64,1);
-        }
-        .rt-row:not(.is-done) .rt-check:hover {
-          border-color: var(--rt-primary-light, #558B68) !important;
-          box-shadow: 0 0 0 4px var(--rt-primary-soft, #E6EFE9);
-        }
-        .rt-row .rt-check svg {
-          opacity: 0;
-          transform: scale(0.4);
-          transition: opacity 220ms ease 60ms, transform 320ms cubic-bezier(.34,1.56,.64,1) 60ms;
-        }
-        .rt-row.is-done .rt-check {
-          background: var(--rt-grad-green-deep) !important;
-          border-color: #33543E !important;
-          box-shadow: var(--rt-sh-green-glow);
-          transform: scale(1);
-        }
-        .rt-row.is-done .rt-check svg { opacity: 1; transform: scale(1); }
+        /* (rt-check rules consolidated above in DESIGN LANGUAGE block) */
         .rt-row .rt-task-title {
           position: relative;
           display: inline-block;
@@ -6507,7 +6848,7 @@ export default function App({ user }) {
             affecting nav items or the Portfolio widget at the bottom. */}
         {page === "coach" ? (
           <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            <button className="r-btn" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: C.btn, color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
+            <button className="r-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: C.btn, color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
               New Chat
             </button>
             {raiConvoList.length > 0 && (() => {
@@ -7479,7 +7820,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, border: "1px solid transparent", borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", transition: "box-shadow 200ms var(--rt-ease-out)" }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative" }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -8212,37 +8553,19 @@ export default function App({ user }) {
                     <button
                       onClick={submitComposer}
                       disabled={!newTask.trim()}
-                      className="rt-add-task-btn"
+                      className="rt-add-task-btn rt-btn rt-btn-primary"
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
                         padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
                         height: 28,
-                        background: newTask.trim() ? "var(--rt-grad-btn)" : "#DBD0EF",
-                        color: "#fff",
                         borderRadius: 7,
                         fontSize: 12,
                         fontWeight: 600,
-                        border: "none",
-                        cursor: newTask.trim() ? "pointer" : "default",
                         fontFamily: "inherit",
                         marginLeft: "auto",
                         flexShrink: 0,
-                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
-                        transition: "transform 200ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), background 200ms ease, padding 200ms ease",
-                      }}
-                      onMouseEnter={e => {
-                        if (newTask.trim()) {
-                          e.currentTarget.style.background = C.btnHover;
-                          e.currentTarget.style.transform = "translateY(-1px)";
-                        }
-                      }}
-                      onMouseLeave={e => {
-                        if (newTask.trim()) {
-                          e.currentTarget.style.background = C.btn;
-                          e.currentTarget.style.transform = "translateY(0)";
-                        }
                       }}
                     >
                       Add Task
@@ -8756,15 +9079,14 @@ export default function App({ user }) {
                               display: "flex", alignItems: "center", gap: 12,
                               padding: "9px 14px",
                               background: C.card,
-                              border: isDragOver ? "1px solid " + C.btn : "1px solid transparent",
                               borderRadius: 12,
                               boxShadow: isDragOver ? "0 0 0 2px " + C.btnLight + ", var(--rt-sh-row-hover)" : "var(--rt-sh-row)",
                               opacity: isDragging ? 0.4 : 1,
                               cursor: isManual ? "grab" : "default",
                               transform: offset !== 0 ? `translateX(${offset}px)` : undefined,
                               transition: swipeStartX[t.id] != null
-                                ? "border-color 120ms, box-shadow 200ms var(--rt-ease-out), opacity 120ms"
-                                : "border-color 120ms, box-shadow 200ms var(--rt-ease-out), opacity 120ms, transform 200ms var(--rt-ease-out)",
+                                ? "box-shadow 200ms var(--rt-ease-out), opacity 120ms"
+                                : "box-shadow 200ms var(--rt-ease-out), opacity 120ms, transform 200ms var(--rt-ease-out)",
                               touchAction: swipeable ? "pan-y" : "auto",
                               position: "relative",
                               zIndex: 2,
@@ -9671,7 +9993,7 @@ export default function App({ user }) {
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = C.primary + "44"; }}
                     >Import Clients</button>
                   )}
-                  <button className="r-btn" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="purple" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
                     Add Client
                   </button>
                 </div>
@@ -9935,7 +10257,7 @@ export default function App({ user }) {
                 {/* Actions */}
                 {importPreview.filter(r => r.valid).length > 0 && (
                   <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                    <button className="r-btn" onClick={async () => {
+                    <button className="r-btn" data-tone="purple" onClick={async () => {
                       // BEFORE THIS FIX: import wrote only to local React state. Imported
                       // clients appeared in the list, then vanished on refresh because
                       // nothing was persisted to Supabase. Same exact failure mode as
@@ -10117,7 +10439,7 @@ export default function App({ user }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                      <button className="r-btn" onClick={() => { if (newClient.name && newClient.contact) setProfileStep(1); }} style={{ flex: 1, padding: "10px", background: newClient.name && newClient.contact ? C.btn : C.surface, color: newClient.name && newClient.contact ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: newClient.name && newClient.contact ? "pointer" : "default", fontFamily: "inherit" }}>Next: Relationship Profile</button>
+                      <button className="r-btn" data-tone="purple" onClick={() => { if (newClient.name && newClient.contact) setProfileStep(1); }} style={{ flex: 1, padding: "10px", background: newClient.name && newClient.contact ? C.btn : C.surface, color: newClient.name && newClient.contact ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: newClient.name && newClient.contact ? "pointer" : "default", fontFamily: "inherit" }}>Next: Relationship Profile</button>
                       <button onClick={() => { setShowAddClient(false); setProfileStep(0); setProfileScores({}); }} style={{ padding: "10px 14px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   </div>
@@ -10153,7 +10475,7 @@ export default function App({ user }) {
                           </div>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button onClick={() => setProfileStep(profileStep - 1)} style={{ padding: "8px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Back</button>
-                            <button className="r-btn" onClick={() => { if (current !== undefined && current !== null) { profileStep < 12 ? setProfileStep(profileStep + 1) : setProfileStep(13); } }} style={{ flex: 1, padding: "8px", background: current !== undefined && current !== null ? C.btn : C.surface, color: current !== undefined && current !== null ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: current !== undefined && current !== null ? "pointer" : "default", fontFamily: "inherit" }}>{profileStep < 12 ? "Next" : "Review"}</button>
+                            <button className="r-btn" data-tone="purple" onClick={() => { if (current !== undefined && current !== null) { profileStep < 12 ? setProfileStep(profileStep + 1) : setProfileStep(13); } }} style={{ flex: 1, padding: "8px", background: current !== undefined && current !== null ? C.btn : C.surface, color: current !== undefined && current !== null ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: current !== undefined && current !== null ? "pointer" : "default", fontFamily: "inherit" }}>{profileStep < 12 ? "Next" : "Review"}</button>
                           </div>
                         </div>
                       );
@@ -10188,7 +10510,7 @@ export default function App({ user }) {
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => setProfileStep(12)} style={{ padding: "10px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
-                      <button className="r-btn" onClick={submitNewClient} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add Client</button>
+                      <button className="r-btn" data-tone="purple" onClick={submitNewClient} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add Client</button>
                     </div>
                     <div style={{ fontSize: 10.5, color: C.textMuted, lineHeight: 1.45, marginTop: 10, textAlign: "center" }}>
                       By adding this client, you confirm you have the right to process their information for client management purposes.
@@ -11582,7 +11904,7 @@ export default function App({ user }) {
                               </div>
                             </div>
                             {!isOpen && (
-                              <button className="r-btn" style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{h.isFirstHC && h.due !== "Today" && h.overdue === 0 ? "Start early" : "Start"}</button>
+                              <button className="r-btn" data-tone="purple" style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{h.isFirstHC && h.due !== "Today" && h.overdue === 0 ? "Start early" : "Start"}</button>
                             )}
                           </div>
 
@@ -11817,7 +12139,7 @@ export default function App({ user }) {
                       <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Rai's Approach</div>
                       <p style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,.7)" }}>{c.approach}</p>
                     </div>
-                    <button className="r-btn" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: `Let's talk about getting a referral from ${c.contact} at ${c.name}. Here's what I'm thinking: ${c.approach}` }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai About This</button>
+                    <button className="r-btn" data-tone="purple" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: `Let's talk about getting a referral from ${c.contact} at ${c.name}. Here's what I'm thinking: ${c.approach}` }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai About This</button>
                   </div>
                 ))}
               </div>
@@ -11875,7 +12197,7 @@ export default function App({ user }) {
             <div style={{ background: C.raiGrad, borderRadius: 14, padding: "16px 18px", color: "#fff", marginTop: 20 }}>
               <div style={{ fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em", color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Rai</div>
               <p style={{ fontSize: 14, color: "rgba(255,255,255,.7)", lineHeight: 1.55 }}>Referral readiness is recalculated with every sweep. As relationships deepen and trust builds, clients move up the list. The best time to ask is when they're riding a win.</p>
-              <button className="r-btn" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: "Let's talk referral strategy. Who are you thinking about asking? I can help you find the right moment and the right words." }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai</button>
+              <button className="r-btn" data-tone="purple" onClick={() => { setPage("coach"); setAiMessages([{ role: "ai", text: "Let's talk referral strategy. Who are you thinking about asking? I can help you find the right moment and the right words." }]); }} style={{ width: "100%", marginTop: 10, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Talk to Rai</button>
             </div>
           </div>
         )}
@@ -12207,7 +12529,7 @@ export default function App({ user }) {
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   <button
-                    className="r-btn"
+                    className="r-btn" data-tone="purple"
                     onClick={() => { setNewWorkerName(""); setNewWorkerEmail(""); setNewWorkerRole(""); setAddWorkerOpen(true); }}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
@@ -12746,7 +13068,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
-                  <button className="r-btn" onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="purple" onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
                     Log Referral
                   </button>
                 </div>
@@ -13310,7 +13632,7 @@ export default function App({ user }) {
                     {referReady > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
                   </div>
                 </div>
-                <button className="r-btn" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
+                <button className="r-btn" data-tone="purple" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
                   <span style={{ whiteSpace: "nowrap" }}>New Contact</span>
                 </button>
               </div>
@@ -13843,7 +14165,7 @@ export default function App({ user }) {
                   </div>
                   <div style={{ marginTop: 12, fontSize: 12, color: C.textMuted }}>Last sweep: Today at 6:02 AM · {sweepData.clients_analyzed} clients</div>
                   <div style={{ fontSize: 12, color: C.textMuted }}>Next sweep: Tomorrow at 6:00 AM</div>
-                  <button className="r-btn" style={{ width: "100%", marginTop: 12, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Run Sweep Now</button>
+                  <button className="r-btn" data-tone="purple" style={{ width: "100%", marginTop: 12, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Run Sweep Now</button>
                 </div>
 
                 {/* Output Routing */}
@@ -13871,7 +14193,7 @@ export default function App({ user }) {
                       <div style={{ fontSize: 14, fontWeight: 600 }}>API Key</div>
                       <div style={{ fontSize: 12, color: C.textMuted }}>Use this key to authenticate API requests</div>
                     </div>
-                    <button className="r-btn" style={{ padding: "6px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Regenerate</button>
+                    <button className="r-btn" data-tone="purple" style={{ padding: "6px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Regenerate</button>
                   </div>
                   <div style={{ background: C.bg, borderRadius: 8, padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: C.textSec, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>sk_live_ret_••••••••••••••••••••a4f2</span>
@@ -14399,7 +14721,7 @@ export default function App({ user }) {
                     <div style={{ background: C.primarySoft, borderRadius: 12, padding: "16px", border: "1px solid " + C.primary + "33" }}>
                       <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be moved to your Rolodex for future tracking. Relationships change — this keeps the door open. Rai's memory of them will be cleared.</p>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button className="r-btn" onClick={async () => {
+                        <button className="r-btn" data-tone="purple" onClick={async () => {
                           // Build the rolodex row from the client being moved.
                           // Preserve as much context as possible — relationship
                           // history is the entire point of the Rolodex. None of
@@ -14494,7 +14816,7 @@ export default function App({ user }) {
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => { setClients(clients.filter(c => c.id !== sc.id));
                           clientsDb.hardDelete(sc.id); setSelectedClient(null); setRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Terminate Permanently</button>
-                        <button className="r-btn" onClick={() => setRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                        <button className="r-btn" data-tone="purple" onClick={() => setRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                       </div>
                     </div>
                   )}
@@ -14534,7 +14856,7 @@ export default function App({ user }) {
                             No profile set yet. Build one to help Rai understand this client.
                           </div>
                         )}
-                        <button className="r-btn" onClick={() => { setEditScores({ ...dims }); setEditingProfile(true); }} style={{ width: "100%", padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>
+                        <button className="r-btn" data-tone="purple" onClick={() => { setEditScores({ ...dims }); setEditingProfile(true); }} style={{ width: "100%", padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>
                           {Object.keys(dims).length > 0 ? "Edit Profile" : "Build Profile"}
                         </button>
                       </div>
@@ -14970,7 +15292,7 @@ export default function App({ user }) {
                               <span style={{ fontSize: 14, color: C.textSec }}>Make recurring (auto-adds each month)</span>
                             </div>
                             <div style={{ display: "flex", gap: 8 }}>
-                              <button className="r-btn" onClick={() => addItem(month)} style={{ flex: 1, padding: "10px", background: billingNewItem.description.trim() && billingNewItem.amount ? C.btn : C.surface, color: billingNewItem.description.trim() && billingNewItem.amount ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
+                              <button className="r-btn" data-tone="purple" onClick={() => addItem(month)} style={{ flex: 1, padding: "10px", background: billingNewItem.description.trim() && billingNewItem.amount ? C.btn : C.surface, color: billingNewItem.description.trim() && billingNewItem.amount ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
                               <button onClick={() => { setBillingAddOpen(false); setBillingNewItem({ description: "", amount: "", recurring: false }); }} style={{ padding: "10px 14px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
                           </div>
@@ -15231,7 +15553,7 @@ export default function App({ user }) {
                       </div>
                     )}
                     {!showReminderPicker ? (
-                      <button onClick={() => { setShowReminderPicker(true); setReminderDate(sr.reminder || ""); }} className="r-btn" style={{ width: "100%", padding: sr.reminder ? "12px" : "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 16, textAlign: sr.reminder ? "left" : "center" }}>
+                      <button onClick={() => { setShowReminderPicker(true); setReminderDate(sr.reminder || ""); }} className="r-btn" data-tone="purple" style={{ width: "100%", padding: sr.reminder ? "12px" : "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 16, textAlign: sr.reminder ? "left" : "center" }}>
                         {sr.reminder ? (
                           <div>
                             <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 2 }}>⏰ Reminder set</div>
@@ -15262,7 +15584,7 @@ export default function App({ user }) {
                         </div>
                         {reminderDate && <div style={{ fontSize: 14, color: C.primary, fontWeight: 600, marginBottom: 12 }}>Monday, {new Date(reminderDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>}
                         <div style={{ display: "flex", gap: 8 }}>
-                          <button className="r-btn" onClick={async () => {
+                          <button className="r-btn" data-tone="purple" onClick={async () => {
                             // Persist the reminder date to DB. Before this fix
                             // the reminder was only kept in local state and
                             // would disappear on refresh — silent data loss.
@@ -15315,7 +15637,7 @@ export default function App({ user }) {
                           <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This will remove {sr.client} from your Rolodex. No more check-in reminders, no more tracking. You can always add them back later.</p>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button onClick={() => { setRolodex(prev => prev.filter(x => x.id !== sr.id)); rolodexDb.delete(sr.id); setSelectedRolodex(null); setRolodexRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove</button>
-                            <button className="r-btn" onClick={() => setRolodexRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                            <button className="r-btn" data-tone="purple" onClick={() => setRolodexRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                           </div>
                         </div>
                       )}
@@ -15467,7 +15789,7 @@ export default function App({ user }) {
 
                 <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
                   <button onClick={() => setRefEditing(null)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                  <button className="r-btn" onClick={() => {
+                  <button className="r-btn" data-tone="purple" onClick={() => {
                     setRefs(prev => prev.map((x, idx) => (x.id || idx) === refEditing ? { ...x, to: refEditData.to, from: refEditData.from, status: refEditData.status, converted: refEditData.status === "converted" || refEditData.status === "closed", revenue: parseInt(refEditData.revenue) || 0, totalRevenue: parseInt(refEditData.totalRevenue) || 0 } : x));
                     // Persist
                     referralsDb.update(refEditing, {
