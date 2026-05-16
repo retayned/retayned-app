@@ -695,6 +695,55 @@ function localYmd(d = new Date()) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// ─────────────────────────────────────────────────────────────
+// TZ-AWARE MIDNIGHT (post-May-2026 fix)
+//
+// Background: previously, the frontend used `setHours(0,0,0,0)` for the
+// midnight rollover cutoff and the recurring-task reset cutoff. That
+// reads the BROWSER's wall clock, which can drift from the user's stored
+// `profiles.timezone` — e.g. Chrome holding a stale resolvedOptions TZ
+// after macOS changes its clock. Drift caused the recurring-task reset
+// to fire at the wrong time (22:00 MDT instead of 00:00 MDT) and reset
+// completed recurring tasks back to un-done.
+//
+// These helpers anchor to a passed-in IANA TZ (canonically the user's
+// `profiles.timezone`), independent of whatever the browser thinks.
+// ─────────────────────────────────────────────────────────────
+
+// Minutes that local-tz is AHEAD of UTC at the given instant.
+// e.g. America/Denver in MDT → -360 (six hours behind UTC).
+// Handles DST automatically because we ask Intl for the offset AT a
+// specific instant, not in the abstract.
+function tzOffsetMinutes(tz, atDate) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(atDate);
+  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+  // Some engines emit "24" for midnight under hour12:false. Coerce.
+  const h = parseInt(p.hour, 10) % 24;
+  const localAsUtc = Date.UTC(+p.year, +p.month - 1, +p.day, h, +p.minute, +p.second);
+  return Math.round((localAsUtc - atDate.getTime()) / 60000);
+}
+
+// UTC instant for local midnight in `tz`, `daysAhead` from the local day
+// containing `atDate`.
+//   daysAhead = 0 → most recent local midnight (already passed, today's start)
+//   daysAhead = 1 → upcoming local midnight (tomorrow's start)
+// DST-safe: refines the offset using the offset AT the candidate instant
+// so the 23-hour and 25-hour DST-transition days resolve correctly.
+function tzMidnightInstant(tz, atDate = new Date(), daysAhead = 0) {
+  const offsetMin = tzOffsetMinutes(tz, atDate);
+  const localMs = atDate.getTime() + offsetMin * 60000;
+  const localMidnightMs = Math.floor(localMs / 86400000) * 86400000 + daysAhead * 86400000;
+  let candidateUtcMs = localMidnightMs - offsetMin * 60000;
+  const candidateOffset = tzOffsetMinutes(tz, new Date(candidateUtcMs));
+  if (candidateOffset !== offsetMin) {
+    candidateUtcMs = localMidnightMs - candidateOffset * 60000;
+  }
+  return candidateUtcMs;
+}
+
 // ============================================================
 // Skeleton loaders — row-shaped placeholders for initial load
 // ============================================================
@@ -3633,6 +3682,13 @@ export default function App({ user }) {
   // so it stays dismissed across refreshes/devices. The Settings →
   // Integrations row is unaffected — it always offers the connection.
   const [googleCalPromptDismissed, setGoogleCalPromptDismissed] = useState(false);
+  // User's IANA timezone, sourced from profiles.timezone. The single source
+  // of truth for any local-day math in the frontend (midnight rollover,
+  // recurring-task reset cutoff). Falls back to the device's detected TZ
+  // ONLY until the profile loads — never overwrites a stored value from
+  // the device (that's how the Eastern-vs-Denver drift bug happened pre-fix).
+  // null means "not loaded yet"; effects that depend on it must guard.
+  const [userTimezone, setUserTimezone] = useState(null);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -4475,12 +4531,17 @@ export default function App({ user }) {
       //     active Today list.
       //   - Open tasks (not done) → preserved regardless of age (carry forward)
       //
-      // Cutoff is today at midnight local (00:00). Any recurring task
-      // completed before midnight resets; any non-recurring task completed
-      // before midnight soft-clears from the active Today view.
-      const now = new Date();
-      const cutoff = new Date(now);
-      cutoff.setHours(0, 0, 0, 0);
+      // Cutoff is today at midnight in the user's STORED timezone
+      // (profiles.timezone), NOT the device's wall clock. Pre-fix this used
+      // setHours(0,0,0,0), which read the browser's TZ; a stale browser TZ
+      // could fire this filter at 22:00 MDT (Eastern's midnight) and reset
+      // recurring tasks 2 hours early. We now anchor to the stored TZ and
+      // fall back to device-local only while the profile hasn't loaded —
+      // and never persist that fallback.
+      const cutoffMs = userTimezone
+        ? tzMidnightInstant(userTimezone, new Date(), 0)
+        : (() => { const c = new Date(); c.setHours(0, 0, 0, 0); return c.getTime(); })();
+      const cutoff = new Date(cutoffMs);
 
       // Recurring + done + completed before cutoff → reset to incomplete
       const toReset = taskRes.data.filter(t =>
@@ -4628,7 +4689,7 @@ export default function App({ user }) {
     }
 
     setDataLoaded(true);
-  }, [user]);
+  }, [user, userTimezone]);
 
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -4884,29 +4945,43 @@ export default function App({ user }) {
   }, [user, rankMode, raiState, raiPicks, tasks, clients, todayDismissed]);
 
 
-  // Sync user's IANA timezone to the profiles table once per session.
-  // Used by the Observer cron and any future server-side scheduling that
-  // needs to anchor "today" / "this week" to the user's local clock instead
-  // of UTC. Only writes if the detected tz differs from what's stored
-  // (avoids unnecessary writes on every load).
+  // Hydrate profile-derived state: timezone, Google Cal prompt dismissal.
+  //
+  // Timezone policy (post-May-2026 fix): profiles.timezone is the single
+  // source of truth for all local-day math (Rai sweep gate, frontend
+  // midnight rollover, recurring-task reset cutoff). We SEED it from the
+  // device's detected TZ exactly once — when the column is null/empty —
+  // and never overwrite a stored value from the device after that. The
+  // prior behavior auto-wrote on every session, which let a stale browser
+  // TZ (e.g. Chrome holding an Eastern resolvedOptions across a macOS
+  // clock change) silently flip profiles.timezone hours-at-a-time and
+  // corrupt both the overnight Rai pick AND the local midnight cutoff.
+  // Users can change their stored TZ via Settings (separate UI path).
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     (async () => {
       try {
-        const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
         const profRes = await profileDb.get(user.id);
         if (cancelled) return;
-        // Hydrate the Google Calendar prompt dismissal flag. Defaults to
-        // false (show the prompt) if the column or row is missing.
         setGoogleCalPromptDismissed(!!profRes?.data?.google_cal_prompt_dismissed);
-        const storedTz = profRes?.data?.timezone || 'UTC';
-        if (detectedTz && detectedTz !== storedTz) {
+        const storedTz = profRes?.data?.timezone || null;
+        if (storedTz) {
+          setUserTimezone(storedTz);
+        } else {
+          // First-time seed only. After this write the column is non-null
+          // and this branch never runs again for this user.
+          const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+          setUserTimezone(detectedTz);
           await profileDb.update(user.id, { timezone: detectedTz });
         }
       } catch (e) {
-        // Non-blocking — failure here just means observations/etc fall back to UTC
-        console.warn('Timezone sync failed:', e);
+        // Non-blocking — fall back to device TZ in-memory only. Do NOT
+        // write the fallback to the database; that's how drift happens.
+        console.warn('Timezone hydrate failed:', e);
+        if (!cancelled) {
+          setUserTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -4916,17 +4991,25 @@ export default function App({ user }) {
   // tasks re-bucket (Today → Overdue, Tomorrow → Today, etc), Rai's pick
   // and the calendar all flip together at 00:00.
   // Fires even if the tab stays open across midnight — ensures no one sees stale state.
+  //
+  // Anchored to the user's STORED timezone (profiles.timezone), not the
+  // browser's wall clock — see notes on tzMidnightInstant for why.
+  // While userTimezone is still null (very brief, just on first mount),
+  // fall back to device-local midnight so the effect still fires reasonably.
   useEffect(() => {
     if (!user) return;
     let timeoutId;
     const scheduleNextMidnight = () => {
       const now = new Date();
-      const nextMidnight = new Date(now);
-      nextMidnight.setHours(0, 0, 0, 0);
-      // setHours(0,...) gives midnight at the START of today — already past.
-      // Always advance to the next midnight (tomorrow at 00:00).
-      nextMidnight.setDate(nextMidnight.getDate() + 1);
-      const msUntil = nextMidnight.getTime() - now.getTime();
+      const nextMidnightMs = userTimezone
+        ? tzMidnightInstant(userTimezone, now, 1)
+        : (() => {
+            const d = new Date(now);
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() + 1);
+            return d.getTime();
+          })();
+      const msUntil = Math.max(0, nextMidnightMs - now.getTime());
       timeoutId = setTimeout(() => {
         loadData();
         scheduleNextMidnight();
@@ -4943,7 +5026,7 @@ export default function App({ user }) {
       if (timeoutId) clearTimeout(timeoutId);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [user, loadData]);
+  }, [user, loadData, userTimezone]);
 
   // ═══ SUPABASE-BACKED MUTATIONS ═══
   const toggleTask = async (id) => {
