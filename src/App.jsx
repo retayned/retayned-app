@@ -6527,18 +6527,16 @@ export default function App({ user }) {
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
       <div className="r-desk" style={{ width: 240, background: C.sidebar, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.16)" }}>
-        {/* Logo — "R." monogram in Fraunces italic. Matches the favicon.
-            Cream wordmark on dark sidebar reads like engraved serif type
-            on a leather notebook — calm, brand-anchoring, no decoration. */}
-        <div style={{ padding: "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline", gap: 0 }}>
+        {/* Logo — "Retayned." wordmark in Outfit 900. The brand mark. */}
+        <div style={{ padding: "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline" }}>
           <span style={{
-            fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic",
-            fontWeight: 600,
-            fontSize: 30,
+            fontFamily: "'Outfit', system-ui, sans-serif",
+            fontWeight: 900,
+            fontSize: 22,
             color: "#FAFAF7",
-            letterSpacing: "-0.5px",
+            letterSpacing: "-0.04em",
             lineHeight: 1,
-          }}>R.</span>
+          }}>Retayned.</span>
         </div>
 
         {/* Nav items — fixed, always visible */}
