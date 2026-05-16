@@ -5893,13 +5893,14 @@ export default function App({ user }) {
         .r-btn[data-tone="green"]:hover:not(:disabled) {
           box-shadow: 0 0 0 1px rgba(51,84,62,0.18), 0 6px 18px rgba(51,84,62,0.28) !important;
         }
-        .row-hover { transition: background 0.1s; cursor: pointer; }
-        .row-hover:hover { background: ${C.primarySoft}; }
+        .row-hover { transition: background 0.1s, transform 180ms var(--rt-ease-out); cursor: pointer; }
+        .row-hover:hover { background: ${C.primarySoft}; transform: translateX(2px); }
         /* Neutral row-hover variant — for table rows where green is too
-           loud / fights with status pills inside the row. Used in the
-           Clients Table view (both mobile + desktop variants). */
-        .row-hover-neutral { transition: background 0.1s; cursor: pointer; }
-        .row-hover-neutral:hover { background: rgba(0,0,0,0.03); }
+           loud / fights with status pills inside the row. Same shift-right
+           motion, lighter wash. Used in the Clients Table view (both mobile
+           + desktop variants). */
+        .row-hover-neutral { transition: background 0.1s, transform 180ms var(--rt-ease-out); cursor: pointer; }
+        .row-hover-neutral:hover { background: rgba(0,0,0,0.03); transform: translateX(2px); }
 
         /* ════════════════════════════════════════════════════
            DESIGN LANGUAGE — single source of truth.
@@ -6143,20 +6144,22 @@ export default function App({ user }) {
         @media (hover: hover) {
           .rt-icon-close:hover { background: rgba(0,0,0,0.05); color: ${C.text} !important; }
         }
-        /* Clients page sort pills — inactive variant only. Hairline
-           outlined pill at rest, faint grey wash + darker border on hover.
-           Active pill (black fill) has its own inline styles, untouched. */
+        /* Clients page sort + filter chips — inactive variant.
+           Chip language: subtle card surface with sh-xs at rest, deeper
+           shadow + slight lift on hover. Same recipe as nav user chip,
+           composer chip pills, etc. */
         .rt-sort-opt {
-          background: transparent;
-          color: ${C.textMuted};
-          border: 1px solid ${C.borderLight};
-          transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+          background: ${C.card};
+          color: ${C.textSec};
+          border: none;
+          box-shadow: var(--rt-sh-xs);
+          transition: background 120ms ease, color 120ms ease, box-shadow 180ms var(--rt-ease-out), transform 180ms var(--rt-ease-out);
         }
         @media (hover: hover) {
           .rt-sort-opt:hover {
-            background: rgba(0,0,0,0.04);
             color: ${C.text};
-            border-color: ${C.border};
+            box-shadow: var(--rt-sh-card);
+            transform: translateY(-1px);
           }
         }
         /* Clients page view toggle — inactive variant. Translucent white
@@ -10658,7 +10661,15 @@ export default function App({ user }) {
                               display: "inline-flex", alignItems: "center", gap: 5,
                               padding: "5px 11px", fontSize: 11.5, borderRadius: 999,
                               fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit", border: "none",
-                              ...(isActive ? { background: toneActive.bg, color: toneActive.fg, boxShadow: toneActive.sh } : { background: "transparent", color: C.textSec }),
+                              transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
+                              // Active retains tone-aware color (purple/green/yellow/red)
+                              // because the tone IS the signal — you can tell what kind
+                              // of filter is engaged at a glance. The sh-card-lift
+                              // shadow + 0.5px translate add the lifted-chip motion that
+                              // every other active surface in the app uses.
+                              ...(isActive
+                                ? { background: toneActive.bg, color: toneActive.fg, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
+                                : {}),
                             }}
                           >
                             <span>{f.label}</span>
@@ -10678,11 +10689,13 @@ export default function App({ user }) {
                         {sortOptions.map(s => (
                           <button key={s.id} onClick={() => setClientsSort(s.id)} className={(sortId === s.id ? "" : "rt-sort-opt ") + (s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : "")} style={{
                             padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                            // Active = filled black with white text (matches the
-                            // Referrals page email-tone toggle's active state).
-                            // Inactive resting + hover styles live in .rt-sort-opt.
+                            transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
+                            // Active = lifted card chip (sh-card-lift + 0.5px translate).
+                            // Matches the chip-language used by view toggle, tabs, and
+                            // nav active states. Inactive resting + hover styles live in
+                            // .rt-sort-opt (subtle card surface).
                             ...(sortId === s.id
-                              ? { background: C.text, color: "#fff", border: "1px solid " + C.text }
+                              ? { background: C.card, color: C.text, border: "none", boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                               : {}),
                           }}>{s.label}</button>
                         ))}
@@ -10692,8 +10705,9 @@ export default function App({ user }) {
                           <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} className={variant === v.id ? "" : "rt-view-opt"} style={{
                             display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
                             border: "none",
+                            transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
                             ...(variant === v.id
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                               : {}),
                           }}>
                             <Icon name={v.icon} size={14} color={variant === v.id ? C.text : C.textMuted} />
@@ -14510,9 +14524,20 @@ export default function App({ user }) {
 
               <div style={{ padding: "16px 20px 0" }}>
                 <div style={{ display: "flex", gap: 0, background: C.surface, borderRadius: 10, padding: 3 }}>
-                  {["Overview", "Profile", "Billing", "Flags"].map(t => (
-                    <button key={t} onClick={() => setClientTab(t.toLowerCase())} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: clientTab === t.toLowerCase() ? C.card : "transparent", color: clientTab === t.toLowerCase() ? C.text : C.textMuted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: clientTab === t.toLowerCase() ? C.shadowSm : "none", transition: "background 0.15s ease, color 0.15s ease" }}>{t}</button>
-                  ))}
+                  {["Overview", "Profile", "Billing", "Flags"].map(t => {
+                    const isActive = clientTab === t.toLowerCase();
+                    return (
+                      <button key={t} onClick={() => setClientTab(t.toLowerCase())} style={{
+                        flex: 1, padding: "10px", borderRadius: 8, border: "none",
+                        background: isActive ? C.card : "transparent",
+                        color: isActive ? C.text : C.textMuted,
+                        fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                        boxShadow: isActive ? "var(--rt-sh-card-lift)" : "none",
+                        transform: isActive ? "translateY(-0.5px)" : "none",
+                        transition: "background 0.15s ease, color 0.15s ease, box-shadow 180ms var(--rt-ease-out), transform 180ms var(--rt-ease-out)",
+                      }}>{t}</button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -14565,31 +14590,71 @@ export default function App({ user }) {
                             </>
                           );
                         })()}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
-                          <button
-                            onClick={() => {
-                              // Open Rai chat preloaded with this client. Mirrors the
-                              // discussable-task-title flow: clear convo state, seed
-                              // an opener keyed off the client (uses coachOpeners map
-                              // when available, otherwise a generic prompt), close
-                              // the modal so the user lands cleanly on the chat page.
-                              const opener = coachOpeners[sc.name] || `Let's talk about ${sc.name}. What's on your mind?`;
-                              setAiConvoId(null);
-                              setAiMessages([{ role: "ai", text: opener }]);
-                              setSelectedClient(null);
-                              setPage("coach");
-                            }}
-                            style={{ width: "100%", padding: "11px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)" }}
-                          >
-                            Discuss {sc.name}
-                          </button>
-                          <button
-                            onClick={() => { setEditingOverview(true); setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" }); }}
-                            style={{ width: "100%", padding: "11px", background: C.btnLight, color: C.btn, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                          >
-                            Edit Details
-                          </button>
-                        </div>
+                        {/* Recent activity — last 7 days. Pulls from completed
+                            tasks and logged touchpoints for this client. Empty
+                            state suppresses entirely so a brand-new client
+                            doesn't render an empty container. */}
+                        {(() => {
+                          const NOW = Date.now();
+                          const SEVEN_D = 7 * 24 * 60 * 60 * 1000;
+
+                          const taskEvents = (tasks || [])
+                            .filter(t => t.client === sc.name && t.done && t.completed_at)
+                            .map(t => {
+                              const ts = new Date(t.completed_at).getTime();
+                              return { ts, kind: "task", text: t.text };
+                            })
+                            .filter(e => (NOW - e.ts) <= SEVEN_D);
+
+                          const tpEvents = (allTouchpoints || [])
+                            .filter(tp => (tp.client_name === sc.name || tp.client_id === sc.id) && tp.occurred_at)
+                            .map(tp => {
+                              const ts = new Date(tp.occurred_at).getTime();
+                              return { ts, kind: "touchpoint", text: tp.channel || "Touchpoint" };
+                            })
+                            .filter(e => (NOW - e.ts) <= SEVEN_D);
+
+                          const events = [...taskEvents, ...tpEvents].sort((a, b) => b.ts - a.ts).slice(0, 6);
+                          if (events.length === 0) return null;
+
+                          const relTime = (ts) => {
+                            const diff = NOW - ts;
+                            const hours = Math.floor(diff / (60 * 60 * 1000));
+                            if (hours < 1) return "just now";
+                            if (hours < 24) return hours + "h ago";
+                            const days = Math.floor(hours / 24);
+                            if (days === 1) return "yesterday";
+                            return days + "d ago";
+                          };
+
+                          return (
+                            <div style={{ marginTop: 18 }}>
+                              <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 }}>Recent activity · 7d</div>
+                              <div style={{ background: C.bg, borderRadius: 10, padding: 4 }}>
+                                {events.map((e, i) => (
+                                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderTop: i > 0 ? "1px solid " + C.borderLight : "none" }}>
+                                    <div style={{
+                                      width: 22, height: 22, borderRadius: "50%",
+                                      background: e.kind === "task" ? C.primarySoft : C.surface,
+                                      color: e.kind === "task" ? C.primary : C.textMuted,
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                                    }}>
+                                      {e.kind === "task" ? "✓" : "·"}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      <span style={{ color: C.text, fontWeight: 600 }}>
+                                        {e.kind === "task" ? "Task done" : (e.text || "Touchpoint")}
+                                      </span>
+                                      {e.kind === "task" && e.text ? <span>: {e.text}</span> : null}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: C.textMuted, flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{relTime(e.ts)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </>
                     ) : (
                       <>
@@ -14720,23 +14785,13 @@ export default function App({ user }) {
                         </div>
                       </>
                     )}
-                {/* Destructive actions — text-link strip (rare events, light visual weight).
-                    Order is by severity: Pause (reversible, muted) · Move to Rolodex
-                    (state change, muted) · Terminate (permanent, red). */}
+                {/* Destructive action CONFIRM blocks — triggered by the
+                    sticky footer at modal level. When no confirm is active
+                    this renders nothing (the sticky footer is visible
+                    instead). The four confirm dialogs preserve the existing
+                    state-machine semantics. */}
                 <div style={{ marginTop: 18 }}>
-                  {!rolodexConfirm && !removeConfirm && !pauseConfirm && !resumeConfirm ? (
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, fontSize: 12 }}>
-                      {sc.is_paused ? (
-                        <button onClick={() => { setResumeConfirm(true); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Resume engagement</button>
-                      ) : (
-                        <button onClick={() => { setPauseConfirm(true); setRolodexConfirm(false); setRemoveConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Pause</button>
-                      )}
-                      <span style={{ color: C.border }}>·</span>
-                      <button onClick={() => { setRolodexConfirm(true); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Move to Rolodex</button>
-                      <span style={{ color: C.border }}>·</span>
-                      <button onClick={() => { setRemoveConfirm(true); setRolodexConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Terminate</button>
-                    </div>
-                  ) : pauseConfirm ? (
+                  {!rolodexConfirm && !removeConfirm && !pauseConfirm && !resumeConfirm ? null : pauseConfirm ? (
                     <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px" }}>
                       <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be paused. Their tasks stay visible but Rai stops surfacing them, and their retention score will drop -4. Tenure clock freezes until you resume.</p>
                       <div style={{ display: "flex", gap: 8 }}>
@@ -14900,26 +14955,61 @@ export default function App({ user }) {
                     {!editingProfile ? (
                       <div>
                         {Object.keys(dims).length > 0 ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {profileDimensions.map(d => {
-                              const val = dims[d.key];
-                              if (val === undefined || val === null) return null;
-                              const labels = dimLabels[d.key] || [d.name, "Low", "High"];
-                              return (
-                                <div key={d.key} style={{ background: C.bg, borderRadius: 8, padding: "10px 12px" }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                                    <span style={{ fontSize: 14, fontWeight: 600 }}>{labels[0]}</span>
-                                    <span style={{ fontSize: 14, fontWeight: 700, color: C.primary }}>{val}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                            {/* Radar visualization — 12-point polygon. Shape reads the
+                                relationship at a glance; dents (low dimensions) pop
+                                visually. Background rings at quartiles, faint spokes
+                                from center, polygon filled at 18% opacity + 1.5px
+                                stroke + corner dots. */}
+                            <svg width="200" height="200" viewBox="0 0 200 200" style={{ flexShrink: 0 }}>
+                              <g fill="none" stroke={C.borderLight} strokeWidth="1">
+                                <circle cx="100" cy="100" r="20" />
+                                <circle cx="100" cy="100" r="40" />
+                                <circle cx="100" cy="100" r="60" />
+                                <circle cx="100" cy="100" r="80" />
+                              </g>
+                              <g fill="none" stroke={C.borderLight} strokeWidth="0.5">
+                                {profileDimensions.map((d, i) => {
+                                  const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
+                                  const x = 100 + 80 * Math.cos(angle);
+                                  const y = 100 + 80 * Math.sin(angle);
+                                  return <line key={d.key} x1="100" y1="100" x2={x} y2={y} />;
+                                })}
+                              </g>
+                              {(() => {
+                                const points = profileDimensions.map((d, i) => {
+                                  const val = dims[d.key] !== undefined && dims[d.key] !== null ? Number(dims[d.key]) : 0;
+                                  const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
+                                  const r = (Math.max(0, Math.min(10, val)) / 10) * 80;
+                                  return [100 + r * Math.cos(angle), 100 + r * Math.sin(angle)];
+                                });
+                                const polyStr = points.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+                                return (
+                                  <>
+                                    <polygon points={polyStr} fill={C.primary} fillOpacity="0.18" stroke={C.primary} strokeWidth="1.5" strokeLinejoin="round" />
+                                    {points.map((p, i) => (
+                                      <circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill={C.primary} />
+                                    ))}
+                                  </>
+                                );
+                              })()}
+                            </svg>
+                            {/* Legend — 12 dimension rows. Low values (≤4) coloured
+                                warn-red so weak points jump off the list even
+                                without looking at the radar shape. */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 180 }}>
+                              {profileDimensions.map(d => {
+                                const val = dims[d.key];
+                                const isSet = val !== undefined && val !== null;
+                                const isLow = isSet && Number(val) <= 4;
+                                return (
+                                  <div key={d.key} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, fontSize: 11.5, padding: "2px 0" }}>
+                                    <span style={{ color: C.textSec }}>{d.name}</span>
+                                    <span style={{ color: isLow ? C.retWarn : C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right" }}>{isSet ? val : "—"}</span>
                                   </div>
-                                  <div style={{ position: "relative", height: 4, background: C.borderLight, borderRadius: 2, marginBottom: 4, overflow: "hidden" }}>
-                                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(val) * 10))}%`, background: C.primary, borderRadius: 2 }} />
-                                  </div>
-                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.textMuted }}>
-                                    <span>{labels[1]}</span><span>{labels[2]}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
+                            </div>
                           </div>
                         ) : (
                           <div style={{ textAlign: "center", padding: "20px 0", color: C.textMuted, fontSize: 14 }}>
@@ -15550,6 +15640,92 @@ export default function App({ user }) {
                 )}
 
               </div>
+
+              {/* Sticky action footer — Discuss · Edit · Pause/Resume · Remove.
+                  Sits at the bottom of the modal regardless of which tab is
+                  open. The Discuss button uses the gradient + halo Rai-territory
+                  treatment (same as armed Add Task, New Rai Chat). Edit/Pause/
+                  Remove are chip-language buttons (card + sh-xs).
+                  Auto-switches to Overview tab when a destructive action is
+                  triggered so the existing inline confirm dialog is visible.
+                  When a confirm is already active the footer hides — the
+                  confirm UI in the Overview tab takes over. */}
+              {!pauseConfirm && !resumeConfirm && !rolodexConfirm && !removeConfirm && (
+                <div style={{
+                  position: "sticky",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  background: "rgba(255,255,255,0.96)",
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                  borderTop: "1px solid " + C.borderLight,
+                  padding: "12px 16px",
+                  zIndex: 5,
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "stretch",
+                }}>
+                  <button
+                    onClick={() => {
+                      // Open Rai chat preloaded with this client.
+                      const opener = coachOpeners[sc.name] || `Let's talk about ${sc.name}. What's on your mind?`;
+                      setAiConvoId(null);
+                      setAiMessages([{ role: "ai", text: opener }]);
+                      setSelectedClient(null);
+                      setPage("coach");
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "10px 16px",
+                      background: "var(--rt-grad-btn)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      boxShadow: "var(--rt-sh-rai-pop)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>✦</span>
+                    <span>Discuss</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setClientTab("overview");
+                      setEditingOverview(true);
+                      setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" });
+                    }}
+                    style={{ padding: "10px 14px", background: C.card, color: C.textSec, border: "none", boxShadow: "var(--rt-sh-xs)", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                  >Edit</button>
+                  <button
+                    onClick={() => {
+                      // Auto-switch to Overview so the confirm dialog is visible.
+                      setClientTab("overview");
+                      if (sc.is_paused) { setResumeConfirm(true); }
+                      else { setPauseConfirm(true); }
+                      setRolodexConfirm(false); setRemoveConfirm(false);
+                    }}
+                    style={{ padding: "10px 14px", background: C.card, color: C.textSec, border: "none", boxShadow: "var(--rt-sh-xs)", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                  >{sc.is_paused ? "Resume" : "Pause"}</button>
+                  <button
+                    onClick={() => {
+                      // Remove = Move to Rolodex (the soft-remove path).
+                      // Auto-switch to Overview so the confirm dialog is visible.
+                      setClientTab("overview");
+                      setRolodexConfirm(true);
+                      setPauseConfirm(false); setResumeConfirm(false); setRemoveConfirm(false);
+                    }}
+                    style={{ padding: "10px 14px", background: C.card, color: C.danger, border: "none", boxShadow: "var(--rt-sh-xs)", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                  >Remove</button>
+                </div>
+              )}
             </div>
           </>
         );
