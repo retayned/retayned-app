@@ -4312,6 +4312,18 @@ export default function App({ user }) {
   };
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
+  // Renewal date picker popover state — used by the client profile edit
+  // form (replaces the native <input type="date"> which renders poorly
+  // and inconsistently on mobile, and doesn't match the site's picker
+  // pattern). Uses the same .rt-picker-panel + calendar grid as the
+  // composer Due picker, minus the Today/Tomorrow/Later/Recurring quick
+  // options — a renewal date is a specific future calendar date, not a
+  // bucket like a task due date.
+  const [renewalPickerOpen, setRenewalPickerOpen] = useState(false);
+  const [renewalCalendarMonth, setRenewalCalendarMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   // Calendar grid: which month is currently shown in the date picker.
   // Stored as YYYY-MM string. Defaults to current month; resets on picker open.
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -6838,34 +6850,19 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — comprehensive fix.
-             Problem: position:absolute from the chip container lets the
-             picker grow to its content's natural width/height, which
-             with a full 6-week calendar inside is ~220x500. That covers
-             most of the phone screen and overlaps the page beneath.
-             Fix: switch to position:fixed anchored to the viewport's
-             right edge with a hard maxWidth and maxHeight cap. Tighten
-             the calendar cells and gaps. Internal scroll for overflow.
-             The transparent backdrop above the picker already catches
-             outside-taps to dismiss, so detaching from the chip
-             container doesn't break dismissal. */
+          /* DUE PICKER ON MOBILE — content density only.
+             Previously had a position:fixed override that anchored the
+             picker to the viewport's bottom-right corner regardless of
+             where the chip was. That made the picker feel disconnected
+             from the tap target. Now the Due picker uses the same
+             absolute positioning as Client/Worker (anchored to the
+             chip), and we just tighten the calendar's cell size and
+             padding so the calendar fits in the picker's natural
+             ~240px width. Backdrop above the picker still catches
+             outside-taps to dismiss. */
           .rt-due-picker {
-            position: fixed !important;
-            top: auto !important;
-            left: auto !important;
-            right: 12px !important;
-            /* Bottom anchored above the mobile bottom nav (~82px height
-               + 12px margin). This keeps the picker visible regardless
-               of where in the composer the Due chip is. */
-            bottom: 100px !important;
-            max-width: 260px !important;
-            width: calc(100vw - 24px) !important;
-            min-width: 0 !important;
-            max-height: 420px !important;
+            max-height: calc(100vh - 120px) !important;
             overflow-y: auto !important;
-            overflow-x: hidden !important;
-            /* Compact inner padding */
-            padding: 6px !important;
           }
           /* Compact calendar cells on mobile so the grid doesn't bloat
              the picker. Smaller height, smaller font. */
@@ -8619,6 +8616,32 @@ export default function App({ user }) {
                                   };
                                   return (
                                     <div style={{ padding: "6px 4px 2px" }}>
+                                      {/* TODAY reference — single-line label so users
+                                          have a fixed anchor while navigating months.
+                                          Format: TODAY · M/D/YY (no leading zeros).
+                                          Lives inside the calendar widget only, not
+                                          on the Today page. */}
+                                      {(() => {
+                                        const _t = new Date();
+                                        const _tStr = `${_t.getMonth() + 1}/${_t.getDate()}/${String(_t.getFullYear()).slice(-2)}`;
+                                        return (
+                                          <div style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 5,
+                                            padding: "0 6px 8px",
+                                            fontSize: 10.5,
+                                            color: C.textMuted,
+                                            fontWeight: 600,
+                                            letterSpacing: 0.4,
+                                            whiteSpace: "nowrap",
+                                          }}>
+                                            <span style={{ color: C.text }}>TODAY</span>
+                                            <span style={{ opacity: 0.5 }}>·</span>
+                                            <span style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0 }}>{_tStr}</span>
+                                          </div>
+                                        );
+                                      })()}
                                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, padding: "0 6px" }}>
                                         <button
                                           onClick={goPrev}
@@ -14988,7 +15011,143 @@ export default function App({ user }) {
                           )}
                           <div>
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Renewal date <span style={{ color: C.textMuted, fontWeight: 400 }}>· optional</span></label>
-                            <input type="date" value={overviewEditData.renewal_date ? String(overviewEditData.renewal_date).split("T")[0] : ""} onChange={e => setOverviewEditData({ ...overviewEditData, renewal_date: e.target.value || null })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, colorScheme: "light" }} />
+                            <div style={{ position: "relative" }}>
+                              {/* Custom button styled like the form's input fields
+                                  so it sits in the same visual rhythm. Opens a
+                                  .rt-picker-panel calendar below. Replaces the
+                                  native <input type="date"> which on mobile (iOS
+                                  in particular) rendered as a separate button-
+                                  styled control that broke the form's visual
+                                  rhythm and could overflow the page. */}
+                              <button
+                                type="button"
+                                onClick={() => setRenewalPickerOpen(!renewalPickerOpen)}
+                                style={{
+                                  width: "100%",
+                                  padding: "12px 16px",
+                                  border: "none",
+                                  borderRadius: 8,
+                                  fontSize: 14,
+                                  fontFamily: "inherit",
+                                  textAlign: "left",
+                                  background: C.bg,
+                                  boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)",
+                                  cursor: "pointer",
+                                  color: overviewEditData.renewal_date ? C.text : C.textMuted,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  gap: 8,
+                                  boxSizing: "border-box",
+                                }}
+                              >
+                                <span>
+                                  {overviewEditData.renewal_date
+                                    ? new Date(String(overviewEditData.renewal_date).split("T")[0] + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                                    : "Select a date"}
+                                </span>
+                                <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  {overviewEditData.renewal_date && (
+                                    <span
+                                      role="button"
+                                      onClick={(e) => { e.stopPropagation(); setOverviewEditData({ ...overviewEditData, renewal_date: null }); }}
+                                      style={{ width: 18, height: 18, borderRadius: 9, background: C.surface, color: C.textMuted, display: "grid", placeItems: "center", fontSize: 10, cursor: "pointer" }}
+                                      aria-label="Clear renewal date"
+                                    >×</span>
+                                  )}
+                                  <Icon name="due" size={14} simple color={C.textMuted} />
+                                </span>
+                              </button>
+                              {renewalPickerOpen && (
+                                <>
+                                  <div onClick={() => setRenewalPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }} />
+                                  <div className="rt-picker-panel" style={{
+                                    position: "absolute",
+                                    top: "calc(100% + 6px)",
+                                    left: 0,
+                                    right: 0,
+                                    zIndex: 50,
+                                    maxHeight: "min(420px, calc(100vh - 140px))",
+                                    overflowY: "auto",
+                                  }}>
+                                    {(() => {
+                                      // TODAY · M/D/YY reference line
+                                      const _now = new Date();
+                                      const _tStr = `${_now.getMonth() + 1}/${_now.getDate()}/${String(_now.getFullYear()).slice(-2)}`;
+                                      const _todayISO = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+                                      const [yr, mo] = renewalCalendarMonth.split("-").map(Number);
+                                      const firstOfMonth = new Date(yr, mo - 1, 1);
+                                      const startDow = firstOfMonth.getDay();
+                                      const daysInMonth = new Date(yr, mo, 0).getDate();
+                                      const monthLabel = firstOfMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                                      const cells = [];
+                                      for (let i = 0; i < startDow; i++) cells.push(null);
+                                      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                                      while (cells.length % 7 !== 0) cells.push(null);
+                                      const goPrev = () => {
+                                        let nyr = yr, nmo = mo - 1;
+                                        if (nmo < 1) { nmo = 12; nyr--; }
+                                        setRenewalCalendarMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
+                                      };
+                                      const goNext = () => {
+                                        let nyr = yr, nmo = mo + 1;
+                                        if (nmo > 12) { nmo = 1; nyr++; }
+                                        setRenewalCalendarMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
+                                      };
+                                      const selectedISO = overviewEditData.renewal_date ? String(overviewEditData.renewal_date).split("T")[0] : null;
+                                      return (
+                                        <div style={{ padding: "6px 4px 4px" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 6px 8px", fontSize: 10.5, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+                                            <span style={{ color: C.text }}>TODAY</span>
+                                            <span style={{ opacity: 0.5 }}>·</span>
+                                            <span style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0 }}>{_tStr}</span>
+                                          </div>
+                                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, padding: "0 6px" }}>
+                                            <button type="button" onClick={goPrev} style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textSec, cursor: "pointer", borderRadius: 4, fontSize: 14, lineHeight: 1, padding: 0 }}>‹</button>
+                                            <span style={{ fontSize: 11.5, color: C.text, fontWeight: 600, letterSpacing: 0.2 }}>{monthLabel}</span>
+                                            <button type="button" onClick={goNext} style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textSec, cursor: "pointer", borderRadius: 4, fontSize: 14, lineHeight: 1, padding: 0 }}>›</button>
+                                          </div>
+                                          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, padding: "0 4px 4px" }}>
+                                            {["S","M","T","W","T","F","S"].map((d,i) => (
+                                              <div key={i} style={{ fontSize: 9, color: C.textMuted, textAlign: "center", fontWeight: 600, padding: "2px 0" }}>{d}</div>
+                                            ))}
+                                            {cells.map((d, i) => {
+                                              if (d === null) return <div key={i} />;
+                                              const dateStr = `${yr}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                                              const isSel = selectedISO === dateStr;
+                                              const isToday = dateStr === _todayISO;
+                                              return (
+                                                <button
+                                                  type="button"
+                                                  key={i}
+                                                  onClick={() => { setOverviewEditData({ ...overviewEditData, renewal_date: dateStr }); setRenewalPickerOpen(false); }}
+                                                  style={{
+                                                    width: "100%", height: 24,
+                                                    border: "none",
+                                                    background: isSel ? "var(--rt-grad-btn)" : "transparent",
+                                                    color: isSel ? "#fff" : (isToday ? C.btn : C.text),
+                                                    borderRadius: 6,
+                                                    fontSize: 11,
+                                                    fontWeight: isToday || isSel ? 700 : 500,
+                                                    cursor: "pointer",
+                                                    fontFamily: "inherit",
+                                                    padding: 0,
+                                                    boxShadow: isSel ? "var(--rt-sh-purple)" : "none",
+                                                    transition: "all 160ms var(--rt-ease-out)",
+                                                  }}
+                                                  onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(0,0,0,0.06)"; }}
+                                                  onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+                                                >{d}</button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
