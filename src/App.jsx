@@ -209,86 +209,63 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
 
   const paths = {
     today: (<>
-      {/* Duotone calendar — main body in `color`, top stripe in `accent`,
-          cream date dot for interior highlight. 32×32 viewBox. */}
-      <rect x="4" y="7" width="24" height="21" rx="3" fill={color}/>
-      <rect x="4" y="7" width="24" height="6" rx="3" fill={accent}/>
-      <rect x="4" y="10" width="24" height="3" fill={accent}/>
-      <line x1="10" y1="4" x2="10" y2="10" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
-      <line x1="22" y1="4" x2="22" y2="10" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
-      <circle cx="16" cy="20" r="4" fill="var(--rt-icon-fill)" opacity="0.95"/>
+      {/* Filled calendar — primary-light body with dark binding tabs and
+          cream center dot. New icon set, May 2026. */}
+      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill="#558B68"/>
+      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill="#2F2F31"/>
+      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill="#2F2F31"/>
+      <circle cx="16" cy="20" r="3.4" fill="#FCFCFE"/>
     </>),
     clients: (<>
-      {/* Duotone heads — three figures with the central one in accent.
-          Center figure slightly elevated to read as the focused one. */}
-      <circle cx="10" cy="13" r="4.5" fill={color}/>
-      <circle cx="22" cy="13" r="3.8" fill={color} opacity="0.75"/>
-      <path d="M2 28c0-4.4 3.6-8 8-8s8 3.6 8 8z" fill={color}/>
-      <path d="M16 28c0-3.6 3.1-6.8 6.5-6.8s6.5 3.2 6.5 6.8z" fill={color} opacity="0.75"/>
-      <circle cx="16" cy="11" r="5.5" fill={accent}/>
-      <path d="M7 28c0-5 4-9 9-9s9 4 9 9z" fill={accent}/>
+      {/* Two figures: foreground person in primary-light, background
+          person in dark accent with a connecting curve. New icon set. */}
+      <circle cx="11" cy="12.5" r="4.5" fill="#558B68"/>
+      <path d="M3 25.5 C 3 19.5, 7 17, 11 17 C 15 17, 19 19.5, 19 25.5 Z" fill="#558B68"/>
+      <circle cx="23" cy="10.5" r="3.4" fill="#2F2F31"/>
+      <path d="M18.5 19.6 C 20.2 18, 22 17.6, 23.5 17.6 C 27.5 17.6, 29 20, 29 23.5" stroke="#2F2F31" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     health: (<>
-      {/* Duotone monitor — screen body in color, header bar in accent,
-          pulse line in cream highlight. */}
-      <rect x="3" y="6" width="26" height="20" rx="3" fill={color}/>
-      <rect x="3" y="6" width="26" height="5" rx="3" fill={accent}/>
-      <rect x="3" y="9" width="26" height="2" fill={accent}/>
-      <path d="M6 19l3.5-3.5L13 19l4-6 4.5 7 3-4" stroke="var(--rt-icon-fill)" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      <rect x="11" y="26" width="10" height="2" rx="1" fill={accent}/>
+      {/* Heart silhouette in primary-light with a cream ECG pulse line
+          through the middle. New icon set. */}
+      <path d="M16 26.5 C 7 21.5, 3 17.5, 3 12 C 3 8, 6 5.5, 9.5 5.5 C 12 5.5, 14.5 7, 16 9.5 C 17.5 7, 20 5.5, 22.5 5.5 C 26 5.5, 29 8, 29 12 C 29 17.5, 25 21.5, 16 26.5 Z" fill="#558B68"/>
+      <path d="M6 15 L10 15 L12 11.5 L14.5 18.5 L16.5 13.5 L18 15 L26 15" fill="none" stroke="#FCFCFE" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
-      {/* Duotone speech bubble — body in color, spark/star in accent. */}
-      <g transform="translate(0 1)">
-        <path d="M4 9 Q4 5 8 5 L24 5 Q28 5 28 9 L28 20 Q28 24 24 24 L14 24 L9 28 L10 24 Q4 24 4 20 Z" fill={color}/>
-        <path d="M16 9 L17.8 14.6 L23 16.4 L17.8 18.2 L16 24 L14.2 18.2 L9 16.4 L14.2 14.6 Z" fill={accent}/>
-        <circle cx="23" cy="10" r="1.4" fill={accent} opacity="0.7"/>
-      </g>
+      {/* Speech bubble with cream 4-point sparkle inside. New icon set. */}
+      <path d="M4 10 Q4 6 8 6 L24 6 Q28 6 28 10 L28 19 Q28 23 24 23 L14 23 L9 27.5 L10 23 Q4 23 4 19 Z" fill="#558B68"/>
+      <path d="M16 10 L17.8 14.2 L22 15.7 L17.8 17.2 L16 21.4 L14.2 17.2 L10 15.7 L14.2 14.2 Z" fill="#FCFCFE"/>
     </>),
     rolodex: (<>
-      {/* Duotone Rolodex — base in accent, cards stack in color, top card
-          highlighted with a cream tab. */}
-      <rect x="2" y="23" width="28" height="5" rx="1.5" fill={accent}/>
-      <rect x="4" y="9" width="24" height="15" rx="1.5" fill={color}/>
-      <rect x="4" y="9" width="24" height="4" fill={accent}/>
-      <rect x="13" y="5" width="6" height="6" rx="1" fill={accent}/>
-      <path d="M10 15l3-3 3 3v8h-6z" fill="var(--rt-icon-fill)" opacity="0.95"/>
-      <line x1="20" y1="16" x2="25" y2="16" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.85"/>
-      <line x1="20" y1="19" x2="24" y2="19" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/>
+      {/* ID-card style: rounded primary-light rect with a dark divider
+          rule, cream avatar circle, and cream text lines. New icon set. */}
+      <rect x="4" y="6" width="24" height="20" rx="4" fill="#558B68"/>
+      <line x1="4" y1="11.5" x2="28" y2="11.5" stroke="#2F2F31" strokeWidth="2" opacity="0.45"/>
+      <circle cx="11.5" cy="19" r="2.6" fill="#FCFCFE"/>
+      <line x1="16.5" y1="18" x2="23.5" y2="18" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
+      <line x1="16.5" y1="22" x2="20.5" y2="22" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round" opacity="0.85"/>
     </>),
     referrals: (<>
-      {/* Duotone constellation — hub in accent, satellites in color,
-          connecting threads at low opacity. */}
-      <line x1="11" y1="16" x2="24" y2="6" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
-      <line x1="11" y1="16" x2="26" y2="16" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
-      <line x1="11" y1="16" x2="24" y2="26" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
-      <circle cx="25" cy="6" r="3" fill={color} opacity="0.75"/>
-      <circle cx="27" cy="16" r="3" fill={color} opacity="0.75"/>
-      <circle cx="25" cy="26" r="3" fill={color} opacity="0.75"/>
-      <circle cx="10" cy="16" r="5.5" fill={accent}/>
-      <circle cx="10" cy="16" r="2" fill="var(--rt-icon-fill)"/>
+      {/* Three nodes: large hub on left, two satellites on right with
+          primary-light connector lines. New icon set. */}
+      <line x1="10.6" y1="14.6" x2="21.4" y2="9" stroke="#558B68" strokeWidth="3" strokeLinecap="round"/>
+      <line x1="10.6" y1="17.4" x2="21.4" y2="23" stroke="#558B68" strokeWidth="3" strokeLinecap="round"/>
+      <circle cx="8" cy="16" r="4" fill="#558B68"/>
+      <circle cx="24" cy="7.5" r="3.4" fill="#558B68"/>
+      <circle cx="24" cy="24.5" r="3.4" fill="#558B68"/>
     </>),
     workers: (<>
-      {/* Duotone team — desk + person seated.
-          Desk surface = accent, person body = color, screen face = cream highlight. */}
-      <path d="M9 4 Q16 8 23 4" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round"/>
-      <rect x="14.5" y="5" width="3" height="3" rx="0.6" fill={accent}/>
-      <rect x="5" y="9" width="22" height="20" rx="2.5" fill={color}/>
-      <rect x="5" y="9" width="22" height="5" rx="2.5" fill={accent}/>
-      <rect x="5" y="11" width="22" height="3" fill={accent}/>
-      <rect x="8" y="16" width="9" height="10" rx="1" fill={accent}/>
-      <circle cx="12.5" cy="20" r="1.8" fill="var(--rt-icon-fill)"/>
-      <path d="M9.5 25.5 Q12.5 23.5 15.5 25.5" fill="var(--rt-icon-fill)" stroke="none"/>
-      <line x1="19" y1="17" x2="25" y2="17" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.85"/>
-      <line x1="19" y1="20" x2="24" y2="20" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/>
-      <line x1="19" y1="23" x2="24" y2="23" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+      {/* Briefcase: primary-light body with dark handle and divider rule,
+          cream center lock. New icon set. */}
+      <rect x="3" y="10" width="26" height="17" rx="3.4" fill="#558B68"/>
+      <path d="M10.5 10 V 7.5 Q 10.5 5 13 5 L 19 5 Q 21.5 5 21.5 7.5 V 10" stroke="#2F2F31" strokeWidth="2.4" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+      <line x1="3" y1="17.5" x2="29" y2="17.5" stroke="#2F2F31" strokeWidth="2" opacity="0.4"/>
+      <rect x="13.5" y="15.5" width="5" height="4" rx="0.8" fill="#FCFCFE"/>
     </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
     settings: (<>
-      {/* Duotone gear — outer cog in color, inner ring in accent, center cream. */}
-      <path d="M16 3 L18 6.5 L22 5.5 L22.5 9.5 L26 11 L24.5 14.5 L27 17.5 L24 20 L24.5 24 L20.5 24.5 L18.5 28 L15 26 L11.5 28 L9.5 24.5 L5.5 24 L6 20 L3 17.5 L5.5 14.5 L4 11 L7.5 9.5 L8 5.5 L12 6.5 Z" fill={color}/>
-      <circle cx="16" cy="16" r="6.5" fill={accent}/>
-      <circle cx="16" cy="16" r="2.4" fill="var(--rt-icon-fill)"/>
+      {/* Cog gear in primary-light with cream center. New icon set. */}
+      <path d="M16 3 L18.4 5.4 L21.6 4.6 L22.6 7.6 L25.6 8.4 L25 11.4 L27.5 13.2 L26.2 16 L28 18.6 L25.6 20.4 L26 23.4 L23 24.2 L22.2 27 L19 27 L16.8 29 L14 28 L11 29 L9 27 L5.8 27 L5 24.2 L2 23.4 L2.4 20.4 L0 18.6 L1.8 16 L0.5 13.2 L3 11.4 L2.4 8.4 L5.4 7.6 L6.4 4.6 L9.6 5.4 L12 3 L14 4 Z" fill="#558B68" transform="translate(2 0) scale(0.92)"/>
+      <circle cx="16" cy="14.7" r="4.4" fill="#FCFCFE"/>
     </>),
     due: (<>
       {/* Duotone overdue calendar — same as today but with a small clock badge. */}
@@ -5850,13 +5827,26 @@ export default function App({ user }) {
           opacity: 0.7;
         }
 
-        /* Sidebar collapse toggle — inline subtle chevron in the brand
-           area. Variant A from the two-asks mock. Renders as a flat
-           transparent icon button — no card, no shadow — so it reads as
-           part of the rail, not a floating chip. Expanded: sits to the
-           right of "Retayned." in the brand row. Collapsed: sits below
-           "R." centered in the 64px rail. Hidden on mobile (sidebar is
-           also hidden there). Hover: subtle surface wash. */
+        /* Sidebar collapse toggle — floating disc that straddles the
+           sidebar's right edge, vertically aligned with the brand mark.
+           Variant C from the wide options mock.
+
+           Sizing: 22×22 — large enough to read as an intentional control,
+           small enough not to compete with the brand mark or nav items.
+
+           Weight (Retayned tokens):
+             — background: var(--rt-card) (white, contrasts with cream sidebar)
+             — shadow: stacked rt-sh-xs + 1px hairline outline at 6% black
+               (gives lift without the "stranded chip" feel of heavy shadows)
+             — color: text-muted at rest, text on hover (mirrors the
+               rest→hover color shift the nav items use)
+
+           Position: fixed against the viewport, left computed from
+           --sidebar-w so the disc tracks the sidebar's right edge
+           through the collapse/expand transition. top: 36px centers the
+           disc on the brand mark (14px sidebar offset + 22px brand
+           padding-top + 11px to the brand text vertical center, minus
+           11px to center the 22px disc → 36px). */
         .rt-sidebar-toggle {
           display: none;
         }
@@ -5865,23 +5855,45 @@ export default function App({ user }) {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            position: fixed;
+            left: calc(var(--sidebar-w, 240px) + 14px - 11px);
+            top: 36px;
             width: 22px;
             height: 22px;
-            border-radius: 4px;
-            background: transparent;
+            border-radius: 50%;
+            background: var(--rt-card);
             color: var(--rt-text-muted);
             border: none;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
+            font-weight: 600;
             line-height: 1;
             padding: 0;
             font-family: inherit;
-            transition: background 140ms var(--rt-ease-out),
-                        color 140ms var(--rt-ease-out);
+            /* Stacked: tiny drop + hairline outline. Together they give
+               just enough definition for the disc to read as a touchable
+               element without the "floating chip" effect. */
+            box-shadow:
+              0 1px 2px rgba(20, 30, 22, 0.05),
+              0 2px 6px rgba(20, 30, 22, 0.04),
+              0 0 0 1px rgba(20, 30, 22, 0.06);
+            z-index: 51;
+            transition: left 220ms var(--rt-ease-out),
+                        color 160ms var(--rt-ease-out),
+                        box-shadow 200ms var(--rt-ease-out),
+                        transform 180ms var(--rt-ease-out);
           }
           .rt-sidebar-toggle:hover {
-            background: rgba(20,30,22,0.06);
             color: var(--rt-text);
+            box-shadow:
+              0 1px 2px rgba(20, 30, 22, 0.06),
+              0 3px 10px rgba(20, 30, 22, 0.08),
+              0 0 0 1px rgba(20, 30, 22, 0.10);
+            transform: scale(1.06);
+          }
+          .rt-sidebar-toggle:active {
+            transform: scale(0.94);
+            transition: transform 80ms var(--rt-ease-press);
           }
         }
         .rt-user-chip:active {
@@ -6706,9 +6718,11 @@ export default function App({ user }) {
             "tasks focus";
         }
         .rt-mob-strip { display: none; }
-        /* Mobile-only band condensation toggles below (rt-band-date-long
-           / rt-band-date-short removed — date is now a single TODAY ·
-           date label in the JSX that works at every width). */
+        /* Desktop defaults for mobile-only band condensation elements.
+           Mobile media query below toggles them on, restructures the
+           meta row to a single inline row, and clamps the pick to 2
+           lines with a "More" tap. */
+        .rt-band-date-short { display: none; }
         @media (max-width: 900px) {
           .rt-today-v4 {
             grid-template-columns: 1fr;
@@ -6727,6 +6741,8 @@ export default function App({ user }) {
             padding-left: 0 !important;
             padding-right: 0 !important;
           }
+          .rt-band-date-long { display: none; }
+          .rt-band-date-short { display: inline; }
           .rt-band-greet { font-size: 20px !important; white-space: nowrap; }
           /* Mobile-specific compressions on top of the now-universal
              flat meta row: hide the "OF TODAY DONE" label (number alone
@@ -6753,18 +6769,41 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* Due picker on mobile: the Due chip is the rightmost composer
-             pill, and the picker has minWidth: 240 with left: 0 from the
-             chip's container — this overflows the right edge of the phone.
-             Re-anchor: left: auto, right: 0 so the picker grows leftward
-             from the chip instead. Also cap height with internal scroll
-             so the full calendar doesn't run off the bottom of the screen
-             and overlap the mobile bottom nav. */
+          /* DUE PICKER ON MOBILE — comprehensive fix.
+             Problem: position:absolute from the chip container lets the
+             picker grow to its content's natural width/height, which
+             with a full 6-week calendar inside is ~220x500. That covers
+             most of the phone screen and overlaps the page beneath.
+             Fix: switch to position:fixed anchored to the viewport's
+             right edge with a hard maxWidth and maxHeight cap. Tighten
+             the calendar cells and gaps. Internal scroll for overflow.
+             The transparent backdrop above the picker already catches
+             outside-taps to dismiss, so detaching from the chip
+             container doesn't break dismissal. */
           .rt-due-picker {
+            position: fixed !important;
+            top: auto !important;
             left: auto !important;
-            right: 0 !important;
-            max-height: 60vh !important;
+            right: 12px !important;
+            /* Bottom anchored above the mobile bottom nav (~82px height
+               + 12px margin). This keeps the picker visible regardless
+               of where in the composer the Due chip is. */
+            bottom: 100px !important;
+            max-width: 260px !important;
+            width: calc(100vw - 24px) !important;
+            min-width: 0 !important;
+            max-height: 420px !important;
             overflow-y: auto !important;
+            overflow-x: hidden !important;
+            /* Compact inner padding */
+            padding: 6px !important;
+          }
+          /* Compact calendar cells on mobile so the grid doesn't bloat
+             the picker. Smaller height, smaller font. */
+          .rt-due-picker [role="grid"] button,
+          .rt-due-picker > div > div > div > button {
+            height: 22px !important;
+            font-size: 10.5px !important;
           }
         }
         /* Rai pick clamp + fade — universal (desktop AND mobile).
@@ -7025,48 +7064,21 @@ export default function App({ user }) {
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
       <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "var(--rt-sh-card)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
-        {/* Logo + collapse toggle.
-            Expanded (240px): "Retayned." wordmark on the left, chevron
-            tucked into the top-right of the brand row.
-            Collapsed (64px): "R." centered, chevron immediately below
-            it, also centered. Toggle is a flat transparent icon button
-            (.rt-sidebar-toggle CSS) — no card, no shadow — so it reads
-            as part of the rail rather than a floating chip. */}
-        {!sidebarCollapsed ? (
-          <div style={{ padding: "22px 22px 18px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-            <span style={{
-              fontFamily: "'Outfit', system-ui, sans-serif",
-              fontWeight: 900,
-              fontSize: 22,
-              color: C.primary,
-              letterSpacing: "-0.04em",
-              lineHeight: 1,
-            }}>Retayned.</span>
-            <button
-              className="rt-sidebar-toggle"
-              onClick={() => setSidebarCollapsed(true)}
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
-            >‹</button>
-          </div>
-        ) : (
-          <div style={{ padding: "22px 0 14px", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <span style={{
-              fontFamily: "'Outfit', system-ui, sans-serif",
-              fontWeight: 900,
-              fontSize: 22,
-              color: C.primary,
-              letterSpacing: "-0.04em",
-              lineHeight: 1,
-            }}>R.</span>
-            <button
-              className="rt-sidebar-toggle"
-              onClick={() => setSidebarCollapsed(false)}
-              title="Expand sidebar"
-              aria-label="Expand sidebar"
-            >›</button>
-          </div>
-        )}
+        {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
+            Collapsed: "R." centered. The collapse/expand toggle lives
+            OUTSIDE the sidebar (as a sibling, see below) so it can
+            straddle the right edge as a floating disc without being
+            clipped by the sidebar's overflow-y: auto. */}
+        <div style={{ padding: sidebarCollapsed ? "22px 0 18px" : "22px 22px 18px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
+          <span style={{
+            fontFamily: "'Outfit', system-ui, sans-serif",
+            fontWeight: 900,
+            fontSize: 22,
+            color: C.primary,
+            letterSpacing: "-0.04em",
+            lineHeight: 1,
+          }}>{sidebarCollapsed ? "R." : "Retayned."}</span>
+        </div>
 
         {/* Nav items — fixed, always visible */}
         <div style={{ padding: sidebarCollapsed ? "0 8px" : "0 10px", flexShrink: 0 }}>
@@ -7341,6 +7353,23 @@ export default function App({ user }) {
           </div>
         </div>
       </div>
+
+      {/* SIDEBAR COLLAPSE TOGGLE — floating disc on the sidebar's right
+          edge. Rendered OUTSIDE the sidebar (as a sibling) so it can
+          straddle the edge without being clipped by the sidebar's
+          overflow-y: auto. Position is computed from --sidebar-w (set
+          on documentElement when sidebarCollapsed changes) so the disc
+          follows the sidebar's right edge through the collapse/expand
+          transition. Vertically aligned with the brand mark. Hidden on
+          mobile — the mobile bottom nav handles all navigation there. */}
+      <button
+        className="rt-sidebar-toggle"
+        onClick={() => setSidebarCollapsed(v => !v)}
+        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {sidebarCollapsed ? "›" : "‹"}
+      </button>
 
       {/* MOBILE TOP */}
       {/* Mobile top bar deliberately removed (May 2026).
@@ -7660,7 +7689,8 @@ export default function App({ user }) {
           const firstName = user?.user_metadata?.full_name?.split(" ")[0]
             || (user?.email ? user.email.split("@")[0].replace(/^\w/, c => c.toUpperCase()) : "")
             || "";
-          const displayDate = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" });
+          const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+          const shortDisplayDate = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
           // Score chip component
           const ScoreChip = ({ score, delta = null, size = "sm" }) => {
@@ -7940,10 +7970,9 @@ export default function App({ user }) {
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
               {/* STATUS BAND */}
               <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
-                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.6, textTransform: "uppercase", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                  <span>Today</span>
-                  <span style={{ opacity: 0.5, fontWeight: 400, letterSpacing: 0 }}>·</span>
-                  <span style={{ letterSpacing: 0.2, fontWeight: 600 }}>{displayDate}</span>
+                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
+                  <span className="rt-band-date-long">{displayDate}</span>
+                  <span className="rt-band-date-short">{shortDisplayDate}</span>
                 </div>
                 <h1 className="rt-band-greet" style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
                   {greeting}{firstName ? ", " + firstName : ""}.
