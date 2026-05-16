@@ -94,6 +94,16 @@ const THEME_CSS = `
     --rt-sh-purple-hover: 0 0 0 1px rgba(91,33,182,0.22), 0 8px 22px rgba(91,33,182,0.34), 0 2px 4px rgba(91,33,182,0.16);
     --rt-sh-green-glow: 0 0 0 1px rgba(51,84,62,0.10), 0 2px 6px rgba(51,84,62,0.16);
     --rt-sh-chip-purple: 0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08);
+    /* Rai-territory gradient-halo shadow. Used on the armed Add Task
+       button and the New Rai Chat button so they read as the inspiration's
+       Ask AI pill: tight ambient + glowing purple bleed underneath. Halo
+       reserved — applied sparingly so it stays meaningful. */
+    --rt-sh-rai-pop: 0 1px 2px rgba(91,33,182,0.22), 0 6px 14px rgba(91,33,182,0.18), 0 14px 32px rgba(123,58,224,0.32);
+    --rt-sh-rai-pop-hover: 0 2px 4px rgba(91,33,182,0.28), 0 8px 18px rgba(91,33,182,0.22), 0 18px 40px rgba(123,58,224,0.38);
+    /* Card-lift shadow — the active sidebar nav rises above the substrate
+       with a multi-stop drop, matching the inspiration's lifted-white-chip
+       toolbar pattern. */
+    --rt-sh-card-lift: 0 2px 4px rgba(20,30,22,0.06), 0 12px 28px rgba(20,30,22,0.08);
     --rt-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --rt-ease-press: cubic-bezier(0.4, 0, 0.6, 1);
     /* Cream highlight used inside duotone editorial icons (date dot,
@@ -2715,96 +2725,89 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
         </div>
       </div>
 
-      {/* Connect Google Calendar — sits below the timeline grid, above
-          the composer. Quiet left-aligned row inside a soft warm-cream
-          panel; reads as a calendar-level setting rather than a primary
-          action. Disappears entirely once connected (googleConnected
-          true → header shows the status instead) OR once the user
-          dismisses it via "Not now" (promptDismissed). Settings →
-          Integrations always keeps a Google Calendar row regardless, so
-          dismissing here is not permanent — it just clears the nudge.
-          Only rendered when an onConnectClick handler is wired. */}
+      {/* Connect Google Calendar — quiet utility row below the timeline.
+          No panel surface, no background, no rounded card — it's an
+          offer, not a feature. Small icon + bold purple link + dot
+          separator + Not now. Disappears when connected OR dismissed.
+          Settings → Integrations always keeps an explicit Google row,
+          so dismissing here is non-permanent. Only renders when an
+          onConnectClick handler is wired. */}
       {!googleConnected && !promptDismissed && onConnectClick && (
         <div style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          padding: "9px 12px",
-          marginTop: 10,
-          background: C.surfaceWarm,
-          borderRadius: 10,
-          boxShadow: "var(--rt-sh-xs)",
+          gap: 6,
+          padding: "8px 4px 4px",
+          fontSize: 11.5,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <Icon name="calendar" size={14} color={C.textSec} />
-            <button
-              type="button"
-              className="rt-purple-link"
-              onClick={onConnectClick}
-              style={{
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                paddingBottom: 1,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
-              Connect Google Calendar
-            </button>
-          </div>
+          <Icon name="calendar" size={11} color={C.textMuted} />
+          <button
+            type="button"
+            className="rt-purple-link"
+            onClick={onConnectClick}
+            style={{
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              paddingBottom: 1,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 11.5,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Connect Google Calendar
+          </button>
           {onDismissConnectPrompt && (
-            <button
-              type="button"
-              className="rt-quiet-link"
-              onClick={onDismissConnectPrompt}
-              style={{
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 11.5,
-                fontWeight: 500,
-                color: C.textMuted,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              Not now
-            </button>
+            <>
+              <span style={{ color: C.border }}>·</span>
+              <button
+                type="button"
+                className="rt-quiet-link"
+                onClick={onDismissConnectPrompt}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: 11.5,
+                  fontWeight: 500,
+                  color: C.textMuted,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Not now
+              </button>
+            </>
           )}
         </div>
       )}
 
-      {/* Composer — rendered as a div (not a form) to avoid nested-form
-          interactions. The position:relative + zIndex:5 lifts the composer
-          above the absolute-positioned timeline content above it.
-          Styled as a recessed warm-cream input so it reads as a discrete
-          entry field rather than a thin-line afterthought. Matches the
-          form-field pattern used elsewhere on white modal surfaces. */}
+      {/* Composer — flush input at the foot of the calendar widget.
+          Idle: hairline divider on top, no background, no rounded panel.
+          Focused (:focus-within from rt-cal-composer class): the row
+          softens into a recessed warm-cream surface with inset shadow,
+          so the act of typing feels like using a real input. Returns to
+          the quiet idle when focus leaves. */}
       <div
+        className="rt-cal-composer"
         onClick={() => inputRef.current && inputRef.current.focus()}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "9px 12px",
-          marginTop: 10,
-          background: C.surfaceWarm,
-          borderRadius: 10,
-          boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)",
+          padding: "8px 2px 0",
+          marginTop: 6,
+          borderTop: "1px solid " + C.borderLight,
           cursor: "text",
           pointerEvents: "auto",
           position: "relative",
           zIndex: 5,
         }}
       >
-        <span style={{ fontSize: 16, color: C.btn, fontWeight: 700, lineHeight: 1, paddingLeft: 2, pointerEvents: "none" }}>+</span>
+        <span style={{ fontSize: 15, color: C.btn, fontWeight: 700, lineHeight: 1, pointerEvents: "none" }}>+</span>
         <input
           ref={inputRef}
           type="text"
@@ -5747,7 +5750,15 @@ export default function App({ user }) {
            hover the text darkens one step and a faint hairline underline
            previews the active-state underline. Substrate is the deepCream
            Portfolio widget card, so hover should darken (not lighten). */
-        .rt-user-chip:hover { background: var(--rt-deep-cream); }
+        .rt-user-chip:hover {
+          background: var(--rt-deep-cream);
+          box-shadow: var(--rt-sh-card) !important;
+          transform: translateY(-1px);
+        }
+        .rt-user-chip:active {
+          transform: translateY(0) scale(0.99);
+          transition: transform 80ms var(--rt-ease-press);
+        }
         .r-period-opt {
           color: var(--rt-text-sec);
           border-bottom: 1px solid transparent;
@@ -5914,11 +5925,23 @@ export default function App({ user }) {
         }
         .rt-add-task-btn:not(:disabled):hover {
           background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-purple-hover) !important;
+          box-shadow: var(--rt-sh-rai-pop-hover) !important;
           transform: translateY(-1px);
         }
         .rt-add-task-btn:not(:disabled):active {
           transform: translateY(0) scale(0.97);
+          transition: transform 80ms var(--rt-ease-press);
+        }
+        /* Rai-territory gradient-halo buttons (sidebar New Chat, future
+           additions). Mirror the Add Task armed-state motion: lift on
+           hover, brighten the gradient, intensify the halo. */
+        .rt-rai-pop-btn:hover {
+          background: var(--rt-grad-btn-hover) !important;
+          box-shadow: var(--rt-sh-rai-pop-hover) !important;
+          transform: translateY(-1px);
+        }
+        .rt-rai-pop-btn:active {
+          transform: translateY(0) scale(0.98);
           transition: transform 80ms var(--rt-ease-press);
         }
         /* ── PILL — generic small status/info chip ───────── */
@@ -6023,6 +6046,80 @@ export default function App({ user }) {
            stays put. */
         @media (prefers-reduced-motion: reduce) {
           .rt-rai-boost::before { animation: none; }
+          .rt-band-pick-mark { animation: none !important; }
+        }
+
+        /* Calendar composer (G) — idle is the flush hairline-divider
+           treatment set inline at the call site. On focus-within, the
+           row softens into a warm-cream recessed input. Lets us keep
+           the lightweight idle state Adam wanted while restoring real
+           input weight while typing. Transitions cover the morph so
+           neither state feels jumpy. */
+        .rt-cal-composer {
+          transition: background 180ms var(--rt-ease-out),
+                      box-shadow 180ms var(--rt-ease-out),
+                      border-top-color 180ms var(--rt-ease-out),
+                      border-radius 180ms var(--rt-ease-out),
+                      padding 180ms var(--rt-ease-out),
+                      margin-top 180ms var(--rt-ease-out);
+        }
+        .rt-cal-composer:focus-within {
+          background: var(--rt-surface-warm);
+          box-shadow: inset 0 1px 2px rgba(20,30,22,0.08);
+          border-top-color: transparent !important;
+          border-radius: 8px;
+          padding: 9px 12px !important;
+          margin-top: 10px !important;
+        }
+
+        /* Progress bar leading-edge highlight (D). A small radial bright
+           spot at the right edge of the fill suggests an instrument in
+           motion rather than a flat gradient. */
+        .rt-pct-fill {
+          position: absolute;
+        }
+        .rt-pct-fill::after {
+          content: '';
+          position: absolute;
+          right: -1px;
+          top: -2px;
+          bottom: -2px;
+          width: 8px;
+          border-radius: 999px;
+          background: radial-gradient(ellipse at left, rgba(255,255,255,0.55), transparent 70%);
+          pointer-events: none;
+        }
+
+        /* Pick-sentence ✦ medallion (E). Same gradient + halo + breathe
+           as the row-marker .rt-rai-boost::before, but with a -1.3s
+           animation-delay so the two marks are 180° out of phase. Synced
+           medallions read as one duplicated effect; offset reads as two
+           independent living things. */
+        .rt-band-pick-mark {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 16px;
+          height: 16px;
+          margin-right: 8px;
+          vertical-align: -2px;
+          position: relative;
+          top: -1px;
+          background: var(--rt-grad-btn);
+          color: #fff;
+          border-radius: 50%;
+          font-size: 8.5px;
+          line-height: 1;
+          font-weight: 700;
+          /* Override the parent's Fraunces italic for the glyph so the
+             ✦ renders centered and proportional. */
+          font-family: 'Manrope', system-ui, sans-serif;
+          font-style: normal;
+          box-shadow: var(--rt-sh-rai-pop);
+          animation: rtRaiBoostBreathe 2.6s ease-in-out infinite;
+          animation-delay: -1.3s;
+          transform-origin: center center;
+          will-change: transform;
         }
 
         /* ── ANIMATIONS ──────────────────────────────────── */
@@ -6433,29 +6530,49 @@ export default function App({ user }) {
           }
           .rt-focus-col { display: none !important; }
           .rt-rai-col { display: none !important; }
-          /* Mobile band layout: switch from flex-row to block. The %-completion
-             widget (.rt-band-right) is hidden entirely on mobile; instead we
-             show the smaller inline elements .rt-band-sub-pct (in the events
-             row) and .rt-band-sub-bar (full-width thin bar below the row).
-             This keeps a single, vertically-stacked, full-width content column.
-             Horizontal padding is removed on mobile so the events dropdown
-             matches the composer card width pixel-for-pixel. */
+          /* Mobile band: the band is already a vertical flex stack (date,
+             greeting, Rai pick, meta row). Defensive mobile overrides
+             below: force the column direction (don't rely on inline),
+             cap Rai pick to viewport, and stack the meta row's two
+             children so the % block falls cleanly under events · tasks
+             instead of squeezing into a flex-wrap edge case. */
           .rt-band {
-            display: block !important;
+            display: flex !important;
+            flex-direction: column !important;
             position: relative !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
           }
-          .rt-band > div:first-child { width: 100% !important; }
           .rt-band-greet { font-size: 24px !important; white-space: nowrap; }
-          .rt-band-right { display: none !important; }
-          .rt-band-sub-pct { display: inline-block !important; }
-          .rt-band-sub-bar { display: block !important; }
-          /* Sub row stays single-line on mobile so the inline progress bar
-             sits between "12 tasks" and "100%" without wrapping. */
-          .rt-band-sub { width: 100% !important; flex-wrap: nowrap !important; }
-          .rt-band-pick { width: 100% !important; }
-          .rt-composer-controls { width: 100%; }
+          .rt-band-pick { max-width: 100% !important; }
+          /* Stack events·tasks and the %-bar block on mobile — the desktop
+             space-between row becomes a column. % block goes full-width
+             below events·tasks rather than fighting for horizontal room. */
+          .rt-band-meta {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 10px !important;
+          }
+          .rt-band-pct {
+            min-width: 0 !important;
+            width: 100%;
+          }
+          /* %-block contents align left on mobile (was right on desktop). */
+          .rt-band-pct > div:first-child {
+            justify-content: flex-start !important;
+          }
+          /* Composer Row 2: let Add Task wrap to its own line on mobile
+             so it can never be clipped off the right edge. The .rt-composer-controls
+             takes the full row at flex-basis 100%, pushing the button
+             below. Button stays compact but is centered. */
+          .rt-composer-controls {
+            flex: 0 0 100% !important;
+            width: 100%;
+          }
+          .rt-add-task-btn {
+            margin-left: auto !important;
+            margin-right: auto !important;
+          }
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
@@ -6487,6 +6604,26 @@ export default function App({ user }) {
         }
         .rt-composer-pill.is-filled:hover {
           box-shadow: 0 0 0 1px rgba(91,33,182,0.18), 0 4px 12px rgba(91,33,182,0.20) !important;
+        }
+        /* Recurring frequency chips inside the Due picker — share the
+           composer-pill motion language (idle xs-shadow, hover lift,
+           press scale). Idle vs active surfaces are set inline at the
+           call site so the class only carries motion, not state. */
+        .rt-rec-chip {
+          transition: box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out),
+                      background 200ms var(--rt-ease-out),
+                      color 200ms var(--rt-ease-out);
+        }
+        .rt-rec-chip:hover {
+          transform: translateY(-1px);
+        }
+        .rt-rec-chip:not(.is-active):hover {
+          box-shadow: var(--rt-sh-card) !important;
+        }
+        .rt-rec-chip:active {
+          transform: translateY(0) scale(0.97);
+          transition: transform 80ms var(--rt-ease-press);
         }
         /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
         @media (min-width: 1440px) {
@@ -6678,13 +6815,14 @@ export default function App({ user }) {
                 marginBottom: 2,
                 color: active ? C.primaryDeep : C.textSec,
                 fontWeight: active ? 600 : 500,
-                background: active ? C.deepCream : "transparent",
-                boxShadow: active ? "var(--rt-sh-xs)" : "none",
+                background: active ? C.card : "transparent",
+                boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
+                transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
                 <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
-                {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar, flexShrink: 0 }} />}
+                {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
               </div>
             );
           })}
@@ -6695,7 +6833,7 @@ export default function App({ user }) {
             affecting nav items or the Portfolio widget at the bottom. */}
         {page === "coach" ? (
           <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            <button className="r-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: C.btn, color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
+            <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-rai-pop)", flexShrink: 0, transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
               New Chat
             </button>
             {raiConvoList.length > 0 && (() => {
@@ -6909,8 +7047,9 @@ export default function App({ user }) {
                   padding: "9px 12px",
                   borderRadius: 9,
                   color: active ? C.primaryDeep : C.textSec,
-                  background: active ? C.deepCream : "transparent",
-                  boxShadow: active ? "var(--rt-sh-xs)" : "none",
+                  background: active ? C.card : "transparent",
+                  boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
+                  transform: active ? "translateY(-0.5px)" : "none",
                   fontWeight: active ? 600 : 500,
                   cursor: "pointer",
                   transition: "all 180ms var(--rt-ease-out)",
@@ -6922,7 +7061,7 @@ export default function App({ user }) {
           })()}
         </div>
         <div style={{ padding: "10px 6px 14px" }}>
-          <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: "pointer", transition: "background 160ms var(--rt-ease-out)" }}>
+          <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: "pointer", background: C.card, boxShadow: "var(--rt-sh-xs)", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
             <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)" }}>{getUserInitial(user)}</div>
             <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
           </div>
@@ -7526,14 +7665,68 @@ export default function App({ user }) {
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
               {/* STATUS BAND */}
-              <div className="rt-band" style={{ gridArea: "band", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                  <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>{displayDate}</div>
-                  <h1 className="rt-band-greet" style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
-                    {greeting}{firstName ? ", " + firstName : ""}.
-                  </h1>
+              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
+                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
+                <h1 className="rt-band-greet" style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
+                  {greeting}{firstName ? ", " + firstName : ""}.
+                </h1>
 
-                  <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {/* Rai's Pick of the Day — its own block above the meta row.
+                    maxWidth caps how wide it can get so long reasons WRAP
+                    within the block (multi-line) instead of stretching the
+                    band wider and pushing the events · tasks · % row to
+                    misalign. Renders regardless of rankMode: the Pick is an
+                    OBSERVATION ("here's the client to focus on today"), not
+                    a SORT directive — Manual toggle does not silence it.
+                    Hidden when: no pick, picked client not in roster, or
+                    user dismissed it today. */}
+                {(() => {
+                  if (!raiPicks || !raiPicks.client_id) return null;
+                  if (raiState?.todays_pick_dismissed_at) return null;
+                  const pickClient = clients.find(c => c.id === raiPicks.client_id);
+                  if (!pickClient) return null;
+                  const handleAddTask = () => {
+                    setTodayComposerClient(pickClient.name);
+                    setTimeout(() => {
+                      const el = document.getElementById("rt-composer-input");
+                      if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+                    }, 0);
+                  };
+                  const cleanedReason = raiPicks.reason
+                    ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "")
+                    : "Worth a check-in";
+                  return (
+                    <div className="rt-band-pick" style={{
+                      marginTop: 4,
+                      maxWidth: 640,
+                      fontSize: 13.5,
+                      lineHeight: 1.5,
+                      color: C.textMuted,
+                      fontFamily: "'Fraunces', Georgia, serif",
+                      fontStyle: "italic",
+                      fontWeight: 500,
+                      fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                    }}>
+                      <span className="rt-band-pick-mark" aria-hidden="true">✦</span>
+                      Today&rsquo;s client is{" "}
+                      <span
+                        className="rt-purple-link"
+                        onClick={handleAddTask}
+                        style={{ cursor: "pointer", paddingBottom: 1 }}
+                      >
+                        {pickClient.name}
+                      </span>
+                      {" "}&mdash;{" "}{cleanedReason}.{" "}-Rai
+                    </div>
+                  );
+                })()}
+
+                {/* Meta row: events · tasks on the left, % + completion bar
+                    on the right. One flex row, justify-between, with a
+                    flex-wrap fallback so on truly narrow screens the right
+                    block falls below cleanly. */}
+                <div className="rt-band-meta" style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <button
                       className="rt-band-sub-events"
                       onClick={() => setTodayStripOpen(!todayStripOpen)}
@@ -7558,147 +7751,70 @@ export default function App({ user }) {
                     </button>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
-                    {/* Rai's Pick of the Day — inline editorial sentence right
-                        after events · tasks. Used to live as its own block
-                        above (.rt-band-pick), which on long reasons would
-                        wrap and push the events/tasks line down. Now it
-                        shares this row with a hard cap (maxWidth) + ellipsis
-                        on desktop, so it can never push the count or the
-                        right-side % pill onto a new line. On mobile, the
-                        parent .rt-band-sub already flexWraps and the
-                        sentence falls naturally onto a new line at full
-                        width — that's fine because mobile gets vertical
-                        space. Renders regardless of rankMode: the Pick is
-                        an OBSERVATION ("here's the client to focus on
-                        today"), not a SORT directive — Manual toggle does
-                        not silence it. Hidden when: no pick, picked client
-                        not in roster, or user dismissed it today. */}
-                    {(() => {
-                      if (!raiPicks || !raiPicks.client_id) return null;
-                      if (raiState?.todays_pick_dismissed_at) return null;
-                      const pickClient = clients.find(c => c.id === raiPicks.client_id);
-                      if (!pickClient) return null;
-                      const handleAddTask = () => {
-                        setTodayComposerClient(pickClient.name);
-                        setTimeout(() => {
-                          const el = document.getElementById("rt-composer-input");
-                          if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
-                        }, 0);
-                      };
-                      const cleanedReason = raiPicks.reason
-                        ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "")
-                        : "Worth a check-in";
-                      return (
-                        <>
-                          <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
-                          <span
-                            className="rt-band-pick-inline"
-                            style={{
-                              // flex-shrink + min-width:0 lets the sibling
-                              // count items stay visible; ellipsis kicks in
-                              // when the sentence can't fit. maxWidth caps
-                              // the share of horizontal real estate so the
-                              // pick can never feel like it owns the row.
-                              flex: "0 1 auto",
-                              minWidth: 0,
-                              maxWidth: 560,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              fontSize: 13,
-                              color: C.textMuted,
-                              fontFamily: "'Fraunces', Georgia, serif",
-                              fontStyle: "italic",
-                              fontWeight: 500,
-                              fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
-                            }}
-                            title={`Today's client is ${pickClient.name} — ${cleanedReason}. -Rai`}
-                          >
-                            Today&rsquo;s client is{" "}
-                            <span
-                              className="rt-purple-link"
-                              onClick={handleAddTask}
-                              style={{ cursor: "pointer", paddingBottom: 1 }}
-                            >
-                              {pickClient.name}
-                            </span>
-                            {" "}&mdash;{" "}{cleanedReason}.{" "}-Rai
-                          </span>
-                        </>
-                      );
-                    })()}
-                    {/* Inline progress bar — mobile only. Sits between the tasks
-                        count and the % pill, taking the remaining horizontal space.
-                        On desktop this element is hidden (the standalone right-side
-                        widget handles % display). */}
-                    <div className="rt-band-sub-bar" style={{ display: "none", height: 3, background: C.borderLight, borderRadius: 2, overflow: "hidden", flex: 1, minWidth: 40 }}>
-                      <div style={{ height: "100%", width: `${pct * 100}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
-                    </div>
-                    <span className="rt-band-sub-pct" style={{ display: "none", fontSize: 11, fontWeight: 700, color: C.primary, background: C.primarySoft, padding: "2px 8px", borderRadius: 999, flexShrink: 0 }}>
-                      {Math.round(pct * 100)}%
-                    </span>
                   </div>
 
-                  {/* Mobile calendar dropdown — drops down right under the band trigger.
-                      Renders the today timeline in compact mode (caps at 6 visible
-                      hours with internal scroll). */}
-                  {todayStripOpen && (
-                    <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, borderRadius: 10, padding: "14px" }}>
-                      <TodayTimeline
-                        events={personalEvents}
-                        C={C}
-                        showHeader={true}
-                        compact={true}
-                        googleConnected={false}
-                        onConnectClick={() => setPage("settings")}
-                        promptDismissed={googleCalPromptDismissed}
-                        onDismissConnectPrompt={dismissGoogleCalPrompt}
-                        onCreate={async (entry) => {
-                          const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                          setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                          const { data, error } = await personalCalendarDb.create(user.id, entry);
-                          if (error) {
-                            console.error("Calendar create failed:", error);
-                            setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
-                            return;
-                          }
-                          setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                        }}
-                        onUpdate={async (id, patch) => {
-                          // Optimistic move/resize. Capture prev so we can
-                          // roll back if the server rejects the update.
-                          const prev = personalEvents;
-                          setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                          const { error } = await personalCalendarDb.update(id, patch);
-                          if (error) {
-                            console.error("Calendar update failed:", error);
-                            setPersonalEvents(prev);
-                          }
-                        }}
-                        onDelete={async (id) => {
-                          const prev = personalEvents;
-                          setPersonalEvents(prev.filter(e => e.id !== id));
-                          const { error } = await personalCalendarDb.remove(id);
-                          if (error) {
-                            console.error("Calendar delete failed:", error);
-                            setPersonalEvents(prev);
-                          }
-                        }}
-                      />
+                  {/* Completion: big % + label + progress bar. Single block
+                      on the right of the meta row — replaces the old
+                      .rt-band-right separate column. */}
+                  <div className="rt-band-pct" style={{ minWidth: 200, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
+                      <span className="rt-pct-num" style={{ fontSize: 22, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
+                        {Math.round(pct * 100)}<span style={{ fontSize: 13, color: C.textMuted, fontWeight: 500 }}>%</span>
+                      </span>
+                      <span className="rt-pct-lbl" style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>of today done</span>
                     </div>
-                  )}
-                </div>
-                <div className="rt-band-right" style={{ minWidth: 220, textAlign: "right" }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
-                    <span className="rt-pct-num" style={{ fontSize: 26, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
-                      {Math.round(pct * 100)}<span style={{ fontSize: 15, color: C.textMuted, fontWeight: 500 }}>%</span>
-                    </span>
-                    <span className="rt-pct-lbl" style={{ fontSize: 11, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>of today done</span>
-                  </div>
-                  <div className="rt-pct-bar" style={{ position: "relative", height: 4, background: C.borderLight, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(pct) * 100))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
+                    <div className="rt-pct-bar" style={{ position: "relative", height: 5, background: C.borderLight, borderRadius: 999, marginTop: 8, overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.10)" }}>
+                      <div className="rt-pct-fill" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(pct) * 100))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 999, transition: "width 400ms cubic-bezier(.2,.7,.3,1)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.30), 0 0 6px rgba(51,84,62,0.25)" }} />
+                    </div>
                   </div>
                 </div>
+
+                {/* Mobile calendar dropdown — drops down right under the band trigger.
+                    Renders the today timeline in compact mode (caps at 6 visible
+                    hours with internal scroll). */}
+                {todayStripOpen && (
+                  <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, borderRadius: 10, padding: "14px" }}>
+                    <TodayTimeline
+                      events={personalEvents}
+                      C={C}
+                      showHeader={true}
+                      compact={true}
+                      googleConnected={false}
+                      onConnectClick={() => setPage("settings")}
+                      promptDismissed={googleCalPromptDismissed}
+                      onDismissConnectPrompt={dismissGoogleCalPrompt}
+                      onCreate={async (entry) => {
+                        const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                        setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                        const { data, error } = await personalCalendarDb.create(user.id, entry);
+                        if (error) {
+                          console.error("Calendar create failed:", error);
+                          setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
+                          return;
+                        }
+                        setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                      }}
+                      onUpdate={async (id, patch) => {
+                        const prev = personalEvents;
+                        setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                        const { error } = await personalCalendarDb.update(id, patch);
+                        if (error) {
+                          console.error("Calendar update failed:", error);
+                          setPersonalEvents(prev);
+                        }
+                      }}
+                      onDelete={async (id) => {
+                        const prev = personalEvents;
+                        setPersonalEvents(prev.filter(e => e.id !== id));
+                        const { error } = await personalCalendarDb.remove(id);
+                        if (error) {
+                          console.error("Calendar delete failed:", error);
+                          setPersonalEvents(prev);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* COMPOSER */}
@@ -8275,7 +8391,7 @@ export default function App({ user }) {
                                         return (
                                           <button
                                             key={opt.key}
-                                            className="rt-rec-chip"
+                                            className={"rt-rec-chip" + (isSel ? " is-active" : "")}
                                             onClick={() => {
                                               if (opt.key === "daily") setNewTaskRecurrencePattern({ kind: "daily" });
                                               else if (opt.key === "weekdays") setNewTaskRecurrencePattern({ kind: "weekdays" });
@@ -8284,16 +8400,15 @@ export default function App({ user }) {
                                             }}
                                             style={{
                                               padding: "6px 14px",
-                                              background: isSel ? C.btnLight : "transparent",
-                                              color: isSel ? C.btn : C.textSec,
                                               border: "none",
                                               borderRadius: 999,
                                               fontSize: 12,
                                               fontWeight: 600,
                                               cursor: "pointer",
                                               fontFamily: "inherit",
-                                              boxShadow: isSel ? "var(--rt-sh-chip-purple)" : "none",
-                                              transition: "all 160ms var(--rt-ease-out)",
+                                              ...(isSel
+                                                ? { background: C.btnLight, color: C.btn, boxShadow: "var(--rt-sh-chip-purple)" }
+                                                : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
                                           >
                                             {opt.label}
@@ -8312,7 +8427,7 @@ export default function App({ user }) {
                                           return (
                                             <button
                                               key={dow}
-                                              className="rt-rec-chip"
+                                              className={"rt-rec-chip" + (isSel ? " is-active" : "")}
                                               onClick={() => {
                                                 const newDays = isSel
                                                   ? days.filter(d => d !== dow)
@@ -8322,8 +8437,6 @@ export default function App({ user }) {
                                               }}
                                               style={{
                                                 width: 28, height: 28,
-                                                background: isSel ? C.btn : "transparent",
-                                                color: isSel ? "#fff" : C.textSec,
                                                 border: "none",
                                                 borderRadius: 999,
                                                 fontSize: 11.5,
@@ -8331,8 +8444,9 @@ export default function App({ user }) {
                                                 cursor: "pointer",
                                                 fontFamily: "inherit",
                                                 padding: 0,
-                                                boxShadow: isSel ? "var(--rt-sh-chip-purple)" : "none",
-                                                transition: "all 160ms var(--rt-ease-out)",
+                                                ...(isSel
+                                                  ? { background: C.btn, color: "#fff", boxShadow: "var(--rt-sh-chip-purple)" }
+                                                  : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                               }}
                                             >{label}</button>
                                           );
@@ -8345,32 +8459,30 @@ export default function App({ user }) {
                                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                         <div style={{ display: "flex", gap: 5 }}>
                                           <button
-                                            className="rt-rec-chip"
+                                            className={"rt-rec-chip" + (newTaskRecurrencePattern.kind === "monthly_date" ? " is-active" : "")}
                                             onClick={() => setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() })}
                                             style={{
                                               flex: 1, padding: "6px 12px",
-                                              background: newTaskRecurrencePattern.kind === "monthly_date" ? C.btnLight : "transparent",
-                                              color: newTaskRecurrencePattern.kind === "monthly_date" ? C.btn : C.textSec,
                                               border: "none",
                                               borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                                              boxShadow: newTaskRecurrencePattern.kind === "monthly_date" ? "var(--rt-sh-chip-purple)" : "none",
-                                              transition: "all 160ms var(--rt-ease-out)",
+                                              ...(newTaskRecurrencePattern.kind === "monthly_date"
+                                                ? { background: C.btnLight, color: C.btn, boxShadow: "var(--rt-sh-chip-purple)" }
+                                                : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
                                           >Date of month</button>
                                           <button
-                                            className="rt-rec-chip"
+                                            className={"rt-rec-chip" + (newTaskRecurrencePattern.kind === "monthly_weekday" ? " is-active" : "")}
                                             onClick={() => {
                                               const week = Math.ceil(_now.getDate() / 7);
                                               setNewTaskRecurrencePattern({ kind: "monthly_weekday", week, day: _now.getDay() });
                                             }}
                                             style={{
                                               flex: 1, padding: "6px 12px",
-                                              background: newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btnLight : "transparent",
-                                              color: newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btn : C.textSec,
                                               border: "none",
                                               borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                                              boxShadow: newTaskRecurrencePattern.kind === "monthly_weekday" ? "var(--rt-sh-chip-purple)" : "none",
-                                              transition: "all 160ms var(--rt-ease-out)",
+                                              ...(newTaskRecurrencePattern.kind === "monthly_weekday"
+                                                ? { background: C.btnLight, color: C.btn, boxShadow: "var(--rt-sh-chip-purple)" }
+                                                : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
                                           >Day of week</button>
                                         </div>
@@ -8466,7 +8578,7 @@ export default function App({ user }) {
                         // color does the work.,
                         background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
                         color: newTask.trim() ? "#fff" : C.textMuted,
-                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
+                        boxShadow: newTask.trim() ? "var(--rt-sh-rai-pop)" : "none",
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
@@ -15774,17 +15886,19 @@ export default function App({ user }) {
                 cursor: "pointer",
                 padding: "5px 12px",
                 borderRadius: 10,
-                background: active ? C.deepCream : "transparent",
-                boxShadow: active ? "var(--rt-sh-xs)" : "none",
+                background: active ? C.card : "transparent",
+                boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
+                transform: active ? "translateY(-0.5px)" : "none",
                 position: "relative",
                 flexShrink: 0,
                 scrollSnapAlign: "center",
                 minWidth: 60,
+                transition: "all 180ms var(--rt-ease-out)",
               }}
             >
               <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.deepCream : C.sidebar) }} />}
+              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
             </div>
           );
         })}
