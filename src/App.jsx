@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, workerTokens as workerTokensDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 // d3-force for the live, physics-driven referral network. We import only
 // the force functions we use (not the full d3 bundle) — keeps the chunk
@@ -26,7 +26,7 @@ import {
 // The CSS variable definitions live in a <style> block injected at App
 // mount-time so they're available before any component reads them.
 const C = {
-  primary: "#33543E", primaryDark: "#274230", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
+  primary: "#33543E", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
 
   // Surfaces — themed
   bg: "var(--rt-bg)",
@@ -40,27 +40,23 @@ const C = {
   text: "var(--rt-text)",
   textSec: "var(--rt-text-sec)",
   textMuted: "var(--rt-text-muted)",
-  ink900: "var(--rt-ink-900)", ink700: "var(--rt-ink-700)", ink500: "var(--rt-ink-500)", ink400: "var(--rt-ink-400)", ink300: "var(--rt-ink-300)",
+  ink500: "var(--rt-ink-500)", ink300: "var(--rt-ink-300)",
 
-  // Borders — themed
+  // Borders — themed (mostly retired in favor of shadow surfaces, but
+  // C.border/borderLight are still used for legitimate divider rules)
   border: "var(--rt-border)",
   borderLight: "var(--rt-border-light)",
   borderSoft: "var(--rt-border-soft)",
-  surfaceSelected: "var(--rt-surface-selected)",
 
-  // Gradients use only fixed dark colors so they read well on either theme bg
-  heroGrad: "linear-gradient(145deg, #1E261F 0%, #2A382C 40%, #33543E 100%)",
+  // Rai chat hero gradient — only used on the empty-state chat surface
   raiGrad: "linear-gradient(145deg, #1E261F 0%, #33543E 55%, #558B68 100%)",
 
-  // Accents — fixed (Direction A: warm dark; original colors hold up against warm-brown bg)
+  // Accents — fixed
   danger: "#C4432B", warning: "#B88B15", success: "#2D8659",
+  dangerSoft: "#FBE6DE",
   retCrit: "#B4341F", retWarn: "#D17A1B", retOk: "#A8A420", retGood: "#1F7A5C", retElite: "#0C3A2E",
   btn: "#5B21B6", btnHover: "#4C1D95", btnLight: "var(--rt-btn-light)",
 
-  // Shadows — slightly stronger in dark mode for depth perception
-  cardShadow: "var(--rt-shadow-card)",
-  shadowSm: "var(--rt-shadow-sm)",
-  shadowMd: "var(--rt-shadow-md)",
 };
 
 // CSS variable definitions. Injected in the App component's
@@ -72,32 +68,23 @@ const THEME_CSS = `
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
     --rt-deep-cream: #EAE4D6;
-    --rt-sidebar: #FAFAF7;
+    --rt-sidebar: #1C3224;
     --rt-text: #1E261F;
     --rt-text-sec: #6B6B66;
     --rt-text-muted: #9A9A93;
-    --rt-ink-900: #0A0A0A;
-    --rt-ink-700: #2A2A28;
     --rt-ink-500: #6B6B66;
-    --rt-ink-400: #9A9A93;
     --rt-ink-300: #C4C4BD;
     --rt-border: #D8DFD8;
     --rt-border-light: #EFEFEA;
     --rt-border-soft: #EFEFEA;
-    --rt-surface-selected: #F3F8F5;
     --rt-btn-light: #EDE4FA;
-    --rt-shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04);
-    --rt-shadow-sm: 0 1px 2px rgba(10,10,10,0.04), 0 1px 3px rgba(10,10,10,0.03);
-    --rt-shadow-md: 0 2px 4px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05);
     /* ────────────── POLISH LAYER ──────────────
        Same palette, just enhanced with gradients, layered shadows for
        hover-lift, and a uniform motion curve. Applied across the Today
        page interactive surfaces. */
     --rt-grad-btn: linear-gradient(135deg, #6D2BD9 0%, #5B21B6 55%, #4C1D95 100%);
     --rt-grad-btn-hover: linear-gradient(135deg, #7B3AE0 0%, #6028C2 55%, #5421A8 100%);
-    --rt-grad-green: linear-gradient(135deg, #6BA37C 0%, #558B68 100%);
     --rt-grad-green-deep: linear-gradient(135deg, #33543E 0%, #1C3224 100%);
-    --rt-grad-warm-card: linear-gradient(180deg, #FFFFFF 0%, #FBFAF6 100%);
     --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
     --rt-sh-row: 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
     --rt-sh-row-hover: 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
@@ -106,13 +93,13 @@ const THEME_CSS = `
     --rt-sh-purple: 0 0 0 1px rgba(91,33,182,0.10), 0 2px 8px rgba(91,33,182,0.20), 0 1px 2px rgba(91,33,182,0.10);
     --rt-sh-purple-hover: 0 0 0 1px rgba(91,33,182,0.22), 0 8px 22px rgba(91,33,182,0.34), 0 2px 4px rgba(91,33,182,0.16);
     --rt-sh-green-glow: 0 0 0 1px rgba(51,84,62,0.10), 0 2px 6px rgba(51,84,62,0.16);
+    --rt-sh-chip-purple: 0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08);
     --rt-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
     --rt-ease-press: cubic-bezier(0.4, 0, 0.6, 1);
-    /* Editorial nav-icon palette: cream paper, near-black ink,
-       primary-light green accent (matches the SVG art's hand-drawn style). */
+    /* Cream highlight used inside duotone editorial icons (date dot,
+       pulse line, screen face). Body + accent now flow from color /
+       accent props at the call site. */
     --rt-icon-fill: #FCFCFE;
-    --rt-icon-stroke: #2F2F31;
-    --rt-icon-accent: #558B68;
   }
   html, body {
     background: var(--rt-bg);
@@ -126,7 +113,7 @@ const THEME_CSS = `
   }
 `;
 
-const Icon = ({ name, size = 18, color = "currentColor" }) => {
+const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", simple = false }) => {
   // Editorial nav icons — 32x32 viewBox, multi-color (cream paper + ink stroke
   // + green accent). Color tokens come from CSS variables so they flip in dark
   // mode. The `color` prop is intentionally ignored for these icons — they
@@ -135,109 +122,154 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
   const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "due"]);
   const isEditorial = editorialNames.has(name);
 
-  const paths = {
-    today: (<>
-      <rect x="5" y="8" width="22" height="20" rx="3" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <path d="M5 11 Q5 8 8 8 L24 8 Q27 8 27 11 L27 13 L5 13 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <line x1="11" y1="5" x2="11" y2="10" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
-      <line x1="21" y1="5" x2="21" y2="10" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
-      <circle cx="16" cy="20" r="4.2" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-    </>),
+  // Simple variants of editorial icons — single-color silhouettes for
+  // compact contexts (composer chips at 14px) where the duotone interior
+  // detail collapses into noise. Same 32×32 viewBox so dispatch logic
+  // doesn't branch. Body only — no accent, no cream highlights.
+  const simplePaths = {
     clients: (<>
-      <g transform="translate(8 17)">
-        <circle cx="0" cy="0" r="6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <circle cx="0" cy="-1.6" r="1.8" fill="var(--rt-icon-stroke)"/>
-        <path d="M-3.5 4 Q0 1.5 3.5 4" fill="var(--rt-icon-stroke)" stroke="none"/>
-      </g>
-      <g transform="translate(24 17)">
-        <circle cx="0" cy="0" r="6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <circle cx="0" cy="-1.6" r="1.8" fill="var(--rt-icon-stroke)"/>
-        <path d="M-3.5 4 Q0 1.5 3.5 4" fill="var(--rt-icon-stroke)" stroke="none"/>
-      </g>
-      <g transform="translate(16 14)">
-        <circle cx="0" cy="0" r="7.5" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
-        <circle cx="0" cy="-2" r="2.2" fill="var(--rt-icon-fill)"/>
-        <path d="M-4 5 Q0 2 4 5" fill="var(--rt-icon-fill)" stroke="none"/>
-      </g>
-      <path d="M9 26 Q16 30 23 26" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
-      <circle cx="16" cy="28.5" r="1.2" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.2"/>
+      <circle cx="11" cy="12" r="4" fill={color}/>
+      <circle cx="21" cy="12" r="3.5" fill={color} opacity="0.7"/>
+      <path d="M3 27c0-4 3.6-7 8-7s8 3 8 7z" fill={color}/>
+      <path d="M16 26c0-3.2 2.8-6 6.5-6s6.5 2.8 6.5 6z" fill={color} opacity="0.7"/>
+    </>),
+    workers: (<>
+      <rect x="4" y="10" width="24" height="18" rx="2" fill={color}/>
+      <path d="M10 4 Q16 8 22 4" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      <rect x="14.5" y="6" width="3" height="3" rx="0.6" fill={color}/>
+    </>),
+    due: (<>
+      <rect x="4" y="7" width="24" height="21" rx="3" fill={color}/>
+      <line x1="10" y1="3" x2="10" y2="10" stroke={color} strokeWidth="2.4" strokeLinecap="round"/>
+      <line x1="22" y1="3" x2="22" y2="10" stroke={color} strokeWidth="2.4" strokeLinecap="round"/>
+    </>),
+    today: (<>
+      <rect x="4" y="7" width="24" height="21" rx="3" fill={color}/>
+      <line x1="10" y1="3" x2="10" y2="10" stroke={color} strokeWidth="2.4" strokeLinecap="round"/>
+      <line x1="22" y1="3" x2="22" y2="10" stroke={color} strokeWidth="2.4" strokeLinecap="round"/>
     </>),
     health: (<>
-      <rect x="6" y="8" width="20" height="20" rx="2.5" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <rect x="11" y="4" width="10" height="6" rx="1.5" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinejoin="round"/>
-      <path d="M9 19 L13 19 L14.5 15.5 L16.5 22.5 L18.5 16 L20 19 L23 19" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="3" y="6" width="26" height="20" rx="3" fill={color}/>
+      <path d="M6 19l3.5-3.5L13 19l4-6 4.5 7 3-4" stroke="var(--rt-icon-fill)" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
-      {/* Wrap in a group with a small downward translate so the speech bubble's
-          visual center of mass aligns with the centers of Today (calendar) and
-          Clients (heads). Without this, the Rai icon appears to sit higher in
-          its nav cell because its content is biased toward the top of the
-          32-unit canvas. */}
-      <g transform="translate(0 1.5)">
-        <path d="M5 9 Q5 6 8 6 L24 6 Q27 6 27 9 L27 19 Q27 22 24 22 L14 22 L9 27 L10 22 Q5 22 5 19 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-        <path d="M16 10 L17.6 14.4 L22 16 L17.6 17.6 L16 22 L14.4 17.6 L10 16 L14.4 14.4 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinejoin="round"/>
-        <path d="M22 10 L22.6 11.6 L24.2 12.2 L22.6 12.8 L22 14.4 L21.4 12.8 L19.8 12.2 L21.4 11.6 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1" strokeLinejoin="round"/>
+      <path d="M4 9 Q4 5 8 5 L24 5 Q28 5 28 9 L28 20 Q28 24 24 24 L14 24 L9 28 L10 24 Q4 24 4 20 Z" fill={color}/>
+    </>),
+    rolodex: (<>
+      <rect x="3" y="9" width="26" height="19" rx="2" fill={color}/>
+      <rect x="13" y="5" width="6" height="6" rx="1" fill={color}/>
+    </>),
+    referrals: (<>
+      <line x1="11" y1="16" x2="24" y2="6" stroke={color} strokeWidth="2.2" strokeLinecap="round"/>
+      <line x1="11" y1="16" x2="26" y2="16" stroke={color} strokeWidth="2.2" strokeLinecap="round"/>
+      <line x1="11" y1="16" x2="24" y2="26" stroke={color} strokeWidth="2.2" strokeLinecap="round"/>
+      <circle cx="25" cy="6" r="2.6" fill={color}/>
+      <circle cx="27" cy="16" r="2.6" fill={color}/>
+      <circle cx="25" cy="26" r="2.6" fill={color}/>
+      <circle cx="10" cy="16" r="4.6" fill={color}/>
+    </>),
+    settings: (<>
+      <path d="M16 3 L18 6.5 L22 5.5 L22.5 9.5 L26 11 L24.5 14.5 L27 17.5 L24 20 L24.5 24 L20.5 24.5 L18.5 28 L15 26 L11.5 28 L9.5 24.5 L5.5 24 L6 20 L3 17.5 L5.5 14.5 L4 11 L7.5 9.5 L8 5.5 L12 6.5 Z" fill={color}/>
+    </>),
+  };
+
+  const paths = {
+    today: (<>
+      {/* Duotone calendar — main body in `color`, top stripe in `accent`,
+          cream date dot for interior highlight. 32×32 viewBox. */}
+      <rect x="4" y="7" width="24" height="21" rx="3" fill={color}/>
+      <rect x="4" y="7" width="24" height="6" rx="3" fill={accent}/>
+      <rect x="4" y="10" width="24" height="3" fill={accent}/>
+      <line x1="10" y1="4" x2="10" y2="10" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
+      <line x1="22" y1="4" x2="22" y2="10" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
+      <circle cx="16" cy="20" r="4" fill="var(--rt-icon-fill)" opacity="0.95"/>
+    </>),
+    clients: (<>
+      {/* Duotone heads — three figures with the central one in accent.
+          Center figure slightly elevated to read as the focused one. */}
+      <circle cx="10" cy="13" r="4.5" fill={color}/>
+      <circle cx="22" cy="13" r="3.8" fill={color} opacity="0.75"/>
+      <path d="M2 28c0-4.4 3.6-8 8-8s8 3.6 8 8z" fill={color}/>
+      <path d="M16 28c0-3.6 3.1-6.8 6.5-6.8s6.5 3.2 6.5 6.8z" fill={color} opacity="0.75"/>
+      <circle cx="16" cy="11" r="5.5" fill={accent}/>
+      <path d="M7 28c0-5 4-9 9-9s9 4 9 9z" fill={accent}/>
+    </>),
+    health: (<>
+      {/* Duotone monitor — screen body in color, header bar in accent,
+          pulse line in cream highlight. */}
+      <rect x="3" y="6" width="26" height="20" rx="3" fill={color}/>
+      <rect x="3" y="6" width="26" height="5" rx="3" fill={accent}/>
+      <rect x="3" y="9" width="26" height="2" fill={accent}/>
+      <path d="M6 19l3.5-3.5L13 19l4-6 4.5 7 3-4" stroke="var(--rt-icon-fill)" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="11" y="26" width="10" height="2" rx="1" fill={accent}/>
+    </>),
+    rai: (<>
+      {/* Duotone speech bubble — body in color, spark/star in accent. */}
+      <g transform="translate(0 1)">
+        <path d="M4 9 Q4 5 8 5 L24 5 Q28 5 28 9 L28 20 Q28 24 24 24 L14 24 L9 28 L10 24 Q4 24 4 20 Z" fill={color}/>
+        <path d="M16 9 L17.8 14.6 L23 16.4 L17.8 18.2 L16 24 L14.2 18.2 L9 16.4 L14.2 14.6 Z" fill={accent}/>
+        <circle cx="23" cy="10" r="1.4" fill={accent} opacity="0.7"/>
       </g>
     </>),
     rolodex: (<>
-      <rect x="3" y="22" width="26" height="5" rx="1.5" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      <circle cx="6" cy="14" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
-      <circle cx="26" cy="14" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
-      <line x1="6" y1="14" x2="26" y2="14" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
-      <path d="M9 14 Q12 5 16 7 Q20 9 23 14 L20 14 L20 22 L12 22 L12 14 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinejoin="round"/>
-      <line x1="14" y1="16" x2="20" y2="16" stroke="var(--rt-icon-fill)" strokeWidth="1.2" strokeLinecap="round"/>
+      {/* Duotone Rolodex — base in accent, cards stack in color, top card
+          highlighted with a cream tab. */}
+      <rect x="2" y="23" width="28" height="5" rx="1.5" fill={accent}/>
+      <rect x="4" y="9" width="24" height="15" rx="1.5" fill={color}/>
+      <rect x="4" y="9" width="24" height="4" fill={accent}/>
+      <rect x="13" y="5" width="6" height="6" rx="1" fill={accent}/>
+      <path d="M10 15l3-3 3 3v8h-6z" fill="var(--rt-icon-fill)" opacity="0.95"/>
+      <line x1="20" y1="16" x2="25" y2="16" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.85"/>
+      <line x1="20" y1="19" x2="24" y2="19" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/>
     </>),
     referrals: (<>
-      <g stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round">
-        <line x1="11" y1="16" x2="24" y2="6"/>
-        <line x1="11" y1="16" x2="26" y2="16"/>
-        <line x1="11" y1="16" x2="24" y2="26"/>
-      </g>
-      <circle cx="25" cy="6" r="2.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      <circle cx="27" cy="16" r="2.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      <circle cx="25" cy="26" r="2.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      <circle cx="9" cy="16" r="4.6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
-      <circle cx="9" cy="16" r="1.4" fill="var(--rt-icon-fill)"/>
+      {/* Duotone constellation — hub in accent, satellites in color,
+          connecting threads at low opacity. */}
+      <line x1="11" y1="16" x2="24" y2="6" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
+      <line x1="11" y1="16" x2="26" y2="16" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
+      <line x1="11" y1="16" x2="24" y2="26" stroke={color} strokeWidth="2" strokeLinecap="round" opacity="0.55"/>
+      <circle cx="25" cy="6" r="3" fill={color} opacity="0.75"/>
+      <circle cx="27" cy="16" r="3" fill={color} opacity="0.75"/>
+      <circle cx="25" cy="26" r="3" fill={color} opacity="0.75"/>
+      <circle cx="10" cy="16" r="5.5" fill={accent}/>
+      <circle cx="10" cy="16" r="2" fill="var(--rt-icon-fill)"/>
     </>),
     workers: (<>
-      <path d="M10 4 Q16 8 22 4" fill="none" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
-      <rect x="14.5" y="6" width="3" height="3" rx="0.6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.2"/>
-      <rect x="6" y="9" width="20" height="19" rx="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <rect x="9" y="13" width="8" height="9" rx="1" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.4"/>
-      <circle cx="13" cy="16.5" r="1.6" fill="var(--rt-icon-fill)"/>
-      <path d="M10.5 21 Q13 19 15.5 21" fill="var(--rt-icon-fill)" stroke="none"/>
-      <line x1="19" y1="14" x2="24" y2="14" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round"/>
-      <line x1="19" y1="17" x2="23" y2="17" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round" opacity="0.7"/>
-      <line x1="19" y1="20" x2="23" y2="20" stroke="var(--rt-icon-stroke)" strokeWidth="1.4" strokeLinecap="round" opacity="0.7"/>
-      <g stroke="var(--rt-icon-stroke)" strokeWidth="1.2" strokeLinecap="round">
-        <line x1="9" y1="25" x2="9" y2="26.5"/>
-        <line x1="11" y1="25" x2="11" y2="26.5"/>
-        <line x1="13" y1="25" x2="13" y2="26.5"/>
-        <line x1="15" y1="25" x2="15" y2="26.5"/>
-        <line x1="17" y1="25" x2="17" y2="26.5"/>
-        <line x1="19" y1="25" x2="19" y2="26.5"/>
-      </g>
+      {/* Duotone team — desk + person seated.
+          Desk surface = accent, person body = color, screen face = cream highlight. */}
+      <path d="M9 4 Q16 8 23 4" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round"/>
+      <rect x="14.5" y="5" width="3" height="3" rx="0.6" fill={accent}/>
+      <rect x="5" y="9" width="22" height="20" rx="2.5" fill={color}/>
+      <rect x="5" y="9" width="22" height="5" rx="2.5" fill={accent}/>
+      <rect x="5" y="11" width="22" height="3" fill={accent}/>
+      <rect x="8" y="16" width="9" height="10" rx="1" fill={accent}/>
+      <circle cx="12.5" cy="20" r="1.8" fill="var(--rt-icon-fill)"/>
+      <path d="M9.5 25.5 Q12.5 23.5 15.5 25.5" fill="var(--rt-icon-fill)" stroke="none"/>
+      <line x1="19" y1="17" x2="25" y2="17" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.85"/>
+      <line x1="19" y1="20" x2="24" y2="20" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.6"/>
+      <line x1="19" y1="23" x2="24" y2="23" stroke="var(--rt-icon-fill)" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
     </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
     settings: (<>
-      <g strokeLinejoin="round" strokeLinecap="round">
-        <path d="M16 3 L18 6.5 L22 5.5 L22.5 9.5 L26 11 L24.5 14.5 L27 17.5 L24 20 L24.5 24 L20.5 24.5 L18.5 28 L15 26 L11.5 28 L9.5 24.5 L5.5 24 L6 20 L3 17.5 L5.5 14.5 L4 11 L7.5 9.5 L8 5.5 L12 6.5 Z" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <circle cx="16" cy="16" r="6" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-        <circle cx="16" cy="16" r="2" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.6"/>
-      </g>
+      {/* Duotone gear — outer cog in color, inner ring in accent, center cream. */}
+      <path d="M16 3 L18 6.5 L22 5.5 L22.5 9.5 L26 11 L24.5 14.5 L27 17.5 L24 20 L24.5 24 L20.5 24.5 L18.5 28 L15 26 L11.5 28 L9.5 24.5 L5.5 24 L6 20 L3 17.5 L5.5 14.5 L4 11 L7.5 9.5 L8 5.5 L12 6.5 Z" fill={color}/>
+      <circle cx="16" cy="16" r="6.5" fill={accent}/>
+      <circle cx="16" cy="16" r="2.4" fill="var(--rt-icon-fill)"/>
     </>),
     due: (<>
-      <rect x="4" y="6" width="22" height="22" rx="3" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <path d="M4 9 Q4 6 7 6 L23 6 Q26 6 26 9 L26 12 L4 12 Z" fill="var(--rt-icon-accent)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8" strokeLinejoin="round"/>
-      <line x1="10" y1="3.5" x2="10" y2="8.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
-      <line x1="20" y1="3.5" x2="20" y2="8.5" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
-      <g fill="var(--rt-icon-stroke)" stroke="none" opacity="0.55">
-        <circle cx="9" cy="17" r="1"/><circle cx="14" cy="17" r="1"/><circle cx="19" cy="17" r="1"/>
-        <circle cx="9" cy="22" r="1"/><circle cx="14" cy="22" r="1"/>
+      {/* Duotone overdue calendar — same as today but with a small clock badge. */}
+      <rect x="3" y="6" width="24" height="22" rx="3" fill={color}/>
+      <rect x="3" y="6" width="24" height="6" rx="3" fill={accent}/>
+      <rect x="3" y="9" width="24" height="3" fill={accent}/>
+      <line x1="9" y1="3" x2="9" y2="9" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
+      <line x1="21" y1="3" x2="21" y2="9" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
+      <g fill="var(--rt-icon-fill)" stroke="none" opacity="0.7">
+        <circle cx="9" cy="17" r="1.2"/><circle cx="15" cy="17" r="1.2"/>
+        <circle cx="9" cy="22" r="1.2"/>
       </g>
-      <circle cx="22" cy="23" r="6" fill="var(--rt-icon-fill)" stroke="var(--rt-icon-stroke)" strokeWidth="1.8"/>
-      <line x1="22" y1="23" x2="22" y2="20" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
-      <line x1="22" y1="23" x2="25" y2="23" stroke="var(--rt-icon-stroke)" strokeWidth="1.6" strokeLinecap="round"/>
+      <circle cx="22" cy="23" r="6" fill={accent}/>
+      <line x1="22" y1="23" x2="22" y2="19.5" stroke="var(--rt-icon-fill)" strokeWidth="1.8" strokeLinecap="round"/>
+      <line x1="22" y1="23" x2="25" y2="23" stroke="var(--rt-icon-fill)" strokeWidth="1.8" strokeLinecap="round"/>
     </>),
     sweeps: (<><path d="M18 20V10M12 20V4M6 20v-6" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     target: (<><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="6" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="2" fill={color}/></>),
@@ -299,7 +331,7 @@ const Icon = ({ name, size = 18, color = "currentColor" }) => {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      {paths[name]}
+      {simple && simplePaths[name] ? simplePaths[name] : paths[name]}
     </svg>
   );
 };
@@ -662,308 +694,6 @@ function localYmd(d = new Date()) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
-// ============================================================
-// DESIGN LANGUAGE PRIMITIVES
-// ============================================================
-// The polish layer expressed as components, not patches. Every
-// button/card/pill/toggle in the app goes through these. The
-// styling lives in ONE place. To change the look of every button
-// in the app, edit Btn — not 200 inline styles.
-//
-// Available primitives:
-//   Btn      — variant: "primary" | "primaryGreen" | "secondary" | "ghost"
-//                       | "icon" | "danger"
-//              size:    "sm" | "md" | "lg"
-//   Card     — surface with soft shadow + hover lift (optional)
-//   Pill     — small status/info pill with soft shadow
-//   Toggle   — segmented control with lifted active state
-//   IconBtn  — icon-only button with hover halo
-//
-// Pass-through: every primitive accepts `style` for one-off overrides,
-// `className` for additional class hooks, and standard event handlers.
-//
-// Design tokens used (all defined in :root, see THEME_CSS):
-//   --rt-grad-btn         purple gradient (light → dark)
-//   --rt-grad-btn-hover   purple gradient (hover state)
-//   --rt-grad-green-deep  deep-green gradient
-//   --rt-sh-purple        purple halo shadow
-//   --rt-sh-purple-hover  purple halo, intense
-//   --rt-sh-green-glow    green halo shadow
-//   --rt-sh-card          card shadow at rest
-//   --rt-sh-card-hover    card shadow on hover
-//   --rt-sh-row           row shadow at rest
-//   --rt-sh-row-hover     row shadow on hover
-//   --rt-ease-out         cubic-bezier(0.22, 1, 0.36, 1)
-//   --rt-ease-press       cubic-bezier(0.4, 0, 0.6, 1)
-// ============================================================
-
-function Btn({
-  variant = "secondary",
-  size = "md",
-  disabled = false,
-  onClick,
-  children,
-  style: styleOverride,
-  className: extraClass = "",
-  type = "button",
-  title,
-  ...rest
-}) {
-  const sizes = {
-    sm: { pad: "6px 12px", fs: 12, radius: 8, gap: 6 },
-    md: { pad: "9px 16px", fs: 13, radius: 10, gap: 7 },
-    lg: { pad: "11px 20px", fs: 14, radius: 12, gap: 8 },
-  };
-  const s = sizes[size] || sizes.md;
-  // variant → class on the button. The CSS below (in the global style
-  // block) handles all hover/active/disabled states uniformly.
-  const variantClass = "rt-btn rt-btn-" + variant;
-  return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={variantClass + (extraClass ? " " + extraClass : "")}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: s.gap,
-        padding: s.pad,
-        fontSize: s.fs,
-        fontWeight: 600,
-        borderRadius: s.radius,
-        border: "none",
-        cursor: disabled ? "default" : "pointer",
-        fontFamily: "inherit",
-        whiteSpace: "nowrap",
-        userSelect: "none",
-        ...styleOverride,
-      }}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Card({
-  children,
-  hoverable = false,
-  padding = "16px",
-  style: styleOverride,
-  className: extraClass = "",
-  onClick,
-  ...rest
-}) {
-  return (
-    <div
-      className={"rt-card" + (hoverable ? " rt-card-hoverable" : "") + (extraClass ? " " + extraClass : "")}
-      onClick={onClick}
-      style={{
-        background: "#FFFFFF",
-        borderRadius: 12,
-        padding,
-        boxShadow: "var(--rt-sh-card)",
-        transition: "box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)",
-        ...styleOverride,
-      }}
-      {...rest}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Pill({
-  children,
-  tone = "neutral",      // neutral | purple | green | warn | danger | muted
-  size = "sm",
-  style: styleOverride,
-  className: extraClass = "",
-  ...rest
-}) {
-  const tones = {
-    neutral: { bg: "var(--rt-surface-warm)", fg: "var(--rt-text-sec)" },
-    purple:  { bg: "var(--rt-btn-light)",    fg: "#5B21B6" },
-    green:   { bg: "var(--rt-primary-soft, #E6EFE9)", fg: "#33543E" },
-    warn:    { bg: "#FAF1D6",                fg: "#B88B15" },
-    danger:  { bg: "#FBE6DE",                fg: "#C4432B" },
-    muted:   { bg: "transparent",            fg: "var(--rt-text-muted)" },
-  };
-  const t = tones[tone] || tones.neutral;
-  const sizes = {
-    xs: { pad: "1px 6px", fs: 10 },
-    sm: { pad: "3px 9px", fs: 11 },
-    md: { pad: "4px 11px", fs: 12 },
-  };
-  const s = sizes[size] || sizes.sm;
-  return (
-    <span
-      className={"rt-pill" + (extraClass ? " " + extraClass : "")}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        padding: s.pad,
-        fontSize: s.fs,
-        fontWeight: 600,
-        fontVariantNumeric: "tabular-nums",
-        background: t.bg,
-        color: t.fg,
-        borderRadius: 999,
-        boxShadow: tone === "muted" ? "none" : "var(--rt-sh-xs)",
-        ...styleOverride,
-      }}
-      {...rest}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Toggle({
-  options = [],       // [{value, label, icon?}]
-  value,
-  onChange,
-  style: styleOverride,
-  className: extraClass = "",
-}) {
-  return (
-    <div
-      className={"rt-toggle" + (extraClass ? " " + extraClass : "")}
-      style={{
-        display: "inline-flex",
-        padding: 3,
-        background: "var(--rt-surface-warm)",
-        borderRadius: 999,
-        boxShadow: "var(--rt-sh-xs)",
-        ...styleOverride,
-      }}
-    >
-      {options.map(opt => {
-        const isActive = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange && onChange(opt.value)}
-            className={"rt-toggle-opt" + (isActive ? " is-active" : "")}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "5px 13px",
-              fontSize: 12,
-              fontWeight: 600,
-              borderRadius: 999,
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              transition: "all 180ms var(--rt-ease-out)",
-              ...(isActive
-                ? { background: "#FFFFFF", color: "var(--rt-text)", boxShadow: "var(--rt-sh-card)" }
-                : { background: "transparent", color: "var(--rt-text-muted)" }),
-            }}
-          >
-            {opt.icon}
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function IconBtn({
-  children,
-  onClick,
-  title,
-  size = 28,
-  tone = "neutral",  // neutral | purple
-  style: styleOverride,
-  className: extraClass = "",
-  ...rest
-}) {
-  const isPurple = tone === "purple";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={"rt-icon-btn" + (isPurple ? " rt-icon-btn-purple" : "") + (extraClass ? " " + extraClass : "")}
-      style={{
-        width: size,
-        height: size,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: isPurple ? "var(--rt-grad-btn)" : "transparent",
-        color: isPurple ? "#fff" : "var(--rt-text-sec)",
-        border: "none",
-        borderRadius: "50%",
-        cursor: "pointer",
-        boxShadow: isPurple ? "var(--rt-sh-purple)" : "none",
-        transition: "all 200ms var(--rt-ease-out)",
-        fontFamily: "inherit",
-        flexShrink: 0,
-        ...styleOverride,
-      }}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-}
-
-
-// ============================================================
-// EmptyState — shared empty-state component
-// ============================================================
-// Used by Clients, Health, Rolodex, Referrals page-level emptiness.
-// Today's empty state is rendered inline (Fraunces italic, no icon)
-// because it's Rai's home and reads as her voice — see line ~7965.
-//
-// Props:
-//   - icon: one of "clients" | "health" | "rolodex" | "referrals"
-//   - headline: bold title
-//   - body: 1-2 sentence description (string)
-//   - cta: { label, onClick } — primary purple button
-//   - secondaryCta: { label, onClick } — optional outlined green button
-// ============================================================
-const EMPTY_STATE_ICONS = {
-  clients: (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  ),
-  health: (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-    </svg>
-  ),
-  rolodex: (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="16" rx="2"/>
-      <circle cx="12" cy="11" r="3"/>
-      <path d="M7 20v-1.5a3.5 3.5 0 0 1 3.5-3.5h3a3.5 3.5 0 0 1 3.5 3.5V20"/>
-    </svg>
-  ),
-  referrals: (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#558B68" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="18" cy="5" r="3"/>
-      <circle cx="6" cy="12" r="3"/>
-      <circle cx="18" cy="19" r="3"/>
-      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-    </svg>
-  ),
-};
 
 // ============================================================
 // Skeleton loaders — row-shaped placeholders for initial load
@@ -2854,7 +2584,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                       bottom: 0,
                       height: 6,
                       cursor: "ns-resize",
-                      // Subtle visual hint on hover.
+                      // Subtle visual hint on hover.,
                       background: (isHovered || isDraggingThis) ? `linear-gradient(180deg, transparent 0%, ${C.borderLight} 100%)` : "transparent",
                       borderBottomLeftRadius: containerStyle.borderRadius || 0,
                       borderBottomRightRadius: containerStyle.borderRadius || 0,
@@ -3117,10 +2847,9 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
     <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
       <div style={{
         background: C.card,
-        border: "1px solid " + C.borderLight,
         borderRadius: 14,
         overflow: "hidden",
-        boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 4px 12px rgba(10,10,10,0.05)",
+        boxShadow: "var(--rt-sh-card)",
         display: "flex",
         flexDirection: "column",
       }}>
@@ -3474,8 +3203,16 @@ function ReferralNetworkD3({
             <stop offset="100%" stopColor={C.primary} stopOpacity="0" />
           </radialGradient>
           <filter id="softShadowD3" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#000" floodOpacity="0.12" />
+            <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#1E261F" floodOpacity="0.15" />
           </filter>
+          <filter id="purpleHaloD3" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="1" stdDeviation="3" floodColor="#5B21B6" floodOpacity="0.30" />
+          </filter>
+          <linearGradient id="ghostGradD3" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#6D2BD9" />
+            <stop offset="55%" stopColor="#5B21B6" />
+            <stop offset="100%" stopColor="#4C1D95" />
+          </linearGradient>
         </defs>
 
         {/* Hub glow */}
@@ -3496,10 +3233,10 @@ function ReferralNetworkD3({
               <line
                 key={"ln-" + idx}
                 x1={s.x} y1={s.y} x2={t.x} y2={t.y}
-                stroke={C.textMuted}
+                stroke="#C4C4BD"
                 strokeWidth="1.5"
                 strokeDasharray="1 6"
-                opacity={dim * 0.5}
+                opacity={dim * 0.7}
                 strokeLinecap="round"
               />
             );
@@ -3544,8 +3281,8 @@ function ReferralNetworkD3({
               onMouseEnter={(e) => handleEnter(n.id, e)}
               onClick={() => onNodeClick && onNodeClick({ kind: "ghost", data: n.data })}
             >
-              <circle cx={n.x} cy={n.y} r={n.radius} fill={C.bg} stroke={C.btn} strokeWidth="2" strokeDasharray="4 3" opacity="0.85" />
-              <text x={n.x} y={n.y + 4} fontSize="11" fill={C.btn} textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
+              <circle cx={n.x} cy={n.y} r={n.radius} fill="url(#ghostGradD3)" filter="url(#purpleHaloD3)" opacity="0.95" />
+              <text x={n.x} y={n.y + 4} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
               <text x={n.x} y={n.y - n.radius - 14} fontSize="10.5" fill={C.btn} textAnchor="middle" fontWeight="600" opacity="0.85">{name.length > 16 ? name.slice(0, 15) + "…" : name}</text>
               <text x={n.x} y={n.y + n.radius + 16} fontSize="10" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
             </g>
@@ -3644,7 +3381,6 @@ function ReferralNetworkD3({
               left: Math.min(tooltipPos.x + 14, W - 240),
               top: Math.max(8, tooltipPos.y - 10),
               background: C.card,
-              border: "1px solid " + C.border,
               borderRadius: 10,
               padding: "10px 12px",
               boxShadow: "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
@@ -3676,7 +3412,6 @@ function ReferralNetworkD3({
               left: Math.min(tooltipPos.x + 14, W - 240),
               top: Math.max(8, tooltipPos.y - 10),
               background: C.card,
-              border: "1px solid " + C.border,
               borderRadius: 10,
               padding: "10px 12px",
               boxShadow: "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
@@ -3705,10 +3440,10 @@ function ReferralNetworkD3({
               left: Math.min(tooltipPos.x + 14, W - 240),
               top: Math.max(8, tooltipPos.y - 10),
               background: C.card,
-              border: "1px solid " + C.btn + "55",
-              borderRadius: 10,
+              border: "none",
+              borderRadius: 12,
               padding: "10px 12px",
-              boxShadow: "0 8px 20px rgba(91,33,182,0.12), 0 2px 4px rgba(10,10,10,0.06)",
+              boxShadow: "var(--rt-sh-purple)",
               minWidth: 200,
               maxWidth: 260,
               pointerEvents: "none",
@@ -3738,7 +3473,11 @@ export default function App({ user }) {
     return <WorkerDashboard />;
   }
 
-  const [tier, setTier] = useState("core");  // "core" | "enterprise"
+  // Tier flag — currently fixed at "core" everywhere. Kept as a constant
+  // (not state) since setTier was never called and the value never
+  // changes at runtime. When enterprise toggling is wired up, restore
+  // useState here and add a setter call site.
+  const tier = "core";  // "core" | "enterprise"
   const [page, setPage] = useState("today");
 
   // Scroll to top on page change. .r-main is now a fixed-positioned scroll
@@ -3810,7 +3549,6 @@ export default function App({ user }) {
       vv.removeEventListener("scroll", update);
     };
   }, []);
-  const [showMore, setShowMore] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientTab, setClientTab] = useState("overview");
   const [clientBilling, setClientBilling] = useState({});
@@ -4432,7 +4170,6 @@ export default function App({ user }) {
   // Whether the "Completed today" log is expanded. Defaults to collapsed.
   const [completedLogOpen, setCompletedLogOpen] = useState(false);
   const [newTask, setNewTask] = useState("");
-  const [newTaskClient, setNewTaskClient] = useState("");
   const [newTaskRecurring, setNewTaskRecurring] = useState(false);
   // Recurrence pattern shape (when newTaskRecurring is true):
   //   { kind: "daily" }
@@ -4478,7 +4215,6 @@ export default function App({ user }) {
 
   // ─── Workers state ──
   const [workersList, setWorkersList] = useState([]);
-  const [workerCounts, setWorkerCounts] = useState({}); // { worker_id: { pending, done } }
   // All historical completions attributed to workers. Read from
   // task_completions table on hydration. The in-memory `tasks` array
   // is only today's open tasks — completion history older than today
@@ -4491,7 +4227,6 @@ export default function App({ user }) {
   const [newWorkerName, setNewWorkerName] = useState("");
   const [newWorkerEmail, setNewWorkerEmail] = useState("");
   const [newWorkerRole, setNewWorkerRole] = useState("");
-  const [showClientPicker, setShowClientPicker] = useState(false);
   // Touchpoint data layer is intact (allTouchpoints + tpLogged still load from DB
   // for rhythm calc and history) — only the manual Log UI was removed.
   const [tpLogged, setTpLogged] = useState([]);
@@ -4882,13 +4617,11 @@ export default function App({ user }) {
 
     // Workers — non-blocking, optional table
     try {
-      const [wRes, wcRes, wcompRes] = await Promise.all([
+      const [wRes, wcompRes] = await Promise.all([
         workersDb.list(uid),
-        workersDb.getCounts(uid),
         workersDb.getAllCompletions(uid),
       ]);
       if (wRes?.data) setWorkersList(wRes.data);
-      if (wcRes?.data) setWorkerCounts(wcRes.data);
       if (wcompRes?.data) setWorkerCompletions(wcompRes.data);
     } catch (e) {
       console.warn("Workers load failed (table may not exist yet):", e);
@@ -4967,20 +4700,14 @@ export default function App({ user }) {
           // Preserve any local-only fields by spreading mapped over t
           return { ...t, ...mapped };
         }));
-        // Refresh worker counts if a worker assignment changed or task got completed
-        if (row.assigned_worker_id) {
-          workersDb.getCounts(user.id).then(({ data }) => {
-            if (data) setWorkerCounts(data);
+        // Refresh completion history if a worker assignment changed
+        // and the task just flipped to done — a new task_completions
+        // row appears that the Workers page reads. Without this refetch
+        // those stats would be stale until full reload.
+        if (row.assigned_worker_id && row.is_done) {
+          workersDb.getAllCompletions(user.id).then(({ data }) => {
+            if (data) setWorkerCompletions(data);
           }).catch(() => {});
-          // Also refresh completion history — a worker-assigned task that
-          // just flipped to done will have a new task_completions row.
-          // Without this refetch the Workers page would show stale stats
-          // until full reload.
-          if (row.is_done) {
-            workersDb.getAllCompletions(user.id).then(({ data }) => {
-              if (data) setWorkerCompletions(data);
-            }).catch(() => {});
-          }
         }
       }
     });
@@ -5482,8 +5209,6 @@ export default function App({ user }) {
   const [askActed, setAskActed] = useState(() => {
     try { const raw = localStorage.getItem("rt-ask-acted"); return raw ? new Set(JSON.parse(raw)) : new Set(); } catch { return new Set(); }
   });
-  // Network Map hover highlight
-  const [networkHoverId, setNetworkHoverId] = useState(null);
 
   const addRef = async () => {
     if (!refName.trim() || !refFrom) return;
@@ -5878,7 +5603,7 @@ export default function App({ user }) {
   };
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
-  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } setPage(id); setShowMore(false); };
+  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } setPage(id); };
   const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
@@ -5901,26 +5626,34 @@ export default function App({ user }) {
         ::selection { background: #33543E; color: #fff; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
-        .nav-item { transition: all 0.12s; cursor: pointer; }
+        .nav-item { transition: all 180ms var(--rt-ease-out); cursor: pointer; }
+        /* Hover on inactive items lifts to a slightly brighter dark layer + brightens text */
+        .nav-item:hover:not(.is-active) {
+          background: #233E2C !important;
+          color: #E6EFE9 !important;
+        }
+        .nav-item:hover:not(.is-active) svg { color: #E6EFE9 !important; }
+        .nav-item:active:not(.is-active) { transform: scale(0.98); }
         /* Hover uses deepCream — the same fill as the selected state.
            The selected item is distinguished by its inset shadow and
            bold font-weight, not by a different background. This matches
            the Linear / Notion sidebar convention. */
-        .nav-item:hover:not(.is-active) { background: var(--rt-deep-cream); }
+        /* (Hover handled above — was light cream, now dark-aware) */
         /* Period toggle (Week/Month/Year) — inactive options only. The
            active option carries its own inline color + primaryDeep
            underline. Inactive options rest muted with a transparent
            underline; on hover the text darkens one step and a faint
            hairline underline previews the active-state underline. */
+        .rt-user-chip:hover { background: #233E2C; }
         .r-period-opt {
-          color: var(--rt-text-muted);
+          color: #6B8278;
           border-bottom: 1px solid transparent;
-          transition: color 0.12s, border-color 0.12s;
+          transition: color 180ms var(--rt-ease-out), border-color 180ms var(--rt-ease-out);
         }
         @media (hover: hover) {
           .r-period-opt:hover {
-            color: var(--rt-text-sec);
-            border-bottom-color: var(--rt-ink-300);
+            color: #E6EFE9;
+            border-bottom-color: rgba(255,255,255,0.30);
           }
         }
         /* ─── TODAY PAGE HOVERS ───
@@ -6085,117 +5818,6 @@ export default function App({ user }) {
           transform: translateY(0) scale(0.97);
           transition: transform 80ms var(--rt-ease-press);
         }
-        .rt-btn {
-          transition: background 200ms var(--rt-ease-out),
-                      box-shadow 200ms var(--rt-ease-out),
-                      color 200ms var(--rt-ease-out),
-                      transform 200ms var(--rt-ease-out);
-        }
-        .rt-btn:active:not(:disabled) {
-          transform: translateY(0) scale(0.97);
-          transition: transform 80ms var(--rt-ease-press) !important;
-        }
-
-        /* Primary — purple gradient pill with halo */
-        .rt-btn-primary {
-          background: var(--rt-grad-btn);
-          color: #fff;
-          box-shadow: var(--rt-sh-purple);
-        }
-        .rt-btn-primary:hover:not(:disabled) {
-          background: var(--rt-grad-btn-hover);
-          box-shadow: var(--rt-sh-purple-hover);
-          transform: translateY(-1px);
-        }
-        .rt-btn-primary:disabled {
-          background: var(--rt-surface-warm);
-          color: var(--rt-text-muted);
-          box-shadow: none;
-        }
-
-        /* PrimaryGreen — deep-green gradient with green glow */
-        .rt-btn-primaryGreen {
-          background: var(--rt-grad-green-deep);
-          color: #fff;
-          box-shadow: var(--rt-sh-green-glow);
-        }
-        .rt-btn-primaryGreen:hover:not(:disabled) {
-          box-shadow: 0 0 0 1px rgba(51,84,62,0.18), 0 6px 18px rgba(51,84,62,0.28);
-          transform: translateY(-1px);
-        }
-        .rt-btn-primaryGreen:disabled {
-          background: var(--rt-surface-warm);
-          color: var(--rt-text-muted);
-          box-shadow: none;
-        }
-
-        /* Secondary — white card with soft shadow */
-        .rt-btn-secondary {
-          background: #FFFFFF;
-          color: var(--rt-text);
-          box-shadow: var(--rt-sh-card);
-        }
-        .rt-btn-secondary:hover:not(:disabled) {
-          box-shadow: var(--rt-sh-card-hover);
-          transform: translateY(-1px);
-        }
-
-        /* Ghost — transparent, no shadow, hover gets soft fill */
-        .rt-btn-ghost {
-          background: transparent;
-          color: var(--rt-text-sec);
-          box-shadow: none;
-        }
-        .rt-btn-ghost:hover:not(:disabled) {
-          background: rgba(0,0,0,0.04);
-          color: var(--rt-text);
-        }
-
-        /* Danger — red outline that turns into filled red on hover */
-        .rt-btn-danger {
-          background: #FBE6DE;
-          color: #C4432B;
-          box-shadow: var(--rt-sh-xs);
-        }
-        .rt-btn-danger:hover:not(:disabled) {
-          background: #C4432B;
-          color: #fff;
-          box-shadow: 0 2px 6px rgba(196,67,43,0.32);
-          transform: translateY(-1px);
-        }
-
-        /* ── ICON BUTTON ─────────────────────────────────── */
-        .rt-icon-btn { transition: all 200ms var(--rt-ease-out); }
-        .rt-icon-btn:hover {
-          background: rgba(0,0,0,0.04);
-          transform: translateY(-1px) scale(1.05);
-        }
-        .rt-icon-btn:active { transform: translateY(0) scale(0.95); transition: transform 80ms var(--rt-ease-press); }
-        .rt-icon-btn-purple:hover {
-          background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-purple-hover) !important;
-          transform: translateY(-1px) scale(1.05);
-        }
-
-        /* ── CARD ────────────────────────────────────────── */
-        .rt-card-hoverable {
-          cursor: pointer;
-        }
-        .rt-card-hoverable:hover {
-          box-shadow: var(--rt-sh-card-hover) !important;
-          transform: translateY(-1px);
-        }
-        .rt-card-hoverable:active {
-          transform: translateY(0) scale(0.995);
-          transition: transform 80ms var(--rt-ease-press) !important;
-        }
-
-        /* ── TOGGLE — segmented control ──────────────────── */
-        .rt-toggle-opt:not(.is-active):hover {
-          color: var(--rt-text-sec) !important;
-          background: rgba(0,0,0,0.03) !important;
-        }
-
         /* ── PILL — generic small status/info chip ───────── */
         /* Most pills are presentational. If interactive, wrap in a button. */
 
@@ -6578,7 +6200,7 @@ export default function App({ user }) {
         }
         .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
         /* Rai sidebar — reveal star/delete on row hover */
-        .r-convo-row:hover { background: rgba(91,33,182,0.06); }
+        .r-convo-row:hover:not([style*="rgba(123,58,224"]) { background: #233E2C !important; color: #E6EFE9 !important; }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
         /* Direct-hover on the revealed icons. Star brightens to gold
            (previews the on-state). Trash goes danger red (the universal
@@ -6782,7 +6404,6 @@ export default function App({ user }) {
           }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
-          .rt-composer-client-chip { padding: 2px 4px 2px 2px !important; }
           /* Task right-side indicators on mobile:
              - Recurring: keep ∞ icon only, hide "Recurring" label
              - Today / Overdue date pill: keep calendar icon only, hide date text
@@ -6902,11 +6523,32 @@ export default function App({ user }) {
         </div>
       )}
 
-      {/* SIDEBAR */}
-      <div className="r-desk" style={{ width: 240, background: C.surfaceWarm, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(10,10,10,0.04), 0 2px 6px rgba(10,10,10,0.04)" }}>
-        {/* Logo — fixed at top */}
-        <div style={{ padding: "20px 18px 18px", flexShrink: 0 }}>
-          <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary, fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned<span style={{ letterSpacing: "0" }}>.</span></span>
+      {/* SIDEBAR — dark green primary-deep frame. Provides architectural
+          contrast against the cream content area. Active nav items pop
+          forward as warm-cream chips; everything else recedes. */}
+      <div className="r-desk" style={{ width: 240, background: C.sidebar, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.16)" }}>
+        {/* Logo — purple gradient mark + Fraunces italic wordmark. The
+            "R" badge anchors the brand; the italic wordmark reads like
+            engraved type on a leather notebook. */}
+        <div style={{ padding: "20px 18px 22px", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{
+            width: 30, height: 30,
+            borderRadius: 8,
+            background: "var(--rt-grad-btn)",
+            color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic",
+            fontWeight: 600, fontSize: 17, letterSpacing: "-0.5px",
+            boxShadow: "var(--rt-sh-purple)",
+            flexShrink: 0,
+          }}>R</span>
+          <span style={{
+            fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic",
+            fontWeight: 500,
+            fontSize: 21,
+            color: "#FAFAF7",
+            letterSpacing: "-0.4px",
+          }}>Retayned</span>
         </div>
 
         {/* Nav items — fixed, always visible */}
@@ -6914,9 +6556,20 @@ export default function App({ user }) {
           {(tier === "enterprise" ? navItemsEnterprise : navItemsCore).map(n => {
             const active = page === n.id;
             return (
-              <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, marginBottom: 2, ...(active ? { background: C.deepCream } : {}), color: C.text, fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
-                {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.surfaceWarm, flexShrink: 0 }} />}
+              <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} style={{
+                display: "flex", alignItems: "center", gap: 11,
+                padding: "9px 12px",
+                borderRadius: 9,
+                marginBottom: 2,
+                color: active ? C.primaryDeep : "#8FA697",
+                fontWeight: active ? 600 : 500,
+                background: active ? "#F2EEE8" : "transparent",
+                boxShadow: active ? "0 1px 3px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.16)" : "none",
+                cursor: "pointer",
+                transition: "all 180ms var(--rt-ease-out)",
+              }}>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.primaryLight} accent={active ? C.primary : "#33543E"} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
+                {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar, flexShrink: 0 }} />}
               </div>
             );
           })}
@@ -6935,7 +6588,7 @@ export default function App({ user }) {
               const recent = raiConvoList.filter(c => !c.is_starred);
               const section = (label, items) => (
                 <>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.5, textTransform: "uppercase", padding: "14px 10px 6px" }}>{label}</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, color: "#6B8278", letterSpacing: "0.18em", textTransform: "uppercase", padding: "14px 10px 6px" }}>{label}</div>
                   {items.map(c => {
                     const isActive = c.id === aiConvoId;
                     const title = c.title || c.client?.name || "Untitled chat";
@@ -6944,7 +6597,18 @@ export default function App({ user }) {
                         key={c.id}
                         className="r-convo-row"
                         onClick={() => openRaiChat(c.id)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px 7px 10px", borderRadius: 7, cursor: "pointer", background: isActive ? C.btnLight : "transparent", color: isActive ? C.btn : C.text, fontSize: 12.5, fontWeight: isActive ? 600 : 500, position: "relative", transition: "background 0.12s" }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          padding: "8px 10px 8px 12px",
+                          borderRadius: 7, cursor: "pointer",
+                          background: isActive ? "rgba(123,58,224,0.14)" : "transparent",
+                          color: isActive ? "#F2E8FC" : "#8FA697",
+                          fontSize: 12.5,
+                          fontWeight: isActive ? 500 : 500,
+                          position: "relative",
+                          transition: "background 160ms var(--rt-ease-out), color 160ms var(--rt-ease-out)",
+                          boxShadow: isActive ? "inset 2px 0 0 0 #9B6BE8" : "none",
+                        }}
                       >
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
                         <button
@@ -7030,7 +6694,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 8, position: "relative" }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: "#233E2C", borderRadius: 10, position: "relative", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
@@ -7056,7 +6720,7 @@ export default function App({ user }) {
 
               {/* TASKS COMPLETED section */}
               <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
-                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
+                <div style={{ fontSize: 10, color: "#8FA697", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
                 <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
                   {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
                     const active = taskCompletedPeriod === p.id;
@@ -7071,7 +6735,7 @@ export default function App({ user }) {
                           fontWeight: active ? 600 : 500,
                           cursor: "pointer",
                           ...(active
-                            ? { color: C.text, borderBottom: "1px solid " + C.primaryDeep }
+                            ? { color: "#FAFAF7", borderBottom: "1px solid #E6EFE9" }
                             : {}),
                         }}
                       >
@@ -7081,7 +6745,7 @@ export default function App({ user }) {
                   })}
                 </div>
                 <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FAFAF7", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
                   {/* Hand-drawn circle around the number — permanent, every period.
                       Reads as "your work, marked." Not tied to the callout — the
                       callout sits on top and is the conditional celebratory layer.
@@ -7094,12 +6758,12 @@ export default function App({ user }) {
                           stroke={C.danger} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
                   </svg>
                 </div>
-                <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
+                <div style={{ color: "#8FA697", fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 10, color: "#8FA697", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
+                <div style={{ fontSize: 9.5, color: "#8FA697", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -7112,7 +6776,7 @@ export default function App({ user }) {
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                     <div style={{ color: s.color, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
-                    <div style={{ color: C.textSec, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
+                    <div style={{ color: "#8FA697", fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -7124,17 +6788,28 @@ export default function App({ user }) {
             const active = page === "settings";
             return (
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, color: C.text, ...(active ? { background: C.deepCream } : {}), fontWeight: active ? 600 : 500, boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none", cursor: "pointer" }}>
-                  <span style={{ width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="settings" size={20} color={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
+                <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} style={{
+                  flex: 1,
+                  display: "flex", alignItems: "center", gap: 11,
+                  padding: "9px 12px",
+                  borderRadius: 9,
+                  color: active ? C.primaryDeep : "#8FA697",
+                  background: active ? "#F2EEE8" : "transparent",
+                  boxShadow: active ? "0 1px 3px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.16)" : "none",
+                  fontWeight: active ? 600 : 500,
+                  cursor: "pointer",
+                  transition: "all 180ms var(--rt-ease-out)",
+                }}>
+                  <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={18} color={active ? C.primaryDeep : C.primaryLight} accent={active ? C.primary : "#33543E"} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
                 </div>
               </div>
             );
           })()}
         </div>
-        <div style={{ padding: "10px 16px 14px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 15, background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{getUserInitial(user)}</div>
-            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
+        <div style={{ padding: "10px 6px 14px" }}>
+          <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: "pointer", transition: "background 160ms var(--rt-ease-out)" }}>
+            <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)" }}>{getUserInitial(user)}</div>
+            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#E6EFE9", textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: "#6B8278", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
           </div>
         </div>
       </div>
@@ -7491,7 +7166,7 @@ export default function App({ user }) {
           };
 
           // Client avatar (letters, color)
-          const ClientAvatar = ({ client, size = 28 }) => {
+          const ClientAvatar = ({ client, size = 32 }) => {
             if (!client) return null;
             const initials = client.name.split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
             const color = retColor(client.ret || 60);
@@ -7777,7 +7452,7 @@ export default function App({ user }) {
                         // (not headline ink), weight 400, optical-size + softness +
                         // wonk axis values that lighten the strokes. Without these
                         // axes, Fraunces italic at 14px renders noticeably darker
-                        // and chunkier than the surrounding sans-serif body text.
+                        // and chunkier than the surrounding sans-serif body text.,
                         color: C.textMuted,
                         fontFamily: "'Fraunces', Georgia, serif",
                         fontStyle: "italic",
@@ -7840,7 +7515,7 @@ export default function App({ user }) {
                       Renders the today timeline in compact mode (caps at 6 visible
                       hours with internal scroll). */}
                   {todayStripOpen && (
-                    <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
+                    <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, borderRadius: 10, padding: "14px" }}>
                       <TodayTimeline
                         events={personalEvents}
                         C={C}
@@ -8019,12 +7694,12 @@ export default function App({ user }) {
                           >
                             {selectedClientObj ? (
                               <>
-                                <ClientAvatar client={selectedClientObj} size={20} />
+                                <ClientAvatar client={selectedClientObj} size={22} />
                                 <span className="rt-composer-client-name" style={{ paddingRight: 4 }}>{selectedClientObj.name}</span>
                               </>
                             ) : (
                               <>
-                                <Icon name="clients" size={14} />
+                                <Icon name="clients" size={14} simple />
                                 <span style={{ fontWeight: 500 }}>Client</span>
                               </>
                             )}
@@ -8038,7 +7713,6 @@ export default function App({ user }) {
                                 width: 16, height: 16,
                                 borderRadius: 8,
                                 background: C.card,
-                                border: "1px solid " + C.borderLight,
                                 color: C.textMuted,
                                 cursor: "pointer",
                                 display: "grid", placeItems: "center",
@@ -8057,7 +7731,7 @@ export default function App({ user }) {
                       onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
                       style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
                     />
-                    <div className="rt-client-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 300, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                    <div className="rt-client-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 300, background: C.card, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
                       <input autoFocus value={composerQuery}
@@ -8153,7 +7827,7 @@ export default function App({ user }) {
                             }}
                             title={selectedWorker ? `Assigned to ${selectedWorker.name}` : "Assign to a worker"}
                           >
-                            <Icon name="workers" size={14} color={selectedWorker ? C.btn : C.textMuted} />
+                            <Icon name="workers" size={14} simple color={selectedWorker ? C.btn : C.textMuted} />
                             <span>{selectedWorker ? selectedWorker.name.split(' ')[0] : "Worker"}</span>
                           </button>
                           {selectedWorker && (
@@ -8165,7 +7839,6 @@ export default function App({ user }) {
                                 width: 16, height: 16,
                                 borderRadius: 8,
                                 background: C.card,
-                                border: "1px solid " + C.borderLight,
                                 color: C.textMuted,
                                 cursor: "pointer",
                                 display: "grid", placeItems: "center",
@@ -8186,7 +7859,6 @@ export default function App({ user }) {
                                 left: 0,
                                 width: 260,
                                 background: C.card,
-                                border: "1px solid " + C.border,
                                 borderRadius: 10,
                                 padding: 6,
                                 boxShadow: "0 12px 32px rgba(20,30,22,0.12)",
@@ -8266,7 +7938,7 @@ export default function App({ user }) {
                           fontWeight: (newTaskDueDate || newTaskRecurring) ? 600 : 500,
                         }}
                       >
-                        <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
+                        <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} simple color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
                         <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
                       </button>
                       {(newTaskDueDate || newTaskRecurring) && (
@@ -8278,7 +7950,6 @@ export default function App({ user }) {
                             width: 16, height: 16,
                             borderRadius: 8,
                             background: C.card,
-                            border: "1px solid " + C.borderLight,
                             color: C.textMuted,
                             cursor: "pointer",
                             display: "grid", placeItems: "center",
@@ -8302,7 +7973,6 @@ export default function App({ user }) {
                           top: "calc(100% + 6px)",
                           left: 0,
                           background: C.card,
-                          border: "1px solid " + C.border,
                           borderRadius: 10,
                           padding: 8,
                           boxShadow: "0 4px 16px rgba(20,30,22,0.12), 0 1px 3px rgba(20,30,22,0.06)",
@@ -8563,7 +8233,7 @@ export default function App({ user }) {
                                             <select
                                               value={newTaskRecurrencePattern.day}
                                               onChange={e => setNewTaskRecurrencePattern({ kind: "monthly_date", day: parseInt(e.target.value, 10) })}
-                                              style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid " + C.borderLight, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                              style={{ padding: "3px 6px", borderRadius: 5, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
                                             >
                                               {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
                                             </select>
@@ -8576,7 +8246,7 @@ export default function App({ user }) {
                                             <select
                                               value={newTaskRecurrencePattern.week}
                                               onChange={e => setNewTaskRecurrencePattern(p => ({ ...p, week: parseInt(e.target.value, 10) }))}
-                                              style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid " + C.borderLight, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                              style={{ padding: "3px 6px", borderRadius: 5, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
                                             >
                                               <option value={1}>1st</option>
                                               <option value={2}>2nd</option>
@@ -8587,7 +8257,7 @@ export default function App({ user }) {
                                             <select
                                               value={newTaskRecurrencePattern.day}
                                               onChange={e => setNewTaskRecurrencePattern(p => ({ ...p, day: parseInt(e.target.value, 10) }))}
-                                              style={{ padding: "3px 6px", borderRadius: 5, border: "1px solid " + C.borderLight, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                              style={{ padding: "3px 6px", borderRadius: 5, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
                                             >
                                               <option value={0}>Sunday</option>
                                               <option value={1}>Monday</option>
@@ -8604,7 +8274,7 @@ export default function App({ user }) {
                                     <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
                                       <button
                                         onClick={() => { setNewTaskRecurring(false); setNewTaskRecurrencePattern({ kind: "daily" }); }}
-                                        style={{ padding: "5px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                        style={{ padding: "5px 10px", background: "transparent", color: C.textMuted, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                       >Cancel</button>
                                       <button
                                         onClick={() => setDuePickerOpen(false)}
@@ -8641,7 +8311,7 @@ export default function App({ user }) {
                         // Two-state treatment: at rest = warm-neutral box with
                         // soft shadow (no fake-purple). When armed = full purple
                         // gradient with halo. Same shape across both — only the
-                        // color does the work.
+                        // color does the work.,
                         background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
                         color: newTask.trim() ? "#fff" : C.textMuted,
                         boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
@@ -8681,7 +8351,7 @@ export default function App({ user }) {
                             // Option B "perfectly nested" geometry: inner radius
                             // = (outer height ÷ 2) − container padding. Locked
                             // to current button dimensions (padding 6/14, fontSize 12,
-                            // container padding 3); if you resize either, recompute.
+                            // container padding 3); if you resize either, recompute.,
                             borderRadius: 13,
                             border: "none",
                             fontFamily: "inherit",
@@ -8794,7 +8464,7 @@ export default function App({ user }) {
                       Renders the today timeline in compact mode (caps at 6 visible
                       hours with internal scroll). */}
                   {todayStripOpen && (
-                    <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "14px" }}>
+                    <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, borderRadius: 10, padding: "14px" }}>
                       <TodayTimeline
                         events={personalEvents}
                         C={C}
@@ -9389,7 +9059,7 @@ export default function App({ user }) {
                                   fontWeight: 600,
                                   flexShrink: 0,
                                   // Pending = gold (warning) — distinct from purple (selected) and green (done).
-                                  // Done = neutral grey, doesn't compete with the strikethrough on the title.
+                                  // Done = neutral grey, doesn't compete with the strikethrough on the title.,
                                   background: isWorkerDone ? C.surfaceWarm : "rgba(184,139,21,0.14)",
                                   color: isWorkerDone ? C.textMuted : C.warning,
                                 }} title={isWorkerDone ? `${w.name} completed this` : `Assigned to ${w.name}`}>
@@ -9445,7 +9115,7 @@ export default function App({ user }) {
                                   // collapses to the muted "future" treatment
                                   // (transparent bg, hairline border, muted text)
                                   // so it visually matches the rest of the dimmed
-                                  // task row instead of staying full-color.
+                                  // task row instead of staying full-color.,
                                   background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : C.surfaceWarm),
                                   color: isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted),
                                   border: "none",
@@ -9728,7 +9398,7 @@ export default function App({ user }) {
 
             {/* Priority Ranking */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Priority Ranking</div>
-            <div style={{ background: C.card, borderRadius: 14, border: "1px solid " + C.border, overflow: "hidden" }}>
+            <div style={{ background: C.card, borderRadius: 14, overflow: "hidden" }}>
               {/* Header row */}
               <div style={{ display: "flex", padding: "10px 16px", borderBottom: "1px solid " + C.border, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
                 <span style={{ width: 28 }}>#</span>
@@ -9762,7 +9432,7 @@ export default function App({ user }) {
             {/* Tasks from Sweep */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, marginTop: 20 }}>Tasks Generated ({sweepTasks.length})</div>
             {sweepTasks.filter(t => t.priority !== "urgent").map(t => (
-              <div key={t.id} style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "14px 16px", marginBottom: 8 }}>
+              <div key={t.id} style={{ background: C.card, borderRadius: 12, padding: "14px 16px", marginBottom: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{t.client}</span>
                   <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, fontWeight: 600, background: t.priority === "high" ? "#FEF3C7" : C.primarySoft, color: t.priority === "high" ? "#D97706" : C.primary }}>{t.priority === "high" ? "High" : "Medium"} · {t.timeframe}</span>
@@ -9774,7 +9444,7 @@ export default function App({ user }) {
 
             {/* Sweep History */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, marginTop: 20 }}>Previous Sweeps</div>
-            <div style={{ background: C.card, borderRadius: 14, border: "1px solid " + C.border, overflow: "hidden" }}>
+            <div style={{ background: C.card, borderRadius: 14, overflow: "hidden" }}>
               {sweepHistory.map((s, i) => (
                 <div key={i} style={{ padding: "12px 16px", borderBottom: i < sweepHistory.length - 1 ? "1px solid " + C.borderLight : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{s.date}</span>
@@ -10041,7 +9711,7 @@ export default function App({ user }) {
           const viewOptions = [
             { id: "table",   label: "Table",   icon: "sweeps" },
             { id: "columns", label: "Columns", icon: "bento" },
-            { id: "heatmap", label: "Heatmap", icon: "heatmapGrid" },
+            { id: "heatmap", label: "Cards", icon: "heatmapGrid" },
           ];
 
           return (
@@ -10080,7 +9750,7 @@ export default function App({ user }) {
                 {/* LEFT RAIL — Portfolio, Book history, Recent movement (3 separate cards) */}
                 <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
                   {/* Card 1: Portfolio */}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                     <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Portfolio</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                       <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
@@ -10133,7 +9803,7 @@ export default function App({ user }) {
                   </div>
 
                   {/* Card 2: Book history */}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                     <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Book history</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                       <div>
@@ -10159,7 +9829,7 @@ export default function App({ user }) {
                   </div>
 
                   {/* Card 3: Recent movement */}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
                       <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Recent movement</span>
                       <span style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.2 }}>7d</span>
@@ -10291,7 +9961,7 @@ export default function App({ user }) {
                       }}
                       placeholder={"Business Name\tContact Name\tEmail\tRole\tIndustry\tRevenue\tMonths\nAcme Corp\tJane Smith\tjane@acme.com\tCMO\tSaaS\t5000\t12"}
                       rows={6}
-                      style={{ width: "100%", padding: "12px 14px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "monospace", outline: "none", background: C.bg, resize: "vertical", lineHeight: 1.6 }}
+                      style={{ width: "100%", padding: "12px 14px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "monospace", outline: "none", background: C.surfaceWarm, resize: "vertical", lineHeight: 1.6 }}
                     />
                     <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>Paste rows from Excel or Google Sheets. Tab or comma-separated. First 3 columns required.</div>
                   </div>
@@ -10301,7 +9971,7 @@ export default function App({ user }) {
                 {importPreview.length > 0 && (
                   <div style={{ marginTop: 16 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Preview ({importPreview.filter(r => r.valid).length} valid of {importPreview.length})</div>
-                    <div style={{ background: C.bg, borderRadius: 10, border: "1px solid " + C.border, overflow: "hidden" }}>
+                    <div style={{ background: C.bg, borderRadius: 10, overflow: "hidden" }}>
                       {/* Header */}
                       <div style={{ display: "flex", padding: "8px 12px", borderBottom: "1px solid " + C.border, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
                         <span style={{ width: 24 }}></span>
@@ -10485,29 +10155,29 @@ export default function App({ user }) {
             )}
 
             {showAddClient && (
-              <div style={{ background: C.card, borderRadius: 14, border: "2px solid " + C.primary, padding: "20px", marginBottom: 16, boxShadow: C.cardShadow }}>
+              <div style={{ background: C.card, borderRadius: 14, border: "2px solid " + C.primary, padding: "20px", marginBottom: 16, boxShadow: "var(--rt-sh-card)" }}>
                 {profileStep === 0 && (
                   <div>
                     <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>New Client</h3>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      <input value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} placeholder="Company name" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
-                      <input value={newClient.contact} onChange={e => setNewClient({...newClient, contact: e.target.value})} placeholder="Primary contact name" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
-                      <input value={newClient.role} onChange={e => setNewClient({...newClient, role: e.target.value})} placeholder="Their role" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
-                      <input value={newClient.tag} onChange={e => setNewClient({...newClient, tag: e.target.value})} placeholder="Industry (e.g. Fitness, Real Estate)" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+                      <input value={newClient.name} onChange={e => setNewClient({...newClient, name: e.target.value})} placeholder="Company name" style={{ padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm }} />
+                      <input value={newClient.contact} onChange={e => setNewClient({...newClient, contact: e.target.value})} placeholder="Primary contact name" style={{ padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm }} />
+                      <input value={newClient.role} onChange={e => setNewClient({...newClient, role: e.target.value})} placeholder="Their role" style={{ padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm }} />
+                      <input value={newClient.tag} onChange={e => setNewClient({...newClient, tag: e.target.value})} placeholder="Industry (e.g. Fitness, Real Estate)" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm }} />
                       <div>
-                        <input value={newClient.months} onChange={e => setNewClient({...newClient, months: e.target.value})} placeholder="Months working together" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <input value={newClient.months} onChange={e => setNewClient({...newClient, months: e.target.value})} placeholder="Months working together" type="number" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
                           Calibrates the engagement start. Tenure grows automatically from here — you won't need to update this.
                         </div>
                       </div>
                       <div>
-                        <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Current monthly rate ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <input value={newClient.revenue} onChange={e => setNewClient({...newClient, revenue: e.target.value})} placeholder="Current monthly rate ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
                           Your best estimate of monthly revenue. Changing this will not affect prior months.
                         </div>
                       </div>
                       <div>
-                        <input value={newClient.lifetime_revenue_at_entry} onChange={e => setNewClient({...newClient, lifetime_revenue_at_entry: e.target.value})} placeholder="Lifetime revenue earned before today ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                        <input value={newClient.lifetime_revenue_at_entry} onChange={e => setNewClient({...newClient, lifetime_revenue_at_entry: e.target.value})} placeholder="Lifetime revenue earned before today ($)" type="number" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
                         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
                           Optional. Backfill what you earned from this client before Retayned tracked them. Skip this and Retayned will calculate LTV from today forward, using current rate × tenure.
                         </div>
@@ -10597,7 +10267,7 @@ export default function App({ user }) {
 
 
                   {/* Toolbar: search + sort + view toggle */}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "10px 14px", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "10px 14px", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Icon name="search" size={14} color={C.textMuted} />
                       <input value={clientSearch} onChange={e => setClientSearch(e.target.value)} placeholder="Search clients, owners, industries…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, padding: "2px 0", fontFamily: "inherit", color: C.text }} />
@@ -10608,14 +10278,20 @@ export default function App({ user }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 10, borderTop: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Drift</span>
                       {[
-                        { id: "all", label: "All", count: activeClients.length },
-                        { id: "Improving", label: "Improving", count: byDrift.Improving },
-                        { id: "Stable", label: "Stable", count: byDrift.Stable },
-                        { id: "Something shifted", label: "Shifted", count: byDrift["Something shifted"] },
-                        { id: "Declining", label: "Declining", count: byDrift.Declining },
-                        { id: "At risk", label: "At risk", count: byDrift["At risk"] },
+                        { id: "all", label: "All", count: activeClients.length, tone: "neutral" },
+                        { id: "Improving", label: "Improving", count: byDrift.Improving, tone: "good" },
+                        { id: "Stable", label: "Stable", count: byDrift.Stable, tone: "neutral" },
+                        { id: "Something shifted", label: "Shifted", count: byDrift["Something shifted"], tone: "warn" },
+                        { id: "Declining", label: "Declining", count: byDrift.Declining, tone: "danger" },
+                        { id: "At risk", label: "At risk", count: byDrift["At risk"], tone: "danger" },
                       ].map(f => {
                         const isActive = clientsDriftFilter === f.id;
+                        const toneActive = {
+                          neutral: { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" },
+                          good:    { bg: "#DBEEDF", fg: "#1F7A5C", sh: "0 1px 2px rgba(31,122,92,0.14), 0 2px 6px rgba(31,122,92,0.10)" },
+                          warn:    { bg: "#FAF1D6", fg: "#9A7610", sh: "0 1px 2px rgba(184,139,21,0.14), 0 2px 6px rgba(184,139,21,0.10)" },
+                          danger:  { bg: C.dangerSoft, fg: C.danger, sh: "0 1px 2px rgba(196,67,43,0.14), 0 2px 6px rgba(196,67,43,0.10)" },
+                        }[f.tone] || { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" };
                         return (
                           <button
                             key={f.id}
@@ -10623,15 +10299,15 @@ export default function App({ user }) {
                             className={isActive ? "" : "rt-sort-opt"}
                             style={{
                               display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "4px 10px", fontSize: 11.5, borderRadius: 999,
-                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                              ...(isActive ? { background: C.text, color: "#fff", border: "1px solid " + C.text } : {}),
+                              padding: "5px 11px", fontSize: 11.5, borderRadius: 999,
+                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit", border: "none",
+                              ...(isActive ? { background: toneActive.bg, color: toneActive.fg, boxShadow: toneActive.sh } : { background: "transparent", color: C.textSec }),
                             }}
                           >
                             <span>{f.label}</span>
                             <span style={{
-                              background: isActive ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.05)",
-                              color: isActive ? "#fff" : C.textMuted,
+                              background: isActive ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.05)",
+                              color: isActive ? toneActive.fg : C.textMuted,
                               padding: "1px 6px", borderRadius: 999,
                               fontSize: 10, fontWeight: 700, fontVariantNumeric: "tabular-nums",
                             }}>{f.count}</span>
@@ -10643,13 +10319,19 @@ export default function App({ user }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Score</span>
                       {[
-                        { id: "all", label: "All", count: activeClients.length },
-                        { id: "thriving", label: "Thriving 80+", count: byStage.thriving },
-                        { id: "healthy", label: "Healthy 65–79", count: byStage.healthy },
-                        { id: "watch", label: "Watch 45–64", count: byStage.watch },
-                        { id: "atrisk", label: "At risk <45", count: byStage.atRisk + byStage.critical },
+                        { id: "all", label: "All", count: activeClients.length, tone: "neutral" },
+                        { id: "thriving", label: "Thriving 80+", count: byStage.thriving, tone: "good" },
+                        { id: "healthy", label: "Healthy 65–79", count: byStage.healthy, tone: "good" },
+                        { id: "watch", label: "Watch 45–64", count: byStage.watch, tone: "warn" },
+                        { id: "atrisk", label: "At risk <45", count: byStage.atRisk + byStage.critical, tone: "danger" },
                       ].map(f => {
                         const isActive = clientsScoreFilter === f.id;
+                        const toneActive = {
+                          neutral: { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" },
+                          good:    { bg: "#DBEEDF", fg: "#1F7A5C", sh: "0 1px 2px rgba(31,122,92,0.14), 0 2px 6px rgba(31,122,92,0.10)" },
+                          warn:    { bg: "#FAF1D6", fg: "#9A7610", sh: "0 1px 2px rgba(184,139,21,0.14), 0 2px 6px rgba(184,139,21,0.10)" },
+                          danger:  { bg: C.dangerSoft, fg: C.danger, sh: "0 1px 2px rgba(196,67,43,0.14), 0 2px 6px rgba(196,67,43,0.10)" },
+                        }[f.tone] || { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" };
                         return (
                           <button
                             key={f.id}
@@ -10657,15 +10339,15 @@ export default function App({ user }) {
                             className={isActive ? "" : "rt-sort-opt"}
                             style={{
                               display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "4px 10px", fontSize: 11.5, borderRadius: 999,
-                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                              ...(isActive ? { background: C.text, color: "#fff", border: "1px solid " + C.text } : {}),
+                              padding: "5px 11px", fontSize: 11.5, borderRadius: 999,
+                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit", border: "none",
+                              ...(isActive ? { background: toneActive.bg, color: toneActive.fg, boxShadow: toneActive.sh } : { background: "transparent", color: C.textSec }),
                             }}
                           >
                             <span>{f.label}</span>
                             <span style={{
-                              background: isActive ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.05)",
-                              color: isActive ? "#fff" : C.textMuted,
+                              background: isActive ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.05)",
+                              color: isActive ? toneActive.fg : C.textMuted,
                               padding: "1px 6px", borderRadius: 999,
                               fontSize: 10, fontWeight: 700, fontVariantNumeric: "tabular-nums",
                             }}>{f.count}</span>
@@ -10688,13 +10370,13 @@ export default function App({ user }) {
                           }}>{s.label}</button>
                         ))}
                       </div>
-                      <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, border: "1px solid " + C.border, borderRadius: 8 }}>
+                      <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, borderRadius: 8 }}>
                         {viewOptions.map(v => (
                           <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} className={variant === v.id ? "" : "rt-view-opt"} style={{
                             display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
                             border: "none",
                             ...(variant === v.id
-                              ? { background: C.card, color: C.text, boxShadow: C.shadowSm }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}>
                             <Icon name={v.icon} size={14} color={variant === v.id ? C.text : C.textMuted} />
@@ -10716,7 +10398,7 @@ export default function App({ user }) {
 
                   {/* Mobile card list — always rendered, CSS reveals only <=768px */}
                   {dataLoaded && (
-                  <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
+                  <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     {filteredClients.map((c, i, arr) => {
                       const delta = stubDelta(c.name);
                       const scoreColor = retColor(c.ret || 0);
@@ -10761,7 +10443,7 @@ export default function App({ user }) {
                   )}
 
                   {dataLoaded && variant === "table" && (
-                    <div className="rc-desktop-view" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
+                    <div className="rc-desktop-view" style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.bg }}>
                         <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
                         <div style={{ flex: 1.4, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
@@ -10896,7 +10578,7 @@ export default function App({ user }) {
                                   const ca = stubCadenceActual(c);
                                   const delta = stubDelta(c.name);
                                   return (
-                                    <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
+                                    <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                         <ScoreRing2 client={c} size={32} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -10913,7 +10595,7 @@ export default function App({ user }) {
                                         <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
                                         <CadencePips target={ct} actual={ca} />
                                       </div>
-                                      <div style={{ position: "relative", background: C.bg, border: "1px solid " + C.borderLight, borderRadius: 6, padding: "4px 6px", minWidth: 0, overflow: "hidden" }}>
+                                      <div style={{ position: "relative", background: C.bg, borderRadius: 6, padding: "4px 6px", minWidth: 0, overflow: "hidden" }}>
                                         <V2Sparkline points={trend} width={156} height={28} fill responsive />
                                         <div style={{ position: "absolute", top: 4, left: 0, right: 6, display: "flex", justifyContent: "space-between", padding: "0 6px", pointerEvents: "none" }}>
                                           <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0)/1000).toFixed(1)}k</span>
@@ -10948,7 +10630,7 @@ export default function App({ user }) {
                         const ca = stubCadenceActual(c);
                         const delta = stubDelta(c.name);
                         return (
-                          <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
+                          <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
                             <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                               <ScoreRing2 client={c} size={34} />
@@ -10963,7 +10645,7 @@ export default function App({ user }) {
                                 )}
                               </div>
                             </div>
-                            <div style={{ position: "relative", background: C.primaryGhost, border: "1px solid " + C.borderLight, borderRadius: 6, padding: "4px 6px", marginBottom: 10, overflow: "hidden" }}>
+                            <div style={{ position: "relative", background: C.primaryGhost, borderRadius: 6, padding: "4px 6px", marginBottom: 10, overflow: "hidden" }}>
                               <V2Sparkline points={trend} width={200} height={32} fill showEnd />
                               <div style={{ position: "absolute", top: 4, left: 6, right: 6, display: "flex", justifyContent: "space-between", alignItems: "center", pointerEvents: "none" }}>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", background: "rgba(255,255,255,0.9)", padding: "1px 4px", borderRadius: 3 }}>${((c.revenue || 0)/1000).toFixed(1)}k<span style={{ fontWeight: 400, fontSize: 10.5, color: C.textMuted }}>/mo</span></span>
@@ -11004,7 +10686,7 @@ export default function App({ user }) {
                   )}
 
                   {dataLoaded && filteredClients.length === 0 && activeClients.length > 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12 }}>
+                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, borderRadius: 12 }}>
                       <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 6 }}>
                         No clients match {clientSearch ? `"${clientSearch}"` : "your filters"}.
                       </div>
@@ -11205,11 +10887,10 @@ export default function App({ user }) {
                             background: C.primarySoft,
                             color: C.text,
                             borderRadius: 14,
-                            border: "1px solid " + C.borderLight,
                             padding: "16px 18px",
                             position: "relative",
                             overflow: "hidden",
-                            boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
+                            boxShadow: "var(--rt-sh-card)",
                           }}>
                             {/* Corner ✕ dismiss — top-right notification pattern */}
                             <button
@@ -11386,11 +11067,10 @@ export default function App({ user }) {
                             background: C.primarySoft,
                             color: C.text,
                             borderRadius: 14,
-                            border: "1px solid " + C.borderLight,
                             padding: "24px 28px 22px",
                             position: "relative",
                             overflow: "hidden",
-                            boxShadow: "0 1px 2px rgba(20,30,22,0.03)",
+                            boxShadow: "var(--rt-sh-card)",
                           }}>
                             {/* Illustration — absolute corner placement */}
                             {illoSrc && (
@@ -11755,11 +11435,11 @@ export default function App({ user }) {
                   while (cells.length % 7 !== 0) cells.push(null);
                   const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
                   return (
-                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ background: C.card, borderRadius: 10, overflow: "hidden" }}>
                       <div onClick={() => setHealthStripOpen(!healthStripOpen)} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                           <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <Icon name="health" size={14} color={C.primary} />
+                            <Icon name="health" size={14} simple color={C.primary} />
                           </div>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>{monthName} rhythm</div>
@@ -11848,7 +11528,7 @@ export default function App({ user }) {
                     while (cells.length % 7 !== 0) cells.push(null);
                     const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
                     return (
-                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
                           <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>{monthName} rhythm</span>
                           <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}><b style={{ color: C.text }}>{loggedCount}</b> checks · <b style={{ color: C.text }}>{todayDay}</b>/{daysInMonth}</span>
@@ -11893,7 +11573,7 @@ export default function App({ user }) {
                       </div>
                     );
                   })()}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
                       <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Queue</span>
                       <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{activeQueue.length}</span>
@@ -11947,7 +11627,7 @@ export default function App({ user }) {
                   {/* Observation — rendered TWICE (once for mobile above calendar, once for desktop in this main column). renderObserver returns null when conditions aren't met. */}
                   {!isMobile && renderObserver()}
                   {activeQueue.length === 0 && justCompleted.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm }}>
+                    <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: C.text }}>All caught up</div>
                       <div style={{ fontSize: 12.5, color: C.textMuted }}>No health checks due right now. Check back when the next one is ready.</div>
                     </div>
@@ -11963,7 +11643,7 @@ export default function App({ user }) {
                       const client = clients.find(c => c.name === h.client);
 
                       return (
-                        <div key={i} style={{ background: C.card, borderRadius: 12, border: "1px solid " + (isOpen ? C.primary + "55" : C.border), boxShadow: C.shadowSm, transition: "border-color 150ms" }}>
+                        <div key={i} style={{ background: C.card, borderRadius: 12, border: "1px solid " + (isOpen ? C.primary + "55" : C.border), boxShadow: "var(--rt-sh-card)", transition: "border-color 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 18, background: retColor(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
                               {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
@@ -12051,7 +11731,7 @@ export default function App({ user }) {
                     const zeroX = xToPx(0);
                     const zeroY = yToPx(0);
                     return (
-                      <div style={{ marginTop: 24, background: C.card, borderRadius: 12, border: "1px solid " + C.border, boxShadow: C.shadowSm, padding: "20px 22px 16px" }}>
+                      <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 16px" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
                           <div>
                             <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall — this month</div>
@@ -12104,7 +11784,7 @@ export default function App({ user }) {
 
                   {/* Done this month */}
                   {justCompleted.length > 0 && (
-                    <div style={{ marginTop: 24, background: C.card, borderRadius: 12, border: "1px solid " + C.border, boxShadow: C.shadowSm, overflow: "hidden" }}>
+                    <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 20px 12px", borderBottom: "1px solid " + C.borderLight }}>
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Done this month</span>
                         <span style={{ fontSize: 11, color: C.textMuted }}>Most recent first</span>
@@ -12136,12 +11816,12 @@ export default function App({ user }) {
                   {/* Upcoming */}
                   {upcomingQueue.length > 0 && (
                     <div style={{ marginTop: 24 }}>
-                      <div onClick={() => setShowUpcoming(!showUpcoming)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, cursor: "pointer", border: "1px solid " + C.borderLight, background: C.card }}>
+                      <div onClick={() => setShowUpcoming(!showUpcoming)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, cursor: "pointer", background: C.card }}>
                         <span style={{ fontSize: 12.5, fontWeight: 600, color: C.textSec }}>Upcoming · {upcomingQueue.length}</span>
                         <span style={{ fontSize: 12, color: C.textMuted }}>{showUpcoming ? "Hide" : "Show"}</span>
                       </div>
                       {showUpcoming && (
-                        <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.borderLight, overflow: "hidden", marginTop: 6 }}>
+                        <div style={{ background: C.card, borderRadius: 12, overflow: "hidden", marginTop: 6 }}>
                           {upcomingQueue.map((h, i) => (
                             <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", borderBottom: i < upcomingQueue.length - 1 ? "1px solid " + C.borderLight : "none", opacity: 0.6 }}>
                               <span style={{ fontSize: 13, color: C.textSec }}>{h.client}</span>
@@ -12182,7 +11862,7 @@ export default function App({ user }) {
                 { l: "Building", v: referralReadiness.filter(r => r.tier === "building").length, c: C.warning },
                 { l: "Not Yet", v: referralReadiness.filter(r => r.tier === "not_yet").length, c: C.textMuted },
               ].map((s, i) => (
-                <div key={i} style={{ background: C.card, borderRadius: 10, padding: "12px 14px", border: "1px solid " + C.border, textAlign: "center" }}>
+                <div key={i} style={{ background: C.card, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: s.c }}>{s.v}</div>
                 </div>
@@ -12194,7 +11874,7 @@ export default function App({ user }) {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.success, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🎯 Ready to Ask</div>
                 {referralReadiness.filter(r => r.tier === "ready").map(c => (
-                  <div key={c.id} style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px", marginBottom: 10, boxShadow: C.cardShadow }}>
+                  <div key={c.id} style={{ background: C.card, borderRadius: 12, padding: "16px", marginBottom: 10, boxShadow: "var(--rt-sh-card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <div>
                         <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
@@ -12225,7 +11905,7 @@ export default function App({ user }) {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.warning, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🔄 Building Toward It</div>
                 {referralReadiness.filter(r => r.tier === "building").map(c => (
-                  <div key={c.id} style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px", marginBottom: 10, boxShadow: C.cardShadow }}>
+                  <div key={c.id} style={{ background: C.card, borderRadius: 12, padding: "16px", marginBottom: 10, boxShadow: "var(--rt-sh-card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <div>
                         <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
@@ -12251,7 +11931,7 @@ export default function App({ user }) {
             {referralReadiness.filter(r => r.tier === "not_yet").length > 0 && (
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>⏳ Not Yet</div>
-                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, overflow: "hidden" }}>
+                <div style={{ background: C.card, borderRadius: 12, overflow: "hidden" }}>
                   {referralReadiness.filter(r => r.tier === "not_yet").map((c, i, arr) => (
                     <div key={c.id} style={{ padding: "12px 16px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
@@ -12639,7 +12319,7 @@ export default function App({ user }) {
                   {/* LEFT RAIL — Team / Team History / Recent Movement */}
                   <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
                     {/* Card 1: TEAM (mirrors Portfolio) */}
-                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Team</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                         <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
@@ -12691,7 +12371,7 @@ export default function App({ user }) {
                     </div>
 
                     {/* Card 2: TEAM HISTORY */}
-                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Team history</div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                         <div>
@@ -12717,7 +12397,7 @@ export default function App({ user }) {
                     </div>
 
                     {/* Card 3: RECENT MOVEMENT */}
-                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Recent movement</div>
                         <div style={{ fontSize: 10.5, color: C.textMuted }}>7d</div>
@@ -12758,7 +12438,7 @@ export default function App({ user }) {
                   {workersList.length >= 2 && (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20 }}>
                       {/* Impact leaderboard */}
-                      <div style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ background: C.card, borderRadius: 12, padding: "14px 16px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Impact · last 90 days</div>
                         {sortedByImpact.length === 0 ? (
                           <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>Not enough completed tasks yet</div>
@@ -12771,7 +12451,7 @@ export default function App({ user }) {
                         ))}
                       </div>
                       {/* Volume leaderboard */}
-                      <div style={{ background: C.card, border: "1px solid " + C.borderLight, borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ background: C.card, borderRadius: 12, padding: "14px 16px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Throughput · last 30 days</div>
                         {sortedByVolume.slice(0, 3).map(({ w, s }, i) => (
                           <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
@@ -12793,7 +12473,6 @@ export default function App({ user }) {
                         <div key={w.id} style={{
                           padding: "16px 18px",
                           background: C.card,
-                          border: "1px solid " + C.borderLight,
                           borderRadius: 12,
                         }}>
                           {/* Top row: avatar + name + impact + remove */}
@@ -12910,7 +12589,7 @@ export default function App({ user }) {
                   value={newWorkerName}
                   onChange={e => setNewWorkerName(e.target.value)}
                   placeholder="Sarah Kim"
-                  style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
                 />
               </div>
               <div style={{ marginBottom: 14 }}>
@@ -12920,7 +12599,7 @@ export default function App({ user }) {
                   value={newWorkerEmail}
                   onChange={e => setNewWorkerEmail(e.target.value)}
                   placeholder="sarah@yourdomain.com"
-                  style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
                 />
               </div>
               <div style={{ marginBottom: 14 }}>
@@ -12929,13 +12608,13 @@ export default function App({ user }) {
                   value={newWorkerRole}
                   onChange={e => setNewWorkerRole(e.target.value)}
                   placeholder="Internal · Freelancer · VA"
-                  style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
                 />
               </div>
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22, paddingTop: 18, borderTop: "1px solid " + C.borderLight }}>
                 <button
                   onClick={() => setAddWorkerOpen(false)}
-                  style={{ padding: "8px 14px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  style={{ padding: "8px 14px", background: "transparent", color: C.textSec, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
                 >Cancel</button>
                 <button
                   onClick={async () => {
@@ -13154,7 +12833,7 @@ export default function App({ user }) {
 
                 {/* LEFT RAIL: Who to ask next */}
                 <div className="rc-rail" style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 0, alignSelf: "start" }}>
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who to ask next</div>
                       <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Strongest signals first</div>
@@ -13189,7 +12868,7 @@ export default function App({ user }) {
                     const sorted = [...referrers].sort((a, b) => b.revenue - a.revenue);
                     const max = Math.max(1, ...sorted.map(r => r.revenue));
                     return (
-                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: "14px" }}>
+                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who's compounding</div>
                         <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3, marginBottom: 12 }}>Revenue through each client's referrals</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -13231,7 +12910,7 @@ export default function App({ user }) {
                           </div>
                         </div>
                         {/* Tone toggle */}
-                        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.bg, border: "1px solid " + C.border, borderRadius: 8 }}>
+                        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.bg, borderRadius: 8 }}>
                           {["softer", "neutral", "firmer"].map(t => (
                             <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 6, textTransform: "capitalize", letterSpacing: 0.2, border: "none", cursor: "pointer", fontFamily: "inherit", background: askTone === t ? C.text : "transparent", color: askTone === t ? "#fff" : C.textMuted, fontWeight: askTone === t ? 600 : 500, transition: "all 120ms" }}>{t}</button>
                           ))}
@@ -13245,30 +12924,30 @@ export default function App({ user }) {
                       <textarea
                         value={displayedDraft}
                         onChange={e => { setAskDraft(e.target.value); if (activeAsk) setAskActiveId(activeAsk.name); }}
-                        style={{ width: "100%", minHeight: 150, padding: "12px 14px", border: "1px solid " + C.border, borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap" }}
+                        style={{ width: "100%", minHeight: 150, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap" }}
                       />
                       {/* Action row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <a href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, border: "1px solid " + C.border, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+                          <a href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
                             <Icon name="mail" size={13} color={C.textSec} />
                             <span>Email</span>
                           </a>
-                          <a href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, border: "1px solid " + C.border, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+                          <a href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
                             <Icon name="phone" size={13} color={C.textSec} />
                             <span>Text</span>
                           </a>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 12px", fontSize: 12, color: C.textMuted, background: "transparent", border: "none", borderRadius: 7, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Ask someone else →</button>
-                          <button onClick={() => markAsked(activeAsk)} style={{ padding: "8px 16px", fontSize: 12.5, color: "#fff", background: C.retGood, borderRadius: 7, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: C.shadowSm }}>Mark asked</button>
+                          <button onClick={() => markAsked(activeAsk)} style={{ padding: "8px 16px", fontSize: 12.5, color: "#fff", background: C.retGood, borderRadius: 7, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-card)" }}>Mark asked</button>
                         </div>
                       </div>
                     </div>
                   )}
 
                   {/* NETWORK MAP — d3-force live simulation */}
-                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowSm, padding: "18px 20px" }}>
+                  <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "18px 20px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, gap: 16, flexWrap: "wrap" }}>
                       <div>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Referral Network</div>
@@ -13285,7 +12964,7 @@ export default function App({ user }) {
                           <span style={{ width: 8, height: 8, borderRadius: 4, background: C.textMuted }} />Lost
                         </span>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 12, height: 12, borderRadius: 6, border: "1.5px dashed " + C.btn }} />Likely
+                          <span style={{ width: 10, height: 10, borderRadius: 5, background: "var(--rt-grad-btn)", boxShadow: "0 0 0 2px rgba(91,33,182,0.16)" }} />Likely
                         </span>
                       </div>
                     </div>
@@ -13362,7 +13041,7 @@ export default function App({ user }) {
                             const pct = ((curMs - minMs) / (maxMs - minMs)) * 100;
                             const fmt = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
                             return (
-                              <div style={{ marginTop: 14, padding: "10px 12px", background: C.bg, border: "1px solid " + C.borderLight, borderRadius: 10 }}>
+                              <div style={{ marginTop: 14, padding: "10px 12px", background: C.bg, borderRadius: 10 }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, fontSize: 11, color: C.textMuted }}>
                                   <span style={{ fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase" }}>Time travel</span>
                                   <span style={{ fontVariantNumeric: "tabular-nums" }}>{networkAsOf ? `Showing as of ${fmt(curMs)}` : `Today (${fmt(maxMs)})`}</span>
@@ -13403,7 +13082,7 @@ export default function App({ user }) {
                         No referrals logged yet.
                       </div>
                     ) : (
-                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, overflow: "hidden" }}>
+                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                         {refs.map((r, i) => {
                           const isActive = r.status === "converted" || r.status === "active";
                           return (
@@ -13439,24 +13118,24 @@ export default function App({ user }) {
 
               {/* Referral form modal — preserved from v1 */}
               {refForm && (
-                <div onClick={() => setRefForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={() => setRefForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 18 }}>Log Referral</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>New client name</label>
-                        <input value={refName} onChange={e => setRefName(e.target.value)} placeholder="e.g. White Mountain Puzzles" style={{ width: "100%", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={refName} onChange={e => setRefName(e.target.value)} placeholder="e.g. White Mountain Puzzles" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
-                        <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ width: "100%", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }}>
+                        <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }}>
                           <option value="">Choose a client…</option>
                           {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Monthly revenue (optional)</label>
-                        <input value={refRevenue} onChange={e => setRefRevenue(e.target.value)} placeholder="4000" style={{ width: "100%", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={refRevenue} onChange={e => setRefRevenue(e.target.value)} placeholder="4000" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
@@ -13728,7 +13407,7 @@ export default function App({ user }) {
                       const selected = filedFilter === s.key;
                       const cards = Math.min(6, count);
                       return (
-                        <button key={s.key} onClick={() => setFiledFilter(selected ? "all" : s.key)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "12px 14px", borderRadius: 12, boxShadow: C.shadowSm, cursor: "pointer", textAlign: "left", background: selected ? s.toneBg : C.card, border: "1px solid " + (selected ? s.tone : C.border), fontFamily: "inherit", transition: "all 150ms" }}>
+                        <button key={s.key} onClick={() => setFiledFilter(selected ? "all" : s.key)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "12px 14px", borderRadius: 12, boxShadow: "var(--rt-sh-card)", cursor: "pointer", textAlign: "left", background: selected ? s.toneBg : C.card, border: "1px solid " + (selected ? s.tone : C.border), fontFamily: "inherit", transition: "all 150ms" }}>
                           <div style={{ position: "relative", width: 36, height: 44, flexShrink: 0 }}>
                             {cards === 0 ? (
                               <div style={{ position: "absolute", inset: 0, border: "1px dashed " + C.border, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, color: C.textMuted }}>empty</div>
@@ -13749,7 +13428,7 @@ export default function App({ user }) {
 
                   {/* Awaiting retro queue */}
                   {queued.length > 0 && (
-                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, padding: 14 }}>
+                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 14 }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Awaiting retro</div>
                         <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999 }}>{queued.length}</span>
@@ -13782,9 +13461,9 @@ export default function App({ user }) {
                   {active ? (
                     <div style={{ position: "relative", paddingBottom: 8 }}>
                       {/* Peek of next cards behind */}
-                      {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 14, opacity: 0.5, zIndex: 0 }} />}
-                      {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, border: "1px solid " + C.border, borderRadius: 14, opacity: 0.8, zIndex: 0 }} />}
-                      <div style={{ position: "relative", zIndex: 1, background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "0 4px 12px rgba(10,10,10,0.06)", overflow: "hidden" }}>
+                      {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, borderRadius: 14, opacity: 0.5, zIndex: 0 }} />}
+                      {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, borderRadius: 14, opacity: 0.8, zIndex: 0 }} />}
+                      <div style={{ position: "relative", zIndex: 1, background: C.card, borderRadius: 14, boxShadow: "0 4px 12px rgba(10,10,10,0.06)", overflow: "hidden" }}>
                         {/* Header */}
                         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 20px 14px" }}>
                           <Avatar id={active.id} name={active.client_name || active.client} size={44} />
@@ -13815,7 +13494,7 @@ export default function App({ user }) {
                               onBlur={() => { if (localText != null) saveAnswer(currentStepDef, localText); }}
                               placeholder={currentStepDef.placeholder}
                               rows={3}
-                              style={{ width: "100%", padding: "12px 14px", border: "1px solid " + C.border, borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }}
+                              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }}
                             />
                           )}
                           {currentStepDef.kind === "pick" && (
@@ -13857,14 +13536,14 @@ export default function App({ user }) {
                             <button onClick={advanceAfterRetro} style={{ fontSize: 11.5, color: C.textMuted, padding: "6px 10px", borderRadius: 6, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Skip for now</button>
                             <div style={{ display: "flex", gap: 8 }}>
                               <button onClick={onPrev} disabled={effectiveStep === 0} style={{ padding: "8px 14px", background: C.borderLight, color: C.textSec, borderRadius: 8, fontSize: 12.5, fontWeight: 500, border: "none", cursor: effectiveStep === 0 ? "default" : "pointer", opacity: effectiveStep === 0 ? 0.5 : 1, fontFamily: "inherit" }}>Back</button>
-                              <button onClick={onNext} style={{ padding: "8px 18px", background: C.retGood, color: "#fff", borderRadius: 8, fontSize: 12.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: C.shadowSm }}>Next →</button>
+                              <button onClick={onNext} style={{ padding: "8px 18px", background: C.retGood, color: "#fff", borderRadius: 8, fontSize: 12.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-card)" }}>Next →</button>
                             </div>
                           </div>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: C.shadowSm }}>
+                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)" }}>
                       <div style={{ width: 44, height: 44, borderRadius: 22, background: "#E8F3EC", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", border: "2px solid " + C.retGood }}>
                         <Icon name="check" size={20} color={C.retGood} />
                       </div>
@@ -13885,7 +13564,7 @@ export default function App({ user }) {
                           </button>
                         )}
                       </div>
-                      <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 180, padding: "6px 10px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontFamily: "inherit", background: C.card, outline: "none" }} />
+                      <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 180, padding: "6px 10px", borderRadius: 8, fontSize: 12, fontFamily: "inherit", background: C.card, outline: "none" }} />
                     </div>
 
                     {filteredFiled.length === 0 ? (
@@ -13902,7 +13581,7 @@ export default function App({ user }) {
                         // Summary = History > What you did/happened (step 1 text answer)
                         const summary = (e.retro_answers && (e.retro_answers.happened || e.retro_answers.did || e.retro_answers.what)) || "";
                         return (
-                          <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: C.shadowSm, marginBottom: 8, cursor: "pointer" }}>
+                          <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", marginBottom: 8, cursor: "pointer" }}>
                             <div style={{ width: 3, alignSelf: "stretch", background: prioTone, borderRadius: 2, flexShrink: 0 }} />
                             <Avatar id={e.id} name={name} size={40} />
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -13947,18 +13626,18 @@ export default function App({ user }) {
 
               {/* Add contact modal */}
               {showAddRolodex && (
-                <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>New rolodex contact</div>
                     <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>Add someone to your deck. You'll run a quick retro to file them.</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Company / client name</label>
-                        <input value={newRolodexEntry.client} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, client: e.target.value })} placeholder="Northbeam Studios" style={{ width: "100%", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={newRolodexEntry.client} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, client: e.target.value })} placeholder="Northbeam Studios" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Contact person</label>
-                        <input value={newRolodexEntry.contact} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, contact: e.target.value })} placeholder="Jordan Reeve" style={{ width: "100%", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={newRolodexEntry.contact} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, contact: e.target.value })} placeholder="Jordan Reeve" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Type</label>
@@ -14040,11 +13719,11 @@ export default function App({ user }) {
                       <p style={{ fontSize: 19, fontWeight: 400, color: C.textSec, lineHeight: 1.5, marginTop: 10, marginBottom: 36, letterSpacing: "-0.01em" }}>
                         What's on your mind today?
                       </p>
-                      <div className="rt-composer" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 18, padding: "20px 22px 14px", textAlign: "left", boxShadow: "0 1px 2px rgba(10,10,10,0.03), 0 6px 20px rgba(91,33,182,0.08)" }}>
+                      <div className="rt-composer" style={{ background: C.card, borderRadius: 14, padding: "20px 22px 14px", textAlign: "left", boxShadow: "var(--rt-sh-card)" }}>
                         {aiAttachments.length > 0 && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
                             {aiAttachments.map(a => (
-                              <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 10px", background: C.surfaceWarm, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, color: C.text, maxWidth: 240 }}>
+                              <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 10px", background: C.surfaceWarm, borderRadius: 8, fontSize: 12, color: C.text, maxWidth: 240 }}>
                                 <Icon name={a.type === "image" ? "image" : "file"} size={12} color={C.textSec} />
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                                 <button onClick={() => setAiAttachments(prev => prev.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: C.textMuted, display: "flex" }} aria-label={"Remove " + a.name}>
@@ -14063,7 +13742,7 @@ export default function App({ user }) {
                           style={{ width: "100%", minHeight: 72, padding: "2px 0", border: "none", fontSize: 16, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.55, color: C.text, overflowY: "auto" }}
                         />
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-                          <label title="Attach a file (PDF or image, max 10MB)" style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid " + C.border, background: C.card, color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}>
+                          <label title="Attach a file (PDF or image, max 10MB)" style={{ width: 36, height: 36, borderRadius: 10, background: C.card, color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s" }}>
                             <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onChange={e => { handleFilePick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
                             <Icon name="plus" size={16} />
                           </label>
@@ -14086,7 +13765,6 @@ export default function App({ user }) {
                             style={{
                               padding: "7px 14px",
                               background: C.card,
-                              border: "1px solid " + C.border,
                               borderRadius: 999,
                               fontSize: 13,
                               fontWeight: 500,
@@ -14112,7 +13790,7 @@ export default function App({ user }) {
                       const messageRef = isLastUser ? aiUserRef : null;
                       return m.role === "user" ? (
                         <div key={i} ref={messageRef} className="r-chat-msg-user" style={{ marginBottom: 28, display: "flex", justifyContent: "flex-end" }}>
-                          <div style={{ maxWidth: "75%", background: C.surface, borderRadius: 20, padding: "12px 18px" }}>
+                          <div style={{ maxWidth: "75%", background: C.surfaceWarm, borderRadius: 20, padding: "12px 18px", boxShadow: "var(--rt-sh-xs)" }}>
                             {m.text.split("\n").map((l, j) => l.trim() === "" ? <div key={j} style={{ height: 8 }} /> : <p key={j} style={{ fontSize: 17, color: C.text, lineHeight: 1.5, margin: 0 }}>{l}</p>)}
                           </div>
                         </div>
@@ -14132,11 +13810,11 @@ export default function App({ user }) {
             {aiMessages.length > 0 && (
               <div className="r-rai-inputbar" style={{ background: C.bg, padding: "12px 24px 16px" }}>
                 <div style={{ maxWidth: 720, margin: "0 auto" }}>
-                  <div style={{ background: C.card, border: "1.5px solid " + C.border, borderRadius: 14, padding: "14px 16px 10px" }}>
+                  <div style={{ background: C.card, border: "none", boxShadow: "var(--rt-sh-card)", borderRadius: 14, padding: "14px 16px 10px" }}>
                     {aiAttachments.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                         {aiAttachments.map(a => (
-                          <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 10px", background: C.surfaceWarm, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, color: C.text, maxWidth: 240 }}>
+                          <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 10px", background: C.surfaceWarm, borderRadius: 8, fontSize: 12, color: C.text, maxWidth: 240 }}>
                             <Icon name={a.type === "image" ? "image" : "file"} size={12} color={C.textSec} />
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                             <button onClick={() => setAiAttachments(prev => prev.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: C.textMuted, display: "flex" }} aria-label={"Remove " + a.name}>
@@ -14148,7 +13826,7 @@ export default function App({ user }) {
                     )}
                     <textarea value={aiInput} onChange={e => { setAiInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} placeholder="Reply to Rai…" rows={1} style={{ width: "100%", padding: "4px 0", border: "none", fontSize: 17, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, overflowY: "auto" }} />
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                      <label title="Attach a file (PDF or image, max 10MB)" style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid " + C.border, background: C.card, color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                      <label title="Attach a file (PDF or image, max 10MB)" style={{ width: 32, height: 32, borderRadius: 8, background: C.card, color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                         <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onChange={e => { handleFilePick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
                         <Icon name="plus" size={14} />
                       </label>
@@ -14175,7 +13853,7 @@ export default function App({ user }) {
                 always here. When real Google OAuth ships (TODO I), the
                 Connect button + connected state light up from the same
                 googleConnected source the Today page reads. */}
-            <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8 }}>
+            <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Integrations</div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -14206,7 +13884,7 @@ export default function App({ user }) {
             </div>
 
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
-              <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", border: "1px solid " + C.border, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
                 <Icon name="chevron" size={16} color={C.border} />
               </div>
@@ -14217,23 +13895,23 @@ export default function App({ user }) {
               <div style={{ marginTop: 20 }}>
                 {/* Sweep Schedule */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }}>Automated Sweep</div>
-                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 14, fontWeight: 600 }}>Frequency</span>
-                      <select style={{ padding: "6px 12px", border: "1.5px solid " + C.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.bg }}>
+                      <select style={{ padding: "6px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.surfaceWarm }}>
                         <option>Daily</option><option>Twice daily</option><option>Weekly (Monday AM)</option>
                       </select>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 14, fontWeight: 600 }}>Time</span>
-                      <select style={{ padding: "6px 12px", border: "1.5px solid " + C.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.bg }}>
+                      <select style={{ padding: "6px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.surfaceWarm }}>
                         <option>6:00 AM</option><option>7:00 AM</option><option>8:00 AM</option><option>9:00 AM</option>
                       </select>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 14, fontWeight: 600 }}>Timezone</span>
-                      <select style={{ padding: "6px 12px", border: "1.5px solid " + C.border, borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.bg }}>
+                      <select style={{ padding: "6px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 6, fontSize: 14, fontFamily: "inherit", background: C.surfaceWarm }}>
                         <option>Eastern</option><option>Central</option><option>Mountain</option><option>Pacific</option>
                       </select>
                     </div>
@@ -14245,7 +13923,7 @@ export default function App({ user }) {
 
                 {/* Output Routing */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>Output Routing</div>
-                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
                   {[
                     { label: "Retayned Dashboard", checked: true, disabled: true, meta: "Always on" },
                     { label: "Slack Channel", checked: false, meta: "#retention-alerts" },
@@ -14262,7 +13940,7 @@ export default function App({ user }) {
 
                 {/* API Access */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>API Access</div>
-                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>API Key</div>
@@ -14313,7 +13991,7 @@ export default function App({ user }) {
 
                 {/* MCP Server */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>MCP Server</div>
-                <div style={{ background: C.card, borderRadius: 12, border: "1px solid " + C.border, padding: "16px" }}>
+                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
                   <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>Expose Retayned as a tool server for your AI agents. Any MCP-compatible agent can connect and call Retayned tools directly.</p>
                   
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "10px 14px", background: C.bg, borderRadius: 8 }}>
@@ -14405,7 +14083,7 @@ export default function App({ user }) {
 
         return (
           <>
-            <div onClick={() => setSelectedClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)", zIndex: 90 }} />
+            <div onClick={() => setSelectedClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.32)", zIndex: 90 }} />
             <div className="r-client-modal" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "100%", maxWidth: 520, maxHeight: "90vh", background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", zIndex: 100, overflowY: "auto", borderRadius: 16 }}>
               {/* Top bar — close only (industry now lives in hero eyebrow) */}
               <div style={{ padding: "12px 20px", display: "flex", justifyContent: "flex-end", position: "sticky", top: 0, background: C.card, zIndex: 1, borderBottom: "1px solid " + C.borderLight }}>
@@ -14603,16 +14281,16 @@ export default function App({ user }) {
                           {[{ key: "contact", label: "Contact name" }, { key: "role", label: "Role" }, { key: "tag", label: "Industry" }].map(f => (
                             <div key={f.key}>
                               <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>{f.label}</label>
-                              <input value={overviewEditData[f.key] || ""} onChange={e => setOverviewEditData({ ...overviewEditData, [f.key]: e.target.value })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                              <input value={overviewEditData[f.key] || ""} onChange={e => setOverviewEditData({ ...overviewEditData, [f.key]: e.target.value })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                             </div>
                           ))}
                           <div>
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Months together</label>
-                            <input type="number" value={overviewEditData.months || 0} onChange={e => setOverviewEditData({ ...overviewEditData, months: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                            <input type="number" value={overviewEditData.months || 0} onChange={e => setOverviewEditData({ ...overviewEditData, months: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                           </div>
                           <div>
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Current monthly rate ($)</label>
-                            <input type="number" value={overviewEditData.revenue || 0} onChange={e => setOverviewEditData({ ...overviewEditData, revenue: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                            <input type="number" value={overviewEditData.revenue || 0} onChange={e => setOverviewEditData({ ...overviewEditData, revenue: parseInt(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
                               Your best estimate of monthly revenue. Changing this will not affect prior months.
                             </div>
@@ -14622,9 +14300,9 @@ export default function App({ user }) {
                               the narrative behind movement (expansion, contraction, etc)
                               rather than just the numbers. */}
                           {Number(overviewEditData.revenue || 0) !== Number(sc.revenue || 0) && (
-                            <div style={{ background: C.surfaceWarm, borderRadius: 8, padding: "12px", border: "1px solid " + C.borderLight }}>
+                            <div style={{ background: C.surfaceWarm, borderRadius: 8, padding: "12px" }}>
                               <label style={{ fontSize: 13, fontWeight: 600, color: C.text, display: "block", marginBottom: 6 }}>Why is the rate changing? (optional)</label>
-                              <select value={overviewEditData.change_reason || ""} onChange={e => setOverviewEditData({ ...overviewEditData, change_reason: e.target.value })} style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, marginBottom: 6 }}>
+                              <select value={overviewEditData.change_reason || ""} onChange={e => setOverviewEditData({ ...overviewEditData, change_reason: e.target.value })} style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, marginBottom: 6 }}>
                                 <option value="">Skip — no reason given</option>
                                 <option value="expansion">Expansion (scope grew)</option>
                                 <option value="contraction">Contraction (scope shrank)</option>
@@ -14635,7 +14313,7 @@ export default function App({ user }) {
                                 <option value="correction">Correction (typo / wrong rate)</option>
                                 <option value="other">Other</option>
                               </select>
-                              <input type="text" value={overviewEditData.change_note || ""} onChange={e => setOverviewEditData({ ...overviewEditData, change_note: e.target.value })} placeholder="Note (optional)" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, boxSizing: "border-box" }} />
+                              <input type="text" value={overviewEditData.change_note || ""} onChange={e => setOverviewEditData({ ...overviewEditData, change_note: e.target.value })} placeholder="Note (optional)" style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
                             </div>
                           )}
                           {!showBaselineEdit ? (
@@ -14662,7 +14340,7 @@ export default function App({ user }) {
                           ) : (
                             <div>
                               <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Lifetime revenue earned before today ($)</label>
-                              <input type="number" value={overviewEditData.lifetime_revenue_at_entry || 0} onChange={e => setOverviewEditData({ ...overviewEditData, lifetime_revenue_at_entry: parseFloat(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                              <input type="number" value={overviewEditData.lifetime_revenue_at_entry || 0} onChange={e => setOverviewEditData({ ...overviewEditData, lifetime_revenue_at_entry: parseFloat(e.target.value) || 0 })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4, lineHeight: 1.4 }}>
                                 What you earned from this client BEFORE Retayned tracked them. Only edit this if you skipped it during onboarding or got the number wrong.
                               </div>
@@ -14670,7 +14348,7 @@ export default function App({ user }) {
                           )}
                           <div>
                             <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Renewal date <span style={{ color: C.textMuted, fontWeight: 400 }}>· optional</span></label>
-                            <input type="date" value={overviewEditData.renewal_date ? String(overviewEditData.renewal_date).split("T")[0] : ""} onChange={e => setOverviewEditData({ ...overviewEditData, renewal_date: e.target.value || null })} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, colorScheme: "light" }} />
+                            <input type="date" value={overviewEditData.renewal_date ? String(overviewEditData.renewal_date).split("T")[0] : ""} onChange={e => setOverviewEditData({ ...overviewEditData, renewal_date: e.target.value || null })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, colorScheme: "light" }} />
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -14742,7 +14420,7 @@ export default function App({ user }) {
                       <button onClick={() => { setRemoveConfirm(true); setRolodexConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ background: "none", border: "none", color: C.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 4 }}>Terminate</button>
                     </div>
                   ) : pauseConfirm ? (
-                    <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px", border: "1px solid " + C.border }}>
+                    <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px" }}>
                       <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be paused. Their tasks stay visible but Rai stops surfacing them, and their retention score will drop -4. Tenure clock freezes until you resume.</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={async () => {
@@ -14886,7 +14564,7 @@ export default function App({ user }) {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ background: C.bg, borderRadius: 12, padding: "16px", border: "1px solid " + C.border }}>
+                    <div style={{ background: C.bg, borderRadius: 12, padding: "16px" }}>
                       <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This will permanently delete this client from your account — all tasks, touchpoints, health checks, and Rai's memory of them will be erased. This cannot be undone.</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={() => { setClients(clients.filter(c => c.id !== sc.id));
@@ -15358,8 +15036,8 @@ export default function App({ user }) {
 
                         {!readOnly && (isAdding ? (
                           <div style={{ padding: "12px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-                            <input value={billingNewItem.description} onChange={e => setBillingNewItem({ ...billingNewItem, description: e.target.value })} placeholder="Description (e.g. Retainer, Creative refresh)" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
-                            <input type="number" value={billingNewItem.amount} onChange={e => setBillingNewItem({ ...billingNewItem, amount: e.target.value })} placeholder="Amount ($)" style={{ padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                            <input value={billingNewItem.description} onChange={e => setBillingNewItem({ ...billingNewItem, description: e.target.value })} placeholder="Description (e.g. Retainer, Creative refresh)" style={{ padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
+                            <input type="number" value={billingNewItem.amount} onChange={e => setBillingNewItem({ ...billingNewItem, amount: e.target.value })} placeholder="Amount ($)" style={{ padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                             <div onClick={() => setBillingNewItem({ ...billingNewItem, recurring: !billingNewItem.recurring })} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", cursor: "pointer" }}>
                               <div style={{ width: 18, height: 18, borderRadius: 4, border: billingNewItem.recurring ? "none" : "1.5px solid " + C.border, background: billingNewItem.recurring ? C.primary : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 {billingNewItem.recurring && <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>✓</span>}
@@ -15389,7 +15067,6 @@ export default function App({ user }) {
                           paper-note treatment feel buried. */}
                       <div style={{
                         background: C.card,
-                        border: "1px solid " + C.border,
                         borderRadius: 10,
                         padding: "14px 16px",
                         marginBottom: 18,
@@ -15425,10 +15102,10 @@ export default function App({ user }) {
                         {/* Editing the current entry */}
                         {currentTerm && termsEditingId === currentTerm.id && (
                           <div>
-                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                              <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
-                              <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              <button onClick={() => saveTermEdit(currentTerm.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                              <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
                           </div>
                         )}
@@ -15437,10 +15114,10 @@ export default function App({ user }) {
                         {termsAddingNew[sc.id] && (
                           <div>
                             {currentTerm && <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 8, fontStyle: "italic" }}>Adding a new entry will become the current terms. Previous entry stays in history.</div>}
-                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                            <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} placeholder="Describe the billing arrangement…" style={{ width: "100%", padding: "10px 12px", borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 100, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
                             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                              <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
-                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              <button onClick={addTerm} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Add entry</button>
+                              <button onClick={() => { setTermsAddingNew(prev => ({ ...prev, [sc.id]: false })); setTermsEditDraft(""); }} style={{ padding: "6px 12px", background: "transparent", color: C.textMuted, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                             </div>
                           </div>
                         )}
@@ -15461,10 +15138,10 @@ export default function App({ user }) {
                               <div key={t.id} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: "0.5px dashed " + C.borderLight }}>
                                 {termsEditingId === t.id ? (
                                   <div>
-                                    <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
+                                    <textarea autoFocus value={termsEditDraft} onChange={e => setTermsEditDraft(e.target.value)} style={{ width: "100%", padding: "10px 12px", borderRadius: 4, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, minHeight: 80, resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }} />
                                     <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                      <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: termsEditDraft.trim() ? "none" : "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
-                                      <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, border: "1px solid " + C.borderLight, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                                      <button onClick={() => saveTermEdit(t.id)} disabled={!termsEditDraft.trim()} style={{ padding: "6px 12px", background: termsEditDraft.trim() ? C.text : "transparent", color: termsEditDraft.trim() ? "#fff" : C.textMuted, border: "none", borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: termsEditDraft.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                                      <button onClick={() => { setTermsEditingId(null); setTermsEditDraft(""); }} style={{ padding: "6px 10px", background: "transparent", color: C.textMuted, borderRadius: 4, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                                     </div>
                                   </div>
                                 ) : (
@@ -15574,7 +15251,7 @@ export default function App({ user }) {
         ];
         return (
           <>
-            <div onClick={() => setSelectedRolodex(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)", zIndex: 90 }} />
+            <div onClick={() => setSelectedRolodex(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.32)", zIndex: 90 }} />
             <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "100%", maxWidth: 420, background: C.card, boxShadow: "-4px 0 24px rgba(0,0,0,0.08)", zIndex: 100, overflowY: "scroll" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid " + C.borderLight, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
                 <h2 style={{ fontSize: 20, fontWeight: 800 }}>{sr.client}</h2>
@@ -15708,7 +15385,7 @@ export default function App({ user }) {
                       {!rolodexRemoveConfirm ? (
                         <button onClick={() => setRolodexRemoveConfirm(true)} style={{ width: "100%", padding: "10px", background: "transparent", color: C.danger, border: "1px solid " + C.danger + "44", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove from Rolodex</button>
                       ) : (
-                        <div style={{ background: C.bg, borderRadius: 12, padding: "16px", border: "1px solid " + C.border }}>
+                        <div style={{ background: C.bg, borderRadius: 12, padding: "16px" }}>
                           <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This will remove {sr.client} from your Rolodex. No more check-in reminders, no more tracking. You can always add them back later.</p>
                           <div style={{ display: "flex", gap: 8 }}>
                             <button onClick={() => { setRolodex(prev => prev.filter(x => x.id !== sr.id)); rolodexDb.delete(sr.id); setSelectedRolodex(null); setRolodexRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove</button>
@@ -15724,11 +15401,11 @@ export default function App({ user }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <div>
                         <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Contact name</label>
-                        <input value={ed.contact} onChange={e => setRolodexEditData({...ed, contact: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                        <input value={ed.contact} onChange={e => setRolodexEditData({...ed, contact: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Months together</label>
-                        <input type="number" value={ed.months} onChange={e => setRolodexEditData({...ed, months: parseInt(e.target.value) || 0})} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                        <input type="number" value={ed.months} onChange={e => setRolodexEditData({...ed, months: parseInt(e.target.value) || 0})} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Priority</label>
@@ -15740,21 +15417,21 @@ export default function App({ user }) {
                       </div>
                       <div>
                         <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Notes</label>
-                        <textarea value={ed.notes} onChange={e => setRolodexEditData({...ed, notes: e.target.value})} placeholder="Log a check-in, add context, anything worth remembering..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 80, resize: "vertical" }} />
+                        <textarea value={ed.notes} onChange={e => setRolodexEditData({...ed, notes: e.target.value})} placeholder="Log a check-in, add context, anything worth remembering..." style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, minHeight: 80, resize: "vertical" }} />
                       </div>
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 700, marginTop: 16, marginBottom: 12 }}>History</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {sr.type === "former" ? (
                         <>
-                          <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>What happened?</label><textarea value={ed.what} onChange={e => setRolodexEditData({...ed, what: e.target.value})} placeholder="Contract ended, budget cut, went in-house..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
-                          <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>How did it end?</label><textarea value={ed.terms} onChange={e => setRolodexEditData({...ed, terms: e.target.value})} placeholder="Good terms, neutral, rough..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
-                          <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Would they come back?</label><textarea value={ed.comeback} onChange={e => setRolodexEditData({...ed, comeback: e.target.value})} placeholder="Yes, maybe, no..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
+                          <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>What happened?</label><textarea value={ed.what} onChange={e => setRolodexEditData({...ed, what: e.target.value})} placeholder="Contract ended, budget cut, went in-house..." style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
+                          <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>How did it end?</label><textarea value={ed.terms} onChange={e => setRolodexEditData({...ed, terms: e.target.value})} placeholder="Good terms, neutral, rough..." style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
+                          <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Would they come back?</label><textarea value={ed.comeback} onChange={e => setRolodexEditData({...ed, comeback: e.target.value})} placeholder="Yes, maybe, no..." style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
                         </>
                       ) : (
-                        <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>What did you do for them?</label><textarea value={ed.work} onChange={e => setRolodexEditData({...ed, work: e.target.value})} placeholder="Site audit, consulting session..." style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
+                        <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>What did you do for them?</label><textarea value={ed.work} onChange={e => setRolodexEditData({...ed, work: e.target.value})} placeholder="Site audit, consulting session..." style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
                       )}
-                      <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Would they refer you?</label><textarea value={ed.refer} onChange={e => setRolodexEditData({...ed, refer: e.target.value})} placeholder="Even if they left, would they recommend you?" style={{ width: "100%", padding: "10px 12px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
+                      <div><label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Would they refer you?</label><textarea value={ed.refer} onChange={e => setRolodexEditData({...ed, refer: e.target.value})} placeholder="Even if they left, would they recommend you?" style={{ width: "100%", padding: "10px 12px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg, minHeight: 60, resize: "vertical" }} /></div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                       <button onClick={() => setRolodexEditing(false)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
@@ -15811,7 +15488,7 @@ export default function App({ user }) {
         const isActive = r.status === "converted" || (r.converted && r.status !== "closed");
         return (
           <>
-            <div onClick={() => setRefEditing(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.25)", zIndex: 90 }} />
+            <div onClick={() => setRefEditing(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.32)", zIndex: 90 }} />
             <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "100%", maxWidth: 420, background: C.card, boxShadow: "-4px 0 24px rgba(0,0,0,0.08)", zIndex: 100, overflowY: "scroll" }}>
               <div style={{ padding: "14px 20px", borderBottom: "1px solid " + C.borderLight, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
                 <h2 style={{ fontSize: 20, fontWeight: 800 }}>{refEditData.to || r.to}</h2>
@@ -15828,7 +15505,7 @@ export default function App({ user }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred person or company</label>
-                    <input value={refEditData.to || ""} onChange={e => setRefEditData({...refEditData, to: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                    <input value={refEditData.to || ""} onChange={e => setRefEditData({...refEditData, to: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
@@ -15852,12 +15529,12 @@ export default function App({ user }) {
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Average monthly revenue ($)</label>
-                    <input type="number" value={refEditData.revenue || ""} onChange={e => setRefEditData({...refEditData, revenue: e.target.value})} placeholder="0" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                    <input type="number" value={refEditData.revenue || ""} onChange={e => setRefEditData({...refEditData, revenue: e.target.value})} placeholder="0" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                   </div>
                   {(refEditData.status === "closed") && (
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Total revenue earned ($)</label>
-                      <input type="number" value={refEditData.totalRevenue || ""} onChange={e => setRefEditData({...refEditData, totalRevenue: e.target.value})} placeholder="0" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                      <input type="number" value={refEditData.totalRevenue || ""} onChange={e => setRefEditData({...refEditData, totalRevenue: e.target.value})} placeholder="0" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
                     </div>
                   )}
                 </div>
@@ -15901,9 +15578,9 @@ export default function App({ user }) {
           top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 82px)",
           left: 12,
           right: 12,
-          background: C.surfaceWarm,
+          background: C.sidebar,
           borderRadius: 18,
-          boxShadow: "0 2px 6px rgba(10,10,10,0.04), 0 4px 14px rgba(10,10,10,0.07)",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.16)",
           padding: "10px 6px 12px",
           zIndex: 40,
           display: keyboardOpen ? "none" : "flex",
@@ -15932,17 +15609,17 @@ export default function App({ user }) {
                 cursor: "pointer",
                 padding: "5px 12px",
                 borderRadius: 10,
-                background: active ? C.deepCream : "transparent",
-                boxShadow: active ? "inset 0 1px 2px rgba(0,0,0,0.06)" : "none",
+                background: active ? "#F2EEE8" : "transparent",
+                boxShadow: active ? "0 1px 3px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.16)" : "none",
                 position: "relative",
                 flexShrink: 0,
                 scrollSnapAlign: "center",
                 minWidth: 60,
               }}
             >
-              <Icon name={n.icon} size={24} color={active ? C.primary : C.ink500} />
-              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.text : C.ink500 }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.deepCream : C.surfaceWarm) }} />}
+              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.primaryLight} accent={active ? C.primary : "#33543E"} />
+              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : "#8FA697" }}>{n.label}</span>
+              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? "#F2EEE8" : C.sidebar) }} />}
             </div>
           );
         })}
