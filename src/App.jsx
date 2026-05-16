@@ -27,6 +27,12 @@ import {
 // mount-time so they're available before any component reads them.
 const C = {
   primary: "#33543E", primaryDeep: "#1C3224", primaryLight: "#558B68", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
+  // Muted sage — same hue family as primaryLight (#558B68) but with
+  // saturation cut roughly in half. Used for inactive nav icons so the
+  // rail recedes and the active item carries brand color. Paired with
+  // primaryMutedDeep below for the darker accent stops inside icons
+  // (replaces the dark #2F2F31 accents in inactive state).
+  primaryMuted: "#8FA597", primaryMutedDeep: "#4D5C50",
 
   // Surfaces — themed
   bg: "var(--rt-bg)",
@@ -5915,20 +5921,33 @@ export default function App({ user }) {
            All scoped to (hover: hover) so touch devices don't get stuck states.
            Inactive variants use :not(.is-active) for segmented toggles. */
 
-        /* Purple inline links — Magic Scoop client name, Connect Google Calendar.
-           Hover signal: color darkens + underline dotted → solid. Font-weight
-           stays at 600 at rest AND hover so the box geometry never shifts —
-           hovering can't push neighboring text or change the link's footprint. */
+        /* Purple inline links — Magic Scoop client name, Connect Google
+           Calendar. Hover signal: color darkens + dotted underline goes
+           to solid. Font-weight stays at 600 at rest AND hover so the
+           box geometry never shifts — hovering can't push neighboring
+           text or change the link's footprint.
+
+           Uses text-decoration (not border-bottom) so the underline
+           survives when the consuming element has an inline border:none
+           reset on it (which buttons do, to kill the native button
+           outline). A border-bottom-based version got wiped out by
+           those resets — Connect Google Calendar rendered with no
+           underline at all. */
         .rt-purple-link {
           color: ${C.btn};
           font-weight: 600;
-          border-bottom: 1px dotted ${C.btn};
-          transition: color 0.12s, border-bottom-color 0.12s;
+          text-decoration: underline;
+          text-decoration-style: dotted;
+          text-decoration-color: ${C.btn};
+          text-decoration-thickness: 1px;
+          text-underline-offset: 3px;
+          transition: color 0.12s, text-decoration-style 0.12s, text-decoration-color 0.12s;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
             color: ${C.btnHover};
-            border-bottom: 1px solid ${C.btnHover};
+            text-decoration-style: solid;
+            text-decoration-color: ${C.btnHover};
           }
         }
 
@@ -5941,6 +5960,52 @@ export default function App({ user }) {
         }
         @media (hover: hover) {
           .rt-quiet-link:hover { color: var(--rt-text-sec); }
+        }
+
+        /* ── UNIFIED PICKER SURFACE — Client / Worker / Due dropdowns.
+           These three composer pickers were built at different times
+           and had drifted: three different border-radii, three different
+           paddings, three different shadow languages. This unifies them
+           to one panel + one item treatment that matches Retayned's
+           --rt-sh-card stacked-shadow language (just stronger, because
+           a picker overlays content and needs more elevation than a
+           card at rest). */
+        .rt-picker-panel {
+          background: var(--rt-card);
+          border-radius: 12px;
+          padding: 6px;
+          box-shadow:
+            0 1px 3px rgba(20, 30, 22, 0.06),
+            0 8px 24px rgba(20, 30, 22, 0.10);
+        }
+        .rt-picker-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 10px;
+          border-radius: 6px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-family: inherit;
+          text-align: left;
+          color: var(--rt-text);
+          font-size: 13px;
+          width: 100%;
+          transition: background 120ms var(--rt-ease-out),
+                      color 120ms var(--rt-ease-out);
+        }
+        .rt-picker-item:hover,
+        .rt-picker-item.is-highlight {
+          background: rgba(20, 30, 22, 0.04);
+        }
+        .rt-picker-item.is-active {
+          background: rgba(20, 30, 22, 0.04);
+        }
+        .rt-picker-divider {
+          height: 1px;
+          background: var(--rt-border-light);
+          margin: 4px 6px;
         }
 
         /* Today/Tomorrow timeline toggle — text-only hover (no fill), so
@@ -6067,19 +6132,23 @@ export default function App({ user }) {
         }
         .rt-add-task-btn:not(:disabled):hover {
           background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-rai-pop-hover) !important;
+          box-shadow: var(--rt-sh-purple-hover) !important;
           transform: translateY(-1px);
         }
         .rt-add-task-btn:not(:disabled):active {
           transform: translateY(0) scale(0.97);
           transition: transform 80ms var(--rt-ease-press);
         }
-        /* Rai-territory gradient-halo buttons (sidebar New Chat, future
-           additions). Mirror the Add Task armed-state motion: lift on
-           hover, brighten the gradient, intensify the halo. */
+        /* Rai-territory gradient buttons (sidebar New Chat, future
+           additions). Use the SITE STANDARD --rt-sh-purple at rest and
+           --rt-sh-purple-hover on hover (same as every other primary
+           purple CTA). Previously used the special --rt-sh-rai-pop
+           token which had a 32px halo bleed — hover-tier intensity for
+           a rest state. The class kept its name for compatibility but
+           no longer applies the heavy halo. */
         .rt-rai-pop-btn:hover {
           background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-rai-pop-hover) !important;
+          box-shadow: var(--rt-sh-purple-hover) !important;
           transform: translateY(-1px);
         }
         .rt-rai-pop-btn:active {
@@ -7113,7 +7182,7 @@ export default function App({ user }) {
             affecting nav items or the Portfolio widget at the bottom. */}
         {page === "coach" && !sidebarCollapsed ? (
           <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-rai-pop)", flexShrink: 0, transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
+            <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-purple)", flexShrink: 0, transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
               New Chat
             </button>
             {raiConvoList.length > 0 && (() => {
@@ -8282,7 +8351,7 @@ export default function App({ user }) {
                       onClick={() => { setComposerMenuOpen(false); setComposerQuery(""); }}
                       style={{ position: "fixed", inset: 0, zIndex: 29, background: "transparent" }}
                     />
-                    <div className="rt-client-picker" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 300, background: C.card, borderRadius: 12, boxShadow: "0 12px 32px rgba(10,10,10,0.12)", zIndex: 30, padding: 6 }}>
+                    <div className="rt-client-picker rt-picker-panel" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 300, zIndex: 30 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <Icon name="search" size={12} color={C.textMuted} />
                       <input autoFocus value={composerQuery}
@@ -8319,6 +8388,7 @@ export default function App({ user }) {
                     <div style={{ display: "flex", flexDirection: "column", paddingTop: 4, maxHeight: 300, overflow: "auto" }}>
                       {clientMatches.map((c, idx) => (
                         <button key={c.id || c.name}
+                          className={"rt-picker-item" + (idx === composerHighlight ? " is-highlight" : "")}
                           onClick={() => {
                             setComposerClient(c.name);
                             setComposerMenuOpen(false);
@@ -8331,21 +8401,16 @@ export default function App({ user }) {
                             }, 0);
                           }}
                           onMouseEnter={() => setComposerHighlight(idx)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 10,
-                            padding: "7px 8px", borderRadius: 6, textAlign: "left",
-                            background: idx === composerHighlight ? "rgba(0,0,0,0.04)" : "none",
-                            border: "none", cursor: "pointer", fontFamily: "inherit",
-                          }}>
+                        >
                           <ClientAvatar client={c} size={22} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: idx === composerHighlight ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                            <div style={{ fontSize: 10.5, color: C.textMuted }}>{c.industry || "Client"}</div>
+                            <div style={{ fontWeight: idx === composerHighlight ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{c.industry || "Client"}</div>
                           </div>
                           <ScoreChip score={c.ret} size="sm" />
                         </button>
                       ))}
-                      {clientMatches.length === 0 && <div style={{ padding: "12px 10px", fontSize: 12, color: C.textMuted }}>No matches</div>}
+                      {clientMatches.length === 0 && <div style={{ padding: "12px 10px", fontSize: 13, color: C.textMuted }}>No matches</div>}
                     </div>
                   </div>
                   </>
@@ -8404,63 +8469,39 @@ export default function App({ user }) {
                           {workerPickerOpen && (
                             <>
                               <div onClick={() => setWorkerPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
-                              <div style={{
+                              <div className="rt-picker-panel" style={{
                                 position: "absolute",
                                 top: "calc(100% + 6px)",
                                 left: 0,
                                 width: 260,
-                                background: C.card,
-                                borderRadius: 10,
-                                padding: 6,
-                                boxShadow: "0 12px 32px rgba(20,30,22,0.12)",
                                 zIndex: 50,
                               }}>
                                 {/* Self-assigned (default) option */}
                                 <button
+                                  className={"rt-picker-item" + (!newTaskWorkerId ? " is-active" : "")}
                                   onClick={() => { setNewTaskWorkerId(null); setWorkerPickerOpen(false); }}
-                                  style={{
-                                    width: "100%",
-                                    display: "flex", alignItems: "center", gap: 10,
-                                    padding: "8px 9px",
-                                    background: !newTaskWorkerId ? "rgba(0,0,0,0.04)" : "transparent",
-                                    border: "none", borderRadius: 6,
-                                    cursor: "pointer", fontFamily: "inherit",
-                                    textAlign: "left",
-                                  }}
-                                  onMouseEnter={e => { if (newTaskWorkerId) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                                  onMouseLeave={e => { if (newTaskWorkerId) e.currentTarget.style.background = "transparent"; }}
                                 >
                                   <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>
                                     {getUserInitial(user)}
                                   </div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, fontWeight: !newTaskWorkerId ? 600 : 500, color: C.text }}>Just me</div>
-                                    <div style={{ fontSize: 11, color: C.textMuted }}>Default — keep on my list</div>
+                                    <div style={{ fontWeight: !newTaskWorkerId ? 600 : 500, color: C.text }}>Just me</div>
+                                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>Default — keep on my list</div>
                                   </div>
                                 </button>
-                                <div style={{ height: 1, background: C.borderLight, margin: "4px 6px" }} />
+                                <div className="rt-picker-divider" />
                                 {workersList.map(w => (
                                   <button
                                     key={w.id}
+                                    className={"rt-picker-item" + (newTaskWorkerId === w.id ? " is-active" : "")}
                                     onClick={() => { setNewTaskWorkerId(w.id); setWorkerPickerOpen(false); }}
-                                    style={{
-                                      width: "100%",
-                                      display: "flex", alignItems: "center", gap: 10,
-                                      padding: "8px 9px",
-                                      background: newTaskWorkerId === w.id ? "rgba(0,0,0,0.04)" : "transparent",
-                                      border: "none", borderRadius: 6,
-                                      cursor: "pointer", fontFamily: "inherit",
-                                      textAlign: "left",
-                                    }}
-                                    onMouseEnter={e => { if (newTaskWorkerId !== w.id) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                                    onMouseLeave={e => { if (newTaskWorkerId !== w.id) e.currentTarget.style.background = "transparent"; }}
                                   >
                                     <div style={{ width: 22, height: 22, borderRadius: 11, background: C.primary, color: "#fff", fontSize: 9, fontWeight: 700, display: "grid", placeItems: "center", flexShrink: 0 }}>
                                       {getWorkerInitials(w.name)}
                                     </div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ fontSize: 13, fontWeight: newTaskWorkerId === w.id ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</div>
-                                      <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.email}</div>
+                                      <div style={{ fontWeight: newTaskWorkerId === w.id ? 600 : 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</div>
+                                      <div style={{ fontSize: 11, color: C.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>{w.email}</div>
                                     </div>
                                   </button>
                                 ))}
@@ -8519,14 +8560,10 @@ export default function App({ user }) {
                           onClick={() => setDuePickerOpen(false)}
                           style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
                         />
-                        <div className="rt-due-picker" style={{
+                        <div className="rt-due-picker rt-picker-panel" style={{
                           position: "absolute",
                           top: "calc(100% + 6px)",
                           left: 0,
-                          background: C.card,
-                          borderRadius: 10,
-                          padding: 8,
-                          boxShadow: "0 4px 16px rgba(20,30,22,0.12), 0 1px 3px rgba(20,30,22,0.06)",
                           zIndex: 50,
                           minWidth: 240,
                           display: "flex",
@@ -8549,23 +8586,9 @@ export default function App({ user }) {
                                   return (
                                     <button
                                       key={o.value}
+                                      className={"rt-picker-item" + (isSel ? " is-active" : "")}
                                       onClick={() => { setNewTaskDueDate(o.value); setNewTaskRecurring(false); setDuePickerOpen(false); }}
-                                      style={{
-                                        textAlign: "left",
-                                        padding: "8px 10px",
-                                        background: isSel ? "rgba(0,0,0,0.04)" : "transparent",
-                                        border: "none",
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        color: C.text,
-                                        fontWeight: isSel ? 600 : 500,
-                                        cursor: "pointer",
-                                        fontFamily: "inherit",
-                                        display: "block",
-                                        width: "100%",
-                                      }}
-                                      onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
-                                      onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
+                                      style={{ fontWeight: isSel ? 600 : 500 }}
                                     >
                                       {o.label}
                                     </button>
@@ -8648,28 +8671,12 @@ export default function App({ user }) {
                                   );
                                 })()}
                                 {/* Recurring option — bottom of menu, divider above. */}
-                                <div style={{ height: 1, background: C.borderLight, margin: "4px 6px" }} />
+                                <div className="rt-picker-divider" />
                                 {!newTaskRecurring && (
                                   <button
+                                    className="rt-picker-item"
                                     onClick={() => { setNewTaskRecurring(true); setNewTaskDueDate(null); }}
-                                    style={{
-                                      textAlign: "left",
-                                      padding: "8px 10px",
-                                      background: "transparent",
-                                      border: "none",
-                                      borderRadius: 6,
-                                      fontSize: 13,
-                                      color: C.text,
-                                      fontWeight: 500,
-                                      cursor: "pointer",
-                                      fontFamily: "inherit",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 7,
-                                      width: "100%",
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.04)"}
-                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                    style={{ gap: 7 }}
                                   >
                                     <Icon name="infinity" size={14} color={C.textMuted} />
                                     Recurring
@@ -8880,12 +8887,16 @@ export default function App({ user }) {
                         flexShrink: 0,
                         cursor: newTask.trim() ? "pointer" : "default",
                         // Two-state treatment: at rest = warm-neutral box with
-                        // soft shadow (no fake-purple). When armed = full purple
-                        // gradient with halo. Same shape across both — only the
-                        // color does the work.,
+                        // no shadow. When armed = full purple gradient + the
+                        // standard --rt-sh-purple shadow (matches Add Client,
+                        // Discuss, and every other primary purple CTA in the
+                        // app). Previously used --rt-sh-rai-pop which had a
+                        // 32px halo bleed at rest — hover-tier intensity for
+                        // a non-hover state. Now consistent: gradient marks
+                        // the button as primary, hover adds the lift + halo.
                         background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
                         color: newTask.trim() ? "#fff" : C.textMuted,
-                        boxShadow: newTask.trim() ? "var(--rt-sh-rai-pop)" : "none",
+                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
