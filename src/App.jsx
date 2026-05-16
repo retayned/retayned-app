@@ -121,6 +121,30 @@ const THEME_CSS = `
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
+
+  /* Range input thumb — primary green across the app so the profile-edit
+     sliders never fall back to system blue. accent-color handles modern
+     browsers; the ::-webkit and ::-moz pseudos handle older/specific cases. */
+  input[type="range"] {
+    accent-color: #33543E;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #33543E;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #33543E;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+    cursor: pointer;
+  }
 `;
 
 const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", simple = false }) => {
@@ -5770,6 +5794,99 @@ export default function App({ user }) {
           box-shadow: var(--rt-sh-xs);
           transform: translateY(-1px);
         }
+
+        /* Slideover topbar nav buttons (↑↓) — subtle surface wash and
+           darker color on hover. No transform — hover stays light. */
+        .rt-so-nav:not(:disabled):hover {
+          background: var(--rt-surface) !important;
+          color: var(--rt-text) !important;
+        }
+        .rt-so-nav .rt-so-preview {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 50%;
+          transform: translateX(-50%);
+          background: var(--rt-text);
+          color: #fff;
+          padding: 6px 9px;
+          border-radius: 6px;
+          font-size: 11px;
+          font-weight: 500;
+          white-space: nowrap;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 140ms var(--rt-ease-out);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          box-shadow: 0 4px 12px rgba(20,30,22,0.18);
+          z-index: 10;
+        }
+        .rt-so-nav .rt-so-preview::before {
+          content: "";
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          border: 4px solid transparent;
+          border-bottom-color: var(--rt-text);
+        }
+        .rt-so-nav:not(:disabled):hover .rt-so-preview {
+          opacity: 1;
+        }
+        .rt-so-nav .rt-so-preview .rt-so-preview-kicker {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
+          opacity: 0.7;
+        }
+
+        /* Sidebar collapse toggle — Linear-style outer-edge tab. Rendered
+           as a sibling of the sidebar (position: fixed against viewport)
+           so it can sit slightly past the sidebar's right edge without
+           being clipped by the sidebar's overflow-y: auto. Left is
+           computed from --sidebar-w so the tab follows the sidebar as
+           it collapses/expands. Always visible at low opacity; full
+           opacity on hover. Rounded right side only — reads as a handle. */
+        .rt-sidebar-toggle {
+          display: none;
+        }
+        @media (min-width: 768px) {
+          .rt-sidebar-toggle {
+            display: flex;
+            position: fixed;
+            left: calc(var(--sidebar-w, 240px) + 14px - 8px);
+            top: 76px;
+            width: 22px;
+            height: 28px;
+            border-radius: 0 8px 8px 0;
+            background: var(--rt-card);
+            border: none;
+            color: var(--rt-text-sec);
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            box-shadow: 2px 0 8px rgba(20,30,22,0.06), 0 0 0 1px rgba(20,30,22,0.04);
+            opacity: 0.65;
+            transition: left 220ms var(--rt-ease-out),
+                        opacity 180ms var(--rt-ease-out),
+                        width 180ms var(--rt-ease-out),
+                        color 180ms var(--rt-ease-out),
+                        box-shadow 200ms var(--rt-ease-out);
+            z-index: 51;
+            padding: 0;
+            font-family: inherit;
+          }
+          .rt-sidebar-toggle:hover {
+            opacity: 1;
+            width: 26px;
+            color: var(--rt-text);
+            box-shadow: 3px 0 12px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.06);
+          }
+        }
         .rt-user-chip:active {
           transform: translateY(0) scale(0.99);
           transition: transform 80ms var(--rt-ease-press);
@@ -5969,23 +6086,10 @@ export default function App({ user }) {
            Edit/Pause/Remove are card chips at rest and lift to
            sh-card on hover, same chip language as nav/composer.
            ────────────────────────────────────────────────────── */
-        .rt-cm-btn-primary {
-          background: ${C.btn};
-          color: #fff;
-          box-shadow: var(--rt-sh-xs);
-          transition: background 200ms var(--rt-ease-out),
-                      box-shadow 200ms var(--rt-ease-out),
-                      transform 200ms var(--rt-ease-out);
-        }
-        .rt-cm-btn-primary:hover {
-          background: var(--rt-grad-btn);
-          box-shadow: var(--rt-sh-rai-pop);
-          transform: translateY(-1px);
-        }
-        .rt-cm-btn-primary:active {
-          transform: translateY(0) scale(0.98);
-          transition: transform 80ms var(--rt-ease-press);
-        }
+        /* Discuss button uses the legacy .r-btn[data-tone="purple"]
+           pattern (gradient + halo + 1px lift) — same as Add Client.
+           Earlier iterations had a custom rt-cm-btn-primary that felt
+           janky on hover; removed in favor of the standard. */
         .rt-cm-btn-secondary {
           background: ${C.card};
           color: ${C.textSec};
@@ -6017,8 +6121,6 @@ export default function App({ user }) {
         }
         .rt-cm-btn-danger:active {
           transform: translateY(0) scale(0.98);
-          transition: transform 80ms var(--rt-ease-press);
-        }
           transition: transform 80ms var(--rt-ease-press);
         }
         /* ── PILL — generic small status/info chip ───────── */
@@ -6257,7 +6359,13 @@ export default function App({ user }) {
             color: ${C.text};
           }
         }
-        .r-desk { display: none; }
+        /* Sidebar hidden on mobile. Must use !important because the
+           sidebar root has inline display: flex (needed for flex layout
+           on desktop), which would otherwise beat the no-important rule
+           below 768px and show the desktop sidebar on phones. The
+           min-width: 768px rule also uses !important and wins via
+           cascade order. */
+        .r-desk { display: none !important; }
         .r-mob-bot { display: flex; }
         /* Mobile bottom nav strip is horizontally scrollable. Hide the
            native scrollbar across all browsers — affordance is the icon
@@ -6323,7 +6431,23 @@ export default function App({ user }) {
           .r-desk { display: flex !important; }
           .r-mob-bot { display: none !important; }
           .r-today-panel { display: block !important; }
-          .r-client-modal { top: 50% !important; left: 50% !important; right: auto !important; bottom: auto !important; transform: translate(-50%, -50%) !important; max-width: 520px !important; max-height: 90vh !important; border-radius: 16px !important; }
+          /* Desktop: right-side slideover panel. Sits flush with sidebar
+             top/bottom (14px gap), takes 560px width on the right. List
+             stays visible behind the 32% backdrop so clicking another row
+             swaps content in place. */
+          .r-client-modal {
+            top: 14px !important;
+            right: 14px !important;
+            left: auto !important;
+            bottom: 14px !important;
+            transform: none !important;
+            width: 560px !important;
+            max-width: 560px !important;
+            max-height: none !important;
+            border-radius: 14px !important;
+            box-shadow: -8px 0 24px rgba(20,30,22,0.06), -2px 0 8px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04) !important;
+            animation: rt-slideover-in 320ms var(--rt-ease-out) backwards;
+          }
           .r-main {
             padding: 28px 48px;
             position: fixed;
@@ -6620,18 +6744,29 @@ export default function App({ user }) {
           /* Composer Row 2: let Add Task wrap to its own line on mobile
              so it can never be clipped off the right edge. The .rt-composer-controls
              takes the full row at flex-basis 100%, pushing the button
-             below. Button stays compact but is centered. */
+             below. Button anchors right (closer to the thumb) — left of
+             the row stays empty, button stays compact. */
           .rt-composer-controls {
             flex: 0 0 100% !important;
             width: 100%;
           }
           .rt-add-task-btn {
             margin-left: auto !important;
-            margin-right: auto !important;
+            margin-right: 0 !important;
           }
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
+          /* Due picker on mobile: the Due chip is the rightmost composer
+             pill, and the picker has minWidth: 240 with left: 0 from the
+             chip's container — this overflows the right edge of the phone.
+             Re-anchor: left: auto, right: 0 so the picker grows leftward
+             from the chip instead. Same fix applies to the Client picker
+             when it sits on the right side of the composer. */
+          .rt-due-picker {
+            left: auto !important;
+            right: 0 !important;
+          }
         }
         /* Rai pick clamp + fade — universal (desktop AND mobile).
            The whole pick block is the tap target; cursor:pointer
@@ -6680,10 +6815,9 @@ export default function App({ user }) {
           transition: transform 80ms var(--rt-ease-press);
         }
         .rt-composer-pill.is-filled {
-          box-shadow: 0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08) !important;
-        }
-        .rt-composer-pill.is-filled:hover {
-          box-shadow: 0 0 0 1px rgba(91,33,182,0.18), 0 4px 12px rgba(91,33,182,0.20) !important;
+          /* Filled state uses the same neutral chip language as Worker/Due —
+             the client avatar carries the visual personality, not the chip
+             surface. Purple was Rai-territory; this is user-selection. */
         }
         /* Recurring frequency chips inside the Due picker — share the
            composer-pill motion language (idle xs-shadow, hover lift,
@@ -6782,7 +6916,12 @@ export default function App({ user }) {
         }
         @media (min-width: 1440px) {
           .rc-grid { grid-template-columns: 240px minmax(0, 1fr) 360px; }
+          .rc-grid.rc-grid-2col { grid-template-columns: 240px minmax(0, 1fr); }
           .rc-rai-col { display: block !important; }
+        }
+        @keyframes rt-slideover-in {
+          from { transform: translateX(40px); opacity: 0.5; }
+          to { transform: translateX(0); opacity: 1; }
         }
         @keyframes fwLaunch {
           0% { transform: translateY(0); opacity: 1; }
@@ -6900,29 +7039,6 @@ export default function App({ user }) {
             letterSpacing: "-0.04em",
             lineHeight: 1,
           }}>{sidebarCollapsed ? "R." : "Retayned."}</span>
-          <button
-            onClick={() => setSidebarCollapsed(v => !v)}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            style={{
-              position: "absolute",
-              top: 18,
-              right: sidebarCollapsed ? "50%" : 10,
-              transform: sidebarCollapsed ? "translate(50%, 30px)" : "none",
-              width: 22, height: 22,
-              borderRadius: 6,
-              background: "rgba(255,255,255,0.55)",
-              border: "none",
-              color: C.textSec,
-              cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 11,
-              boxShadow: "var(--rt-sh-xs)",
-              transition: "all 180ms var(--rt-ease-out)",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.color = C.text; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.55)"; e.currentTarget.style.color = C.textSec; }}
-          >{sidebarCollapsed ? "›" : "‹"}</button>
         </div>
 
         {/* Nav items — fixed, always visible */}
@@ -7198,6 +7314,21 @@ export default function App({ user }) {
           </div>
         </div>
       </div>
+
+      {/* SIDEBAR COLLAPSE TOGGLE — rendered OUTSIDE the sidebar so it can
+          sit slightly past the right edge without being clipped by the
+          sidebar's overflow-y: auto. Position is computed from
+          --sidebar-w CSS variable, which updates when sidebarCollapsed
+          changes (see effect above). Hidden on mobile via CSS — the
+          mobile bottom nav handles all navigation there. */}
+      <button
+        className="rt-sidebar-toggle"
+        onClick={() => setSidebarCollapsed(v => !v)}
+        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {sidebarCollapsed ? "›" : "‹"}
+      </button>
 
       {/* MOBILE TOP */}
       {/* Mobile top bar deliberately removed (May 2026).
@@ -8066,8 +8197,7 @@ export default function App({ user }) {
                               border: "none",
                               borderRadius: 8,
                               fontSize: 12,
-                              color: selectedClientObj ? C.btn : C.textSec,
-                              background: selectedClientObj ? C.btnLight : C.card,
+                              color: selectedClientObj ? C.text : C.textSec,
                               cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
                               fontWeight: selectedClientObj ? 600 : 500,
                             }}
@@ -10190,8 +10320,8 @@ export default function App({ user }) {
                 </div>
               </div>
 
-              {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
-              <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
+              {/* MAIN GRID: rail + main (no third column — table data takes priority) */}
+              <div className="rc-grid rc-grid-2col" style={{ display: "grid", gap: 20, alignItems: "start" }}>
 
                 {/* LEFT RAIL — Portfolio, Book history, Recent movement (3 separate cards) */}
                 <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
@@ -11070,15 +11200,7 @@ export default function App({ user }) {
                   )}
                 </div>
 
-                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
-                <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <DaybookPanel
-                    entry={daybookEntry}
-                    yesterday={daybookYesterday}
-                    saveStatus={daybookSaveStatus}
-                    onChange={handleDaybookChange}
-                  />
-                </div>
+                {/* No right rail on Clients page — table data takes priority */}
               </div>
             </div>
           );
@@ -14454,10 +14576,61 @@ export default function App({ user }) {
           <>
             <div onClick={() => setSelectedClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.32)", zIndex: 90 }} />
             <div className="r-client-modal" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "100%", maxWidth: 520, maxHeight: "90vh", background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", zIndex: 100, overflowY: "auto", borderRadius: 16 }}>
-              {/* Top bar — close only (industry now lives in hero eyebrow) */}
-              <div style={{ padding: "12px 20px", display: "flex", justifyContent: "flex-end", position: "sticky", top: 0, background: C.card, zIndex: 1, borderBottom: "1px solid " + C.borderLight }}>
-                <button onClick={() => setSelectedClient(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1, padding: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-              </div>
+              {/* Top bar — neighbor nav (↑↓) on left, position breadcrumb
+                  in the middle, X close on right. ↑↓ navigate through the
+                  full clients array with wraparound; clicking either just
+                  calls setSelectedClient(next), which swaps content in
+                  place — no close/reopen. */}
+              {(() => {
+                const navList = (clients || []).filter(c => c && c.id && !c.archived_at);
+                const currentIdx = navList.findIndex(c => c.id === sc.id);
+                const total = navList.length;
+                const hasNav = total > 1 && currentIdx >= 0;
+                const goPrev = () => {
+                  if (!hasNav) return;
+                  const next = navList[currentIdx === 0 ? total - 1 : currentIdx - 1];
+                  if (next) setSelectedClient(next);
+                };
+                const goNext = () => {
+                  if (!hasNav) return;
+                  const next = navList[currentIdx === total - 1 ? 0 : currentIdx + 1];
+                  if (next) setSelectedClient(next);
+                };
+                const prevClient = hasNav ? navList[currentIdx === 0 ? total - 1 : currentIdx - 1] : null;
+                const nextClient = hasNav ? navList[currentIdx === total - 1 ? 0 : currentIdx + 1] : null;
+                return (
+                  <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, position: "sticky", top: 0, background: C.card, zIndex: 1, borderBottom: "1px solid " + C.borderLight }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                      <button onClick={goPrev} disabled={!hasNav} title={prevClient ? `Previous · ${prevClient.name}` : "Previous client"} aria-label="Previous client" className="rt-so-nav" style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: hasNav ? C.textSec : C.textMuted, cursor: hasNav ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 16, lineHeight: 1, padding: 0, position: "relative" }}>
+                        ↑
+                        {prevClient && (
+                          <span className="rt-so-preview">
+                            <span className="rt-so-preview-kicker">Prev</span>
+                            <span>{prevClient.name}</span>
+                          </span>
+                        )}
+                      </button>
+                      <button onClick={goNext} disabled={!hasNav} title={nextClient ? `Next · ${nextClient.name}` : "Next client"} aria-label="Next client" className="rt-so-nav" style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: hasNav ? C.textSec : C.textMuted, cursor: hasNav ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 16, lineHeight: 1, padding: 0, position: "relative" }}>
+                        ↓
+                        {nextClient && (
+                          <span className="rt-so-preview">
+                            <span className="rt-so-preview-kicker">Next</span>
+                            <span>{nextClient.name}</span>
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    {hasNav && (
+                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: "uppercase", color: C.textMuted, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span>Client</span>
+                        <span style={{ opacity: 0.5 }}>·</span>
+                        <span>{currentIdx + 1} of {total}</span>
+                      </div>
+                    )}
+                    <button onClick={() => setSelectedClient(null)} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1, padding: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                  </div>
+                );
+              })()}
 
               {/* Hero — gradient band: eyebrow meta · name · delta · score */}
               <div style={{ padding: "20px 20px 14px", background: "linear-gradient(180deg, " + C.surfaceWarm + " 0%, " + C.card + " 100%)" }}>
@@ -14993,33 +15166,39 @@ export default function App({ user }) {
                     {!editingProfile ? (
                       <div>
                         {Object.keys(dims).length > 0 ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                            {/* Radar visualization — 12-point polygon. Shape reads the
-                                relationship at a glance; dents (low dimensions) pop
-                                visually. Background rings at quartiles, faint spokes
-                                from center, polygon filled at 18% opacity + 1.5px
-                                stroke + corner dots. */}
-                            <svg width="200" height="200" viewBox="0 0 200 200" style={{ flexShrink: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "center", padding: "4px 0 8px" }}>
+                            {/* Radar visualization — 12-point polygon with labels
+                                integrated at each spoke endpoint. The SHAPE
+                                carries the meaning: dents (low dimensions) read
+                                visually without needing a numeric legend. Labels
+                                sit just outside the 100px radar at radius 125.
+                                textAnchor and dominantBaseline are picked per-
+                                spoke from angle quadrant so labels never collide
+                                with the radar or each other. */}
+                            <svg width="320" height="320" viewBox="0 0 320 320" style={{ flexShrink: 0 }}>
+                              {/* Background quartile rings */}
                               <g fill="none" stroke={C.borderLight} strokeWidth="1">
-                                <circle cx="100" cy="100" r="20" />
-                                <circle cx="100" cy="100" r="40" />
-                                <circle cx="100" cy="100" r="60" />
-                                <circle cx="100" cy="100" r="80" />
+                                <circle cx="160" cy="160" r="25" />
+                                <circle cx="160" cy="160" r="50" />
+                                <circle cx="160" cy="160" r="75" />
+                                <circle cx="160" cy="160" r="100" />
                               </g>
+                              {/* Faint spokes from center */}
                               <g fill="none" stroke={C.borderLight} strokeWidth="0.5">
                                 {profileDimensions.map((d, i) => {
                                   const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
-                                  const x = 100 + 80 * Math.cos(angle);
-                                  const y = 100 + 80 * Math.sin(angle);
-                                  return <line key={d.key} x1="100" y1="100" x2={x} y2={y} />;
+                                  const x = 160 + 100 * Math.cos(angle);
+                                  const y = 160 + 100 * Math.sin(angle);
+                                  return <line key={d.key} x1="160" y1="160" x2={x} y2={y} />;
                                 })}
                               </g>
+                              {/* Polygon + corner dots */}
                               {(() => {
                                 const points = profileDimensions.map((d, i) => {
                                   const val = dims[d.key] !== undefined && dims[d.key] !== null ? Number(dims[d.key]) : 0;
                                   const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
-                                  const r = (Math.max(0, Math.min(10, val)) / 10) * 80;
-                                  return [100 + r * Math.cos(angle), 100 + r * Math.sin(angle)];
+                                  const r = (Math.max(0, Math.min(10, val)) / 10) * 100;
+                                  return [160 + r * Math.cos(angle), 160 + r * Math.sin(angle)];
                                 });
                                 const polyStr = points.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
                                 return (
@@ -15031,23 +15210,35 @@ export default function App({ user }) {
                                   </>
                                 );
                               })()}
+                              {/* Spoke labels at radius 125. textAnchor picks
+                                  left/middle/right from cos(angle). Vertical
+                                  alignment picks alphabetic/middle/hanging
+                                  from sin(angle) so labels above the center
+                                  sit above their spoke and labels below sit
+                                  below their spoke — no overlap with rings. */}
+                              <g fontFamily="Manrope, sans-serif" fontSize="11" fontWeight="600" fill={C.textSec}>
+                                {profileDimensions.map((d, i) => {
+                                  const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
+                                  const cos = Math.cos(angle);
+                                  const sin = Math.sin(angle);
+                                  const x = 160 + 125 * cos;
+                                  const y = 160 + 125 * sin;
+                                  const textAnchor = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
+                                  const dominantBaseline = sin > 0.35 ? "hanging" : sin < -0.35 ? "auto" : "middle";
+                                  return (
+                                    <text
+                                      key={d.key}
+                                      x={x}
+                                      y={y}
+                                      textAnchor={textAnchor}
+                                      dominantBaseline={dominantBaseline}
+                                    >
+                                      {d.name}
+                                    </text>
+                                  );
+                                })}
+                              </g>
                             </svg>
-                            {/* Legend — 12 dimension rows. Low values (≤4) coloured
-                                warn-red so weak points jump off the list even
-                                without looking at the radar shape. */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 180 }}>
-                              {profileDimensions.map(d => {
-                                const val = dims[d.key];
-                                const isSet = val !== undefined && val !== null;
-                                const isLow = isSet && Number(val) <= 4;
-                                return (
-                                  <div key={d.key} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, fontSize: 11.5, padding: "2px 0" }}>
-                                    <span style={{ color: C.textSec }}>{d.name}</span>
-                                    <span style={{ color: isLow ? C.retWarn : C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums", minWidth: 18, textAlign: "right" }}>{isSet ? val : "—"}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
                           </div>
                         ) : (
                           <div style={{ textAlign: "center", padding: "20px 0", color: C.textMuted, fontSize: 14 }}>
@@ -15713,7 +15904,8 @@ export default function App({ user }) {
                       setSelectedClient(null);
                       setPage("coach");
                     }}
-                    className="rt-cm-btn-primary"
+                    className="r-btn"
+                    data-tone="purple"
                     style={{
                       flex: 1,
                       padding: "10px 16px",
