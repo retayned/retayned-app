@@ -3681,6 +3681,23 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
+  // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
+  // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
+  // Persisted in localStorage so user preference survives reloads.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.localStorage.getItem("retayned:sidebarCollapsed") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem("retayned:sidebarCollapsed", sidebarCollapsed ? "1" : "0"); } catch {}
+    // Sync the CSS var that .r-main reads to compute its left edge. The
+    // root selector defines a default; this override updates it at runtime
+    // so the main content area resizes to fill the freed horizontal space.
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--sidebar-w", sidebarCollapsed ? "64px" : "240px");
+    }
+  }, [sidebarCollapsed]);
   // Whether the Rai pick text is expanded on mobile. Desktop ignores this
   // — the clamp only applies via mobile @media. On mobile: false = clamped
   // to 2 lines with fade-out + "More" tap. Resets daily implicitly because
@@ -5744,11 +5761,13 @@ export default function App({ user }) {
         }
         .nav-item:hover:not(.is-active) svg { color: var(--rt-text) !important; }
         .nav-item:active:not(.is-active) { transform: scale(0.98); }
-        /* User chip rests as a card already (matches nav-item active
-           treatment). Hover deepens the shadow + adds the 1px lift —
-           same logical progression as nav: never darken, only lift. */
+        /* User chip rests transparent (matches sidebar bg). Hover adds a
+           subtle surface wash + soft shadow + 1px lift — same logical
+           progression as nav: never darken, only lift, but kept light
+           because we're inside the sidebar's substrate. */
         .rt-user-chip:hover {
-          box-shadow: var(--rt-sh-card) !important;
+          background: rgba(255,255,255,0.6);
+          box-shadow: var(--rt-sh-xs);
           transform: translateY(-1px);
         }
         .rt-user-chip:active {
@@ -5939,6 +5958,67 @@ export default function App({ user }) {
         }
         .rt-rai-pop-btn:active {
           transform: translateY(0) scale(0.98);
+          transition: transform 80ms var(--rt-ease-press);
+        }
+
+        /* ──────────────────────────────────────────────────────
+           CLIENT MODAL — STICKY FOOTER BUTTONS
+           Discuss at rest is flat C.btn (matches Add Client, Add
+           Worker — the standard primary button style). On hover
+           it reveals the Rai-territory gradient + halo + 1px lift.
+           Edit/Pause/Remove are card chips at rest and lift to
+           sh-card on hover, same chip language as nav/composer.
+           ────────────────────────────────────────────────────── */
+        .rt-cm-btn-primary {
+          background: ${C.btn};
+          color: #fff;
+          box-shadow: var(--rt-sh-xs);
+          transition: background 200ms var(--rt-ease-out),
+                      box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
+        }
+        .rt-cm-btn-primary:hover {
+          background: var(--rt-grad-btn);
+          box-shadow: var(--rt-sh-rai-pop);
+          transform: translateY(-1px);
+        }
+        .rt-cm-btn-primary:active {
+          transform: translateY(0) scale(0.98);
+          transition: transform 80ms var(--rt-ease-press);
+        }
+        .rt-cm-btn-secondary {
+          background: ${C.card};
+          color: ${C.textSec};
+          box-shadow: var(--rt-sh-xs);
+          transition: background 160ms var(--rt-ease-out),
+                      color 160ms var(--rt-ease-out),
+                      box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
+        }
+        .rt-cm-btn-secondary:hover {
+          color: ${C.text};
+          box-shadow: var(--rt-sh-card);
+          transform: translateY(-1px);
+        }
+        .rt-cm-btn-secondary:active {
+          transform: translateY(0) scale(0.98);
+          transition: transform 80ms var(--rt-ease-press);
+        }
+        .rt-cm-btn-danger {
+          background: ${C.card};
+          color: ${C.danger};
+          box-shadow: var(--rt-sh-xs);
+          transition: box-shadow 200ms var(--rt-ease-out),
+                      transform 200ms var(--rt-ease-out);
+        }
+        .rt-cm-btn-danger:hover {
+          box-shadow: var(--rt-sh-card);
+          transform: translateY(-1px);
+        }
+        .rt-cm-btn-danger:active {
+          transform: translateY(0) scale(0.98);
+          transition: transform 80ms var(--rt-ease-press);
+        }
           transition: transform 80ms var(--rt-ease-press);
         }
         /* ── PILL — generic small status/info chip ───────── */
@@ -6196,6 +6276,12 @@ export default function App({ user }) {
            provide enough affordance that the inner track adds visual noise. */
         .r-client-modal::-webkit-scrollbar { display: none; }
         .r-client-modal { scrollbar-width: none; -ms-overflow-style: none; }
+        /* Sidebar scrollbar — sidebar root has overflow-y: auto so short
+           screens can scroll to reveal the widget + user chip + recent
+           chats. Native scrollbar would clutter the warm-cream substrate;
+           hide it across all browser engines. */
+        .r-desk::-webkit-scrollbar { display: none; }
+        .r-desk { scrollbar-width: none; -ms-overflow-style: none; }
         /* Due picker and Client picker on mobile: keep anchored to the chip
            (like Worker does) instead of popping as a bottom sheet. Earlier
            iterations pinned these to the viewport to give them screen room,
@@ -6554,7 +6640,7 @@ export default function App({ user }) {
            not a hard cut. Tapping toggles .is-clamped ↔ .is-expanded.
            The client-name link inside uses stopPropagation so tapping
            the client routes to the composer instead. */
-        .rt-band-pick { cursor: pointer; }
+        .rt-band-pick { /* plain text — only the client name span is clickable */ }
         .rt-band-pick.is-clamped {
           display: -webkit-box;
           -webkit-line-clamp: 2;
@@ -6672,6 +6758,22 @@ export default function App({ user }) {
           .rt-row-due.rt-due-overdue { padding: 3px 5px !important; }
           .rt-row-due.rt-due-future { display: none !important; }
         }
+        /* Clients table responsive — progressively hide optional columns
+           as horizontal space shrinks. Order is by signal density: cadence
+           pips + renews countdown first (visual but tangential), then trend
+           sparkline (nice-to-have), then LCV (redundant with revenue at
+           the squeezed end). Client name + score + revenue + tenure are
+           always shown above 768px. */
+        @media (max-width: 1200px) {
+          .rt-tcol-cadence,
+          .rt-tcol-renews { display: none !important; }
+        }
+        @media (max-width: 1024px) {
+          .rt-tcol-trend { display: none !important; }
+        }
+        @media (max-width: 900px) {
+          .rt-tcol-lcv { display: none !important; }
+        }
         @media (min-width: 769px) {
           .rc-mobile-list { display: none !important; }
           /* Events dropdown is mobile-only — on desktop the button reads as plain text */
@@ -6784,9 +6886,12 @@ export default function App({ user }) {
       {/* SIDEBAR — dark green primary-deep frame. Provides architectural
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
-      <div className="r-desk" style={{ width: 240, background: C.sidebar, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "var(--rt-sh-card)" }}>
-        {/* Logo — "Retayned." wordmark in Outfit 900. The brand mark. */}
-        <div style={{ padding: "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline" }}>
+      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "var(--rt-sh-card)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
+        {/* Logo — "Retayned." wordmark in Outfit 900 (collapsed: "R."). The
+            brand mark. The toggle chevron sits at the right edge of the
+            sidebar; clicking it switches between expanded (240px) and
+            collapsed (64px) modes. Persists via localStorage. */}
+        <div style={{ padding: sidebarCollapsed ? "22px 0 22px" : "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline", justifyContent: sidebarCollapsed ? "center" : "flex-start", position: "relative" }}>
           <span style={{
             fontFamily: "'Outfit', system-ui, sans-serif",
             fontWeight: 900,
@@ -6794,17 +6899,41 @@ export default function App({ user }) {
             color: C.primary,
             letterSpacing: "-0.04em",
             lineHeight: 1,
-          }}>Retayned.</span>
+          }}>{sidebarCollapsed ? "R." : "Retayned."}</span>
+          <button
+            onClick={() => setSidebarCollapsed(v => !v)}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            style={{
+              position: "absolute",
+              top: 18,
+              right: sidebarCollapsed ? "50%" : 10,
+              transform: sidebarCollapsed ? "translate(50%, 30px)" : "none",
+              width: 22, height: 22,
+              borderRadius: 6,
+              background: "rgba(255,255,255,0.55)",
+              border: "none",
+              color: C.textSec,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 11,
+              boxShadow: "var(--rt-sh-xs)",
+              transition: "all 180ms var(--rt-ease-out)",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.color = C.text; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.55)"; e.currentTarget.style.color = C.textSec; }}
+          >{sidebarCollapsed ? "›" : "‹"}</button>
         </div>
 
         {/* Nav items — fixed, always visible */}
-        <div style={{ padding: "0 10px", flexShrink: 0 }}>
+        <div style={{ padding: sidebarCollapsed ? "0 8px" : "0 10px", flexShrink: 0 }}>
           {(tier === "enterprise" ? navItemsEnterprise : navItemsCore).map(n => {
             const active = page === n.id;
             return (
-              <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} style={{
-                display: "flex", alignItems: "center", gap: 11,
-                padding: "9px 12px",
+              <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} title={sidebarCollapsed ? n.label : undefined} style={{
+                display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 11,
+                justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                padding: sidebarCollapsed ? "10px 0" : "9px 12px",
                 borderRadius: 9,
                 marginBottom: 2,
                 color: active ? C.primaryDeep : C.textSec,
@@ -6813,10 +6942,12 @@ export default function App({ user }) {
                 boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
+                position: "relative",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
-                {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
+                {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>}
+                {hasDot(n.id) && <div style={{ position: sidebarCollapsed ? "absolute" : "static", top: sidebarCollapsed ? 6 : "auto", right: sidebarCollapsed ? 6 : "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
               </div>
             );
           })}
@@ -6825,7 +6956,7 @@ export default function App({ user }) {
         {/* Coach-only: New Chat button + scrollable past-chats list. Takes all
             remaining vertical space so the list scrolls internally without
             affecting nav items or the Portfolio widget at the bottom. */}
-        {page === "coach" ? (
+        {page === "coach" && !sidebarCollapsed ? (
           <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-rai-pop)", flexShrink: 0, transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
               New Chat
@@ -6880,7 +7011,7 @@ export default function App({ user }) {
                 </>
               );
               return (
-                <div style={{ marginTop: 4, overflowY: "auto", flex: 1, minHeight: 0, paddingBottom: 10 }}>
+                <div style={{ marginTop: 4, paddingBottom: 10, flex: 1, minHeight: 0, overflowY: "auto" }}>
                   {starred.length > 0 && section("Starred", starred)}
                   {recent.length > 0 && section("Recent", recent)}
                 </div>
@@ -6896,6 +7027,7 @@ export default function App({ user }) {
             toggle whose period state lives at app level so it persists across
             sidebar re-renders. Portfolio bar/counts unchanged. */}
         {(() => {
+          if (sidebarCollapsed) return null;
           const total = clients.length;
           if (total === 0) return null;
           const buckets = clients.reduce((acc, c) => {
@@ -6979,7 +7111,7 @@ export default function App({ user }) {
                         style={{
                           padding: "5px 0",
                           fontSize: 10.5,
-                          fontWeight: active ? 600 : 500,
+                          fontWeight: 500,
                           cursor: "pointer",
                           ...(active
                             ? { color: C.primaryDeep, borderBottom: "1px solid " + C.primary }
@@ -7030,15 +7162,17 @@ export default function App({ user }) {
             </div>
           );
         })()}
-        <div style={{ padding: "4px 6px 8px" }}>
+        <div style={{ padding: sidebarCollapsed ? "4px 8px 8px" : "4px 6px 8px" }}>
           {(() => {
             const active = page === "settings";
             return (
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} style={{
+                <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} title={sidebarCollapsed ? "Settings" : undefined} style={{
                   flex: 1,
-                  display: "flex", alignItems: "center", gap: 11,
-                  padding: "9px 12px",
+                  display: "flex", alignItems: "center",
+                  gap: sidebarCollapsed ? 0 : 11,
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  padding: sidebarCollapsed ? "10px 0" : "9px 12px",
                   borderRadius: 9,
                   color: active ? C.primaryDeep : C.textSec,
                   background: active ? C.card : "transparent",
@@ -7048,16 +7182,19 @@ export default function App({ user }) {
                   cursor: "pointer",
                   transition: "all 180ms var(--rt-ease-out)",
                 }}>
-                  <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={18} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
+                  <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={18} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
+                  {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>Settings</span>}
                 </div>
               </div>
             );
           })()}
         </div>
-        <div style={{ padding: "10px 6px 14px" }}>
-          <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: "pointer", background: C.card, boxShadow: "var(--rt-sh-xs)", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)" }}>{getUserInitial(user)}</div>
-            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
+        <div style={{ padding: sidebarCollapsed ? "10px 0 14px" : "10px 6px 14px" }}>
+          <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10, justifyContent: sidebarCollapsed ? "center" : "flex-start", padding: sidebarCollapsed ? "8px 0" : "8px 10px", borderRadius: 8, cursor: "pointer", background: "transparent", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
+            <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>{getUserInitial(user)}</div>
+            {!sidebarCollapsed && (
+              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
+            )}
           </div>
         </div>
       </div>
@@ -7695,8 +7832,7 @@ export default function App({ user }) {
                     : "Worth a check-in";
                   return (
                     <div
-                      className={"rt-band-pick" + (pickExpanded ? " is-expanded" : " is-clamped")}
-                      onClick={() => setPickExpanded(p => !p)}
+                      className="rt-band-pick is-expanded"
                       style={{
                         marginTop: 8,
                         fontSize: 13.5,
@@ -8562,7 +8698,7 @@ export default function App({ user }) {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: 8,
-                        padding: newTask.trim() ? "0 8px 0 14px" : "0 14px",
+                        padding: "0 14px",
                         height: 28,
                         borderRadius: 8,
                         border: "none",
@@ -8583,16 +8719,6 @@ export default function App({ user }) {
                       }}
                     >
                       Add Task
-                      {newTask.trim() && (
-                        <span style={{
-                          background: "rgba(255,255,255,0.20)",
-                          padding: "1px 6px",
-                          borderRadius: 4,
-                          fontSize: 10.5,
-                          fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                          lineHeight: 1.3,
-                        }}>⏎</span>
-                      )}
                     </button>
                   </div>
                 </div>
@@ -10593,96 +10719,6 @@ export default function App({ user }) {
                       <input value={clientSearch} onChange={e => setClientSearch(e.target.value)} placeholder="Search clients, owners, industries…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, padding: "2px 0", fontFamily: "inherit", color: C.text }} />
                       {clientSearch && <button className="rt-icon-close" onClick={() => setClientSearch("")} style={{ width: 22, height: 22, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, background: "none", border: "none", cursor: "pointer" }}><Icon name="x" size={11} /></button>}
                     </div>
-                    {/* Drift filter row — single-select. Counts based on activeClients (pre-filter)
-                        so users can preview bucket size before clicking. */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, paddingTop: 10, borderTop: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Drift</span>
-                      {[
-                        { id: "all", label: "All", count: activeClients.length, tone: "neutral" },
-                        { id: "Improving", label: "Improving", count: byDrift.Improving, tone: "good" },
-                        { id: "Stable", label: "Stable", count: byDrift.Stable, tone: "neutral" },
-                        { id: "Something shifted", label: "Shifted", count: byDrift["Something shifted"], tone: "warn" },
-                        { id: "Declining", label: "Declining", count: byDrift.Declining, tone: "danger" },
-                        { id: "At risk", label: "At risk", count: byDrift["At risk"], tone: "danger" },
-                      ].map(f => {
-                        const isActive = clientsDriftFilter === f.id;
-                        const toneActive = {
-                          neutral: { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" },
-                          good:    { bg: "#DBEEDF", fg: "#1F7A5C", sh: "0 1px 2px rgba(31,122,92,0.14), 0 2px 6px rgba(31,122,92,0.10)" },
-                          warn:    { bg: "#FAF1D6", fg: "#9A7610", sh: "0 1px 2px rgba(184,139,21,0.14), 0 2px 6px rgba(184,139,21,0.10)" },
-                          danger:  { bg: C.dangerSoft, fg: C.danger, sh: "0 1px 2px rgba(196,67,43,0.14), 0 2px 6px rgba(196,67,43,0.10)" },
-                        }[f.tone] || { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" };
-                        return (
-                          <button
-                            key={f.id}
-                            onClick={() => setClientsDriftFilter(f.id)}
-                            className={isActive ? "" : "rt-sort-opt"}
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "5px 11px", fontSize: 11.5, borderRadius: 999,
-                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit", border: "none",
-                              ...(isActive ? { background: toneActive.bg, color: toneActive.fg, boxShadow: toneActive.sh } : { background: "transparent", color: C.textSec }),
-                            }}
-                          >
-                            <span>{f.label}</span>
-                            <span style={{
-                              background: isActive ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.05)",
-                              color: isActive ? toneActive.fg : C.textMuted,
-                              padding: "1px 6px", borderRadius: 999,
-                              fontSize: 10, fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                            }}>{f.count}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* Score-bucket filter row */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Score</span>
-                      {[
-                        { id: "all", label: "All", count: activeClients.length, tone: "neutral" },
-                        { id: "thriving", label: "Thriving 80+", count: byStage.thriving, tone: "good" },
-                        { id: "healthy", label: "Healthy 65–79", count: byStage.healthy, tone: "good" },
-                        { id: "watch", label: "Watch 45–64", count: byStage.watch, tone: "warn" },
-                        { id: "atrisk", label: "At risk <45", count: byStage.atRisk + byStage.critical, tone: "danger" },
-                      ].map(f => {
-                        const isActive = clientsScoreFilter === f.id;
-                        const toneActive = {
-                          neutral: { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" },
-                          good:    { bg: "#DBEEDF", fg: "#1F7A5C", sh: "0 1px 2px rgba(31,122,92,0.14), 0 2px 6px rgba(31,122,92,0.10)" },
-                          warn:    { bg: "#FAF1D6", fg: "#9A7610", sh: "0 1px 2px rgba(184,139,21,0.14), 0 2px 6px rgba(184,139,21,0.10)" },
-                          danger:  { bg: C.dangerSoft, fg: C.danger, sh: "0 1px 2px rgba(196,67,43,0.14), 0 2px 6px rgba(196,67,43,0.10)" },
-                        }[f.tone] || { bg: C.btnLight, fg: C.btn, sh: "var(--rt-sh-chip-purple)" };
-                        return (
-                          <button
-                            key={f.id}
-                            onClick={() => setClientsScoreFilter(f.id)}
-                            className={isActive ? "" : "rt-sort-opt"}
-                            style={{
-                              display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: "5px 11px", fontSize: 11.5, borderRadius: 999,
-                              fontWeight: isActive ? 600 : 500, cursor: "pointer", fontFamily: "inherit", border: "none",
-                              transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
-                              // Active retains tone-aware color (purple/green/yellow/red)
-                              // because the tone IS the signal — you can tell what kind
-                              // of filter is engaged at a glance. The sh-card-lift
-                              // shadow + 0.5px translate add the lifted-chip motion that
-                              // every other active surface in the app uses.
-                              ...(isActive
-                                ? { background: toneActive.bg, color: toneActive.fg, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
-                                : {}),
-                            }}
-                          >
-                            <span>{f.label}</span>
-                            <span style={{
-                              background: isActive ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.05)",
-                              color: isActive ? toneActive.fg : C.textMuted,
-                              padding: "1px 6px", borderRadius: 999,
-                              fontSize: 10, fontWeight: 700, fontVariantNumeric: "tabular-nums",
-                            }}>{f.count}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 10, borderTop: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Sort</span>
@@ -10777,14 +10813,14 @@ export default function App({ user }) {
                     <div className="rc-desktop-view" style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.bg }}>
                         <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
-                        <div style={{ flex: 1.4, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
+                        <div style={{ flex: 2, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
                         <div style={{ width: 56, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
                         <div style={{ width: 78, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Revenue</div>
                         <div style={{ width: 64, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Tenure</div>
-                        <div style={{ width: 74, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>LCV</div>
-                        <div style={{ width: 88, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>12-wk trend</div>
-                        <div style={{ width: 92, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Cadence</div>
-                        <div style={{ width: 64, textAlign: "right", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Renews</div>
+                        <div className="rt-tcol-lcv" style={{ width: 74, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>LCV</div>
+                        <div className="rt-tcol-trend" style={{ width: 88, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>12-wk trend</div>
+                        <div className="rt-tcol-cadence" style={{ width: 92, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Cadence</div>
+                        <div className="rt-tcol-renews" style={{ width: 64, textAlign: "right", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Renews</div>
                       </div>
                       <div>
                         {filteredClients.map((c, i, arr) => {
@@ -10802,14 +10838,14 @@ export default function App({ user }) {
                               <div style={{ width: 32, display: "flex", alignItems: "center" }}>
                                 <ScoreRing2 client={c} size={28} />
                               </div>
-                              <div style={{ flex: 1.4, minWidth: 0 }}>
+                              <div style={{ flex: 2, minWidth: 0 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
                                   {c.is_paused && (
                                     <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, color: C.textMuted, background: C.surfaceWarm, letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 }}>Paused</span>
                                   )}
                                 </div>
-                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{c.tag || "Client"} · last {c.lastContact || "—"}</div>
+                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · last {c.lastContact || "—"}</div>
                               </div>
                               <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 3 }}>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums" }}>{c.ret || 0}</span>
@@ -10836,7 +10872,7 @@ export default function App({ user }) {
                                   return <div style={{ fontSize: 13, fontWeight: 500, color: C.text, fontVariantNumeric: "tabular-nums" }}>{display}</div>;
                                 })()}
                               </div>
-                              <div style={{ width: 74 }}>
+                              <div className="rt-tcol-lcv" style={{ width: 74 }}>
                                 {(() => {
                                   // Read honest LTV computed at hydration time from the
                                   // revenue history table + lifetime_revenue_at_entry.
@@ -10850,16 +10886,16 @@ export default function App({ user }) {
                                   return <div style={{ fontSize: 13, fontWeight: 500, color: C.text, fontVariantNumeric: "tabular-nums" }}>{display}</div>;
                                 })()}
                               </div>
-                              <div style={{ width: 88, display: "flex", alignItems: "center", gap: 6 }}>
+                              <div className="rt-tcol-trend" style={{ width: 88, display: "flex", alignItems: "center", gap: 6 }}>
                                 <V2Sparkline points={trend} width={50} height={20} />
                                 <span style={{ fontSize: 11, fontWeight: 700, color: pct >= 1 ? C.retGood : pct <= -1 ? C.retWarn : C.textMuted, fontVariantNumeric: "tabular-nums" }}>
                                   {pct >= 0 ? "+" : ""}{pct.toFixed(0)}%
                                 </span>
                               </div>
-                              <div style={{ width: 92 }}>
+                              <div className="rt-tcol-cadence" style={{ width: 92 }}>
                                 <CadencePips target={ct} actual={ca} showLabel />
                               </div>
-                              <div style={{ width: 64, textAlign: "right" }}>
+                              <div className="rt-tcol-renews" style={{ width: 64, textAlign: "right" }}>
                                 <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: renewUrgent ? C.retWarn : C.textSec, fontWeight: renewUrgent ? 700 : 500 }}>{renewStr}</span>
                               </div>
                             </div>
@@ -11718,15 +11754,15 @@ export default function App({ user }) {
                     </>}
                   </div>
                 </div>
-                <div style={{ flexShrink: 0, textAlign: "right", minWidth: 140 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
-                    <span style={{ fontSize: 26, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
-                      {pctChecked}<span style={{ fontSize: 15, color: C.textMuted, fontWeight: 500 }}>%</span>
+                <div style={{ flexShrink: 0, minWidth: 200 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div className="rt-pct-bar" style={{ position: "relative", flex: 1, height: 5, minWidth: 60, background: C.borderLight, borderRadius: 999, overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.10)" }}>
+                      <div className="rt-pct-fill" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, pctChecked))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 999, transition: "width 400ms cubic-bezier(.2,.7,.3,1)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.30), 0 0 6px rgba(51,84,62,0.25)" }} />
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.2, flexShrink: 0 }}>
+                      {pctChecked}<span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>%</span>
                     </span>
-                    <span style={{ fontSize: 11, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>checked</span>
-                  </div>
-                  <div style={{ height: 4, background: C.borderLight, borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pctChecked}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 2, transition: "width 400ms cubic-bezier(.2,.7,.3,1)" }} />
+                    <span style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>of book checked</span>
                   </div>
                 </div>
               </div>
@@ -14094,18 +14130,20 @@ export default function App({ user }) {
                               }, 0);
                             }}
                             style={{
-                              padding: "7px 14px",
+                              padding: "8px 16px",
                               background: C.card,
+                              border: "none",
                               borderRadius: 999,
                               fontSize: 13,
                               fontWeight: 500,
                               color: C.textSec,
                               cursor: "pointer",
                               fontFamily: "inherit",
-                              transition: "all 0.15s",
+                              boxShadow: "var(--rt-sh-xs)",
+                              transition: "all 180ms var(--rt-ease-out)",
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.background = C.surfaceWarm; e.currentTarget.style.color = C.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = C.card; e.currentTarget.style.color = C.textSec; }}
+                            onMouseEnter={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-card)"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.color = C.text; }}
+                            onMouseLeave={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-xs)"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.color = C.textSec; }}
                           >
                             {s}
                           </button>
@@ -15675,18 +15713,16 @@ export default function App({ user }) {
                       setSelectedClient(null);
                       setPage("coach");
                     }}
+                    className="rt-cm-btn-primary"
                     style={{
                       flex: 1,
                       padding: "10px 16px",
-                      background: "var(--rt-grad-btn)",
-                      color: "#fff",
                       border: "none",
                       borderRadius: 8,
                       fontSize: 13,
                       fontWeight: 700,
                       cursor: "pointer",
                       fontFamily: "inherit",
-                      boxShadow: "var(--rt-sh-rai-pop)",
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -15702,7 +15738,8 @@ export default function App({ user }) {
                       setEditingOverview(true);
                       setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" });
                     }}
-                    style={{ padding: "10px 14px", background: C.card, color: C.textSec, border: "none", boxShadow: "var(--rt-sh-xs)", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    className="rt-cm-btn-secondary"
+                    style={{ padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >Edit</button>
                   <button
                     onClick={() => {
@@ -15712,7 +15749,8 @@ export default function App({ user }) {
                       else { setPauseConfirm(true); }
                       setRolodexConfirm(false); setRemoveConfirm(false);
                     }}
-                    style={{ padding: "10px 14px", background: C.card, color: C.textSec, border: "none", boxShadow: "var(--rt-sh-xs)", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    className="rt-cm-btn-secondary"
+                    style={{ padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >{sc.is_paused ? "Resume" : "Pause"}</button>
                   <button
                     onClick={() => {
@@ -15722,7 +15760,8 @@ export default function App({ user }) {
                       setRolodexConfirm(true);
                       setPauseConfirm(false); setResumeConfirm(false); setRemoveConfirm(false);
                     }}
-                    style={{ padding: "10px 14px", background: C.card, color: C.danger, border: "none", boxShadow: "var(--rt-sh-xs)", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    className="rt-cm-btn-danger"
+                    style={{ padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >Remove</button>
                 </div>
               )}
