@@ -5982,23 +5982,47 @@ export default function App({ user }) {
         .rt-rai-boost::before {
           content: '✦';
           position: absolute;
-          left: -7px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 18px;
-          height: 18px;
+          /* Upper-left placement: tucked just outside the row's top-left
+             corner instead of vertically centered. Reads as a small
+             marker rather than a centered medallion. */
+          left: -6px;
+          top: 6px;
+          /* Shrunk from 18×18 to 14×14 for a less heavy presence — Adam
+             wants the star to be a quiet, restless marker, not the focal
+             element of the row. */
+          width: 14px;
+          height: 14px;
           background: var(--rt-grad-btn);
           color: #fff;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 9px;
+          font-size: 7.5px;
           line-height: 1;
           font-weight: 700;
           box-shadow: var(--rt-sh-purple);
           z-index: 2;
           pointer-events: none;
+          /* "Like it's being touched" — gentle bob + micro-rotation on a
+             slow infinite loop. Visible enough to feel alive, quiet
+             enough to read as a marker, not a notification. */
+          animation: rtRaiBoostBreathe 2.6s ease-in-out infinite;
+          transform-origin: center center;
+          will-change: transform;
+        }
+        @keyframes rtRaiBoostBreathe {
+          0%   { transform: translateY(0) rotate(-2deg) scale(1); }
+          25%  { transform: translateY(-1.5px) rotate(2deg) scale(1.04); }
+          50%  { transform: translateY(0) rotate(-1.5deg) scale(1); }
+          75%  { transform: translateY(-1px) rotate(2deg) scale(1.03); }
+          100% { transform: translateY(0) rotate(-2deg) scale(1); }
+        }
+        /* Respect the reduced-motion accessibility preference — users
+           who've opted out of motion shouldn't see the bob. The mark
+           stays put. */
+        @media (prefers-reduced-motion: reduce) {
+          .rt-rai-boost::before { animation: none; }
         }
 
         /* ── ANIMATIONS ──────────────────────────────────── */
@@ -8234,8 +8258,12 @@ export default function App({ user }) {
                                       <Icon name="infinity" size={12} color={C.btn} />
                                       Recurring
                                     </div>
-                                    {/* Frequency chips */}
-                                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                    {/* Frequency chips — site-standard pill buttons.
+                                        No borders, shadow-based active. Active: btnLight
+                                        fill + purple shadow + btn text (same as Ranked
+                                        by Rai active). Inactive: transparent + hover
+                                        surface tint. */}
+                                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                                       {[
                                         { key: "daily", label: "Daily" },
                                         { key: "weekdays", label: "Weekdays" },
@@ -8247,6 +8275,7 @@ export default function App({ user }) {
                                         return (
                                           <button
                                             key={opt.key}
+                                            className="rt-rec-chip"
                                             onClick={() => {
                                               if (opt.key === "daily") setNewTaskRecurrencePattern({ kind: "daily" });
                                               else if (opt.key === "weekdays") setNewTaskRecurrencePattern({ kind: "weekdays" });
@@ -8254,15 +8283,17 @@ export default function App({ user }) {
                                               else if (opt.key === "monthly_date") setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() });
                                             }}
                                             style={{
-                                              padding: "5px 10px",
+                                              padding: "6px 14px",
                                               background: isSel ? C.btnLight : "transparent",
                                               color: isSel ? C.btn : C.textSec,
-                                              border: "1px solid " + (isSel ? C.btn : C.borderLight),
-                                              borderRadius: 7,
-                                              fontSize: 11.5,
+                                              border: "none",
+                                              borderRadius: 999,
+                                              fontSize: 12,
                                               fontWeight: 600,
                                               cursor: "pointer",
                                               fontFamily: "inherit",
+                                              boxShadow: isSel ? "var(--rt-sh-chip-purple)" : "none",
+                                              transition: "all 160ms var(--rt-ease-out)",
                                             }}
                                           >
                                             {opt.label}
@@ -8270,15 +8301,18 @@ export default function App({ user }) {
                                         );
                                       })}
                                     </div>
-                                    {/* Weekly: day-of-week multi-select */}
+                                    {/* Weekly: day-of-week multi-select — same chip
+                                        language at smaller size. Circular by use of
+                                        equal width/height + radius 999. */}
                                     {newTaskRecurrencePattern.kind === "weekly" && (
-                                      <div style={{ display: "flex", gap: 3 }}>
+                                      <div style={{ display: "flex", gap: 4 }}>
                                         {["S", "M", "T", "W", "T", "F", "S"].map((label, dow) => {
                                           const days = newTaskRecurrencePattern.days || [];
                                           const isSel = days.includes(dow);
                                           return (
                                             <button
                                               key={dow}
+                                              className="rt-rec-chip"
                                               onClick={() => {
                                                 const newDays = isSel
                                                   ? days.filter(d => d !== dow)
@@ -8287,57 +8321,66 @@ export default function App({ user }) {
                                                 setNewTaskRecurrencePattern({ kind: "weekly", days: newDays });
                                               }}
                                               style={{
-                                                width: 26, height: 26,
+                                                width: 28, height: 28,
                                                 background: isSel ? C.btn : "transparent",
                                                 color: isSel ? "#fff" : C.textSec,
-                                                border: "1px solid " + (isSel ? C.btn : C.borderLight),
-                                                borderRadius: 13,
-                                                fontSize: 11,
+                                                border: "none",
+                                                borderRadius: 999,
+                                                fontSize: 11.5,
                                                 fontWeight: 700,
                                                 cursor: "pointer",
                                                 fontFamily: "inherit",
                                                 padding: 0,
+                                                boxShadow: isSel ? "var(--rt-sh-chip-purple)" : "none",
+                                                transition: "all 160ms var(--rt-ease-out)",
                                               }}
                                             >{label}</button>
                                           );
                                         })}
                                       </div>
                                     )}
-                                    {/* Monthly: date OR weekday-of-month */}
+                                    {/* Monthly: date OR weekday-of-month — same chip
+                                        pattern. Two side-by-side pills. */}
                                     {(newTaskRecurrencePattern.kind === "monthly_date" || newTaskRecurrencePattern.kind === "monthly_weekday") && (
-                                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                        <div style={{ display: "flex", gap: 4 }}>
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        <div style={{ display: "flex", gap: 5 }}>
                                           <button
+                                            className="rt-rec-chip"
                                             onClick={() => setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() })}
                                             style={{
-                                              flex: 1, padding: "5px 8px",
+                                              flex: 1, padding: "6px 12px",
                                               background: newTaskRecurrencePattern.kind === "monthly_date" ? C.btnLight : "transparent",
                                               color: newTaskRecurrencePattern.kind === "monthly_date" ? C.btn : C.textSec,
-                                              border: "1px solid " + (newTaskRecurrencePattern.kind === "monthly_date" ? C.btn : C.borderLight),
-                                              borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                                              border: "none",
+                                              borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                                              boxShadow: newTaskRecurrencePattern.kind === "monthly_date" ? "var(--rt-sh-chip-purple)" : "none",
+                                              transition: "all 160ms var(--rt-ease-out)",
                                             }}
                                           >Date of month</button>
                                           <button
+                                            className="rt-rec-chip"
                                             onClick={() => {
                                               const week = Math.ceil(_now.getDate() / 7);
                                               setNewTaskRecurrencePattern({ kind: "monthly_weekday", week, day: _now.getDay() });
                                             }}
                                             style={{
-                                              flex: 1, padding: "5px 8px",
+                                              flex: 1, padding: "6px 12px",
                                               background: newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btnLight : "transparent",
                                               color: newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btn : C.textSec,
-                                              border: "1px solid " + (newTaskRecurrencePattern.kind === "monthly_weekday" ? C.btn : C.borderLight),
-                                              borderRadius: 6, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                                              border: "none",
+                                              borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                                              boxShadow: newTaskRecurrencePattern.kind === "monthly_weekday" ? "var(--rt-sh-chip-purple)" : "none",
+                                              transition: "all 160ms var(--rt-ease-out)",
                                             }}
                                           >Day of week</button>
                                         </div>
                                         {newTaskRecurrencePattern.kind === "monthly_date" && (
-                                          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textSec }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.textSec }}>
                                             On the
                                             <select
                                               value={newTaskRecurrencePattern.day}
                                               onChange={e => setNewTaskRecurrencePattern({ kind: "monthly_date", day: parseInt(e.target.value, 10) })}
-                                              style={{ padding: "3px 6px", borderRadius: 5, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                              style={{ padding: "5px 10px", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: C.surfaceWarm, color: C.text, border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)" }}
                                             >
                                               {Array.from({ length: 31 }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}</option>)}
                                             </select>
@@ -8345,12 +8388,12 @@ export default function App({ user }) {
                                           </div>
                                         )}
                                         {newTaskRecurrencePattern.kind === "monthly_weekday" && (
-                                          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.textSec, flexWrap: "wrap" }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.textSec, flexWrap: "wrap" }}>
                                             The
                                             <select
                                               value={newTaskRecurrencePattern.week}
                                               onChange={e => setNewTaskRecurrencePattern(p => ({ ...p, week: parseInt(e.target.value, 10) }))}
-                                              style={{ padding: "3px 6px", borderRadius: 5, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                              style={{ padding: "5px 10px", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: C.surfaceWarm, color: C.text, border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)" }}
                                             >
                                               <option value={1}>1st</option>
                                               <option value={2}>2nd</option>
@@ -8361,7 +8404,7 @@ export default function App({ user }) {
                                             <select
                                               value={newTaskRecurrencePattern.day}
                                               onChange={e => setNewTaskRecurrencePattern(p => ({ ...p, day: parseInt(e.target.value, 10) }))}
-                                              style={{ padding: "3px 6px", borderRadius: 5, fontSize: 12, fontFamily: "inherit", background: C.card, color: C.text }}
+                                              style={{ padding: "5px 10px", borderRadius: 7, fontSize: 12.5, fontFamily: "inherit", background: C.surfaceWarm, color: C.text, border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)" }}
                                             >
                                               <option value={0}>Sunday</option>
                                               <option value={1}>Monday</option>
@@ -8375,14 +8418,19 @@ export default function App({ user }) {
                                         )}
                                       </div>
                                     )}
-                                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                    {/* Cancel + Done — site-standard modal action pair.
+                                        Cancel = C.surface secondary chip (matches every
+                                        other modal Cancel in the app). Done = primary
+                                        purple, anchored right via marginLeft auto. */}
+                                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
                                       <button
                                         onClick={() => { setNewTaskRecurring(false); setNewTaskRecurrencePattern({ kind: "daily" }); }}
-                                        style={{ padding: "5px 10px", background: "transparent", color: C.textMuted, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                        style={{ padding: "8px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                       >Cancel</button>
                                       <button
+                                        className="r-btn" data-tone="purple"
                                         onClick={() => setDuePickerOpen(false)}
-                                        style={{ padding: "5px 12px", background: C.btn, color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginLeft: "auto" }}
+                                        style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginLeft: "auto", boxShadow: "var(--rt-sh-chip-purple)" }}
                                       >Done</button>
                                     </div>
                                   </div>
@@ -9345,7 +9393,7 @@ export default function App({ user }) {
                                 fontWeight: 500,
                                 cursor: "pointer",
                                 fontFamily: "inherit",
-                                transition: "background 120ms ease, border-color 120ms ease, color 120ms ease",
+                                transition: "background 160ms var(--rt-ease-out), border-color 160ms var(--rt-ease-out), color 160ms var(--rt-ease-out)",
                               }}
                               onMouseEnter={e => {
                                 if (completedLogOpen) return; // already in green state
@@ -9366,21 +9414,34 @@ export default function App({ user }) {
                               </span>
                               <svg
                                 width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                                style={{ transform: completedLogOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 200ms ease" }}
+                                style={{ transform: completedLogOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 220ms var(--rt-ease-out)" }}
                               >
                                 <path d="M9 6l6 6-6 6" />
                               </svg>
                             </button>
                             <div
                               style={{
-                                maxHeight: completedLogOpen ? 2000 : 0,
-                                overflow: "hidden",
-                                transition: "max-height 320ms ease",
+                                // Smooth height-animation pattern: grid row
+                                // toggles between 0fr (collapsed) and 1fr
+                                // (expanded). The child uses overflow:hidden
+                                // and min-height:0 so it collapses cleanly.
+                                // Animates to the ACTUAL content height — no
+                                // dead-space scrubbing (the old max-height:2000
+                                // approach would run the full 320ms even when
+                                // content was only ~300px tall, producing the
+                                // truncated/janky feel). Opacity fade rides
+                                // alongside for a polished entry.
+                                display: "grid",
+                                gridTemplateRows: completedLogOpen ? "1fr" : "0fr",
                                 marginTop: completedLogOpen ? 8 : 0,
+                                opacity: completedLogOpen ? 1 : 0,
+                                transition: "grid-template-rows 280ms var(--rt-ease-out), margin-top 240ms var(--rt-ease-out), opacity 220ms var(--rt-ease-out)",
                               }}
                             >
-                              <div style={{ display: "flex", flexDirection: "column", gap: 6, opacity: 0.7 }}>
-                                {_collapsedDoneTasks.map(t => renderRow(t, "today"))}
+                              <div style={{ overflow: "hidden", minHeight: 0 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6, opacity: 0.7 }}>
+                                  {_collapsedDoneTasks.map(t => renderRow(t, "today"))}
+                                </div>
                               </div>
                             </div>
                           </div>
