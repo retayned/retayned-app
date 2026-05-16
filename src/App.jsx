@@ -153,12 +153,25 @@ const THEME_CSS = `
   }
 `;
 
-const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", simple = false }) => {
+const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", simple = false, isActive = true }) => {
   // Editorial nav icons — 32x32 viewBox, multi-color (cream paper + ink stroke
   // + green accent). Color tokens come from CSS variables so they flip in dark
   // mode. The `color` prop is intentionally ignored for these icons — they
   // don't recolor on active state; the active state is signalled by the
   // surrounding row's background fill.
+  //
+  // isActive controls the green saturation:
+  //   true  (default) → full brand: #558B68 body, #2F2F31 dark accents
+  //   false           → muted sage: primaryMuted body, primaryMutedDeep accents
+  // Default true preserves behavior for every non-nav caller (composer chips,
+  // empty states, button icons etc.) — they never pass the prop and stay
+  // saturated. Only the sidebar nav iterator passes isActive={active}, so
+  // the inactive rail items recede to sage and the active item carries
+  // brand color. Cream highlights (#FCFCFE) stay constant in both states —
+  // they're paper highlights, not brand color.
+  const G_BODY = isActive ? "#558B68" : "#8FA597";
+  const G_ACCENT = isActive ? "#2F2F31" : "#4D5C50";
+
   const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "due"]);
   const isEditorial = editorialNames.has(name);
 
@@ -217,35 +230,35 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
     today: (<>
       {/* Filled calendar — primary-light body with dark binding tabs and
           cream center dot. New icon set, May 2026. */}
-      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill="#558B68"/>
-      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill="#2F2F31"/>
-      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill="#2F2F31"/>
+      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill={G_BODY}/>
+      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill={G_ACCENT}/>
+      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill={G_ACCENT}/>
       <circle cx="16" cy="20" r="3.4" fill="#FCFCFE"/>
     </>),
     clients: (<>
       {/* Two figures: foreground person in primary-light, background
           person in dark accent with a connecting curve. New icon set. */}
-      <circle cx="11" cy="12.5" r="4.5" fill="#558B68"/>
-      <path d="M3 25.5 C 3 19.5, 7 17, 11 17 C 15 17, 19 19.5, 19 25.5 Z" fill="#558B68"/>
-      <circle cx="23" cy="10.5" r="3.4" fill="#2F2F31"/>
-      <path d="M18.5 19.6 C 20.2 18, 22 17.6, 23.5 17.6 C 27.5 17.6, 29 20, 29 23.5" stroke="#2F2F31" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="11" cy="12.5" r="4.5" fill={G_BODY}/>
+      <path d="M3 25.5 C 3 19.5, 7 17, 11 17 C 15 17, 19 19.5, 19 25.5 Z" fill={G_BODY}/>
+      <circle cx="23" cy="10.5" r="3.4" fill={G_ACCENT}/>
+      <path d="M18.5 19.6 C 20.2 18, 22 17.6, 23.5 17.6 C 27.5 17.6, 29 20, 29 23.5" stroke={G_ACCENT} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     health: (<>
       {/* Heart silhouette in primary-light with a cream ECG pulse line
           through the middle. New icon set. */}
-      <path d="M16 26.5 C 7 21.5, 3 17.5, 3 12 C 3 8, 6 5.5, 9.5 5.5 C 12 5.5, 14.5 7, 16 9.5 C 17.5 7, 20 5.5, 22.5 5.5 C 26 5.5, 29 8, 29 12 C 29 17.5, 25 21.5, 16 26.5 Z" fill="#558B68"/>
+      <path d="M16 26.5 C 7 21.5, 3 17.5, 3 12 C 3 8, 6 5.5, 9.5 5.5 C 12 5.5, 14.5 7, 16 9.5 C 17.5 7, 20 5.5, 22.5 5.5 C 26 5.5, 29 8, 29 12 C 29 17.5, 25 21.5, 16 26.5 Z" fill={G_BODY}/>
       <path d="M6 15 L10 15 L12 11.5 L14.5 18.5 L16.5 13.5 L18 15 L26 15" fill="none" stroke="#FCFCFE" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
       {/* Speech bubble with cream 4-point sparkle inside. New icon set. */}
-      <path d="M4 10 Q4 6 8 6 L24 6 Q28 6 28 10 L28 19 Q28 23 24 23 L14 23 L9 27.5 L10 23 Q4 23 4 19 Z" fill="#558B68"/>
+      <path d="M4 10 Q4 6 8 6 L24 6 Q28 6 28 10 L28 19 Q28 23 24 23 L14 23 L9 27.5 L10 23 Q4 23 4 19 Z" fill={G_BODY}/>
       <path d="M16 10 L17.8 14.2 L22 15.7 L17.8 17.2 L16 21.4 L14.2 17.2 L10 15.7 L14.2 14.2 Z" fill="#FCFCFE"/>
     </>),
     rolodex: (<>
       {/* ID-card style: rounded primary-light rect with a dark divider
           rule, cream avatar circle, and cream text lines. New icon set. */}
-      <rect x="4" y="6" width="24" height="20" rx="4" fill="#558B68"/>
-      <line x1="4" y1="11.5" x2="28" y2="11.5" stroke="#2F2F31" strokeWidth="2" opacity="0.45"/>
+      <rect x="4" y="6" width="24" height="20" rx="4" fill={G_BODY}/>
+      <line x1="4" y1="11.5" x2="28" y2="11.5" stroke={G_ACCENT} strokeWidth="2" opacity="0.45"/>
       <circle cx="11.5" cy="19" r="2.6" fill="#FCFCFE"/>
       <line x1="16.5" y1="18" x2="23.5" y2="18" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
       <line x1="16.5" y1="22" x2="20.5" y2="22" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round" opacity="0.85"/>
@@ -253,24 +266,24 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
     referrals: (<>
       {/* Three nodes: large hub on left, two satellites on right with
           primary-light connector lines. New icon set. */}
-      <line x1="10.6" y1="14.6" x2="21.4" y2="9" stroke="#558B68" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="10.6" y1="17.4" x2="21.4" y2="23" stroke="#558B68" strokeWidth="3" strokeLinecap="round"/>
-      <circle cx="8" cy="16" r="4" fill="#558B68"/>
-      <circle cx="24" cy="7.5" r="3.4" fill="#558B68"/>
-      <circle cx="24" cy="24.5" r="3.4" fill="#558B68"/>
+      <line x1="10.6" y1="14.6" x2="21.4" y2="9" stroke={G_BODY} strokeWidth="3" strokeLinecap="round"/>
+      <line x1="10.6" y1="17.4" x2="21.4" y2="23" stroke={G_BODY} strokeWidth="3" strokeLinecap="round"/>
+      <circle cx="8" cy="16" r="4" fill={G_BODY}/>
+      <circle cx="24" cy="7.5" r="3.4" fill={G_BODY}/>
+      <circle cx="24" cy="24.5" r="3.4" fill={G_BODY}/>
     </>),
     workers: (<>
       {/* Briefcase: primary-light body with dark handle and divider rule,
           cream center lock. New icon set. */}
-      <rect x="3" y="10" width="26" height="17" rx="3.4" fill="#558B68"/>
-      <path d="M10.5 10 V 7.5 Q 10.5 5 13 5 L 19 5 Q 21.5 5 21.5 7.5 V 10" stroke="#2F2F31" strokeWidth="2.4" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
-      <line x1="3" y1="17.5" x2="29" y2="17.5" stroke="#2F2F31" strokeWidth="2" opacity="0.4"/>
+      <rect x="3" y="10" width="26" height="17" rx="3.4" fill={G_BODY}/>
+      <path d="M10.5 10 V 7.5 Q 10.5 5 13 5 L 19 5 Q 21.5 5 21.5 7.5 V 10" stroke={G_ACCENT} strokeWidth="2.4" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+      <line x1="3" y1="17.5" x2="29" y2="17.5" stroke={G_ACCENT} strokeWidth="2" opacity="0.4"/>
       <rect x="13.5" y="15.5" width="5" height="4" rx="0.8" fill="#FCFCFE"/>
     </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
     settings: (<>
       {/* Cog gear in primary-light with cream center. New icon set. */}
-      <path d="M16 3 L18.4 5.4 L21.6 4.6 L22.6 7.6 L25.6 8.4 L25 11.4 L27.5 13.2 L26.2 16 L28 18.6 L25.6 20.4 L26 23.4 L23 24.2 L22.2 27 L19 27 L16.8 29 L14 28 L11 29 L9 27 L5.8 27 L5 24.2 L2 23.4 L2.4 20.4 L0 18.6 L1.8 16 L0.5 13.2 L3 11.4 L2.4 8.4 L5.4 7.6 L6.4 4.6 L9.6 5.4 L12 3 L14 4 Z" fill="#558B68" transform="translate(2 0) scale(0.92)"/>
+      <path d="M16 3 L18.4 5.4 L21.6 4.6 L22.6 7.6 L25.6 8.4 L25 11.4 L27.5 13.2 L26.2 16 L28 18.6 L25.6 20.4 L26 23.4 L23 24.2 L22.2 27 L19 27 L16.8 29 L14 28 L11 29 L9 27 L5.8 27 L5 24.2 L2 23.4 L2.4 20.4 L0 18.6 L1.8 16 L0.5 13.2 L3 11.4 L2.4 8.4 L5.4 7.6 L6.4 4.6 L9.6 5.4 L12 3 L14 4 Z" fill={G_BODY} transform="translate(2 0) scale(0.92)"/>
       <circle cx="16" cy="14.7" r="4.4" fill="#FCFCFE"/>
     </>),
     due: (<>
@@ -7166,7 +7179,7 @@ export default function App({ user }) {
                 position: "relative",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} isActive={active} /></span>
                 {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>}
                 {hasDot(n.id) && <div style={{ position: sidebarCollapsed ? "absolute" : "static", top: sidebarCollapsed ? 6 : "auto", right: sidebarCollapsed ? 6 : "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
               </div>
@@ -11946,16 +11959,38 @@ export default function App({ user }) {
                     </>}
                   </div>
                 </div>
-                <div style={{ flexShrink: 0, minWidth: 200 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div className="rt-pct-bar" style={{ position: "relative", flex: 1, height: 5, minWidth: 60, background: C.borderLight, borderRadius: 999, overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.10)" }}>
-                      <div className="rt-pct-fill" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, pctChecked))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 999, transition: "width 400ms cubic-bezier(.2,.7,.3,1)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.30), 0 0 6px rgba(51,84,62,0.25)" }} />
-                    </div>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.2, flexShrink: 0 }}>
-                      {pctChecked}<span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>%</span>
-                    </span>
-                    <span style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>of book checked</span>
-                  </div>
+                <div style={{ flexShrink: 0 }}>
+                  {/* Primary action — pattern matches Add Client (Clients
+                      page), + Referral (Referrals page), Add Rolodex
+                      (Rolodex page). Restores the site's "left = state,
+                      right = action" rhythm on every page header.
+                      Replaces the previous "of book checked" progress
+                      bar, which was always 0% on new accounts and not
+                      actionable. Routes to Clients with a flag so the
+                      page opens its client picker primed for starting
+                      a Health Check. */}
+                  <button
+                    className="r-btn"
+                    data-tone="purple"
+                    onClick={() => goTo("clients")}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "10px 16px",
+                      background: "var(--rt-grad-btn)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 10,
+                      fontSize: 13.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      boxShadow: "var(--rt-sh-purple)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <Icon name="health" size={14} simple color="#fff" />
+                    <span>Start Health Check</span>
+                  </button>
                 </div>
               </div>
 
@@ -16549,7 +16584,7 @@ export default function App({ user }) {
                 transition: "all 180ms var(--rt-ease-out)",
               }}
             >
-              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
+              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} isActive={active} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
               {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
             </div>
