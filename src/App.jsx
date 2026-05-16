@@ -4390,6 +4390,14 @@ export default function App({ user }) {
   // ═══ FETCH ALL DATA ON MOUNT ═══
   const loadData = useCallback(async () => {
     if (!user) return;
+    // Wait for the user's stored timezone to load before fetching tasks.
+    // Without this gate, loadData fires twice on sign-in: first with
+    // userTimezone=null (which falls back to device-local TZ and may
+    // bucket tasks into the wrong day), then again when the profile
+    // effect sets userTimezone. That double-load is what produces the
+    // ~2s "everything jumbled then sorts" jank Adam was seeing. The
+    // skeleton state covers the (very brief) gap.
+    if (!userTimezone) return;
     const uid = user.id;
     
     const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes] = await Promise.all([
@@ -5842,49 +5850,38 @@ export default function App({ user }) {
           opacity: 0.7;
         }
 
-        /* Sidebar collapse toggle — Linear-style outer-edge tab. Rendered
-           as a sibling of the sidebar (position: fixed against viewport)
-           so it can sit slightly past the sidebar's right edge without
-           being clipped by the sidebar's overflow-y: auto. Left is
-           computed from --sidebar-w so the tab follows the sidebar as
-           it collapses/expands. Always visible at low opacity; full
-           opacity on hover. Rounded right side only — reads as a handle. */
+        /* Sidebar collapse toggle — inline subtle chevron in the brand
+           area. Variant A from the two-asks mock. Renders as a flat
+           transparent icon button — no card, no shadow — so it reads as
+           part of the rail, not a floating chip. Expanded: sits to the
+           right of "Retayned." in the brand row. Collapsed: sits below
+           "R." centered in the 64px rail. Hidden on mobile (sidebar is
+           also hidden there). Hover: subtle surface wash. */
         .rt-sidebar-toggle {
           display: none;
         }
         @media (min-width: 768px) {
           .rt-sidebar-toggle {
-            display: flex;
-            position: fixed;
-            left: calc(var(--sidebar-w, 240px) + 14px - 8px);
-            top: 76px;
-            width: 22px;
-            height: 28px;
-            border-radius: 0 8px 8px 0;
-            background: var(--rt-card);
-            border: none;
-            color: var(--rt-text-sec);
-            cursor: pointer;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
-            font-weight: 600;
-            box-shadow: 2px 0 8px rgba(20,30,22,0.06), 0 0 0 1px rgba(20,30,22,0.04);
-            opacity: 0.65;
-            transition: left 220ms var(--rt-ease-out),
-                        opacity 180ms var(--rt-ease-out),
-                        width 180ms var(--rt-ease-out),
-                        color 180ms var(--rt-ease-out),
-                        box-shadow 200ms var(--rt-ease-out);
-            z-index: 51;
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--rt-text-muted);
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
             padding: 0;
             font-family: inherit;
+            transition: background 140ms var(--rt-ease-out),
+                        color 140ms var(--rt-ease-out);
           }
           .rt-sidebar-toggle:hover {
-            opacity: 1;
-            width: 26px;
+            background: rgba(20,30,22,0.06);
             color: var(--rt-text);
-            box-shadow: 3px 0 12px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.06);
           }
         }
         .rt-user-chip:active {
@@ -6180,6 +6177,16 @@ export default function App({ user }) {
         }
         .rt-rai-boost:hover:not(.is-done) {
           box-shadow: var(--rt-sh-row-hover), inset 2px 0 0 0 #5B21B6 !important;
+        }
+        /* When the Rai-marked task is checked off, drop both the purple
+           inset bar AND the ✦ medallion. Completed tasks should read as
+           done — leaving the Rai indicators on would imply they still
+           need attention. */
+        .rt-rai-boost.is-done {
+          box-shadow: var(--rt-sh-row) !important;
+        }
+        .rt-rai-boost.is-done::before {
+          display: none !important;
         }
         .rt-rai-boost::before {
           content: '✦';
@@ -6699,11 +6706,9 @@ export default function App({ user }) {
             "tasks focus";
         }
         .rt-mob-strip { display: none; }
-        /* Desktop defaults for mobile-only band condensation elements.
-           Mobile media query below toggles them on, restructures the
-           meta row to a single inline row, and clamps the pick to 2
-           lines with a "More" tap. */
-        .rt-band-date-short { display: none; }
+        /* Mobile-only band condensation toggles below (rt-band-date-long
+           / rt-band-date-short removed — date is now a single TODAY ·
+           date label in the JSX that works at every width). */
         @media (max-width: 900px) {
           .rt-today-v4 {
             grid-template-columns: 1fr;
@@ -6714,14 +6719,7 @@ export default function App({ user }) {
           }
           .rt-focus-col { display: none !important; }
           .rt-rai-col { display: none !important; }
-          /* Mobile band — condensed Option 1 layout. Target: ~110px total.
-             Strategy:
-             - Date compressed via .rt-band-date-short
-             - Greeting drops to 20px
-             - Rai pick clamped to 2 lines with fade-out + "More" tap
-             - Meta row becomes ONE inline row: events · tasks [bar] pct%
-               via flex-row + order swap on the pct block's children
-               (bar reordered to come before num+lbl, lbl hidden, num shrunk) */
+          /* Mobile band — condensed Option 1 layout. */
           .rt-band {
             display: flex !important;
             flex-direction: column !important;
@@ -6729,8 +6727,6 @@ export default function App({ user }) {
             padding-left: 0 !important;
             padding-right: 0 !important;
           }
-          .rt-band-date-long { display: none; }
-          .rt-band-date-short { display: inline; }
           .rt-band-greet { font-size: 20px !important; white-space: nowrap; }
           /* Mobile-specific compressions on top of the now-universal
              flat meta row: hide the "OF TODAY DONE" label (number alone
@@ -6761,11 +6757,14 @@ export default function App({ user }) {
              pill, and the picker has minWidth: 240 with left: 0 from the
              chip's container — this overflows the right edge of the phone.
              Re-anchor: left: auto, right: 0 so the picker grows leftward
-             from the chip instead. Same fix applies to the Client picker
-             when it sits on the right side of the composer. */
+             from the chip instead. Also cap height with internal scroll
+             so the full calendar doesn't run off the bottom of the screen
+             and overlap the mobile bottom nav. */
           .rt-due-picker {
             left: auto !important;
             right: 0 !important;
+            max-height: 60vh !important;
+            overflow-y: auto !important;
           }
         }
         /* Rai pick clamp + fade — universal (desktop AND mobile).
@@ -7026,20 +7025,48 @@ export default function App({ user }) {
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
       <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "var(--rt-sh-card)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
-        {/* Logo — "Retayned." wordmark in Outfit 900 (collapsed: "R."). The
-            brand mark. The toggle chevron sits at the right edge of the
-            sidebar; clicking it switches between expanded (240px) and
-            collapsed (64px) modes. Persists via localStorage. */}
-        <div style={{ padding: sidebarCollapsed ? "22px 0 22px" : "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline", justifyContent: sidebarCollapsed ? "center" : "flex-start", position: "relative" }}>
-          <span style={{
-            fontFamily: "'Outfit', system-ui, sans-serif",
-            fontWeight: 900,
-            fontSize: 22,
-            color: C.primary,
-            letterSpacing: "-0.04em",
-            lineHeight: 1,
-          }}>{sidebarCollapsed ? "R." : "Retayned."}</span>
-        </div>
+        {/* Logo + collapse toggle.
+            Expanded (240px): "Retayned." wordmark on the left, chevron
+            tucked into the top-right of the brand row.
+            Collapsed (64px): "R." centered, chevron immediately below
+            it, also centered. Toggle is a flat transparent icon button
+            (.rt-sidebar-toggle CSS) — no card, no shadow — so it reads
+            as part of the rail rather than a floating chip. */}
+        {!sidebarCollapsed ? (
+          <div style={{ padding: "22px 22px 18px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <span style={{
+              fontFamily: "'Outfit', system-ui, sans-serif",
+              fontWeight: 900,
+              fontSize: 22,
+              color: C.primary,
+              letterSpacing: "-0.04em",
+              lineHeight: 1,
+            }}>Retayned.</span>
+            <button
+              className="rt-sidebar-toggle"
+              onClick={() => setSidebarCollapsed(true)}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >‹</button>
+          </div>
+        ) : (
+          <div style={{ padding: "22px 0 14px", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <span style={{
+              fontFamily: "'Outfit', system-ui, sans-serif",
+              fontWeight: 900,
+              fontSize: 22,
+              color: C.primary,
+              letterSpacing: "-0.04em",
+              lineHeight: 1,
+            }}>R.</span>
+            <button
+              className="rt-sidebar-toggle"
+              onClick={() => setSidebarCollapsed(false)}
+              title="Expand sidebar"
+              aria-label="Expand sidebar"
+            >›</button>
+          </div>
+        )}
 
         {/* Nav items — fixed, always visible */}
         <div style={{ padding: sidebarCollapsed ? "0 8px" : "0 10px", flexShrink: 0 }}>
@@ -7314,21 +7341,6 @@ export default function App({ user }) {
           </div>
         </div>
       </div>
-
-      {/* SIDEBAR COLLAPSE TOGGLE — rendered OUTSIDE the sidebar so it can
-          sit slightly past the right edge without being clipped by the
-          sidebar's overflow-y: auto. Position is computed from
-          --sidebar-w CSS variable, which updates when sidebarCollapsed
-          changes (see effect above). Hidden on mobile via CSS — the
-          mobile bottom nav handles all navigation there. */}
-      <button
-        className="rt-sidebar-toggle"
-        onClick={() => setSidebarCollapsed(v => !v)}
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {sidebarCollapsed ? "›" : "‹"}
-      </button>
 
       {/* MOBILE TOP */}
       {/* Mobile top bar deliberately removed (May 2026).
@@ -7648,8 +7660,7 @@ export default function App({ user }) {
           const firstName = user?.user_metadata?.full_name?.split(" ")[0]
             || (user?.email ? user.email.split("@")[0].replace(/^\w/, c => c.toUpperCase()) : "")
             || "";
-          const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-          const shortDisplayDate = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+          const displayDate = new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "2-digit" });
 
           // Score chip component
           const ScoreChip = ({ score, delta = null, size = "sm" }) => {
@@ -7929,9 +7940,10 @@ export default function App({ user }) {
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
               {/* STATUS BAND */}
               <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
-                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
-                  <span className="rt-band-date-long">{displayDate}</span>
-                  <span className="rt-band-date-short">{shortDisplayDate}</span>
+                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.6, textTransform: "uppercase", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                  <span>Today</span>
+                  <span style={{ opacity: 0.5, fontWeight: 400, letterSpacing: 0 }}>·</span>
+                  <span style={{ letterSpacing: 0.2, fontWeight: 600 }}>{displayDate}</span>
                 </div>
                 <h1 className="rt-band-greet" style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
                   {greeting}{firstName ? ", " + firstName : ""}.
@@ -8330,14 +8342,14 @@ export default function App({ user }) {
                               border: "none",
                               borderRadius: 8,
                               fontSize: 12,
-                              color: selectedWorker ? C.btn : C.textSec,
-                              background: selectedWorker ? C.btnLight : C.card,
+                              color: selectedWorker ? C.text : C.textSec,
+                              background: C.card,
                               cursor: "pointer", fontFamily: "inherit",
                               fontWeight: selectedWorker ? 600 : 500,
                             }}
                             title={selectedWorker ? `Assigned to ${selectedWorker.name}` : "Assign to a worker"}
                           >
-                            <Icon name="workers" size={14} simple color={selectedWorker ? C.btn : C.textMuted} />
+                            <Icon name="workers" size={14} simple color={selectedWorker ? C.text : C.textMuted} />
                             <span>{selectedWorker ? selectedWorker.name.split(' ')[0] : "Worker"}</span>
                           </button>
                           {selectedWorker && (
@@ -8442,13 +8454,13 @@ export default function App({ user }) {
                           border: "none",
                           borderRadius: 8,
                           fontSize: 12,
-                          color: (newTaskDueDate || newTaskRecurring) ? C.btn : C.textSec,
-                          background: (newTaskDueDate || newTaskRecurring) ? C.btnLight : C.card,
+                          color: (newTaskDueDate || newTaskRecurring) ? C.text : C.textSec,
+                          background: C.card,
                           cursor: "pointer", fontFamily: "inherit",
                           fontWeight: (newTaskDueDate || newTaskRecurring) ? 600 : 500,
                         }}
                       >
-                        <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} simple color={(newTaskDueDate || newTaskRecurring) ? C.btn : C.textMuted} />
+                        <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} simple color={(newTaskDueDate || newTaskRecurring) ? C.text : C.textMuted} />
                         <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
                       </button>
                       {(newTaskDueDate || newTaskRecurring) && (
@@ -9704,8 +9716,9 @@ export default function App({ user }) {
                       // Polish layer: each bucket gets a tiny color-coded dot
                       // with a soft halo. Green-light for today (the active surface),
                       // muted ink for tomorrow/later. Same primary palette.
-                      // Optional count shown after the name with a thin separator —
-                      // at-a-glance awareness of what's queued without scanning.
+                      // Counts removed per design call — bucket itself shows
+                      // the task list immediately below, so the count was just
+                      // visual noise.
                       const isToday = name === "Today";
                       const dotColor = isToday ? C.primaryLight : C.ink300;
                       const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
@@ -9714,12 +9727,6 @@ export default function App({ user }) {
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>
                             <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: "0 0 0 3px " + dotHalo }} />
                             {name}
-                            {typeof count === "number" && count > 0 && (
-                              <>
-                                <span style={{ color: C.border, fontWeight: 400, letterSpacing: 0 }}>·</span>
-                                <span style={{ color: C.textSec, fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}>{count}</span>
-                              </>
-                            )}
                           </div>
                         </div>
                       );
