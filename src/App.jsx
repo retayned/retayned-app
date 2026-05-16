@@ -68,7 +68,7 @@ const THEME_CSS = `
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
     --rt-deep-cream: #EAE4D6;
-    --rt-sidebar: #1C3224;
+    --rt-sidebar: #F2EEE8;
     --rt-text: #1E261F;
     --rt-text-sec: #6B6B66;
     --rt-text-muted: #9A9A93;
@@ -2349,7 +2349,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       {/* Optional header */}
       {showHeader && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
-          <Icon name="due" size={26} />
+          <Icon name="due" size={26} color={C.primaryLight} accent={C.primary} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
               {selectedDay === "today" ? "Today" : "Tomorrow"}
@@ -2368,7 +2368,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               page) — NOT the circular pill used for freely-exposed
               toggles. Rule: inside tables/contained surfaces = square;
               freely exposed = circular. */}
-          <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.surfaceWarm, borderRadius: 999, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
+          <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.surface, borderRadius: 999, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
             <button
               type="button"
               className={"rt-day-opt" + (selectedDay === "today" ? " is-active" : "")}
@@ -2716,18 +2716,28 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       </div>
 
       {/* Connect Google Calendar — sits below the timeline grid, above
-          the composer. Quiet centered row; reads as a calendar-level
-          setting rather than a primary action. Disappears entirely once
-          connected (googleConnected true → header shows the status
-          instead) OR once the user dismisses it via "Not now"
-          (promptDismissed). Settings → Integrations always keeps a
-          Google Calendar row regardless, so dismissing here is not
-          permanent — it just clears the nudge. Only rendered when an
-          onConnectClick handler is wired. */}
+          the composer. Quiet left-aligned row inside a soft warm-cream
+          panel; reads as a calendar-level setting rather than a primary
+          action. Disappears entirely once connected (googleConnected
+          true → header shows the status instead) OR once the user
+          dismisses it via "Not now" (promptDismissed). Settings →
+          Integrations always keeps a Google Calendar row regardless, so
+          dismissing here is not permanent — it just clears the nudge.
+          Only rendered when an onConnectClick handler is wired. */}
       {!googleConnected && !promptDismissed && onConnectClick && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "11px 0 4px", marginTop: 2 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <Icon name="calendar" size={13} color={C.textMuted} />
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding: "9px 12px",
+          marginTop: 10,
+          background: C.surfaceWarm,
+          borderRadius: 10,
+          boxShadow: "var(--rt-sh-xs)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <Icon name="calendar" size={14} color={C.textSec} />
             <button
               type="button"
               className="rt-purple-link"
@@ -2740,6 +2750,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 cursor: "pointer",
                 fontFamily: "inherit",
                 fontSize: 12,
+                fontWeight: 600,
                 whiteSpace: "nowrap",
               }}
             >
@@ -2757,9 +2768,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 padding: 0,
                 cursor: "pointer",
                 fontFamily: "inherit",
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: 500,
+                color: C.textMuted,
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               Not now
@@ -2770,16 +2783,21 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
 
       {/* Composer — rendered as a div (not a form) to avoid nested-form
           interactions. The position:relative + zIndex:5 lifts the composer
-          above the absolute-positioned timeline content above it. */}
+          above the absolute-positioned timeline content above it.
+          Styled as a recessed warm-cream input so it reads as a discrete
+          entry field rather than a thin-line afterthought. Matches the
+          form-field pattern used elsewhere on white modal surfaces. */}
       <div
         onClick={() => inputRef.current && inputRef.current.focus()}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "10px 0 0",
-          marginTop: 8,
-          borderTop: "1px solid " + C.borderLight,
+          padding: "9px 12px",
+          marginTop: 10,
+          background: C.surfaceWarm,
+          borderRadius: 10,
+          boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)",
           cursor: "text",
           pointerEvents: "auto",
           position: "relative",
@@ -5710,33 +5728,35 @@ export default function App({ user }) {
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
         .nav-item { transition: all 180ms var(--rt-ease-out); cursor: pointer; }
-        /* Hover on inactive items lifts to a slightly brighter dark layer + brightens text */
+        /* Hover on inactive items lifts to deepCream + darkens text/icon.
+           Light-substrate sidebar (post-revert): the hover layer is a
+           shade darker than the substrate (substrate F2EEE8, hover EAE4D6).
+           The active state uses the same deepCream fill — distinguished
+           by inset shadow + bold weight, matching the Linear/Notion
+           sidebar convention. */
         .nav-item:hover:not(.is-active) {
-          background: #233E2C !important;
-          color: #E6EFE9 !important;
+          background: var(--rt-deep-cream) !important;
+          color: var(--rt-text) !important;
         }
-        .nav-item:hover:not(.is-active) svg { color: #E6EFE9 !important; }
+        .nav-item:hover:not(.is-active) svg { color: var(--rt-text) !important; }
         .nav-item:active:not(.is-active) { transform: scale(0.98); }
-        /* Hover uses deepCream — the same fill as the selected state.
-           The selected item is distinguished by its inset shadow and
-           bold font-weight, not by a different background. This matches
-           the Linear / Notion sidebar convention. */
-        /* (Hover handled above — was light cream, now dark-aware) */
+        /* (Hover handled above — was dark-substrate-aware, now light-substrate-aware) */
         /* Period toggle (Week/Month/Year) — inactive options only. The
-           active option carries its own inline color + primaryDeep
-           underline. Inactive options rest muted with a transparent
-           underline; on hover the text darkens one step and a faint
-           hairline underline previews the active-state underline. */
-        .rt-user-chip:hover { background: #233E2C; }
+           active option carries its own inline color + primary underline.
+           Inactive options rest muted with a transparent underline; on
+           hover the text darkens one step and a faint hairline underline
+           previews the active-state underline. Substrate is the deepCream
+           Portfolio widget card, so hover should darken (not lighten). */
+        .rt-user-chip:hover { background: var(--rt-deep-cream); }
         .r-period-opt {
-          color: #6B8278;
+          color: var(--rt-text-sec);
           border-bottom: 1px solid transparent;
           transition: color 180ms var(--rt-ease-out), border-color 180ms var(--rt-ease-out);
         }
         @media (hover: hover) {
           .r-period-opt:hover {
-            color: #E6EFE9;
-            border-bottom-color: rgba(255,255,255,0.30);
+            color: var(--rt-text);
+            border-bottom-color: rgba(28,50,36,0.20);
           }
         }
         /* ─── TODAY PAGE HOVERS ───
@@ -6283,7 +6303,7 @@ export default function App({ user }) {
         }
         .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
         /* Rai sidebar — reveal star/delete on row hover */
-        .r-convo-row:hover:not([style*="rgba(123,58,224"]) { background: #233E2C !important; color: #E6EFE9 !important; }
+        .r-convo-row:hover:not([style*="rgba(91,33,182"]) { background: var(--rt-deep-cream) !important; color: var(--rt-text) !important; }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
         /* Direct-hover on the revealed icons. Star brightens to gold
            (previews the on-state). Trash goes danger red (the universal
@@ -6609,14 +6629,14 @@ export default function App({ user }) {
       {/* SIDEBAR — dark green primary-deep frame. Provides architectural
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
-      <div className="r-desk" style={{ width: 240, background: C.sidebar, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.16)" }}>
+      <div className="r-desk" style={{ width: 240, background: C.sidebar, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "var(--rt-sh-card)" }}>
         {/* Logo — "Retayned." wordmark in Outfit 900. The brand mark. */}
         <div style={{ padding: "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline" }}>
           <span style={{
             fontFamily: "'Outfit', system-ui, sans-serif",
             fontWeight: 900,
             fontSize: 22,
-            color: "#FAFAF7",
+            color: C.primary,
             letterSpacing: "-0.04em",
             lineHeight: 1,
           }}>Retayned.</span>
@@ -6632,14 +6652,14 @@ export default function App({ user }) {
                 padding: "9px 12px",
                 borderRadius: 9,
                 marginBottom: 2,
-                color: active ? C.primaryDeep : "#8FA697",
+                color: active ? C.primaryDeep : C.textSec,
                 fontWeight: active ? 600 : 500,
-                background: active ? "#F2EEE8" : "transparent",
-                boxShadow: active ? "0 1px 3px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.16)" : "none",
+                background: active ? C.deepCream : "transparent",
+                boxShadow: active ? "var(--rt-sh-xs)" : "none",
                 cursor: "pointer",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.primaryLight} accent={active ? C.primary : "#33543E"} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>
                 {hasDot(n.id) && <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar, flexShrink: 0 }} />}
               </div>
             );
@@ -6659,7 +6679,7 @@ export default function App({ user }) {
               const recent = raiConvoList.filter(c => !c.is_starred);
               const section = (label, items) => (
                 <>
-                  <div style={{ fontSize: 9.5, fontWeight: 700, color: "#6B8278", letterSpacing: "0.18em", textTransform: "uppercase", padding: "14px 10px 6px" }}>{label}</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, color: C.textSec, letterSpacing: "0.18em", textTransform: "uppercase", padding: "14px 10px 6px" }}>{label}</div>
                   {items.map(c => {
                     const isActive = c.id === aiConvoId;
                     const title = c.title || c.client?.name || "Untitled chat";
@@ -6672,13 +6692,13 @@ export default function App({ user }) {
                           display: "flex", alignItems: "center", gap: 6,
                           padding: "8px 10px 8px 12px",
                           borderRadius: 7, cursor: "pointer",
-                          background: isActive ? "rgba(123,58,224,0.14)" : "transparent",
-                          color: isActive ? "#F2E8FC" : "#8FA697",
+                          background: isActive ? "rgba(91,33,182,0.10)" : "transparent",
+                          color: isActive ? C.btn : C.textSec,
                           fontSize: 12.5,
-                          fontWeight: isActive ? 500 : 500,
+                          fontWeight: isActive ? 600 : 500,
                           position: "relative",
                           transition: "background 160ms var(--rt-ease-out), color 160ms var(--rt-ease-out)",
-                          boxShadow: isActive ? "inset 2px 0 0 0 #9B6BE8" : "none",
+                          boxShadow: isActive ? "inset 2px 0 0 0 " + C.btn : "none",
                         }}
                       >
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</span>
@@ -6765,7 +6785,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: "#233E2C", borderRadius: 10, position: "relative", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)" }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
@@ -6790,8 +6810,8 @@ export default function App({ user }) {
               </div>
 
               {/* TASKS COMPLETED section */}
-              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.borderLight }}>
-                <div style={{ fontSize: 10, color: "#8FA697", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.border }}>
+                <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
                 <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
                   {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
                     const active = taskCompletedPeriod === p.id;
@@ -6806,8 +6826,8 @@ export default function App({ user }) {
                           fontWeight: active ? 600 : 500,
                           cursor: "pointer",
                           ...(active
-                            ? { color: "#FAFAF7", borderBottom: "1px solid #E6EFE9" }
-                            : {}),
+                            ? { color: C.primaryDeep, borderBottom: "1px solid " + C.primary }
+                            : { color: C.textSec }),
                         }}
                       >
                         {p.label}
@@ -6816,7 +6836,7 @@ export default function App({ user }) {
                   })}
                 </div>
                 <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FAFAF7", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
                   {/* Hand-drawn circle around the number — permanent, every period.
                       Reads as "your work, marked." Not tied to the callout — the
                       callout sits on top and is the conditional celebratory layer.
@@ -6829,12 +6849,12 @@ export default function App({ user }) {
                           stroke={C.danger} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
                   </svg>
                 </div>
-                <div style={{ color: "#8FA697", fontSize: 9.5 }}>Tasks Completed</div>
+                <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: "#8FA697", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: "#8FA697", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
+                <div style={{ fontSize: 9.5, color: C.textSec, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -6847,7 +6867,7 @@ export default function App({ user }) {
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                     <div style={{ color: s.color, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
-                    <div style={{ color: "#8FA697", fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
+                    <div style={{ color: C.textSec, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -6864,14 +6884,14 @@ export default function App({ user }) {
                   display: "flex", alignItems: "center", gap: 11,
                   padding: "9px 12px",
                   borderRadius: 9,
-                  color: active ? C.primaryDeep : "#8FA697",
-                  background: active ? "#F2EEE8" : "transparent",
-                  boxShadow: active ? "0 1px 3px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.16)" : "none",
+                  color: active ? C.primaryDeep : C.textSec,
+                  background: active ? C.deepCream : "transparent",
+                  boxShadow: active ? "var(--rt-sh-xs)" : "none",
                   fontWeight: active ? 600 : 500,
                   cursor: "pointer",
                   transition: "all 180ms var(--rt-ease-out)",
                 }}>
-                  <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={18} color={active ? C.primaryDeep : C.primaryLight} accent={active ? C.primary : "#33543E"} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
+                  <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={18} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span><span style={{ fontSize: 14, flex: 1 }}>Settings</span>
                 </div>
               </div>
             );
@@ -6879,8 +6899,8 @@ export default function App({ user }) {
         </div>
         <div style={{ padding: "10px 6px 14px" }}>
           <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, cursor: "pointer", transition: "background 160ms var(--rt-ease-out)" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)" }}>{getUserInitial(user)}</div>
-            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#E6EFE9", textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: "#6B8278", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
+            <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)" }}>{getUserInitial(user)}</div>
+            <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
           </div>
         </div>
       </div>
@@ -7489,62 +7509,6 @@ export default function App({ user }) {
                     {greeting}{firstName ? ", " + firstName : ""}.
                   </h1>
 
-                  {/* Rai's Pick of the Day — editorial sentence directly under
-                      the greeting. Shows regardless of rankMode: the Pick is
-                      an OBSERVATION ("here's the client to focus on today"),
-                      not a SORT directive. The Manual toggle only disables
-                      Rai's influence on task ORDER — it should not silence
-                      her editorial read of the day. Hidden when: no pick row
-                      exists, picked client isn't in roster, or user dismissed
-                      it today. The pick_boost is already gated to Rai-mode
-                      inside the sort comparator (see manualCompare vs.
-                      raiCompare), so this card showing in Manual mode does
-                      not silently re-apply ranking. */}
-                  {(() => {
-                    if (!raiPicks || !raiPicks.client_id) return null;
-                    if (raiState?.todays_pick_dismissed_at) return null;
-                    const pickClient = clients.find(c => c.id === raiPicks.client_id);
-                    if (!pickClient) return null;
-
-                    const handleAddTask = () => {
-                      setTodayComposerClient(pickClient.name);
-                      setTimeout(() => {
-                        const el = document.getElementById("rt-composer-input");
-                        if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
-                      }, 0);
-                    };
-
-                    return (
-                      <div className="rt-band-pick" style={{
-                        marginTop: 10,
-                        fontSize: 14,
-                        lineHeight: 1.55,
-                        // Match the site's established Fraunces voice: muted color
-                        // (not headline ink), weight 400, optical-size + softness +
-                        // wonk axis values that lighten the strokes. Without these
-                        // axes, Fraunces italic at 14px renders noticeably darker
-                        // and chunkier than the surrounding sans-serif body text.,
-                        color: C.textMuted,
-                        fontFamily: "'Fraunces', Georgia, serif",
-                        fontStyle: "italic",
-                        fontWeight: 500,
-                        fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
-                      }}>
-                        Today&rsquo;s client is{" "}
-                        <span
-                          className="rt-purple-link"
-                          onClick={handleAddTask}
-                          style={{ cursor: "pointer", paddingBottom: 1 }}
-                        >
-                          {pickClient.name}
-                        </span>
-                        {" "}&mdash;{" "}
-                        {raiPicks.reason ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") : "Worth a check-in"}.{" "}
-                        <span>-Rai</span>
-                      </div>
-                    );
-                  })()}
-
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <button
                       className="rt-band-sub-events"
@@ -7570,6 +7534,75 @@ export default function App({ user }) {
                     </button>
                     <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
+                    {/* Rai's Pick of the Day — inline editorial sentence right
+                        after events · tasks. Used to live as its own block
+                        above (.rt-band-pick), which on long reasons would
+                        wrap and push the events/tasks line down. Now it
+                        shares this row with a hard cap (maxWidth) + ellipsis
+                        on desktop, so it can never push the count or the
+                        right-side % pill onto a new line. On mobile, the
+                        parent .rt-band-sub already flexWraps and the
+                        sentence falls naturally onto a new line at full
+                        width — that's fine because mobile gets vertical
+                        space. Renders regardless of rankMode: the Pick is
+                        an OBSERVATION ("here's the client to focus on
+                        today"), not a SORT directive — Manual toggle does
+                        not silence it. Hidden when: no pick, picked client
+                        not in roster, or user dismissed it today. */}
+                    {(() => {
+                      if (!raiPicks || !raiPicks.client_id) return null;
+                      if (raiState?.todays_pick_dismissed_at) return null;
+                      const pickClient = clients.find(c => c.id === raiPicks.client_id);
+                      if (!pickClient) return null;
+                      const handleAddTask = () => {
+                        setTodayComposerClient(pickClient.name);
+                        setTimeout(() => {
+                          const el = document.getElementById("rt-composer-input");
+                          if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
+                        }, 0);
+                      };
+                      const cleanedReason = raiPicks.reason
+                        ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "")
+                        : "Worth a check-in";
+                      return (
+                        <>
+                          <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
+                          <span
+                            className="rt-band-pick-inline"
+                            style={{
+                              // flex-shrink + min-width:0 lets the sibling
+                              // count items stay visible; ellipsis kicks in
+                              // when the sentence can't fit. maxWidth caps
+                              // the share of horizontal real estate so the
+                              // pick can never feel like it owns the row.
+                              flex: "0 1 auto",
+                              minWidth: 0,
+                              maxWidth: 560,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontSize: 13,
+                              color: C.textMuted,
+                              fontFamily: "'Fraunces', Georgia, serif",
+                              fontStyle: "italic",
+                              fontWeight: 500,
+                              fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                            }}
+                            title={`Today's client is ${pickClient.name} — ${cleanedReason}. -Rai`}
+                          >
+                            Today&rsquo;s client is{" "}
+                            <span
+                              className="rt-purple-link"
+                              onClick={handleAddTask}
+                              style={{ cursor: "pointer", paddingBottom: 1 }}
+                            >
+                              {pickClient.name}
+                            </span>
+                            {" "}&mdash;{" "}{cleanedReason}.{" "}-Rai
+                          </span>
+                        </>
+                      );
+                    })()}
                     {/* Inline progress bar — mobile only. Sits between the tasks
                         count and the % pill, taking the remaining horizontal space.
                         On desktop this element is hidden (the standalone right-side
@@ -15651,7 +15684,7 @@ export default function App({ user }) {
           right: 12,
           background: C.sidebar,
           borderRadius: 18,
-          boxShadow: "0 1px 2px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.16)",
+          boxShadow: "var(--rt-sh-card)",
           padding: "10px 6px 12px",
           zIndex: 40,
           display: keyboardOpen ? "none" : "flex",
@@ -15680,17 +15713,17 @@ export default function App({ user }) {
                 cursor: "pointer",
                 padding: "5px 12px",
                 borderRadius: 10,
-                background: active ? "#F2EEE8" : "transparent",
-                boxShadow: active ? "0 1px 3px rgba(0,0,0,0.20), 0 4px 12px rgba(0,0,0,0.16)" : "none",
+                background: active ? C.deepCream : "transparent",
+                boxShadow: active ? "var(--rt-sh-xs)" : "none",
                 position: "relative",
                 flexShrink: 0,
                 scrollSnapAlign: "center",
                 minWidth: 60,
               }}
             >
-              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.primaryLight} accent={active ? C.primary : "#33543E"} />
-              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : "#8FA697" }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? "#F2EEE8" : C.sidebar) }} />}
+              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
+              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
+              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.deepCream : C.sidebar) }} />}
             </div>
           );
         })}
