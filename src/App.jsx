@@ -6527,28 +6527,18 @@ export default function App({ user }) {
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
       <div className="r-desk" style={{ width: 240, background: C.sidebar, flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.16)" }}>
-        {/* Logo — purple gradient mark + Fraunces italic wordmark. The
-            "R" badge anchors the brand; the italic wordmark reads like
-            engraved type on a leather notebook. */}
-        <div style={{ padding: "20px 18px 22px", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{
-            width: 30, height: 30,
-            borderRadius: 8,
-            background: "var(--rt-grad-btn)",
-            color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic",
-            fontWeight: 600, fontSize: 17, letterSpacing: "-0.5px",
-            boxShadow: "var(--rt-sh-purple)",
-            flexShrink: 0,
-          }}>R</span>
+        {/* Logo — "R." monogram in Fraunces italic. Matches the favicon.
+            Cream wordmark on dark sidebar reads like engraved serif type
+            on a leather notebook — calm, brand-anchoring, no decoration. */}
+        <div style={{ padding: "22px 22px 22px", flexShrink: 0, display: "flex", alignItems: "baseline", gap: 0 }}>
           <span style={{
             fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic",
-            fontWeight: 500,
-            fontSize: 21,
+            fontWeight: 600,
+            fontSize: 30,
             color: "#FAFAF7",
-            letterSpacing: "-0.4px",
-          }}>Retayned</span>
+            letterSpacing: "-0.5px",
+            lineHeight: 1,
+          }}>R.</span>
         </div>
 
         {/* Nav items — fixed, always visible */}
