@@ -3681,6 +3681,11 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
+  // Whether the Rai pick text is expanded on mobile. Desktop ignores this
+  // — the clamp only applies via mobile @media. On mobile: false = clamped
+  // to 2 lines with fade-out + "More" tap. Resets daily implicitly because
+  // the pick changes each morning.
+  const [pickExpanded, setPickExpanded] = useState(false);
   // Rai user state — toggle + adaptive frequency state from rai_user_state table.
   // Loaded once on mount in loadData, kept in sync via realtime subscription.
   // Single user-controllable boolean:
@@ -4346,7 +4351,7 @@ export default function App({ user }) {
     if (!user) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -4387,47 +4392,36 @@ export default function App({ user }) {
         .select('id, client_id, paused_at, resumed_at, reason, note')
         .eq('user_id', uid)
         .then(r => r, () => ({ data: [], error: null })),
+      // Promoted from sequential awaits to parallel. Each wrapped in .catch
+      // so a missing function or empty table doesn't reject the whole batch;
+      // null data on failure is the same as the previous try/catch behavior.
+      // Cadence — 90-day touchpoint history for client cards.
+      (typeof touchpointsDb.list === "function")
+        ? touchpointsDb.list(uid, 90).catch(e => { console.warn("Cadence data failed to load:", e); return { data: null, error: e }; })
+        : Promise.resolve({ data: null, error: null }),
+      // Observer card — weekly observation, may not exist.
+      (typeof observationsDb?.getCurrent === "function")
+        ? observationsDb.getCurrent(uid).catch(e => { console.warn("Observer card failed to load:", e); return { data: null, error: e }; })
+        : Promise.resolve({ data: null, error: null }),
+      // Daybook — today + yesterday in one shot.
+      (typeof daybookDb?.getTodayAndYesterday === "function")
+        ? daybookDb.getTodayAndYesterday(uid).catch(e => { console.warn("Daybook failed to load:", e); return { data: null, error: e }; })
+        : Promise.resolve({ data: null, error: null }),
+      // Workers list + per-worker completion counts. Optional table — empty
+      // arrays on failure so the composer worker chip just shows zero options.
+      workersDb.list(uid).catch(e => { console.warn("Workers load failed:", e); return { data: null, error: e }; }),
+      workersDb.getAllCompletions(uid).catch(e => { console.warn("Worker completions load failed:", e); return { data: null, error: e }; }),
+      // Personal calendar events (Today timeline) + sidebar completion counts.
+      // Both render on the default landing page so they belong in critical
+      // path. As fire-and-forget they hydrated late, causing visible pop-in
+      // on the Today calendar widget and the sidebar Portfolio widget.
+      personalCalendarDb.listToday(uid).catch(e => { console.warn("personal calendar load failed:", e); return { data: null, error: e }; }),
+      (typeof tasksDb.getCompletedCounts === "function")
+        ? tasksDb.getCompletedCounts(uid).catch(e => { console.warn("task completion counts failed:", e); return { data: null, error: e }; })
+        : Promise.resolve({ data: null, error: null }),
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
-
-    // Today timeline — personal calendar events. Fire-and-forget; widget
-    // renders empty + composer if this fails or is empty.
-    personalCalendarDb.listToday(uid)
-      .then(r => { if (r?.data) setPersonalEvents(r.data); })
-      .catch(e => console.warn("personal calendar load failed:", e));
-
-    // Sidebar tasks-completed widget — fire-and-forget, doesn't block render.
-    // Up to ~1k completion rows over 12 months for active users; query is fast
-    // but no need to gate the page on it. If it fails, widget shows zeros.
-    if (typeof tasksDb.getCompletedCounts === "function") {
-      tasksDb.getCompletedCounts(uid)
-        .then(r => { if (r?.data) setTaskCompletedCounts(r.data); })
-        .catch(e => console.warn("task completion counts failed:", e));
-    }
-
-    // Billing items — fire-and-forget. Hydrates clientBilling state with all
-    // line items grouped by client_id. If it fails, billing tab starts empty
-    // (user can re-add items; the table just doesn't have data yet).
-    if (typeof clientBillingDb?.listAll === "function") {
-      clientBillingDb.listAll(uid)
-        .then(r => { if (r?.data) setClientBilling(r.data); })
-        .catch(e => console.warn("billing items hydrate failed:", e));
-    }
-
-    // Billing month status — invoiced/paid per (client, month).
-    if (typeof clientBillingMonthStatusDb?.listAll === "function") {
-      clientBillingMonthStatusDb.listAll(uid)
-        .then(r => { if (r?.data) setBillingMonthStatus(r.data); })
-        .catch(e => console.warn("billing month status hydrate failed:", e));
-    }
-
-    // Billing terms — log entries per client, newest first.
-    if (typeof clientBillingTermsDb?.listAll === "function") {
-      clientBillingTermsDb.listAll(uid)
-        .then(r => { if (r?.data) setBillingTerms(r.data); })
-        .catch(e => console.warn("billing terms hydrate failed:", e));
-    }
 
     // Build per-client revenue history map: client_id → [history rows]
     const revHistoryByClient = {};
@@ -4445,43 +4439,20 @@ export default function App({ user }) {
     }
     setEngagementPausesByClient(pausesByClient);
 
-    // Cadence data — loaded separately with fallback so a missing db function
-    // degrades cadence only, doesn't nuke the whole page
-    try {
-      if (typeof touchpointsDb.list === "function") {
-        const tpAllRes = await touchpointsDb.list(uid, 90);
-        if (tpAllRes?.data) setAllTouchpoints(tpAllRes.data);
-      }
-    } catch (e) {
-      console.warn("Cadence data failed to load:", e);
+    // Cadence / Observer / Daybook results from the parallel batch above.
+    // Previously each was a sequential await with its own try/catch — that
+    // added ~600-800ms to the critical path. Now they ride along with the
+    // main batch and are processed here synchronously.
+    if (cadenceRes?.data) setAllTouchpoints(cadenceRes.data);
+    if (observerRes?.data) {
+      setObservation(observerRes.data);
+      setObsMobileExpanded(false);
     }
-
-    // Observer card — loaded separately. If table doesn't exist or is empty, no card shows.
-    try {
-      if (typeof observationsDb?.getCurrent === "function") {
-        const obsRes = await observationsDb.getCurrent(uid);
-        if (obsRes?.data) {
-          setObservation(obsRes.data);
-          setObsMobileExpanded(false);
-        }
-      }
-    } catch (e) {
-      console.warn("Observer card failed to load:", e);
-    }
-
-    // Daybook — fetch today + yesterday in one shot. Hydrate the textarea once.
-    try {
-      if (typeof daybookDb?.getTodayAndYesterday === "function") {
-        const dbRes = await daybookDb.getTodayAndYesterday(uid);
-        if (dbRes?.data) {
-          setDaybookEntry(dbRes.data.today?.body || "");
-          setDaybookYesterday(dbRes.data.yesterday || null);
-          setDaybookSaveStatus(dbRes.data.today ? "saved" : "idle");
-          daybookHydratedRef.current = true;
-        }
-      }
-    } catch (e) {
-      console.warn("Daybook failed to load:", e);
+    if (daybookRes?.data) {
+      setDaybookEntry(daybookRes.data.today?.body || "");
+      setDaybookYesterday(daybookRes.data.yesterday || null);
+      setDaybookSaveStatus(daybookRes.data.today ? "saved" : "idle");
+      daybookHydratedRef.current = true;
     }
 
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
@@ -4697,19 +4668,42 @@ export default function App({ user }) {
       setRaiConvoList(convoListRes.data);
     }
 
-    // Workers — non-blocking, optional table
-    try {
-      const [wRes, wcompRes] = await Promise.all([
-        workersDb.list(uid),
-        workersDb.getAllCompletions(uid),
-      ]);
-      if (wRes?.data) setWorkersList(wRes.data);
-      if (wcompRes?.data) setWorkerCompletions(wcompRes.data);
-    } catch (e) {
-      console.warn("Workers load failed (table may not exist yet):", e);
-    }
+    // Workers + completion counts arrived in the main parallel batch above.
+    // Apply them here synchronously — previously this was an awaited
+    // Promise.all that ran AFTER everything else, making Workers the last
+    // data to hydrate and the composer worker chip the last UI to populate.
+    if (workersRes?.data) setWorkersList(workersRes.data);
+    if (workersComplRes?.data) setWorkerCompletions(workersComplRes.data);
+
+    // Visible-on-load surfaces — calendar widget + sidebar Portfolio.
+    // Now in critical path so they hydrate alongside the rest, no pop-in.
+    if (personalCalRes?.data) setPersonalEvents(personalCalRes.data);
+    if (taskCompletionsRes?.data) setTaskCompletedCounts(taskCompletionsRes.data);
 
     setDataLoaded(true);
+
+    // ─── Secondary hydration — fire-and-forget AFTER initial render ───
+    // Only billing data remains here. It's billing-tab-only — invisible on
+    // initial Today landing, so kicking off after the page renders avoids
+    // competing with the critical paint for bandwidth.
+
+    // Billing data — only visible on the Billing tab. Three fetches that
+    // hydrate independently. Each can render empty on failure (user re-adds).
+    if (typeof clientBillingDb?.listAll === "function") {
+      clientBillingDb.listAll(uid)
+        .then(r => { if (r?.data) setClientBilling(r.data); })
+        .catch(e => console.warn("billing items hydrate failed:", e));
+    }
+    if (typeof clientBillingMonthStatusDb?.listAll === "function") {
+      clientBillingMonthStatusDb.listAll(uid)
+        .then(r => { if (r?.data) setBillingMonthStatus(r.data); })
+        .catch(e => console.warn("billing month status hydrate failed:", e));
+    }
+    if (typeof clientBillingTermsDb?.listAll === "function") {
+      clientBillingTermsDb.listAll(uid)
+        .then(r => { if (r?.data) setBillingTerms(r.data); })
+        .catch(e => console.warn("billing terms hydrate failed:", e));
+    }
   }, [user, userTimezone]);
 
 
@@ -5737,21 +5731,23 @@ export default function App({ user }) {
            The active state uses the same deepCream fill — distinguished
            by inset shadow + bold weight, matching the Linear/Notion
            sidebar convention. */
+        /* Nav-item hover previews the active state at lower amplitude.
+           Idle (transparent) → Hover (white card + xs shadow) →
+           Active (white card + card-lift + 0.5px translate). Click
+           is always a clear upgrade. Going to deepCream on hover
+           inverted that — darker on hover, lighter on click — which
+           read as confused. */
         .nav-item:hover:not(.is-active) {
-          background: var(--rt-deep-cream) !important;
+          background: var(--rt-card) !important;
+          box-shadow: var(--rt-sh-xs) !important;
           color: var(--rt-text) !important;
         }
         .nav-item:hover:not(.is-active) svg { color: var(--rt-text) !important; }
         .nav-item:active:not(.is-active) { transform: scale(0.98); }
-        /* (Hover handled above — was dark-substrate-aware, now light-substrate-aware) */
-        /* Period toggle (Week/Month/Year) — inactive options only. The
-           active option carries its own inline color + primary underline.
-           Inactive options rest muted with a transparent underline; on
-           hover the text darkens one step and a faint hairline underline
-           previews the active-state underline. Substrate is the deepCream
-           Portfolio widget card, so hover should darken (not lighten). */
+        /* User chip rests as a card already (matches nav-item active
+           treatment). Hover deepens the shadow + adds the 1px lift —
+           same logical progression as nav: never darken, only lift. */
         .rt-user-chip:hover {
-          background: var(--rt-deep-cream);
           box-shadow: var(--rt-sh-card) !important;
           transform: translateY(-1px);
         }
@@ -6046,7 +6042,6 @@ export default function App({ user }) {
            stays put. */
         @media (prefers-reduced-motion: reduce) {
           .rt-rai-boost::before { animation: none; }
-          .rt-band-pick-mark { animation: none !important; }
         }
 
         /* Calendar composer (G) — idle is the flush hairline-divider
@@ -6090,37 +6085,8 @@ export default function App({ user }) {
           pointer-events: none;
         }
 
-        /* Pick-sentence ✦ medallion (E). Same gradient + halo + breathe
-           as the row-marker .rt-rai-boost::before, but with a -1.3s
-           animation-delay so the two marks are 180° out of phase. Synced
-           medallions read as one duplicated effect; offset reads as two
-           independent living things. */
-        .rt-band-pick-mark {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 16px;
-          height: 16px;
-          margin-right: 8px;
-          vertical-align: -2px;
-          position: relative;
-          top: -1px;
-          background: var(--rt-grad-btn);
-          color: #fff;
-          border-radius: 50%;
-          font-size: 8.5px;
-          line-height: 1;
-          font-weight: 700;
-          /* Override the parent's Fraunces italic for the glyph so the
-             ✦ renders centered and proportional. */
-          font-family: 'Manrope', system-ui, sans-serif;
-          font-style: normal;
-          box-shadow: var(--rt-sh-rai-pop);
-          animation: rtRaiBoostBreathe 2.6s ease-in-out infinite;
-          animation-delay: -1.3s;
-          transform-origin: center center;
-          will-change: transform;
-        }
+        /* Pick-sentence ✦ medallion removed — Rai pick is pure italic
+           prose to keep the band quiet and tight. */
 
         /* ── ANIMATIONS ──────────────────────────────────── */
         @keyframes rtChkIn {
@@ -6520,6 +6486,11 @@ export default function App({ user }) {
             "tasks focus";
         }
         .rt-mob-strip { display: none; }
+        /* Desktop defaults for mobile-only band condensation elements.
+           Mobile media query below toggles them on, restructures the
+           meta row to a single inline row, and clamps the pick to 2
+           lines with a "More" tap. */
+        .rt-band-date-short { display: none; }
         @media (max-width: 900px) {
           .rt-today-v4 {
             grid-template-columns: 1fr;
@@ -6530,12 +6501,14 @@ export default function App({ user }) {
           }
           .rt-focus-col { display: none !important; }
           .rt-rai-col { display: none !important; }
-          /* Mobile band: the band is already a vertical flex stack (date,
-             greeting, Rai pick, meta row). Defensive mobile overrides
-             below: force the column direction (don't rely on inline),
-             cap Rai pick to viewport, and stack the meta row's two
-             children so the % block falls cleanly under events · tasks
-             instead of squeezing into a flex-wrap edge case. */
+          /* Mobile band — condensed Option 1 layout. Target: ~110px total.
+             Strategy:
+             - Date compressed via .rt-band-date-short
+             - Greeting drops to 20px
+             - Rai pick clamped to 2 lines with fade-out + "More" tap
+             - Meta row becomes ONE inline row: events · tasks [bar] pct%
+               via flex-row + order swap on the pct block's children
+               (bar reordered to come before num+lbl, lbl hidden, num shrunk) */
           .rt-band {
             display: flex !important;
             flex-direction: column !important;
@@ -6543,24 +6516,18 @@ export default function App({ user }) {
             padding-left: 0 !important;
             padding-right: 0 !important;
           }
-          .rt-band-greet { font-size: 24px !important; white-space: nowrap; }
-          .rt-band-pick { max-width: 100% !important; }
-          /* Stack events·tasks and the %-bar block on mobile — the desktop
-             space-between row becomes a column. % block goes full-width
-             below events·tasks rather than fighting for horizontal room. */
-          .rt-band-meta {
-            flex-direction: column !important;
-            align-items: stretch !important;
-            gap: 10px !important;
-          }
-          .rt-band-pct {
-            min-width: 0 !important;
-            width: 100%;
-          }
-          /* %-block contents align left on mobile (was right on desktop). */
-          .rt-band-pct > div:first-child {
-            justify-content: flex-start !important;
-          }
+          .rt-band-date-long { display: none; }
+          .rt-band-date-short { display: inline; }
+          .rt-band-greet { font-size: 20px !important; white-space: nowrap; }
+          /* Mobile-specific compressions on top of the now-universal
+             flat meta row: hide the "OF TODAY DONE" label (number alone
+             is enough at narrow widths), shrink the pct number, slightly
+             tighter gap. */
+          .rt-band-meta { flex-wrap: nowrap !important; gap: 10px !important; }
+          .rt-band-sub { font-size: 12.5px !important; }
+          .rt-pct-lbl { display: none !important; }
+          .rt-pct-num { font-size: 13px !important; }
+          .rt-pct-num > span { font-size: 11px !important; }
           /* Composer Row 2: let Add Task wrap to its own line on mobile
              so it can never be clipped off the right edge. The .rt-composer-controls
              takes the full row at flex-basis 100%, pushing the button
@@ -6576,6 +6543,30 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
+        }
+        /* Rai pick clamp + fade — universal (desktop AND mobile).
+           The whole pick block is the tap target; cursor:pointer
+           communicates affordance. The ::after gradient fades the
+           bottom-right so the 2-line clamp reads as a soft fall-off,
+           not a hard cut. Tapping toggles .is-clamped ↔ .is-expanded.
+           The client-name link inside uses stopPropagation so tapping
+           the client routes to the composer instead. */
+        .rt-band-pick { cursor: pointer; }
+        .rt-band-pick.is-clamped {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .rt-band-pick.is-clamped::after {
+          content: '';
+          position: absolute;
+          right: 0;
+          bottom: 0;
+          width: 120px;
+          height: 1.5em;
+          background: linear-gradient(90deg, rgba(250,250,247,0) 0%, var(--rt-bg) 65%, var(--rt-bg) 100%);
+          pointer-events: none;
         }
         /* ── COMPOSER CHIPS — Client / Worker / Due ──
            Each chip is its own soft-shadow card with hover lift + press
@@ -7386,7 +7377,8 @@ export default function App({ user }) {
           const firstName = user?.user_metadata?.full_name?.split(" ")[0]
             || (user?.email ? user.email.split("@")[0].replace(/^\w/, c => c.toUpperCase()) : "")
             || "";
-          const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+          const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+          const shortDisplayDate = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
           // Score chip component
           const ScoreChip = ({ score, delta = null, size = "sm" }) => {
@@ -7665,9 +7657,12 @@ export default function App({ user }) {
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
               {/* STATUS BAND */}
-              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 6, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
-                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
-                <h1 className="rt-band-greet" style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
+              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
+                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
+                  <span className="rt-band-date-long">{displayDate}</span>
+                  <span className="rt-band-date-short">{shortDisplayDate}</span>
+                </div>
+                <h1 className="rt-band-greet" style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
                   {greeting}{firstName ? ", " + firstName : ""}.
                 </h1>
 
@@ -7696,22 +7691,25 @@ export default function App({ user }) {
                     ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "")
                     : "Worth a check-in";
                   return (
-                    <div className="rt-band-pick" style={{
-                      marginTop: 4,
-                      maxWidth: 640,
-                      fontSize: 13.5,
-                      lineHeight: 1.5,
-                      color: C.textMuted,
-                      fontFamily: "'Fraunces', Georgia, serif",
-                      fontStyle: "italic",
-                      fontWeight: 500,
-                      fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
-                    }}>
-                      <span className="rt-band-pick-mark" aria-hidden="true">✦</span>
+                    <div
+                      className={"rt-band-pick" + (pickExpanded ? " is-expanded" : " is-clamped")}
+                      onClick={() => setPickExpanded(p => !p)}
+                      style={{
+                        marginTop: 8,
+                        fontSize: 13.5,
+                        lineHeight: 1.5,
+                        color: C.textMuted,
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontStyle: "italic",
+                        fontWeight: 500,
+                        fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                        position: "relative",
+                      }}
+                    >
                       Today&rsquo;s client is{" "}
                       <span
                         className="rt-purple-link"
-                        onClick={handleAddTask}
+                        onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
                         style={{ cursor: "pointer", paddingBottom: 1 }}
                       >
                         {pickClient.name}
@@ -7725,8 +7723,8 @@ export default function App({ user }) {
                     on the right. One flex row, justify-between, with a
                     flex-wrap fallback so on truly narrow screens the right
                     block falls below cleanly. */}
-                <div className="rt-band-meta" style={{ marginTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                  <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <div className="rt-band-meta" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexShrink: 0 }}>
                     <button
                       className="rt-band-sub-events"
                       onClick={() => setTodayStripOpen(!todayStripOpen)}
@@ -7753,20 +7751,19 @@ export default function App({ user }) {
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
                   </div>
 
-                  {/* Completion: big % + label + progress bar. Single block
-                      on the right of the meta row — replaces the old
-                      .rt-band-right separate column. */}
-                  <div className="rt-band-pct" style={{ minWidth: 200, flexShrink: 0 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 8 }}>
-                      <span className="rt-pct-num" style={{ fontSize: 22, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.3 }}>
-                        {Math.round(pct * 100)}<span style={{ fontSize: 13, color: C.textMuted, fontWeight: 500 }}>%</span>
-                      </span>
-                      <span className="rt-pct-lbl" style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600 }}>of today done</span>
-                    </div>
-                    <div className="rt-pct-bar" style={{ position: "relative", height: 5, background: C.borderLight, borderRadius: 999, marginTop: 8, overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.10)" }}>
-                      <div className="rt-pct-fill" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(pct) * 100))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 999, transition: "width 400ms cubic-bezier(.2,.7,.3,1)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.30), 0 0 6px rgba(51,84,62,0.25)" }} />
-                    </div>
+                  {/* Bar takes the remaining horizontal space between
+                      events·tasks and the % number. flex: 1 stretches.
+                      min-width keeps the bar visible even if siblings
+                      grow. The wrapping fallback (band-meta has
+                      flex-wrap) handles very narrow desktops. */}
+                  <div className="rt-pct-bar" style={{ position: "relative", flex: 1, height: 5, minWidth: 60, background: C.borderLight, borderRadius: 999, overflow: "hidden", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.10)" }}>
+                    <div className="rt-pct-fill" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${Math.max(0, Math.min(100, Number(pct) * 100))}%`, background: `linear-gradient(90deg, ${C.primaryLight}, ${C.primary})`, borderRadius: 999, transition: "width 400ms cubic-bezier(.2,.7,.3,1)", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.30), 0 0 6px rgba(51,84,62,0.25)" }} />
                   </div>
+
+                  <span className="rt-pct-num" style={{ fontSize: 15, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.2, flexShrink: 0 }}>
+                    {Math.round(pct * 100)}<span style={{ fontSize: 12, color: C.textMuted, fontWeight: 500 }}>%</span>
+                  </span>
+                  <span className="rt-pct-lbl" style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>of today done</span>
                 </div>
 
                 {/* Mobile calendar dropdown — drops down right under the band trigger.
@@ -9444,10 +9441,12 @@ export default function App({ user }) {
                     };
 
                     // Bucket header component (inline).
-                    const BucketHeader = ({ name, dimmed }) => {
+                    const BucketHeader = ({ name, dimmed, count }) => {
                       // Polish layer: each bucket gets a tiny color-coded dot
                       // with a soft halo. Green-light for today (the active surface),
                       // muted ink for tomorrow/later. Same primary palette.
+                      // Optional count shown after the name with a thin separator —
+                      // at-a-glance awareness of what's queued without scanning.
                       const isToday = name === "Today";
                       const dotColor = isToday ? C.primaryLight : C.ink300;
                       const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
@@ -9456,6 +9455,12 @@ export default function App({ user }) {
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>
                             <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: "0 0 0 3px " + dotHalo }} />
                             {name}
+                            {typeof count === "number" && count > 0 && (
+                              <>
+                                <span style={{ color: C.border, fontWeight: 400, letterSpacing: 0 }}>·</span>
+                                <span style={{ color: C.textSec, fontVariantNumeric: "tabular-nums", letterSpacing: 0 }}>{count}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       );
@@ -9469,9 +9474,44 @@ export default function App({ user }) {
                           {_todayBucket.map(t => renderRow(t, "today"))}
                         </div>
 
+                        {/* Today bucket empty states. Two distinct conditions
+                            with different tones — emptiness only earns
+                            acknowledgment when something was actually done.
+
+                            CASE A: nothing exists yet. todayCount === 0 means
+                            no tasks created for today at all (neither open nor
+                            done). Show a quiet prompt — no congratulation,
+                            because there is nothing to congratulate.
+
+                            CASE B: all complete. todayCount > 0 means tasks
+                            existed; _todayBucket.length === 0 means none are
+                            still open; todayDoneCount === todayCount confirms
+                            every one is checked off. Modest acknowledgment —
+                            user earned this — plus a Tomorrow preview if there
+                            is one. The voice stays direct and unsentimental
+                            (no "you crushed it" energy). */}
+                        {_todayBucket.length === 0 && todayCount === 0 && (
+                          <div style={{ textAlign: "center", padding: "32px 20px", background: "transparent", border: "1px dashed " + C.border, borderRadius: 10, color: C.textMuted, fontSize: 13, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontWeight: 500 }}>
+                            Nothing on today&rsquo;s list yet. Add one above &uarr;
+                          </div>
+                        )}
+                        {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (
+                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
+                              <Icon name="check" size={14} color="#fff" />
+                            </div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.primaryDeep }}>Today&rsquo;s list is clear.</div>
+                            {_tomorrowBucket.length > 0 && (
+                              <div style={{ fontSize: 12, color: C.textSec }}>
+                                <b style={{ color: C.text, fontWeight: 700 }}>{_tomorrowBucket.length}</b> {_tomorrowBucket.length === 1 ? "task" : "tasks"} queued for tomorrow.
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
-                          <BucketHeader name="Tomorrow" dimmed={true} />
+                          <BucketHeader name="Tomorrow" dimmed={true} count={_tomorrowBucket.length} />
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                           </div>
@@ -9479,7 +9519,7 @@ export default function App({ user }) {
 
                         {/* LATER bucket */}
                         {_laterBucket.length > 0 && (<>
-                          <BucketHeader name="Later" dimmed={true} />
+                          <BucketHeader name="Later" dimmed={true} count={_laterBucket.length} />
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
