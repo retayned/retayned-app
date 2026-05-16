@@ -153,24 +153,20 @@ const THEME_CSS = `
   }
 `;
 
-const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", simple = false, isActive = true }) => {
-  // Editorial nav icons — 32x32 viewBox, multi-color (cream paper + ink stroke
-  // + green accent). Color tokens come from CSS variables so they flip in dark
-  // mode. The `color` prop is intentionally ignored for these icons — they
-  // don't recolor on active state; the active state is signalled by the
-  // surrounding row's background fill.
-  //
-  // isActive controls the green saturation:
-  //   true  (default) → full brand: #558B68 body, #2F2F31 dark accents
-  //   false           → muted sage: primaryMuted body, primaryMutedDeep accents
-  // Default true preserves behavior for every non-nav caller (composer chips,
-  // empty states, button icons etc.) — they never pass the prop and stay
-  // saturated. Only the sidebar nav iterator passes isActive={active}, so
-  // the inactive rail items recede to sage and the active item carries
-  // brand color. Cream highlights (#FCFCFE) stay constant in both states —
+const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", simple = false }) => {
+  // Editorial nav icons — 32x32 viewBox, multi-color.
+  // Body and accent come from CSS custom properties on the icon's
+  // parent (.nav-item or .nav-item-mobile), so the icon's state
+  // (rest / hover / active) is controlled by the row, not by a prop:
+  //   rest (no class)     → --icon-body: text-muted gray,  --icon-accent: text-sec
+  //   :hover              → --icon-body: primaryMuted sage, --icon-accent: primaryMutedDeep
+  //   .is-active          → --icon-body: primaryLight green, --icon-accent: ink dark
+  // Fallback values in the var() expressions keep non-nav callers
+  // (composer chips at simple={true}, EmptyState illustrations) at
+  // full brand saturation — they never set the CSS vars on their
+  // parent, so the fallback path is taken.
+  // Cream highlights (#FCFCFE) stay constant across all states —
   // they're paper highlights, not brand color.
-  const G_BODY = isActive ? "#558B68" : "#8FA597";
-  const G_ACCENT = isActive ? "#2F2F31" : "#4D5C50";
 
   const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "due"]);
   const isEditorial = editorialNames.has(name);
@@ -230,35 +226,35 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
     today: (<>
       {/* Filled calendar — primary-light body with dark binding tabs and
           cream center dot. New icon set, May 2026. */}
-      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill={G_BODY}/>
-      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill={G_ACCENT}/>
-      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill={G_ACCENT}/>
+      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill="var(--icon-body, #558B68)"/>
+      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill="var(--icon-accent, #2F2F31)"/>
+      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill="var(--icon-accent, #2F2F31)"/>
       <circle cx="16" cy="20" r="3.4" fill="#FCFCFE"/>
     </>),
     clients: (<>
       {/* Two figures: foreground person in primary-light, background
           person in dark accent with a connecting curve. New icon set. */}
-      <circle cx="11" cy="12.5" r="4.5" fill={G_BODY}/>
-      <path d="M3 25.5 C 3 19.5, 7 17, 11 17 C 15 17, 19 19.5, 19 25.5 Z" fill={G_BODY}/>
-      <circle cx="23" cy="10.5" r="3.4" fill={G_ACCENT}/>
-      <path d="M18.5 19.6 C 20.2 18, 22 17.6, 23.5 17.6 C 27.5 17.6, 29 20, 29 23.5" stroke={G_ACCENT} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx="11" cy="12.5" r="4.5" fill="var(--icon-body, #558B68)"/>
+      <path d="M3 25.5 C 3 19.5, 7 17, 11 17 C 15 17, 19 19.5, 19 25.5 Z" fill="var(--icon-body, #558B68)"/>
+      <circle cx="23" cy="10.5" r="3.4" fill="var(--icon-accent, #2F2F31)"/>
+      <path d="M18.5 19.6 C 20.2 18, 22 17.6, 23.5 17.6 C 27.5 17.6, 29 20, 29 23.5" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     health: (<>
       {/* Heart silhouette in primary-light with a cream ECG pulse line
           through the middle. New icon set. */}
-      <path d="M16 26.5 C 7 21.5, 3 17.5, 3 12 C 3 8, 6 5.5, 9.5 5.5 C 12 5.5, 14.5 7, 16 9.5 C 17.5 7, 20 5.5, 22.5 5.5 C 26 5.5, 29 8, 29 12 C 29 17.5, 25 21.5, 16 26.5 Z" fill={G_BODY}/>
+      <path d="M16 26.5 C 7 21.5, 3 17.5, 3 12 C 3 8, 6 5.5, 9.5 5.5 C 12 5.5, 14.5 7, 16 9.5 C 17.5 7, 20 5.5, 22.5 5.5 C 26 5.5, 29 8, 29 12 C 29 17.5, 25 21.5, 16 26.5 Z" fill="var(--icon-body, #558B68)"/>
       <path d="M6 15 L10 15 L12 11.5 L14.5 18.5 L16.5 13.5 L18 15 L26 15" fill="none" stroke="#FCFCFE" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
       {/* Speech bubble with cream 4-point sparkle inside. New icon set. */}
-      <path d="M4 10 Q4 6 8 6 L24 6 Q28 6 28 10 L28 19 Q28 23 24 23 L14 23 L9 27.5 L10 23 Q4 23 4 19 Z" fill={G_BODY}/>
+      <path d="M4 10 Q4 6 8 6 L24 6 Q28 6 28 10 L28 19 Q28 23 24 23 L14 23 L9 27.5 L10 23 Q4 23 4 19 Z" fill="var(--icon-body, #558B68)"/>
       <path d="M16 10 L17.8 14.2 L22 15.7 L17.8 17.2 L16 21.4 L14.2 17.2 L10 15.7 L14.2 14.2 Z" fill="#FCFCFE"/>
     </>),
     rolodex: (<>
       {/* ID-card style: rounded primary-light rect with a dark divider
           rule, cream avatar circle, and cream text lines. New icon set. */}
-      <rect x="4" y="6" width="24" height="20" rx="4" fill={G_BODY}/>
-      <line x1="4" y1="11.5" x2="28" y2="11.5" stroke={G_ACCENT} strokeWidth="2" opacity="0.45"/>
+      <rect x="4" y="6" width="24" height="20" rx="4" fill="var(--icon-body, #558B68)"/>
+      <line x1="4" y1="11.5" x2="28" y2="11.5" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2" opacity="0.45"/>
       <circle cx="11.5" cy="19" r="2.6" fill="#FCFCFE"/>
       <line x1="16.5" y1="18" x2="23.5" y2="18" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
       <line x1="16.5" y1="22" x2="20.5" y2="22" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round" opacity="0.85"/>
@@ -266,24 +262,24 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
     referrals: (<>
       {/* Three nodes: large hub on left, two satellites on right with
           primary-light connector lines. New icon set. */}
-      <line x1="10.6" y1="14.6" x2="21.4" y2="9" stroke={G_BODY} strokeWidth="3" strokeLinecap="round"/>
-      <line x1="10.6" y1="17.4" x2="21.4" y2="23" stroke={G_BODY} strokeWidth="3" strokeLinecap="round"/>
-      <circle cx="8" cy="16" r="4" fill={G_BODY}/>
-      <circle cx="24" cy="7.5" r="3.4" fill={G_BODY}/>
-      <circle cx="24" cy="24.5" r="3.4" fill={G_BODY}/>
+      <line x1="10.6" y1="14.6" x2="21.4" y2="9" stroke="var(--icon-body, #558B68)" strokeWidth="3" strokeLinecap="round"/>
+      <line x1="10.6" y1="17.4" x2="21.4" y2="23" stroke="var(--icon-body, #558B68)" strokeWidth="3" strokeLinecap="round"/>
+      <circle cx="8" cy="16" r="4" fill="var(--icon-body, #558B68)"/>
+      <circle cx="24" cy="7.5" r="3.4" fill="var(--icon-body, #558B68)"/>
+      <circle cx="24" cy="24.5" r="3.4" fill="var(--icon-body, #558B68)"/>
     </>),
     workers: (<>
       {/* Briefcase: primary-light body with dark handle and divider rule,
           cream center lock. New icon set. */}
-      <rect x="3" y="10" width="26" height="17" rx="3.4" fill={G_BODY}/>
-      <path d="M10.5 10 V 7.5 Q 10.5 5 13 5 L 19 5 Q 21.5 5 21.5 7.5 V 10" stroke={G_ACCENT} strokeWidth="2.4" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
-      <line x1="3" y1="17.5" x2="29" y2="17.5" stroke={G_ACCENT} strokeWidth="2" opacity="0.4"/>
+      <rect x="3" y="10" width="26" height="17" rx="3.4" fill="var(--icon-body, #558B68)"/>
+      <path d="M10.5 10 V 7.5 Q 10.5 5 13 5 L 19 5 Q 21.5 5 21.5 7.5 V 10" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2.4" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
+      <line x1="3" y1="17.5" x2="29" y2="17.5" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2" opacity="0.4"/>
       <rect x="13.5" y="15.5" width="5" height="4" rx="0.8" fill="#FCFCFE"/>
     </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
     settings: (<>
       {/* Cog gear in primary-light with cream center. New icon set. */}
-      <path d="M16 3 L18.4 5.4 L21.6 4.6 L22.6 7.6 L25.6 8.4 L25 11.4 L27.5 13.2 L26.2 16 L28 18.6 L25.6 20.4 L26 23.4 L23 24.2 L22.2 27 L19 27 L16.8 29 L14 28 L11 29 L9 27 L5.8 27 L5 24.2 L2 23.4 L2.4 20.4 L0 18.6 L1.8 16 L0.5 13.2 L3 11.4 L2.4 8.4 L5.4 7.6 L6.4 4.6 L9.6 5.4 L12 3 L14 4 Z" fill={G_BODY} transform="translate(2 0) scale(0.92)"/>
+      <path d="M16 3 L18.4 5.4 L21.6 4.6 L22.6 7.6 L25.6 8.4 L25 11.4 L27.5 13.2 L26.2 16 L28 18.6 L25.6 20.4 L26 23.4 L23 24.2 L22.2 27 L19 27 L16.8 29 L14 28 L11 29 L9 27 L5.8 27 L5 24.2 L2 23.4 L2.4 20.4 L0 18.6 L1.8 16 L0.5 13.2 L3 11.4 L2.4 8.4 L5.4 7.6 L6.4 4.6 L9.6 5.4 L12 3 L14 4 Z" fill="var(--icon-body, #558B68)" transform="translate(2 0) scale(0.92)"/>
       <circle cx="16" cy="14.7" r="4.4" fill="#FCFCFE"/>
     </>),
     due: (<>
@@ -2381,9 +2377,22 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
           <Icon name="due" size={26} color={C.primaryLight} accent={C.primary} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
-              {selectedDay === "today" ? "Today" : "Tomorrow"}
-            </div>
+            {/* Eyebrow row: TODAY · M/D/YY (or TOMORROW · M/D/YY when
+                the day toggle is on tomorrow). Lives inside the
+                calendar widget — gives users a fixed date anchor at
+                a glance. Hidden under events on mobile via rt-mob-strip. */}
+            {(() => {
+              const _t = new Date();
+              if (selectedDay === "tomorrow") _t.setDate(_t.getDate() + 1);
+              const _dStr = `${_t.getMonth() + 1}/${_t.getDate()}/${String(_t.getFullYear()).slice(-2)}`;
+              return (
+                <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+                  <span>{selectedDay === "today" ? "Today" : "Tomorrow"}</span>
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0, textTransform: "none", fontWeight: 600 }}>{_dStr}</span>
+                </div>
+              );
+            })()}
             <div style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span>{isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}</span>
               {googleConnected && <span style={{ color: C.primary }}>· Google connected</span>}
@@ -3868,18 +3877,18 @@ export default function App({ user }) {
   const [profileScores, setProfileScores] = useState({});
 
   const profileDimensions = [
-    { key: "trust", name: "Trust", desc: "Does this client trust you to do your job?", left: "Heavy oversight", right: "Full delegation", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "loyalty", name: "Loyalty", desc: "Is this client looking at other options?", left: "Actively shopping", right: "Locked in, not looking", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "expectations", name: "Expectations", desc: "Are the client's expectations for your work realistic?", left: "Highly ambitious", right: "Reasonable, aligned", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "grace", name: "Grace", desc: "When something goes wrong, how does this client react?", left: "Zero tolerance", right: "Gives benefit of the doubt", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "commFrequency", name: "Communication Frequency", desc: "How often does the client reach out to you?", left: "Radio silence, you always initiate", right: "Nonstop, multiple times a day", weight: 0.05, values: [0.20, 0.40, 0.60, 0.80, 0.90, 1.00, 0.90, 0.80, 0.60, 0.40, 0.20] },
-    { key: "stressResponse", name: "Stress Response", desc: "When results are bad or something goes wrong, how do you find out?", left: "You don't — they go quiet and deal with it internally", right: "Immediately — they call, escalate, make it known", weight: 0.05, values: [0.05, 0.20, 0.50, 0.85, 1.00, 1.00, 1.00, 0.85, 0.65, 0.40, 0.20] },
-    { key: "budgetCommitment", name: "Budget Commitment", desc: "How likely is budget to become a reason this client leaves?", left: "Very likely, always under budget pressure", right: "Never, budget is a non-issue", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "relationshipDepth", name: "Relationship Depth", desc: "Beyond business, is there a real relationship here?", left: "Strictly transactional", right: "Genuine connection", weight: 0.05, values: [0.20, 0.30, 0.40, 0.60, 0.80, 0.85, 0.90, 0.95, 1.00, 0.95, 0.90] },
-    { key: "reportingNeed", name: "Reporting Need", desc: "How much reporting does this client need from you?", left: "Hands-off, minimal updates", right: "Wants every detail", weight: 0.05, values: [0.50, 0.80, 0.85, 0.90, 0.95, 1.00, 0.95, 0.90, 0.80, 0.50, 0.20] },
-    { key: "replaceability", name: "Replaceability", desc: "How easy would it be for this client to replace you?", left: "Plug and play, anyone could do it", right: "Deeply embedded, hard to replace", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "commTone", name: "Communication Tone", desc: "How does this client communicate with you?", left: "Reserved, guarded", right: "Warm, direct", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
-    { key: "decisionMaking", name: "Decision Making", desc: "How much authority does your primary contact have?", left: "No authority, just a relay", right: "Full authority, makes the call", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "trust", name: "Trust", short: "Trust", desc: "Does this client trust you to do your job?", left: "Heavy oversight", right: "Full delegation", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "loyalty", name: "Loyalty", short: "Loyalty", desc: "Is this client looking at other options?", left: "Actively shopping", right: "Locked in, not looking", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "expectations", name: "Expectations", short: "Expect.", desc: "Are the client's expectations for your work realistic?", left: "Highly ambitious", right: "Reasonable, aligned", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "grace", name: "Grace", short: "Grace", desc: "When something goes wrong, how does this client react?", left: "Zero tolerance", right: "Gives benefit of the doubt", weight: 0.15, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "commFrequency", name: "Communication Frequency", short: "Comm Freq", desc: "How often does the client reach out to you?", left: "Radio silence, you always initiate", right: "Nonstop, multiple times a day", weight: 0.05, values: [0.20, 0.40, 0.60, 0.80, 0.90, 1.00, 0.90, 0.80, 0.60, 0.40, 0.20] },
+    { key: "stressResponse", name: "Stress Response", short: "Stress", desc: "When results are bad or something goes wrong, how do you find out?", left: "You don't — they go quiet and deal with it internally", right: "Immediately — they call, escalate, make it known", weight: 0.05, values: [0.05, 0.20, 0.50, 0.85, 1.00, 1.00, 1.00, 0.85, 0.65, 0.40, 0.20] },
+    { key: "budgetCommitment", name: "Budget Commitment", short: "Budget", desc: "How likely is budget to become a reason this client leaves?", left: "Very likely, always under budget pressure", right: "Never, budget is a non-issue", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "relationshipDepth", name: "Relationship Depth", short: "Depth", desc: "Beyond business, is there a real relationship here?", left: "Strictly transactional", right: "Genuine connection", weight: 0.05, values: [0.20, 0.30, 0.40, 0.60, 0.80, 0.85, 0.90, 0.95, 1.00, 0.95, 0.90] },
+    { key: "reportingNeed", name: "Reporting Need", short: "Reporting", desc: "How much reporting does this client need from you?", left: "Hands-off, minimal updates", right: "Wants every detail", weight: 0.05, values: [0.50, 0.80, 0.85, 0.90, 0.95, 1.00, 0.95, 0.90, 0.80, 0.50, 0.20] },
+    { key: "replaceability", name: "Replaceability", short: "Replace.", desc: "How easy would it be for this client to replace you?", left: "Plug and play, anyone could do it", right: "Deeply embedded, hard to replace", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "commTone", name: "Communication Tone", short: "Tone", desc: "How does this client communicate with you?", left: "Reserved, guarded", right: "Warm, direct", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
+    { key: "decisionMaking", name: "Decision Making", short: "Decisions", desc: "How much authority does your primary contact have?", left: "No authority, just a relay", right: "Full authority, makes the call", weight: 0.05, values: [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00] },
   ];
 
   // ─── COMBO DEFINITIONS ───
@@ -5781,6 +5790,32 @@ export default function App({ user }) {
         ::selection { background: #33543E; color: #fff; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
+        /* ── NAV ITEM ICON COLOR STATES ───────────────────────────────
+           Three-state flow controlled via CSS custom properties on the
+           parent .nav-item / .nav-item-mobile, picked up by the SVG
+           paths inside via var(--icon-body) / var(--icon-accent).
+             rest      → warm gray (textMuted), feels quiet
+             hover     → sage (primaryMuted), brand color previewing
+             active    → full green (primaryLight), brand color committed
+           The :hover override only fires on devices that actually
+           hover (hover: hover) so mobile gets a clean 2-state flow:
+           gray at rest, full green when active. */
+        .nav-item, .nav-item-mobile {
+          --icon-body: #9A9A93;
+          --icon-accent: #6B6B66;
+        }
+        @media (hover: hover) {
+          .nav-item:hover:not(.is-active),
+          .nav-item-mobile:hover:not(.is-active) {
+            --icon-body: #8FA597;
+            --icon-accent: #4D5C50;
+          }
+        }
+        .nav-item.is-active,
+        .nav-item-mobile.is-active {
+          --icon-body: #558B68;
+          --icon-accent: #2F2F31;
+        }
         .nav-item { transition: all 180ms var(--rt-ease-out); cursor: pointer; }
         /* Hover on inactive items lifts to deepCream + darkens text/icon.
            Light-substrate sidebar (post-revert): the hover layer is a
@@ -6863,19 +6898,25 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — content density only.
-             Previously had a position:fixed override that anchored the
-             picker to the viewport's bottom-right corner regardless of
-             where the chip was. That made the picker feel disconnected
-             from the tap target. Now the Due picker uses the same
-             absolute positioning as Client/Worker (anchored to the
-             chip), and we just tighten the calendar's cell size and
-             padding so the calendar fits in the picker's natural
-             ~240px width. Backdrop above the picker still catches
-             outside-taps to dismiss. */
+          /* DUE PICKER ON MOBILE — fits in viewport via right-anchor.
+             The Due chip is the rightmost chip in the composer, so its
+             default left:0 anchor extends the picker rightward — past
+             the viewport edge on phones. Switching to right:0 (left:
+             auto) anchors the picker to the chip's right edge instead,
+             so the calendar grows leftward into available space.
+             Width is capped at min(280, viewport-24) so we never
+             exceed the screen. max-height + internal scroll handle
+             tall content. Same absolute positioning relative to the
+             chip — picker still feels attached to the tap target,
+             unlike the previous position:fixed override. */
           .rt-due-picker {
+            left: auto !important;
+            right: 0 !important;
+            width: min(280px, calc(100vw - 24px)) !important;
+            min-width: 0 !important;
             max-height: calc(100vh - 120px) !important;
             overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           /* Compact calendar cells on mobile so the grid doesn't bloat
              the picker. Smaller height, smaller font. */
@@ -7153,7 +7194,16 @@ export default function App({ user }) {
             fontFamily: "'Outfit', system-ui, sans-serif",
             fontWeight: 900,
             fontSize: 22,
-            color: C.primary,
+            // Subtle vertical gradient — primaryLight → primary → primaryDeep.
+            // Same direction as the gradient avatars elsewhere (score chip
+            // initials, user avatar in profile chip). Adds just enough
+            // depth to anchor the brand mark without making it feel like
+            // marketing copy.
+            background: "linear-gradient(135deg, #558B68 0%, #33543E 55%, #1C3224 100%)",
+            WebkitBackgroundClip: "text",
+            backgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            color: "transparent",
             letterSpacing: "-0.04em",
             lineHeight: 1,
           }}>{sidebarCollapsed ? "R." : "Retayned."}</span>
@@ -7179,7 +7229,7 @@ export default function App({ user }) {
                 position: "relative",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} isActive={active} /></span>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
                 {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>}
                 {hasDot(n.id) && <div style={{ position: sidebarCollapsed ? "absolute" : "static", top: sidebarCollapsed ? 6 : "auto", right: sidebarCollapsed ? 6 : "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
               </div>
@@ -8629,32 +8679,6 @@ export default function App({ user }) {
                                   };
                                   return (
                                     <div style={{ padding: "6px 4px 2px" }}>
-                                      {/* TODAY reference — single-line label so users
-                                          have a fixed anchor while navigating months.
-                                          Format: TODAY · M/D/YY (no leading zeros).
-                                          Lives inside the calendar widget only, not
-                                          on the Today page. */}
-                                      {(() => {
-                                        const _t = new Date();
-                                        const _tStr = `${_t.getMonth() + 1}/${_t.getDate()}/${String(_t.getFullYear()).slice(-2)}`;
-                                        return (
-                                          <div style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 5,
-                                            padding: "0 6px 8px",
-                                            fontSize: 10.5,
-                                            color: C.textMuted,
-                                            fontWeight: 600,
-                                            letterSpacing: 0.4,
-                                            whiteSpace: "nowrap",
-                                          }}>
-                                            <span style={{ color: C.text }}>TODAY</span>
-                                            <span style={{ opacity: 0.5 }}>·</span>
-                                            <span style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0 }}>{_tStr}</span>
-                                          </div>
-                                        );
-                                      })()}
                                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, padding: "0 6px" }}>
                                         <button
                                           onClick={goPrev}
@@ -12883,11 +12907,11 @@ export default function App({ user }) {
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
                       padding: "10px 16px",
-                      background: C.btn, color: "#fff",
+                      background: "var(--rt-grad-btn)", color: "#fff",
                       border: "none", borderRadius: 10,
                       fontSize: 13.5, fontWeight: 600,
                       cursor: "pointer", fontFamily: "inherit",
-                      boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)",
+                      boxShadow: "var(--rt-sh-purple)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -13416,7 +13440,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
-                  <button className="r-btn" data-tone="purple" onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="purple" onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "var(--rt-grad-btn)", color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", whiteSpace: "nowrap" }}>
                     Log Referral
                   </button>
                 </div>
@@ -13980,7 +14004,7 @@ export default function App({ user }) {
                     {referReady > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
                   </div>
                 </div>
-                <button className="r-btn" data-tone="purple" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", flexShrink: 0 }}>
+                <button className="r-btn" data-tone="purple" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "var(--rt-grad-btn)", color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", flexShrink: 0 }}>
                   <span style={{ whiteSpace: "nowrap" }}>New Contact</span>
                 </button>
               </div>
@@ -15411,12 +15435,16 @@ export default function App({ user }) {
                             {/* Radar visualization — 12-point polygon with labels
                                 integrated at each spoke endpoint. The SHAPE
                                 carries the meaning: dents (low dimensions) read
-                                visually without needing a numeric legend. Labels
-                                sit just outside the 100px radar at radius 125.
-                                textAnchor and dominantBaseline are picked per-
-                                spoke from angle quadrant so labels never collide
-                                with the radar or each other. */}
-                            <svg width="320" height="320" viewBox="0 0 320 320" style={{ flexShrink: 0 }}>
+                                visually without needing a numeric legend.
+                                SVG is responsive (width 100%, max 320, keeps
+                                viewBox 0 0 320 320) so on mobile the polygon
+                                scales down with the container — labels no
+                                longer get clipped at the viewport edge.
+                                Labels use d.short (e.g. "Comm Freq" not
+                                "Communication Frequency") so they fit at the
+                                spoke endpoint at smaller widths. Full names
+                                still appear in the Edit Profile sliders. */}
+                            <svg width="100%" viewBox="0 0 320 320" style={{ flexShrink: 0, maxWidth: 320 }}>
                               {/* Background quartile rings */}
                               <g fill="none" stroke={C.borderLight} strokeWidth="1">
                                 <circle cx="160" cy="160" r="25" />
@@ -15451,19 +15479,20 @@ export default function App({ user }) {
                                   </>
                                 );
                               })()}
-                              {/* Spoke labels at radius 125. textAnchor picks
-                                  left/middle/right from cos(angle). Vertical
+                              {/* Spoke labels at radius 122. Short names from
+                                  d.short keep the label widths small so even
+                                  on mobile the label can't push past the
+                                  SVG viewBox edge. textAnchor picks
+                                  left/middle/right from cos(angle); vertical
                                   alignment picks alphabetic/middle/hanging
-                                  from sin(angle) so labels above the center
-                                  sit above their spoke and labels below sit
-                                  below their spoke — no overlap with rings. */}
-                              <g fontFamily="Manrope, sans-serif" fontSize="11" fontWeight="600" fill={C.textSec}>
+                                  from sin(angle). */}
+                              <g fontFamily="Manrope, sans-serif" fontSize="10.5" fontWeight="600" fill={C.textSec}>
                                 {profileDimensions.map((d, i) => {
                                   const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
                                   const cos = Math.cos(angle);
                                   const sin = Math.sin(angle);
-                                  const x = 160 + 125 * cos;
-                                  const y = 160 + 125 * sin;
+                                  const x = 160 + 122 * cos;
+                                  const y = 160 + 122 * sin;
                                   const textAnchor = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
                                   const dominantBaseline = sin > 0.35 ? "hanging" : sin < -0.35 ? "auto" : "middle";
                                   return (
@@ -15474,7 +15503,7 @@ export default function App({ user }) {
                                       textAnchor={textAnchor}
                                       dominantBaseline={dominantBaseline}
                                     >
-                                      {d.name}
+                                      {d.short || d.name}
                                     </text>
                                   );
                                 })}
@@ -15486,9 +15515,31 @@ export default function App({ user }) {
                             No profile set yet. Build one to help Rai understand this client.
                           </div>
                         )}
-                        <button className="r-btn" data-tone="purple" onClick={() => { setEditScores({ ...dims }); setEditingProfile(true); }} style={{ width: "100%", padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 12 }}>
-                          {Object.keys(dims).length > 0 ? "Edit Profile" : "Build Profile"}
-                        </button>
+                        {/* Quiet edit affordance — small underlined link aligned
+                            right. Previously a full-width purple Edit Profile
+                            button which fought for attention against the
+                            sticky-footer Edit (overview editor). This now
+                            reads as a secondary edit specific to the radar,
+                            not a primary CTA — sticky footer keeps the
+                            visual weight for overall client actions. */}
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                          <button
+                            type="button"
+                            className="rt-purple-link"
+                            onClick={() => { setEditScores({ ...dims }); setEditingProfile(true); }}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              padding: "4px 0",
+                              cursor: "pointer",
+                              fontFamily: "inherit",
+                              fontSize: 12,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {Object.keys(dims).length > 0 ? "Edit relationship profile" : "Build relationship profile"}
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <div>
@@ -16130,7 +16181,11 @@ export default function App({ user }) {
                   backdropFilter: "blur(8px)",
                   WebkitBackdropFilter: "blur(8px)",
                   borderTop: "1px solid " + C.borderLight,
-                  padding: "12px 16px",
+                  // Top padding fixed; bottom padding includes the iOS
+                  // safe-area-inset so the footer clears Safari's home
+                  // indicator / bottom toolbar on mobile. Falls back to
+                  // 12px on browsers without env() support.
+                  padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
                   zIndex: 5,
                   display: "flex",
                   gap: 6,
@@ -16564,6 +16619,7 @@ export default function App({ user }) {
           return (
             <div
               key={n.id}
+              className={"nav-item-mobile" + (active ? " is-active" : "")}
               data-nav-id={n.id}
               onClick={() => goTo(n.id)}
               style={{
@@ -16584,7 +16640,7 @@ export default function App({ user }) {
                 transition: "all 180ms var(--rt-ease-out)",
               }}
             >
-              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} isActive={active} />
+              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
               {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
             </div>
