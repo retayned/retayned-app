@@ -770,6 +770,22 @@ function tzMidnightInstant(tz, atDate = new Date(), daysAhead = 0) {
   return candidateUtcMs;
 }
 
+// Return a YYYY-MM-DD string representing the local calendar date in `tz`
+// at the given instant. Uses Intl.DateTimeFormat — does NOT read the
+// browser's wall clock for date parts. Necessary because every getDate()
+// / getMonth() / getFullYear() call on a Date object reads the DEVICE's
+// timezone, which can disagree with the user's stored timezone (traveling,
+// VPN routes time to wrong region, system clock misconfigured, etc).
+// When that disagreement crosses midnight in either direction, bucketing
+// flips — recurring tasks materialize hours early or hours late.
+function ymdInTz(tz, atDate = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(atDate);
+  const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
 // ============================================================
 // Skeleton loaders — row-shaped placeholders for initial load
 // ============================================================
@@ -2481,6 +2497,27 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           height: visibleHeight,
           overflowY: "auto",
           paddingRight: 2,
+          // Golden-hour wash — soft atmospheric tint that shifts through
+          // the day. Computed from current hour: cool blue-cream morning
+          // (6–10am), neutral white midday (10am–2pm), warming amber
+          // afternoon (2–5pm), full golden hour (5–7pm), deep amber dusk
+          // (7pm+). 100% white→tint gradient at 8–12% alpha so it sits
+          // ON TOP of timeline content without obscuring anything. The
+          // tint follows real time so the page reflects when in the day
+          // the user is reading it. Subtle but immediately distinctive.
+          background: (() => {
+            const h = new Date().getHours();
+            // [r,g,b] tint for the wash + alpha intensity
+            let tint, alpha;
+            if (h < 6)        { tint = "180,190,205"; alpha = 0.10; }   // pre-dawn — cool blue
+            else if (h < 10)  { tint = "220,225,225"; alpha = 0.06; }   // morning — soft cool cream
+            else if (h < 14)  { tint = "255,255,250"; alpha = 0.04; }   // midday — neutral white
+            else if (h < 17)  { tint = "250,235,205"; alpha = 0.10; }   // afternoon — warming amber
+            else if (h < 19)  { tint = "245,210,160"; alpha = 0.14; }   // golden hour — deep amber
+            else if (h < 22)  { tint = "235,195,150"; alpha = 0.12; }   // dusk — warm amber
+            else              { tint = "200,180,165"; alpha = 0.10; }   // night — muted warmth
+            return `linear-gradient(180deg, transparent 0%, rgba(${tint},${alpha}) 50%, rgba(${tint},${alpha * 0.6}) 100%)`;
+          })(),
         }}
       >
         <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight }}>
@@ -2811,7 +2848,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           </button>
           {onDismissConnectPrompt && (
             <>
-              <span style={{ color: C.border }}>·</span>
+              <span className="rt-sep" />
               <button
                 type="button"
                 className="rt-quiet-link"
@@ -5800,7 +5837,7 @@ export default function App({ user }) {
   const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot);
 
   return (
-    <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
+    <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: "transparent" }}>
       {/* Non-blocking font load. Previously the same Google Fonts URL was
           @import'd inside the <style> block below — but CSS @import is
           render-blocking: until it resolves, NONE of the stylesheet's
@@ -5822,7 +5859,25 @@ export default function App({ user }) {
       <style>{`
         ${THEME_CSS}
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { background: var(--rt-bg); overscroll-behavior: none; }
+        /* Paper grain — barely-perceptible noise texture on the cream
+           substrate. Eight 1px radial dots tiled at 220px gives the
+           background warmth and depth without being legible up close.
+           Coated paper feel vs flat SaaS cream. Tile size deliberately
+           prime-adjacent so the pattern doesn't visibly repeat. */
+        html, body {
+          background:
+            radial-gradient(ellipse 1px 1px at 13% 27%, rgba(20,30,22,0.04) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 42% 71%, rgba(20,30,22,0.03) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 78% 13%, rgba(20,30,22,0.04) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 89% 89%, rgba(20,30,22,0.025) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 33% 91%, rgba(20,30,22,0.035) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 64% 33%, rgba(20,30,22,0.03) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 24% 53%, rgba(20,30,22,0.04) 50%, transparent 50%),
+            radial-gradient(ellipse 1px 1px at 71% 64%, rgba(20,30,22,0.035) 50%, transparent 50%),
+            var(--rt-bg);
+          background-size: 220px 220px;
+          overscroll-behavior: none;
+        }
         input, textarea, select { font-size: 16px !important; }
         @media (min-width: 768px) { input, textarea, select { font-size: 14px !important; } }
         ::selection { background: #33543E; color: #fff; }
@@ -6047,6 +6102,22 @@ export default function App({ user }) {
             text-decoration-style: solid;
             text-decoration-color: ${C.btnHover};
           }
+        }
+
+        /* Dot-bullet separator — replaces the · character which has
+           inconsistent vertical alignment and weight across fonts. A
+           real 4×4px circular div sits perfectly centered between
+           adjacent text and renders identically across all browsers.
+           Used in meta rows across pages (X referrals · Y conv · etc). */
+        .rt-sep {
+          display: inline-block;
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: var(--rt-border);
+          margin: 0 2px;
+          vertical-align: middle;
+          flex-shrink: 0;
         }
 
         /* Quiet dismiss links — "Not now". Muted → textSec on hover.
@@ -6499,11 +6570,14 @@ export default function App({ user }) {
           100% { background-position: 480px 0; }
         }
         .rt-sk {
-          background-color: #EFEFEA;
-          background-image: linear-gradient(90deg, #EFEFEA 0%, #F7F5F0 50%, #EFEFEA 100%);
+          /* Slower, softer shimmer. Was 1.4s with a stronger highlight —
+             too mechanical for the brand's calm voice. 2.4s with a more
+             modest highlight reads as breathing rather than spinning. */
+          background-color: #E8E9E5;
+          background-image: linear-gradient(90deg, rgba(232,233,229,0.7) 0%, rgba(247,245,240,0.95) 50%, rgba(232,233,229,0.7) 100%);
           background-size: 480px 100%;
           background-repeat: no-repeat;
-          animation: rtShimmer 1.4s ease-in-out infinite;
+          animation: rtShimmer 2.4s ease-in-out infinite;
           border-radius: 4px;
           display: inline-block;
         }
@@ -6526,7 +6600,10 @@ export default function App({ user }) {
         /* Clients page sort + filter chips — inactive variant.
            Chip language: subtle card surface with sh-xs at rest, deeper
            shadow + slight lift on hover. Same recipe as nav user chip,
-           composer chip pills, etc. */
+           composer chip pills, etc.
+           Hover adds a tiny 180° gradient (white → faint warm) on top of
+           the existing lift — gives the chip a physical "rising" feel
+           rather than a flat color change. */
         .rt-sort-opt {
           background: ${C.card};
           color: ${C.textSec};
@@ -6537,7 +6614,8 @@ export default function App({ user }) {
         @media (hover: hover) {
           .rt-sort-opt:hover {
             color: ${C.text};
-            box-shadow: var(--rt-sh-card);
+            background: linear-gradient(180deg, #FFFFFF 0%, #FCFCFA 100%);
+            box-shadow: 0 1px 2px rgba(20,30,22,0.05), 0 6px 14px rgba(20,30,22,0.08);
             transform: translateY(-1px);
           }
         }
@@ -6623,8 +6701,10 @@ export default function App({ user }) {
         }
         @media (min-width: 768px) {
           :root { --sidebar-w: 240px; --page-gap: 14px; --sidebar-left: 14px; }
-          html, body { background: ${C.bg} !important; }
-          .app-root { background: ${C.bg} !important; }
+          /* html/body bg owned by base rule (with paper-grain texture);
+             previous !important override here was wiping the texture
+             on desktop. App.app-root inherits transparently. */
+          .app-root { background: transparent !important; }
           .r-desk { display: flex !important; }
           .r-mob-bot { display: none !important; }
           .r-today-panel { display: block !important; }
@@ -7284,8 +7364,18 @@ export default function App({ user }) {
                 marginBottom: 2,
                 color: active ? C.primaryDeep : C.textSec,
                 fontWeight: active ? 600 : 500,
-                background: active ? C.card : "transparent",
-                boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
+                // Embossed active surface — subtle white→warm-cream linear
+                // gradient + stacked inset highlights + outer shadow so the
+                // card reads as a key set into the rail rather than paper
+                // stuck on top. Three signals already announce active state
+                // (embossing, icon color flip, label color flip); no need
+                // for a fourth marker like an accent bar.
+                background: active
+                  ? "linear-gradient(180deg, #FFFFFF 0%, #F5F1E8 100%)"
+                  : "transparent",
+                boxShadow: active
+                  ? "inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(28,50,36,0.05), 0 1px 2px rgba(20,30,22,0.04), 0 4px 10px rgba(20,30,22,0.05)"
+                  : "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
                 position: "relative",
@@ -7906,26 +7996,36 @@ export default function App({ user }) {
           const ScoreChip = ({ score, delta = null, size = "sm" }) => {
             if (score == null) return null;
             const color = retColor(score);
-            // 5 soft background tints aligned with the 5-stop retention ramp
-            const bg = score >= 80 ? "#E6EFE9"    // Elite — deepest green tint
-                     : score >= 65 ? "#E8F3ED"   // Good — medium green tint
-                     : score >= 45 ? "#F3F0D8"   // Ok   — mustard tint
-                     : score >= 30 ? "#FDF4DC"   // Warn — amber tint
-                     :              "#FBE6DE";   // Crit — red tint
+            // 5 soft background tints aligned with the 5-stop retention ramp.
+            // Pearlescent treatment: each tier renders as a soft tint-to-white-
+            // to-tint gradient with a faint inset top highlight and a 1px
+            // tinted hairline border. Chip reads like a pearl or polished
+            // stone rather than a flat fill. Same colors, same role,
+            // sharper craft. Chip stays passive — no halo shadow that
+            // would make it read as tappable (chips are indicators, not
+            // buttons; CTAs keep their own purple halo language).
+            const tints = score >= 80 ? { tint: "#E6EFE9", border: "rgba(12,58,46,0.14)" }   // Elite
+                        : score >= 65 ? { tint: "#E8F3ED", border: "rgba(31,122,92,0.14)" }  // Good
+                        : score >= 45 ? { tint: "#F3F0D8", border: "rgba(168,164,32,0.16)" } // Ok
+                        : score >= 30 ? { tint: "#FDF4DC", border: "rgba(209,122,27,0.16)" } // Warn
+                        :              { tint: "#FBE6DE", border: "rgba(180,52,31,0.16)" }; // Crit
             const sizes = size === "sm" ? { fs: 11, pad: "2px 8px" } : { fs: 13, pad: "4px 11px" };
             return (
               <span style={{
+                position: "relative",
                 display: "inline-flex", alignItems: "center", gap: 4,
-                background: bg, color,
+                background: `linear-gradient(135deg, ${tints.tint} 0%, #FFFFFF 45%, ${tints.tint} 100%)`,
+                color,
                 fontSize: sizes.fs, fontWeight: 700,
                 fontVariantNumeric: "tabular-nums",
                 padding: sizes.pad,
                 borderRadius: 999,
-                boxShadow: "var(--rt-sh-xs)",
+                border: "1px solid " + tints.border,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 " + tints.border + ", 0 1px 2px rgba(20,30,22,0.05)",
               }}>
-                <span>{score}</span>
+                <span style={{ position: "relative", zIndex: 1 }}>{score}</span>
                 {delta !== null && delta !== 0 && (
-                  <span style={{ fontWeight: 600, fontSize: sizes.fs - 1, opacity: 0.85 }}>
+                  <span style={{ fontWeight: 600, fontSize: sizes.fs - 1, opacity: 0.85, position: "relative", zIndex: 1 }}>
                     {delta > 0 ? "+" : ""}{delta}
                   </span>
                 )}
@@ -7958,13 +8058,22 @@ export default function App({ user }) {
           };
 
           // ─── DATE BOUNDARIES (hoisted so status band can count today-only tasks) ──
-          // Day boundary at midnight local. Tasks bucket and "today" labels
-          // flip at 00:00 to match the calendar's real-time view.
+          // Day boundary at midnight LOCAL TO STORED TIMEZONE. Previously
+          // computed via getFullYear()/getMonth()/getDate() on a Date —
+          // which reads the device's wall clock and device's timezone.
+          // If device TZ disagrees with stored userTimezone (traveling,
+          // VPN, misconfigured system clock), the date strings flip
+          // hours before stored-TZ midnight. Bug surface: at 10pm Denver
+          // with device on Eastern, _todayStr returned tomorrow's date.
+          // Recurring tasks whose next occurrence was "tomorrow Denver"
+          // bucketed as today and "populated" the board 2 hours early.
+          // ymdInTz uses Intl.DateTimeFormat with the stored TZ so
+          // _todayStr / _tomorrowStr always match real local date in
+          // the user's stored TZ regardless of device clock.
           const _now = new Date();
-          const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
-          const _tomorrow = new Date(_now);
-          _tomorrow.setDate(_tomorrow.getDate() + 1);
-          const _tomorrowStr = `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
+          const _todayStr = userTimezone ? ymdInTz(userTimezone, _now) : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+          const _tomorrow = new Date(_now.getTime() + 86400000);
+          const _tomorrowStr = userTimezone ? ymdInTz(userTimezone, _tomorrow) : `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
 
           const bucketOf = (t) => {
             // Recurring tasks are standing work with a "next occurrence"
@@ -7983,7 +8092,15 @@ export default function App({ user }) {
             if (t.recurring) {
               if (t.done) return "today";
               const next = nextOccurrenceDate(t.recurrence_pattern, _now, true);
-              const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+              // Format candidate date string in the SAME timezone frame
+              // as _todayStr / _tomorrowStr above. Comparing strings
+              // built in different timezone frames is what produced the
+              // 10pm-tasks-populate bug — device-TZ candidate date string
+              // vs device-TZ today string was internally consistent but
+              // wrong when device TZ disagreed with stored userTimezone.
+              const nextStr = userTimezone
+                ? ymdInTz(userTimezone, next)
+                : `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
               if (nextStr <= _todayStr) return "today";
               // Daily recurring tasks always re-appear tomorrow in Today —
               // surfacing them in Tomorrow is duplicative noise. Hide them
@@ -9896,18 +10013,24 @@ export default function App({ user }) {
                       // Polish layer: each bucket gets a tiny color-coded dot
                       // with a soft halo. Green-light for today (the active surface),
                       // muted ink for tomorrow/later. Same primary palette.
-                      // Counts removed per design call — bucket itself shows
-                      // the task list immediately below, so the count was just
-                      // visual noise.
+                      // Section dividers now use two gradient hairlines fading
+                      // out on either side of the label (vs a solid line below).
+                      // Editorial typography move — section is centered between
+                      // two fades, calmer than a hard line.
                       const isToday = name === "Today";
                       const dotColor = isToday ? C.primaryLight : C.ink300;
                       const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
                       return (
-                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "18px 4px 10px" }}>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text }}>
+                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 4px 10px" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
                             <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: "0 0 0 3px " + dotHalo }} />
                             {name}
                           </div>
+                          {/* Gradient fade hairline to the right of the label.
+                              Transparent at the label, fading INTO border tone
+                              and back to transparent at the edge — the line
+                              looks like ink fading out across the page. */}
+                          <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${C.borderLight}, transparent)` }} />
                         </div>
                       );
                     };
@@ -10327,11 +10450,32 @@ export default function App({ user }) {
             // bucket column width and we don't want the sparkline overflowing.
             const svgWidth = responsive ? "100%" : width;
             const svgHeight = responsive ? "100%" : height;
+            // Stable IDs per-instance via JSON of inputs — multiple
+            // sparklines render on the same page so the gradient + filter
+            // refs need unique IDs to avoid cross-contamination.
+            const uid = `sp${Math.abs((sColor + points.join("")).split("").reduce((a, c) => ((a << 5) - a) + c.charCodeAt(0), 0))}`;
+            // Lighter tone at line start, full sColor at line end — gives
+            // the path a feeling of building from past to present.
+            // Quick lighten: append "80" alpha hex for the start stop.
+            const startStop = sColor + "80";
             return (
-              <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: "block" }}>
-                {fill && <path d={area} fill={sColor} fillOpacity={0.08} />}
-                <path d={path} fill="none" stroke={sColor} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-                {showEnd && <circle cx={last[0]} cy={last[1]} r={1.8} fill={sColor} />}
+              <svg width={svgWidth} height={svgHeight} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: "block", overflow: "visible" }}>
+                <defs>
+                  <linearGradient id={uid + "-g"} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={startStop} />
+                    <stop offset="100%" stopColor={sColor} />
+                  </linearGradient>
+                  <filter id={uid + "-glow"} x="-20%" y="-30%" width="140%" height="160%">
+                    <feGaussianBlur stdDeviation="0.8" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                {fill && <path d={area} fill={`url(#${uid}-g)`} fillOpacity={0.10} />}
+                <path d={path} fill="none" stroke={`url(#${uid}-g)`} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" filter={`url(#${uid}-glow)`} />
+                {showEnd && <circle cx={last[0]} cy={last[1]} r={2} fill={sColor} />}
               </svg>
             );
           };
@@ -10486,9 +10630,9 @@ export default function App({ user }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Clients</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{activeClients.length}</b> active</span>
-                    <span style={{ color: C.border }}>·</span>
+                    <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>${(totalMRR/1000).toFixed(1)}k</b> /mo</span>
-                    <span style={{ color: C.border }}>·</span>
+                    <span className="rt-sep" />
                     <span><b style={{ color: retColor(avgScore), fontWeight: 700 }}>{avgScore}</b> avg</span>
                   </div>
                 </div>
@@ -12043,10 +12187,10 @@ export default function App({ user }) {
                     <span style={{ color: activeQueue.filter(h => h.overdue > 0).length > 0 ? C.retWarn : C.textMuted, fontWeight: 600 }}>
                       <b>{activeQueue.filter(h => h.overdue > 0).length}</b> overdue
                     </span>
-                    <span style={{ color: C.border }}>·</span>
+                    <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{activeQueue.filter(h => h.due === "Today").length}</b> due today</span>
                     {justCompleted.length > 0 && <>
-                      <span style={{ color: C.border }}>·</span>
+                      <span className="rt-sep" />
                       <span style={{ color: C.retGood, fontWeight: 600 }}>
                         <b>{justCompleted.length}</b> done today
                       </span>
@@ -12960,9 +13104,9 @@ export default function App({ user }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Workers</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{workersList.length}</b> {workersList.length === 1 ? "worker" : "workers"}</span>
-                    <span style={{ color: C.border }}>·</span>
+                    <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{teamPending}</b> pending</span>
-                    <span style={{ color: C.border }}>·</span>
+                    <span className="rt-sep" />
                     {teamOnTimeRate != null ? (
                       <span><b style={{ color: teamOnTimeRate >= 80 ? C.success : teamOnTimeRate >= 60 ? C.warning : C.danger, fontWeight: 700 }}>{teamOnTimeRate}%</b> on-time</span>
                     ) : (
@@ -13493,10 +13637,10 @@ export default function App({ user }) {
                       the eye away from the title. */}
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{totalRefs}</b> referrals</span>
-                    <span style={{ color: C.border }}>·</span>
+                    <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{becameClients}</b> became clients</span>
                     {totalRefs > 0 && (<>
-                      <span style={{ color: C.border }}>·</span>
+                      <span className="rt-sep" />
                       <span><b style={{ color: C.retGood, fontWeight: 700 }}>{Math.round((becameClients / totalRefs) * 100)}%</b> conversion</span>
                     </>)}
                   </div>
@@ -14099,8 +14243,8 @@ export default function App({ user }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Rolodex</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{saved.length}</b> filed</span>
-                    {queued.length > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{queued.length}</b> awaiting retro</span></>}
-                    {referReady > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
+                    {queued.length > 0 && <><span className="rt-sep" /><span><b style={{ color: C.retGood, fontWeight: 700 }}>{queued.length}</b> awaiting retro</span></>}
+                    {referReady > 0 && <><span className="rt-sep" /><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
                   </div>
                 </div>
                 <button className="r-btn" data-tone="purple" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "var(--rt-grad-btn)", color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", flexShrink: 0 }}>
@@ -14802,8 +14946,15 @@ export default function App({ user }) {
 
         return (
           <>
-            <div onClick={() => setSelectedClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.32)", zIndex: 90 }} />
-            <div className="r-client-modal" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "100%", maxWidth: 520, maxHeight: "90vh", background: C.card, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", zIndex: 100, overflowY: "auto", borderRadius: 16 }}>
+            {/* Slide-over backdrop — dim + blur the list/page behind so
+                the slide-over reads as floating clearly above its
+                context. Previously just a flat 32% dark wash; now adds
+                a 2px gaussian blur via backdrop-filter, which gives a
+                real depth field on Safari/Chrome. Browsers without
+                backdrop-filter (Firefox without flag) fall back to the
+                flat dim — no breakage. */}
+            <div onClick={() => setSelectedClient(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.38)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)", zIndex: 90 }} />
+            <div className="r-client-modal" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "100%", maxWidth: 520, maxHeight: "90vh", background: C.card, boxShadow: "0 1px 3px rgba(20,30,22,0.10), 0 8px 20px rgba(20,30,22,0.14), 0 25px 50px rgba(20,30,22,0.22), inset 0 1px 0 rgba(255,255,255,0.9)", zIndex: 100, overflowY: "auto", borderRadius: 16 }}>
               {/* Top bar — neighbor nav (↑↓) on left, position breadcrumb
                   in the middle, X close on right. ↑↓ navigate through the
                   full clients array with wraparound; clicking either just
