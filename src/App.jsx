@@ -7512,7 +7512,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)" }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
@@ -7630,7 +7630,7 @@ export default function App({ user }) {
             );
           })()}
         </div>
-        <div style={{ padding: sidebarCollapsed ? "10px 0 14px" : "10px 6px 14px" }}>
+        <div style={{ padding: sidebarCollapsed ? "10px 0 14px" : "10px 6px 14px", flexShrink: 0 }}>
           <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10, justifyContent: sidebarCollapsed ? "center" : "flex-start", padding: sidebarCollapsed ? "8px 0" : "8px 10px", borderRadius: 8, cursor: "pointer", background: "transparent", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
             <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>{getUserInitial(user)}</div>
             {!sidebarCollapsed && (
