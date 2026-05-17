@@ -7389,7 +7389,7 @@ export default function App({ user }) {
             remaining vertical space so the list scrolls internally without
             affecting nav items or the Portfolio widget at the bottom. */}
         {page === "coach" && !sidebarCollapsed ? (
-          <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
             <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-purple)", flexShrink: 0, transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
               New Chat
             </button>
