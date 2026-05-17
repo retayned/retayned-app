@@ -283,19 +283,25 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
       <circle cx="16" cy="14.7" r="4.4" fill="#FCFCFE"/>
     </>),
     due: (<>
-      {/* Duotone overdue calendar — same as today but with a small clock badge. */}
-      <rect x="3" y="6" width="24" height="22" rx="3" fill={color}/>
-      <rect x="3" y="6" width="24" height="6" rx="3" fill={accent}/>
-      <rect x="3" y="9" width="24" height="3" fill={accent}/>
-      <line x1="9" y1="3" x2="9" y2="9" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
-      <line x1="21" y1="3" x2="21" y2="9" stroke={accent} strokeWidth="2.4" strokeLinecap="round"/>
-      <g fill="var(--rt-icon-fill)" stroke="none" opacity="0.7">
-        <circle cx="9" cy="17" r="1.2"/><circle cx="15" cy="17" r="1.2"/>
-        <circle cx="9" cy="22" r="1.2"/>
+      {/* Calendar widget header icon — primary-light body with dark
+          binding tabs, a cream divider rule, a 4×2 grid of cream day
+          dots, and a cream "today" pill in the bottom-right. Same
+          color contract as the rest of the duotone icons (color = body,
+          accent = tabs). Used only by the calendar widget header at
+          TodayTimeline; renewal date picker uses the 'simple' variant
+          which renders from simplePaths, not this. */}
+      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill={color}/>
+      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill={accent}/>
+      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill={accent}/>
+      <line x1="4.5" y1="12.5" x2="27.5" y2="12.5" stroke="#FCFCFE" strokeWidth="1.6" opacity="0.45"/>
+      <g fill="#FCFCFE">
+        <circle cx="9" cy="17" r="1.4"/><circle cx="13.5" cy="17" r="1.4"/>
+        <circle cx="18" cy="17" r="1.4"/><circle cx="22.5" cy="17" r="1.4"/>
+        <circle cx="9" cy="21.5" r="1.4"/><circle cx="13.5" cy="21.5" r="1.4"/>
+        <circle cx="18" cy="21.5" r="1.4"/><circle cx="22.5" cy="21.5" r="1.4"/>
+        <circle cx="9" cy="26" r="1.4"/><circle cx="13.5" cy="26" r="1.4"/>
       </g>
-      <circle cx="22" cy="23" r="6" fill={accent}/>
-      <line x1="22" y1="23" x2="22" y2="19.5" stroke="var(--rt-icon-fill)" strokeWidth="1.8" strokeLinecap="round"/>
-      <line x1="22" y1="23" x2="25" y2="23" stroke="var(--rt-icon-fill)" strokeWidth="1.8" strokeLinecap="round"/>
+      <rect x="16.4" y="24.6" width="7" height="2.8" rx="1.4" fill="#FCFCFE"/>
     </>),
     sweeps: (<><path d="M18 20V10M12 20V4M6 20v-6" stroke={color} strokeWidth="2" strokeLinecap="round"/></>),
     target: (<><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="6" stroke={color} strokeWidth="1.8" fill="none"/><circle cx="12" cy="12" r="2" fill={color}/></>),
@@ -7389,10 +7395,18 @@ export default function App({ user }) {
             remaining vertical space so the list scrolls internally without
             affecting nav items or the Portfolio widget at the bottom. */}
         {page === "coach" && !sidebarCollapsed ? (
-          <div style={{ padding: "12px 10px 0", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-            <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-purple)", flexShrink: 0, transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
-              New Chat
-            </button>
+          <>
+            {/* Rai-page: New Chat button — always visible directly below
+                the Rai nav item. flexShrink: 0 + its own wrapper means it
+                survives any viewport compression. Convo list (below) is
+                what scrolls when the sidebar runs out of room. */}
+            <div style={{ padding: "12px 10px 0", flexShrink: 0 }}>
+              <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-purple)", transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
+                New Chat
+              </button>
+            </div>
+            {/* Convo list — flex: 1 + overflowY: auto scrolls internally
+                when there isn't enough room. Holds Starred + Recent. */}
             {raiConvoList.length > 0 && (() => {
               const starred = raiConvoList.filter(c => c.is_starred);
               const recent = raiConvoList.filter(c => !c.is_starred);
@@ -7443,13 +7457,14 @@ export default function App({ user }) {
                 </>
               );
               return (
-                <div style={{ marginTop: 4, paddingBottom: 10, flex: 1, minHeight: 0, overflowY: "auto" }}>
+                <div style={{ padding: "4px 10px 10px", flex: 1, minHeight: 0, overflowY: "auto" }}>
                   {starred.length > 0 && section("Starred", starred)}
                   {recent.length > 0 && section("Recent", recent)}
                 </div>
               );
             })()}
-          </div>
+            {raiConvoList.length === 0 && <div style={{ flex: 1, minHeight: 0 }} />}
+          </>
         ) : (
           /* Non-coach pages: empty spacer pushes Portfolio widget to bottom */
           <div style={{ flex: 1, minHeight: 0 }} />
