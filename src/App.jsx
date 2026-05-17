@@ -849,6 +849,40 @@ function SkeletonHealthQueue({ rows = 3 }) {
   );
 }
 
+// SkeletonPage — universal first-paint placeholder.
+// Mirrors the geometry every page shares: a status band (eyebrow + h1 +
+// meta row) at top, optional right-side action button, then a content
+// surface. Renders at the .r-main level *instead of* the actual page
+// render while dataLoaded is false. Previously, each page mounted its
+// status band immediately with empty data (Hello, undefined — 0 tasks
+// — 0% — no Rai pick — empty meta), then snapped to real values when
+// data landed ~200ms later. That snap is the "garbage blocks" flash.
+// One full-page skeleton eliminates the flash because nothing real
+// renders until everything's ready to render correctly.
+function SkeletonPage() {
+  return (
+    <div style={{ width: "100%" }}>
+      {/* Status band placeholder */}
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid #EFEFEA" }}>
+        <div style={{ flex: "1 1 auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          <span className="rt-sk" style={{ height: 11, width: 90, borderRadius: 3 }} />
+          <span className="rt-sk" style={{ height: 26, width: 220, borderRadius: 6 }} />
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <span className="rt-sk" style={{ height: 14, width: 70, borderRadius: 3 }} />
+            <span className="rt-sk" style={{ height: 14, width: 90, borderRadius: 3 }} />
+            <span className="rt-sk" style={{ height: 14, width: 80, borderRadius: 3 }} />
+          </div>
+        </div>
+        <span className="rt-sk" style={{ height: 38, width: 130, borderRadius: 10, flexShrink: 0 }} />
+      </div>
+      {/* Content surface placeholder — generic list rows so it works
+          for every page (Today/Clients/Health/Workers/Referrals/Rolodex
+          all share a list-of-rows shape under their bands). */}
+      <SkeletonClientList rows={6} />
+    </div>
+  );
+}
+
 function EmptyState({ icon, headline, body, cta, secondaryCta }) {
   return (
     <div style={{
@@ -2377,22 +2411,9 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
           <Icon name="due" size={26} color={C.primaryLight} accent={C.primary} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            {/* Eyebrow row: TODAY · M/D/YY (or TOMORROW · M/D/YY when
-                the day toggle is on tomorrow). Lives inside the
-                calendar widget — gives users a fixed date anchor at
-                a glance. Hidden under events on mobile via rt-mob-strip. */}
-            {(() => {
-              const _t = new Date();
-              if (selectedDay === "tomorrow") _t.setDate(_t.getDate() + 1);
-              const _dStr = `${_t.getMonth() + 1}/${_t.getDate()}/${String(_t.getFullYear()).slice(-2)}`;
-              return (
-                <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-                  <span>{selectedDay === "today" ? "Today" : "Tomorrow"}</span>
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0, textTransform: "none", fontWeight: 600 }}>{_dStr}</span>
-                </div>
-              );
-            })()}
+            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
+              {selectedDay === "today" ? "Today" : "Tomorrow"}
+            </div>
             <div style={{ fontSize: 12, color: C.textSec, marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span>{isEmpty ? "Nothing scheduled" : `${todayEvents.length} ${todayEvents.length === 1 ? "thing" : "things"} scheduled`}</span>
               {googleConnected && <span style={{ color: C.primary }}>· Google connected</span>}
@@ -5780,8 +5801,25 @@ export default function App({ user }) {
 
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: C.bg }}>
+      {/* Non-blocking font load. Previously the same Google Fonts URL was
+          @import'd inside the <style> block below — but CSS @import is
+          render-blocking: until it resolves, NONE of the stylesheet's
+          rules apply. On mobile that meant the desktop sidebar showed
+          briefly (its hide-on-mobile rule wasn't applied yet), the
+          grid templates didn't collapse to single column, and the
+          browser auto-zoomed to fit a desktop-wide layout on a phone
+          viewport — the "massive screen shrunken to micro pixels"
+          flash Adam reported. Moving the font fetch to a <link>
+          element makes it non-blocking: the rest of the stylesheet
+          applies on the first paint, mobile media queries hit
+          immediately, layout is correct from frame 1. Fonts swap in
+          when ready (display=swap), text shows in fallback fonts
+          briefly. */}
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap"
+      />
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap');
         ${THEME_CSS}
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: var(--rt-bg); overscroll-behavior: none; }
@@ -6037,6 +6075,17 @@ export default function App({ user }) {
           box-shadow:
             0 1px 3px rgba(20, 30, 22, 0.06),
             0 8px 24px rgba(20, 30, 22, 0.10);
+        }
+        /* Due picker — base (desktop) positioning. Anchored absolutely
+           to the chip wrapper (position:relative parent), opening
+           below the chip with a 6px gap, flush to the chip's left
+           edge. CSS owns positioning so mobile media queries can
+           override without losing to React inline-style specificity
+           (inline always wins against !important CSS). */
+        .rt-due-picker {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
         }
         .rt-picker-item {
           display: flex;
@@ -6847,11 +6896,6 @@ export default function App({ user }) {
             "tasks focus";
         }
         .rt-mob-strip { display: none; }
-        /* Desktop defaults for mobile-only band condensation elements.
-           Mobile media query below toggles them on, restructures the
-           meta row to a single inline row, and clamps the pick to 2
-           lines with a "More" tap. */
-        .rt-band-date-short { display: none; }
         @media (max-width: 900px) {
           .rt-today-v4 {
             grid-template-columns: 1fr;
@@ -6870,9 +6914,6 @@ export default function App({ user }) {
             padding-left: 0 !important;
             padding-right: 0 !important;
           }
-          .rt-band-date-long { display: none; }
-          .rt-band-date-short { display: inline; }
-          .rt-band-greet { font-size: 20px !important; white-space: nowrap; }
           /* Mobile-specific compressions on top of the now-universal
              flat meta row: hide the "OF TODAY DONE" label (number alone
              is enough at narrow widths), shrink the pct number, slightly
@@ -6898,25 +6939,37 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — fits in viewport via right-anchor.
-             The Due chip is the rightmost chip in the composer, so its
-             default left:0 anchor extends the picker rightward — past
-             the viewport edge on phones. Switching to right:0 (left:
-             auto) anchors the picker to the chip's right edge instead,
-             so the calendar grows leftward into available space.
-             Width is capped at min(280, viewport-24) so we never
-             exceed the screen. max-height + internal scroll handle
-             tall content. Same absolute positioning relative to the
-             chip — picker still feels attached to the tap target,
-             unlike the previous position:fixed override. */
+          /* DUE PICKER ON MOBILE — fixed to viewport, centered.
+             Problem with chip-anchored absolute positioning: the chip
+             sits in the middle of the composer row (Add Task button is
+             to its right). Anchoring the picker left:0 pushes it
+             rightward off-screen on narrow phones (~280px picker on a
+             375px viewport — fits, but only barely, and the chip is
+             not at x:0). Anchoring right:0 pushes the picker leftward
+             past the left edge.
+             Solution: on mobile, use position:fixed and pin to the
+             viewport directly. Centered horizontally with 12px viewport
+             margins. Vertically anchored to bottom: 96px so it floats
+             above the 80px-tall mobile bottom nav with a small gap.
+             Picker now never overflows the viewport regardless of
+             where the chip sits.
+             Sibling backdrop already uses position:fixed inset:0 to
+             catch outside-taps for dismissal — that keeps working. */
           .rt-due-picker {
-            left: auto !important;
-            right: 0 !important;
-            width: min(280px, calc(100vw - 24px)) !important;
+            position: fixed !important;
+            top: auto !important;
+            left: 12px !important;
+            right: 12px !important;
+            bottom: 96px !important;
+            width: auto !important;
             min-width: 0 !important;
-            max-height: calc(100vh - 120px) !important;
+            max-width: none !important;
+            max-height: calc(100vh - 140px) !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
+            box-shadow:
+              0 1px 3px rgba(20, 30, 22, 0.10),
+              0 12px 32px rgba(20, 30, 22, 0.18) !important;
           }
           /* Compact calendar cells on mobile so the grid doesn't bloat
              the picker. Smaller height, smaller font. */
@@ -7205,7 +7258,16 @@ export default function App({ user }) {
             WebkitTextFillColor: "transparent",
             color: "transparent",
             letterSpacing: "-0.04em",
-            lineHeight: 1,
+            // line-height 1.15 (not 1) so the rendered glyph box includes
+            // the descender on "y" and the full height of the period.
+            // background-clip:text clips strictly to the line-box on
+            // some platforms (Safari/iOS especially), so a tight
+            // line-height crops the bottom of heavy glyphs. 1.15 gives
+            // ~3px of breathing room while keeping the brand mark
+            // visually anchored to the sidebar header.
+            lineHeight: 1.15,
+            display: "inline-block",
+            paddingBottom: 2,
           }}>{sidebarCollapsed ? "R." : "Retayned."}</span>
         </div>
 
@@ -7309,9 +7371,16 @@ export default function App({ user }) {
         {/* Combined sidebar widget — tasks completed (top) + portfolio (bottom),
             single surface, hairline divider. Tasks section uses a Week/Month/Year
             toggle whose period state lives at app level so it persists across
-            sidebar re-renders. Portfolio bar/counts unchanged. */}
+            sidebar re-renders. Portfolio bar/counts unchanged.
+            Gated on !dataLoaded → returns null while loading. Previously this
+            was gated only on clients.length > 0, which produced a visible
+            sidebar pop-in: empty during the load window (clients = []),
+            then materializing once data arrived. Skeleton in the main area
+            covered the page content but the sidebar kept reflowing. Now
+            sidebar holds steady through the load. */}
         {(() => {
           if (sidebarCollapsed) return null;
+          if (!dataLoaded) return null;
           const total = clients.length;
           if (total === 0) return null;
           const buckets = clients.reduce((acc, c) => {
@@ -7509,8 +7578,21 @@ export default function App({ user }) {
 
       <div className="r-main">
 
+        {/* GLOBAL LOADING GATE — render a single calm SkeletonPage
+            while data is still loading. This replaces the previous
+            pattern where each page mounted its own status band and
+            rails immediately with empty/zero data, then snapped to
+            real values when load completed — producing a visible
+            flash of "0 tasks", "0%", "$0k", empty greetings, etc.
+            With one full-page skeleton at this level, nothing real
+            paints until everything is ready to paint correctly.
+            The .r-main container's padding/sizing wraps the skeleton
+            the same way it wraps real content, so there's no layout
+            shift when the swap happens. */}
+        {!dataLoaded && <SkeletonPage />}
+
         {/* ═══ TODAY — TASK MANAGER ═══ */}
-        {page === "today" && (() => {
+        {dataLoaded && page === "today" && (() => {
           // ─── LOCAL ALIASES ───────────────────────────────────────────────
           const focusId = todayFocusId, setFocusId = setTodayFocusId;
           const dismissedIds = todayDismissed, setDismissedIds = setTodayDismissed;
@@ -7819,7 +7901,6 @@ export default function App({ user }) {
             || (user?.email ? user.email.split("@")[0].replace(/^\w/, c => c.toUpperCase()) : "")
             || "";
           const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-          const shortDisplayDate = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
           // Score chip component
           const ScoreChip = ({ score, delta = null, size = "sm" }) => {
@@ -8100,10 +8181,9 @@ export default function App({ user }) {
               {/* STATUS BAND */}
               <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
                 <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
-                  <span className="rt-band-date-long">{displayDate}</span>
-                  <span className="rt-band-date-short">{shortDisplayDate}</span>
+                  {displayDate}
                 </div>
-                <h1 className="rt-band-greet" style={{ fontSize: 24, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
+                <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
                   {greeting}{firstName ? ", " + firstName : ""}.
                 </h1>
 
@@ -8621,9 +8701,15 @@ export default function App({ user }) {
                           style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
                         />
                         <div className="rt-due-picker rt-picker-panel" style={{
-                          position: "absolute",
-                          top: "calc(100% + 6px)",
-                          left: 0,
+                          // Position is owned by CSS (.rt-due-picker rule) so
+                          // we can apply different positioning per viewport
+                          // via media queries. Previously inline styles set
+                          // position:absolute + left:0 here, which won the
+                          // specificity battle against any !important CSS
+                          // rule (React inline styles can't take !important).
+                          // That's why repeated mobile fixes never landed —
+                          // the inline always won. Inline now only carries
+                          // properties that don't vary by viewport.
                           zIndex: 50,
                           minWidth: 240,
                           display: "flex",
@@ -9138,12 +9224,6 @@ export default function App({ user }) {
                           }
                         }}
                       />
-                    </div>
-                  )}
-
-                  {!dataLoaded && (
-                    <div style={{ padding: "12px 0 4px" }}>
-                      <SkeletonTaskList rows={4} />
                     </div>
                   )}
 
@@ -10139,7 +10219,7 @@ export default function App({ user }) {
         )}
 
         {/* ═══ CLIENTS v2 — compare-first ═══ */}
-        {page === "clients" && (() => {
+        {dataLoaded && page === "clients" && (() => {
           // ─── Stubs for v2-specific per-client fields ──────────────────────
           // Real data lives in clients[]: name, ret, contact, role, months, revenue, velocity, lastHC, lastContact, tag
           // Stubs provide: owner + ownerColor, cadence target/actual, 12-week trend array, score delta, stage bucket, renewal days
@@ -11275,10 +11355,6 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {!dataLoaded && (
-                    <SkeletonClientList rows={5} />
-                  )}
-
                   {dataLoaded && filteredClients.length === 0 && activeClients.length === 0 && (
                     <EmptyState
                       icon="clients"
@@ -11314,7 +11390,7 @@ export default function App({ user }) {
         })()}
 
         {/* ═══ HEALTH CHECKS ═══ */}
-        {page === "health" && (() => {
+        {dataLoaded && page === "health" && (() => {
           // ─── Observer card renderer ───
           // Rendered TWICE in the JSX below: once above the mobile calendar
           // widget (rt-mob-strip), once inside the desktop rc-grid main column.
@@ -11946,12 +12022,6 @@ export default function App({ user }) {
 
           return (
             <div style={{ width: "100%" }}>
-              {!dataLoaded && (
-                <div style={{ width: "100%", padding: "20px 4px" }}>
-                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 20px", letterSpacing: -0.4, color: C.text, padding: "0 4px" }}>Health</h1>
-                  <SkeletonHealthQueue rows={3} />
-                </div>
-              )}
               {dataLoaded && totalClients === 0 && (
                 <div style={{ width: "100%", padding: "20px 4px" }}>
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 20px", letterSpacing: -0.4, color: C.text, padding: "0 4px" }}>Health</h1>
@@ -12013,7 +12083,7 @@ export default function App({ user }) {
                     }}
                   >
                     <Icon name="health" size={14} simple color="#fff" />
-                    <span>Start Health Check</span>
+                    <span>Start Check</span>
                   </button>
                 </div>
               </div>
@@ -12576,7 +12646,7 @@ export default function App({ user }) {
         )}
 
         {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
-        {page === "workers" && (() => {
+        {dataLoaded && page === "workers" && (() => {
           // Inline mini Stat component for the per-worker stat grid
           const Stat = ({ label, value, sub, tone = "default", isText = false }) => {
             const valueColor =
@@ -13264,7 +13334,7 @@ export default function App({ user }) {
         )}
 
         {/* ═══ REFERRALS v2 — "The Network Map" ═══ */}
-        {page === "referrals" && (() => {
+        {dataLoaded && page === "referrals" && (() => {
           try {
           // ─── Helpers ───────────────────────────────────────────────────
           const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#D17A1B", "#12523F"];
@@ -13394,17 +13464,6 @@ export default function App({ user }) {
           // ─── Render ─────────────────────────────────────────────────────
           return (
             <div style={{ width: "100%" }}>
-              {!dataLoaded && (
-                <div style={{ width: "100%" }}>
-                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
-                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                      <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Word of mouth · this quarter</div>
-                      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Referrals</h1>
-                    </div>
-                  </div>
-                  <SkeletonClientList rows={4} />
-                </div>
-              )}
               {dataLoaded && totalRefs === 0 && (
                 <>
                   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight, flexWrap: "wrap" }}>
@@ -13427,16 +13486,19 @@ export default function App({ user }) {
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Word of mouth · this quarter</div>
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Referrals</h1>
+                  {/* Subhead carries volume + outcome rate only. The $
+                      stats (MRR added, projected LCV) moved into the
+                      "Revenue from referrals" rail card below — they
+                      fought the subhead's editorial tone and pulled
+                      the eye away from the title. */}
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{totalRefs}</b> referrals</span>
                     <span style={{ color: C.border }}>·</span>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{becameClients}</b> became clients</span>
-                    <span style={{ color: C.border }}>·</span>
-                    <span><b style={{ color: C.retGood, fontWeight: 700 }}>${mrrAdded.toLocaleString()}</b>/mo added</span>
-                    {projLCV > 0 && <>
+                    {totalRefs > 0 && (<>
                       <span style={{ color: C.border }}>·</span>
-                      <span><b style={{ color: C.btn, fontWeight: 700 }}>${projLCV.toLocaleString()}</b> projected LCV</span>
-                    </>}
+                      <span><b style={{ color: C.retGood, fontWeight: 700 }}>{Math.round((becameClients / totalRefs) * 100)}%</b> conversion</span>
+                    </>)}
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
@@ -13449,8 +13511,57 @@ export default function App({ user }) {
               {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
               <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
 
-                {/* LEFT RAIL: Who to ask next */}
+                {/* LEFT RAIL: Money earned + Who to ask next + Compounding */}
                 <div className="rc-rail" style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 0, alignSelf: "start" }}>
+                  {/* Revenue from referrals — relocated from band subhead.
+                      Leads with MRR in brand green, projected LCV +
+                      avg deal size as secondary rows below. Subtle
+                      ghost-green gradient surface so the card reads
+                      as "money outcome" without competing with the
+                      neighboring rail cards. Hidden if no referrals
+                      converted yet (becameClients === 0) — the empty
+                      state lives elsewhere on the page. */}
+                  {becameClients > 0 && (
+                    <div style={{
+                      background: "linear-gradient(135deg, " + C.primaryGhost + " 0%, " + C.card + " 100%)",
+                      borderRadius: 12,
+                      boxShadow: "var(--rt-sh-card)",
+                      padding: 16,
+                      border: "1px solid " + C.primarySoft,
+                    }}>
+                      <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 12 }}>
+                        Revenue from referrals
+                      </div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1 }}>
+                        <span style={{ fontSize: 28, fontWeight: 800, color: C.retGood, letterSpacing: -0.6, fontVariantNumeric: "tabular-nums" }}>
+                          ${mrrAdded.toLocaleString()}
+                        </span>
+                        <span style={{ fontSize: 13, color: C.textMuted, fontWeight: 600 }}>/mo</span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>
+                        Added MRR · this quarter
+                      </div>
+                      {(projLCV > 0 || becameClients > 0) && (
+                        <>
+                          <div style={{ height: 1, background: C.borderLight, margin: "14px 0 12px" }} />
+                          {projLCV > 0 && (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, fontSize: 12.5, color: C.textSec }}>
+                              <span>Projected LCV</span>
+                              <b style={{ color: C.btn, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${projLCV.toLocaleString()}</b>
+                            </div>
+                          )}
+                          {becameClients > 0 && (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, color: C.textSec }}>
+                              <span>Avg deal size</span>
+                              <b style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${Math.round(mrrAdded / becameClients).toLocaleString()}/mo</b>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Who to ask next */}
                   <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who to ask next</div>
@@ -13778,7 +13889,7 @@ export default function App({ user }) {
         })()}
 
         {/* ═══ ROLODEX v2 — "The Deck" ═══ */}
-        {page === "retros" && (() => {
+        {dataLoaded && page === "retros" && (() => {
           try {
           // ─── Helpers ───────────────────────────────────────────────────
           // Avatars: deterministic palette by id, initials from name.
@@ -13964,17 +14075,6 @@ export default function App({ user }) {
           // ─── Render ─────────────────────────────────────────────────────
           return (
             <div style={{ width: "100%" }}>
-              {!dataLoaded && (
-                <div style={{ width: "100%" }}>
-                  <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
-                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                      <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Past clients · one-offs · kept warm</div>
-                      <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Rolodex</h1>
-                    </div>
-                  </div>
-                  <SkeletonClientList rows={4} />
-                </div>
-              )}
               {dataLoaded && rolodex.length === 0 && (
                 <>
                   <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, padding: "4px 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
@@ -13999,8 +14099,7 @@ export default function App({ user }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Rolodex</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{saved.length}</b> filed</span>
-                    {byPrio.high.length > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{byPrio.high.length}</b> high priority</span></>}
-                    {queued.length > 0 && <><span style={{ color: C.border }}>·</span><span style={{ color: C.btn, fontWeight: 600 }}><b>{queued.length}</b> waiting for retro</span></>}
+                    {queued.length > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{queued.length}</b> awaiting retro</span></>}
                     {referReady > 0 && <><span style={{ color: C.border }}>·</span><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
                   </div>
                 </div>
@@ -14310,7 +14409,7 @@ export default function App({ user }) {
           }
         })()}
         {/* ═══ COACH / TALK TO RAI — Claude-style chat ═══ */}
-        {page === "coach" && (
+        {dataLoaded && page === "coach" && (
           <div className={"r-rai-page " + (aiMessages.length === 0 ? "r-rai-intro" : "r-rai-chat")} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
             <div className="r-rai-scroll" style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div className="r-rai-inner" style={{ width: "100%", maxWidth: aiMessages.length === 0 ? 760 : 720, margin: "0 auto", padding: "24px 24px 0", flex: aiMessages.length === 0 ? 1 : "0 0 auto", display: aiMessages.length === 0 ? "flex" : "block", flexDirection: "column", justifyContent: aiMessages.length === 0 ? "center" : "flex-start", paddingBottom: aiMessages.length === 0 ? 80 : 0 }}>
@@ -14463,7 +14562,7 @@ export default function App({ user }) {
         )}
 
         {/* ═══ SETTINGS ═══ */}
-        {page === "settings" && (
+        {dataLoaded && page === "settings" && (
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
 
@@ -16217,7 +16316,6 @@ export default function App({ user }) {
                       gap: 6,
                     }}
                   >
-                    <span style={{ fontSize: 14 }}>✦</span>
                     <span>Discuss</span>
                   </button>
                   <button
@@ -16632,16 +16730,26 @@ export default function App({ user }) {
                 borderRadius: 10,
                 background: active ? C.card : "transparent",
                 boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
-                transform: active ? "translateY(-0.5px)" : "none",
+                // No transform on active state. Previously translateY(-0.5px)
+                // micro-lifted the active item — invisible but enough to
+                // cascade subpixel repositioning onto neighbors. Active
+                // state is already announced by the card background + lift
+                // shadow + icon color flip; the translate added nothing.
                 position: "relative",
                 flexShrink: 0,
                 scrollSnapAlign: "center",
                 minWidth: 60,
-                transition: "all 180ms var(--rt-ease-out)",
+                transition: "background 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
               }}
             >
               <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
-              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
+              {/* Label font weight stays at 700 across active and inactive
+                  states. Previously 700 active / 600 inactive — but the
+                  weight change made each label's glyphs measurably wider
+                  on activation, which shifted neighboring nav items in
+                  the flex row when the user tapped. Active state is now
+                  signaled by color (primaryDeep vs textSec) alone. */}
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
               {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
             </div>
           );
