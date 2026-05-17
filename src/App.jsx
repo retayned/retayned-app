@@ -8330,25 +8330,6 @@ export default function App({ user }) {
                     a SORT directive — Manual toggle does not silence it.
                     Hidden when: no pick, picked client not in roster, or
                     user dismissed it today. */}
-                {/* TEMP DIAG — remove once Client of the Day issue resolved.
-                    Renders an inline reason for why the pick isn't showing.
-                    Three gates: pick exists in DB · pick not dismissed ·
-                    picked client found in roster. Shows on the band so we
-                    can see at a glance which gate failed. */}
-                {(() => {
-                  if (!raiPicks || !raiPicks.client_id) {
-                    return <div style={{ marginTop: 6, fontSize: 11, color: C.danger, fontFamily: "'JetBrains Mono', monospace" }}>[diag] no pick row in DB for today (raiPicks={raiPicks ? "obj w/o client_id" : "null"})</div>;
-                  }
-                  if (raiState?.todays_pick_dismissed_at) {
-                    return <div style={{ marginTop: 6, fontSize: 11, color: C.danger, fontFamily: "'JetBrains Mono', monospace" }}>[diag] pick dismissed at {raiState.todays_pick_dismissed_at}</div>;
-                  }
-                  const pickClient = clients.find(c => c.id === raiPicks.client_id);
-                  if (!pickClient) {
-                    return <div style={{ marginTop: 6, fontSize: 11, color: C.danger, fontFamily: "'JetBrains Mono', monospace" }}>[diag] pick exists for client_id={raiPicks.client_id} but client not in roster (clients.length={clients.length})</div>;
-                  }
-                  return null;
-                })()}
-
                 {(() => {
                   if (!raiPicks || !raiPicks.client_id) return null;
                   if (raiState?.todays_pick_dismissed_at) return null;
