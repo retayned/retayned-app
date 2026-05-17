@@ -1093,14 +1093,14 @@ function formatRecurrenceLabel(pattern) {
 // a one-off task has a due_date — bucketOf treats them identically once
 // it knows this date.
 //
-// `fromDate` is the day boundary anchor (the app's 2am-adjusted "today").
+// `fromDate` is the day boundary anchor (the app's stored-TZ "today").
 // `includeToday`:
 //   - true  → if the pattern matches `fromDate` itself, return fromDate.
 //             Used for OPEN recurring tasks: a task due today buckets today.
 //   - false → start scanning from tomorrow. Used for tasks already
 //             COMPLETED today — we don't want a just-finished daily task
 //             to immediately re-surface; it stays in today's completed
-//             section and the 2am reset brings it back. (bucketOf never
+//             section and the midnight rollover brings it back. (bucketOf never
 //             actually needs includeToday=false because completed-today
 //             tasks bucket "today" by the t.done path — but the helper
 //             supports it for correctness / future use.)
@@ -7467,6 +7467,10 @@ export default function App({ user }) {
         {(() => {
           if (sidebarCollapsed) return null;
           if (!dataLoaded) return null;
+          // Hide widget on Rai page — that page uses the middle of the
+          // sidebar for the New Chat button + convo history list, which
+          // needs the full remaining vertical space to scroll cleanly.
+          if (page === "coach") return null;
           const total = clients.length;
           if (total === 0) return null;
           const buckets = clients.reduce((acc, c) => {
@@ -7632,7 +7636,7 @@ export default function App({ user }) {
         </div>
         <div style={{ padding: sidebarCollapsed ? "10px 0 14px" : "10px 6px 14px", flexShrink: 0 }}>
           <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10, justifyContent: sidebarCollapsed ? "center" : "flex-start", padding: sidebarCollapsed ? "8px 0" : "8px 10px", borderRadius: 8, cursor: "pointer", background: "transparent", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 15, background: "linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.18) 100%), " + C.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>{getUserInitial(user)}</div>
+            <div style={{ width: 28, height: 28, borderRadius: 14, background: C.primarySoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>{getUserInitial(user)}</div>
             {!sidebarCollapsed && (
               <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
             )}
@@ -8064,18 +8068,13 @@ export default function App({ user }) {
           };
 
           // ─── DATE BOUNDARIES (hoisted so status band can count today-only tasks) ──
-          // Day boundary at midnight LOCAL TO STORED TIMEZONE. Previously
-          // computed via getFullYear()/getMonth()/getDate() on a Date —
-          // which reads the device's wall clock and device's timezone.
-          // If device TZ disagrees with stored userTimezone (traveling,
-          // VPN, misconfigured system clock), the date strings flip
-          // hours before stored-TZ midnight. Bug surface: at 10pm Denver
-          // with device on Eastern, _todayStr returned tomorrow's date.
-          // Recurring tasks whose next occurrence was "tomorrow Denver"
-          // bucketed as today and "populated" the board 2 hours early.
-          // ymdInTz uses Intl.DateTimeFormat with the stored TZ so
-          // _todayStr / _tomorrowStr always match real local date in
-          // the user's stored TZ regardless of device clock.
+          // Date strings computed in user's STORED timezone (profile.timezone).
+          // Single source of truth across the app — task rollover cutoff,
+          // bucket comparisons, and the band's date label all read from
+          // this same userTimezone value via ymdInTz so they're always in
+          // agreement. Device timezone is never used for date logic.
+          // Fallback to device-local YMD only while userTimezone is briefly
+          // null on first mount; loadData re-runs once it hydrates.
           const _now = new Date();
           const _todayStr = userTimezone ? ymdInTz(userTimezone, _now) : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _tomorrow = new Date(_now.getTime() + 86400000);
@@ -8088,8 +8087,8 @@ export default function App({ user }) {
             // switch; it just tells us when the task next comes due.
             //
             //   - recurring + done       → "today" (sits in today's
-            //     completed section like any finished task; the 2am reset
-            //     brings it back fresh on its next matching day)
+            //     completed section like any finished task; the midnight
+            //     rollover brings it back fresh on its next matching day)
             //   - recurring + not done   → find the next occurrence date,
             //     bucket by today / tomorrow / later. So "every Thursday"
             //     created on a Wednesday lands in TOMORROW, not hidden.
