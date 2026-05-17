@@ -1027,25 +1027,27 @@ export const raiConversations = {
 export const raiPicks = {
   // Get the user's current Pick of the Day (or null if none).
   //
-  // Sweep behaviour change (May 2026): the sweep no longer wipes the
-  // previous day's rows before writing today's — yesterday's row stays
-  // in place so the sweep can read it to enforce the "no back-to-back
-  // same client" rule. To keep this method returning ONLY today's pick,
-  // we filter to rows whose picked_at is within the last 23 hours.
+  // Sweep behaviour: the sweep does NOT wipe the previous day's rows
+  // before writing today's — yesterday's row stays in place so the
+  // sweep can read it to enforce the "no back-to-back same client"
+  // rule. To return ONLY today's pick, we filter on expires_at.
   //
-  // Why 23h and not "today in UTC"? Sweeps fire at the user's LOCAL 3am.
-  // For a user in ET (UTC-5), that's 8am UTC. If we filtered by UTC date,
-  // every evening between 7pm ET (midnight UTC) and 3am ET (sweep time)
-  // the row would fall on the "previous" UTC date and disappear from view.
-  // A relative-age filter is timezone-free and always returns the most
-  // recent pick if one was written within the past day.
+  // Why expires_at and not a relative-age cutoff (e.g. "last 23h"):
+  // writePick stamps every row with expires_at = picked_at + 24h
+  // (PICK_EXPIRY_HOURS in the edge function). That field IS the
+  // authoritative "is this pick current?" signal. A relative-age
+  // cutoff introduces a dead zone every night between (cutoff)h
+  // after the sweep and the next sweep firing — during that gap
+  // the row is hidden even though no replacement exists yet.
+  // Filtering on expires_at > NOW() has the row visible exactly
+  // until its replacement gets written (or until 24h passes if the
+  // next sweep fails to rotate), with no magic hour-number tuning.
   getCurrent: async (userId) => {
-    const cutoffIso = new Date(Date.now() - 23 * 3600 * 1000).toISOString();
     const { data, error } = await supabase
       .from('rai_picks')
       .select('*')
       .eq('user_id', userId)
-      .gte('picked_at', cutoffIso)
+      .gt('expires_at', new Date().toISOString())
       .order('picked_at', { ascending: false })
       .limit(1)
       .maybeSingle();
