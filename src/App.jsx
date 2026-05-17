@@ -4659,18 +4659,43 @@ export default function App({ user }) {
         : (() => { const c = new Date(); c.setHours(0, 0, 0, 0); return c.getTime(); })();
       const cutoff = new Date(cutoffMs);
 
+      // ─── ROGUE-DEVICE-TZ GUARD ─────────────────────────────────
+      // The recurring-task reset and the regular-task soft-clear both
+      // run client-side. ANY device with Retayned open can fire them.
+      // If a device's detected TZ disagrees with the user's stored TZ
+      // (forgotten browser tab in another city, second laptop, QA
+      // session, phone left in airplane mode in transit) that device
+      // will compute a cutoff at its OWN local midnight, not the
+      // user's stored-TZ midnight, and wipe tasks the user completed
+      // earlier today as judged by their actual home timezone.
+      // Symptom: recurring tasks reset at 10pm MDT (a device on EDT)
+      // and regular tasks shift at 11pm MDT (a device on CDT).
+      // Guard: if device TZ ≠ stored TZ, skip the reset+clear entirely.
+      // The device that's actually IN the stored TZ will run them
+      // correctly at the right moment. Realtime sync propagates the
+      // resulting writes to all other devices. Until server-side
+      // pg_cron Edge Function takes over this work entirely, this
+      // guard keeps the wrong device from wrecking the right one.
+      const deviceTzNow = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const tzMatches = !userTimezone || deviceTzNow === userTimezone;
+
       // Recurring + done + completed before cutoff → reset to incomplete
-      const toReset = taskRes.data.filter(t =>
+      const toReset = tzMatches ? taskRes.data.filter(t =>
         t.is_recurring && t.is_done &&
         t.completed_at && new Date(t.completed_at) < cutoff
-      );
+      ) : [];
 
       // Non-recurring + done + completed before cutoff → soft-clear from active view
       // (row stays in DB; only hidden from frontend's active Today list)
-      const toClear = taskRes.data.filter(t =>
+      const toClear = tzMatches ? taskRes.data.filter(t =>
         !t.is_recurring && t.is_done && !t.cleared_at &&
         t.completed_at && new Date(t.completed_at) < cutoff
-      );
+      ) : [];
+
+      // Log if we skipped — helps catch rogue-device situations.
+      if (!tzMatches) {
+        console.warn('[TZ_GUARD] Device TZ', deviceTzNow, 'does not match stored TZ', userTimezone, '— skipping client-side reset/clear on this device.');
+      }
 
       // Fire off DB mutations in background (don't block UI render)
       toReset.forEach(t => { tasksDb.toggle(t.id, false); });
@@ -8092,15 +8117,7 @@ export default function App({ user }) {
             if (t.recurring) {
               if (t.done) return "today";
               const next = nextOccurrenceDate(t.recurrence_pattern, _now, true);
-              // Format candidate date string in the SAME timezone frame
-              // as _todayStr / _tomorrowStr above. Comparing strings
-              // built in different timezone frames is what produced the
-              // 10pm-tasks-populate bug — device-TZ candidate date string
-              // vs device-TZ today string was internally consistent but
-              // wrong when device TZ disagreed with stored userTimezone.
-              const nextStr = userTimezone
-                ? ymdInTz(userTimezone, next)
-                : `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+              const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
               if (nextStr <= _todayStr) return "today";
               // Daily recurring tasks always re-appear tomorrow in Today —
               // surfacing them in Tomorrow is duplicative noise. Hide them
@@ -14709,6 +14726,57 @@ export default function App({ user }) {
         {dataLoaded && page === "settings" && (
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
+
+            {/* Timezone — single source of truth for all local-day math
+                (recurring task reset, Rai pick rollover, bucket flips).
+                Shows the currently-stored value and the device's detected
+                value side by side. When they disagree, tasks reset at
+                weird times because cutoff math runs in the stored TZ
+                while user expectations follow the device. The Reset
+                button writes the device TZ to the DB. This is the
+                escape hatch for any corrupted stored value. */}
+            <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Timezone</div>
+              {(() => {
+                const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+                const mismatch = userTimezone && deviceTz && userTimezone !== deviceTz;
+                return (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: mismatch ? 12 : 0 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Stored: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: mismatch ? C.danger : C.primary }}>{userTimezone || "(loading...)"}</span></div>
+                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>Device detects: <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{deviceTz}</span></div>
+                      </div>
+                      {mismatch && (
+                        <button
+                          onClick={async () => {
+                            if (!user) return;
+                            try {
+                              await profileDb.update(user.id, { timezone: deviceTz });
+                              setUserTimezone(deviceTz);
+                              // Force a fresh data load so the cutoff math
+                              // re-runs with the new TZ and any spuriously
+                              // reset tasks bucket correctly again.
+                              loadData();
+                            } catch (e) {
+                              console.warn('Timezone update failed:', e);
+                            }
+                          }}
+                          style={{ padding: "8px 14px", background: "var(--rt-grad-btn)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", whiteSpace: "nowrap", flexShrink: 0 }}
+                        >
+                          Use device TZ
+                        </button>
+                      )}
+                    </div>
+                    {mismatch && (
+                      <div style={{ fontSize: 11.5, color: C.danger, lineHeight: 1.5, paddingTop: 10, borderTop: "1px solid " + C.borderLight }}>
+                        <b>Mismatch detected.</b> Tasks may reset at unexpected times. Tap "Use device TZ" to align the stored value with your device.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
 
             {/* Integrations — real, all-tiers. Currently just Google
                 Calendar. This is the permanent home for the connection:
