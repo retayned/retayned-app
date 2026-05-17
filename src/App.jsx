@@ -7352,24 +7352,8 @@ export default function App({ user }) {
             fontFamily: "'Outfit', system-ui, sans-serif",
             fontWeight: 900,
             fontSize: 22,
-            // Subtle vertical gradient — primaryLight → primary → primaryDeep.
-            // Same direction as the gradient avatars elsewhere (score chip
-            // initials, user avatar in profile chip). Adds just enough
-            // depth to anchor the brand mark without making it feel like
-            // marketing copy.
-            background: "linear-gradient(135deg, #558B68 0%, #33543E 55%, #1C3224 100%)",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            color: "transparent",
+            color: C.primaryDeep,
             letterSpacing: "-0.04em",
-            // line-height 1.15 (not 1) so the rendered glyph box includes
-            // the descender on "y" and the full height of the period.
-            // background-clip:text clips strictly to the line-box on
-            // some platforms (Safari/iOS especially), so a tight
-            // line-height crops the bottom of heavy glyphs. 1.15 gives
-            // ~3px of breathing room while keeping the brand mark
-            // visually anchored to the sidebar header.
             lineHeight: 1.15,
             display: "inline-block",
             paddingBottom: 2,
@@ -7630,29 +7614,31 @@ export default function App({ user }) {
             </div>
           );
         })()}
-        <div style={{ padding: sidebarCollapsed ? "4px 8px 8px" : "4px 6px 8px" }}>
+        <div style={{ padding: sidebarCollapsed ? "0 8px" : "0 10px", flexShrink: 0 }}>
           {(() => {
             const active = page === "settings";
             return (
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} title={sidebarCollapsed ? "Settings" : undefined} style={{
-                  flex: 1,
-                  display: "flex", alignItems: "center",
-                  gap: sidebarCollapsed ? 0 : 11,
-                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
-                  padding: sidebarCollapsed ? "10px 0" : "9px 12px",
-                  borderRadius: 9,
-                  color: active ? C.primaryDeep : C.textSec,
-                  background: active ? C.card : "transparent",
-                  boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
-                  transform: active ? "translateY(-0.5px)" : "none",
-                  fontWeight: active ? 600 : 500,
-                  cursor: "pointer",
-                  transition: "all 180ms var(--rt-ease-out)",
-                }}>
-                  <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={18} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
-                  {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>Settings</span>}
-                </div>
+              <div className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo("settings")} title={sidebarCollapsed ? "Settings" : undefined} style={{
+                display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 11,
+                justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                padding: sidebarCollapsed ? "10px 0" : "9px 12px",
+                borderRadius: 9,
+                marginBottom: 2,
+                color: active ? C.primaryDeep : C.textSec,
+                fontWeight: active ? 600 : 500,
+                background: active
+                  ? "linear-gradient(180deg, #FFFFFF 0%, #F5F1E8 100%)"
+                  : "transparent",
+                boxShadow: active
+                  ? "inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(28,50,36,0.05), 0 1px 2px rgba(20,30,22,0.04), 0 4px 10px rgba(20,30,22,0.05)"
+                  : "none",
+                transform: active ? "translateY(-0.5px)" : "none",
+                cursor: "pointer",
+                position: "relative",
+                transition: "all 180ms var(--rt-ease-out)",
+              }}>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
+                {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>Settings</span>}
               </div>
             );
           })()}
