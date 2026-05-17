@@ -3819,6 +3819,7 @@ export default function App({ user }) {
   // the device (that's how the Eastern-vs-Denver drift bug happened pre-fix).
   // null means "not loaded yet"; effects that depend on it must guard.
   const [userTimezone, setUserTimezone] = useState(null);
+  const [editingTimezone, setEditingTimezone] = useState(false);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -4652,54 +4653,38 @@ export default function App({ user }) {
       // setHours(0,0,0,0), which read the browser's TZ; a stale browser TZ
       // could fire this filter at 22:00 MDT (Eastern's midnight) and reset
       // recurring tasks 2 hours early. We now anchor to the stored TZ and
-      // fall back to device-local only while the profile hasn't loaded —
-      // and never persist that fallback.
-      const cutoffMs = userTimezone
-        ? tzMidnightInstant(userTimezone, new Date(), 0)
-        : (() => { const c = new Date(); c.setHours(0, 0, 0, 0); return c.getTime(); })();
-      const cutoff = new Date(cutoffMs);
+      // Cutoff for daily rollover. Computed in the user's STORED timezone
+      // (profile.timezone) — the single source of truth for all "today /
+      // midnight" math across the app. Device timezone is never used here.
+      // If two devices are both open, both compute the same cutoff (because
+      // both read the same stored value) and Realtime sync coalesces the
+      // writes — no rogue-device problem.
+      // If userTimezone hasn't hydrated yet (very brief, just on first mount),
+      // skip rollover this pass; the next loadData (triggered when
+      // userTimezone resolves) will run it with the real value.
+      let toReset = [];
+      let toClear = [];
+      if (userTimezone) {
+        const cutoffMs = tzMidnightInstant(userTimezone, new Date(), 0);
+        const cutoff = new Date(cutoffMs);
 
-      // ─── ROGUE-DEVICE-TZ GUARD ─────────────────────────────────
-      // The recurring-task reset and the regular-task soft-clear both
-      // run client-side. ANY device with Retayned open can fire them.
-      // If a device's detected TZ disagrees with the user's stored TZ
-      // (forgotten browser tab in another city, second laptop, QA
-      // session, phone left in airplane mode in transit) that device
-      // will compute a cutoff at its OWN local midnight, not the
-      // user's stored-TZ midnight, and wipe tasks the user completed
-      // earlier today as judged by their actual home timezone.
-      // Symptom: recurring tasks reset at 10pm MDT (a device on EDT)
-      // and regular tasks shift at 11pm MDT (a device on CDT).
-      // Guard: if device TZ ≠ stored TZ, skip the reset+clear entirely.
-      // The device that's actually IN the stored TZ will run them
-      // correctly at the right moment. Realtime sync propagates the
-      // resulting writes to all other devices. Until server-side
-      // pg_cron Edge Function takes over this work entirely, this
-      // guard keeps the wrong device from wrecking the right one.
-      const deviceTzNow = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const tzMatches = !userTimezone || deviceTzNow === userTimezone;
+        // Recurring + done + completed before cutoff → reset to incomplete
+        toReset = taskRes.data.filter(t =>
+          t.is_recurring && t.is_done &&
+          t.completed_at && new Date(t.completed_at) < cutoff
+        );
 
-      // Recurring + done + completed before cutoff → reset to incomplete
-      const toReset = tzMatches ? taskRes.data.filter(t =>
-        t.is_recurring && t.is_done &&
-        t.completed_at && new Date(t.completed_at) < cutoff
-      ) : [];
+        // Non-recurring + done + completed before cutoff → soft-clear from active view
+        // (row stays in DB; only hidden from frontend's active Today list)
+        toClear = taskRes.data.filter(t =>
+          !t.is_recurring && t.is_done && !t.cleared_at &&
+          t.completed_at && new Date(t.completed_at) < cutoff
+        );
 
-      // Non-recurring + done + completed before cutoff → soft-clear from active view
-      // (row stays in DB; only hidden from frontend's active Today list)
-      const toClear = tzMatches ? taskRes.data.filter(t =>
-        !t.is_recurring && t.is_done && !t.cleared_at &&
-        t.completed_at && new Date(t.completed_at) < cutoff
-      ) : [];
-
-      // Log if we skipped — helps catch rogue-device situations.
-      if (!tzMatches) {
-        console.warn('[TZ_GUARD] Device TZ', deviceTzNow, 'does not match stored TZ', userTimezone, '— skipping client-side reset/clear on this device.');
+        // Fire off DB mutations in background (don't block UI render)
+        toReset.forEach(t => { tasksDb.toggle(t.id, false); });
+        toClear.forEach(t => { tasksDb.clearFromActive(t.id); });
       }
-
-      // Fire off DB mutations in background (don't block UI render)
-      toReset.forEach(t => { tasksDb.toggle(t.id, false); });
-      toClear.forEach(t => { tasksDb.clearFromActive(t.id); });
 
       // Build local task list excluding cleared IDs and applying recurring resets
       const clearedIds = new Set(toClear.map(t => t.id));
@@ -5299,9 +5284,11 @@ export default function App({ user }) {
     //       complete, prevents stale-state confetti if the optimistic update
     //       didn't apply for some reason (we explicitly verify the count
     //       went from < total to === total).
-    // Day boundary at midnight local (matches task rollover at 00:00).
+    // Day boundary at midnight stored-TZ (matches task rollover and bucketing).
     const _now = new Date();
-    const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+    const _todayStr = userTimezone
+      ? ymdInTz(userTimezone, _now)
+      : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
     const isTodayBucket = (t) => {
       if (t.recurring) {
         // Recurring tasks only count toward "today" if their next occurrence
@@ -7807,9 +7794,11 @@ export default function App({ user }) {
             // from the difference between today's local date and the task's
             // due_date (date part only — time-of-day ignored to avoid timezone
             // edge cases). Recurring tasks have no due_date and are not late.
-            // Day boundary at midnight local (matches task rollover at 00:00).
+            // Day boundary at midnight stored-TZ (matches task rollover and bucketing).
             const _now = new Date();
-            const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+            const _todayStr = userTimezone
+              ? ymdInTz(userTimezone, _now)
+              : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
             const computeDaysLate = (t) => {
               if (!t.due_date || t.recurring) return 0;
               const dueStr = String(t.due_date).slice(0, 10);
@@ -8001,7 +7990,13 @@ export default function App({ user }) {
           const firstName = user?.user_metadata?.full_name?.split(" ")[0]
             || (user?.email ? user.email.split("@")[0].replace(/^\w/, c => c.toUpperCase()) : "")
             || "";
-          const displayDate = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+          // Date string for the band. Reads stored timezone (userTimezone)
+          // so it always agrees with rollover, bucketing, and Rai's pick.
+          // toLocaleDateString accepts a timeZone option that overrides the
+          // device's setting — same Intl machinery as ymdInTz.
+          const displayDate = userTimezone
+            ? new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: userTimezone })
+            : new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
           // Score chip component
           const ScoreChip = ({ score, delta = null, size = "sm" }) => {
@@ -12833,9 +12828,11 @@ export default function App({ user }) {
           // ─── Stats engine ──────────────────────────────────────────────
           // For each worker, compute throughput, reliability, client mix,
           // and a Worker Impact Score that weights completions by client value.
-          // Day boundary at midnight local (matches task rollover at 00:00).
+          // Day boundary at midnight stored-TZ (matches task rollover and bucketing).
           const _now = new Date();
-          const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+          const _todayStr = userTimezone
+            ? ymdInTz(userTimezone, _now)
+            : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _30dAgo = new Date(_now); _30dAgo.setDate(_30dAgo.getDate() - 30);
           const _30dAgoIso = _30dAgo.toISOString();
 
@@ -14713,52 +14710,140 @@ export default function App({ user }) {
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
 
-            {/* Timezone — single source of truth for all local-day math
-                (recurring task reset, Rai pick rollover, bucket flips).
-                Shows the currently-stored value and the device's detected
-                value side by side. When they disagree, tasks reset at
-                weird times because cutoff math runs in the stored TZ
-                while user expectations follow the device. The Reset
-                button writes the device TZ to the DB. This is the
-                escape hatch for any corrupted stored value. */}
+            {/* Timezone — single source of truth for all today/midnight
+                math across the app: task rollover, Rai pick, bucketing,
+                date label. Three states:
+                  1. Aligned (stored matches device) → quiet card
+                  2. Mismatch → yellow warning with two CTAs
+                  3. Changing → timezone picker dropdown
+                Device timezone is only used as a comparison signal — it
+                never drives behavior, only flags the user when their
+                stored value may be wrong. */}
             <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Timezone</div>
               {(() => {
                 const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
                 const mismatch = userTimezone && deviceTz && userTimezone !== deviceTz;
-                return (
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: mismatch ? 12 : 0 }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Stored: <span style={{ fontFamily: "'JetBrains Mono', monospace", color: mismatch ? C.danger : C.primary }}>{userTimezone || "(loading...)"}</span></div>
-                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>Device detects: <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{deviceTz}</span></div>
+                // Common TZ list — kept short, covers ~99% of US users.
+                // For anyone else, "Other..." prompts them to type/select via the
+                // browser's native datalist. This is more discoverable than
+                // a giant scrollable list of 400+ IANA strings.
+                const commonTzs = [
+                  ["America/New_York", "Eastern"],
+                  ["America/Chicago", "Central"],
+                  ["America/Denver", "Mountain"],
+                  ["America/Los_Angeles", "Pacific"],
+                  ["America/Anchorage", "Alaska"],
+                  ["Pacific/Honolulu", "Hawaii"],
+                  ["America/Phoenix", "Arizona (no DST)"],
+                  ["Europe/London", "London"],
+                  ["Europe/Paris", "Paris"],
+                  ["Europe/Berlin", "Berlin"],
+                  ["Asia/Tokyo", "Tokyo"],
+                  ["Australia/Sydney", "Sydney"],
+                  ["UTC", "UTC"],
+                ];
+                const writeTz = async (tz) => {
+                  if (!user) return;
+                  try {
+                    await profileDb.update(user.id, { timezone: tz });
+                    setUserTimezone(tz);
+                    setEditingTimezone(false);
+                    // Re-run loadData so the cutoff math uses the new TZ
+                    // immediately. Any tasks that were spuriously cleared
+                    // earlier (because old stored TZ rolled over wrong)
+                    // stay cleared in DB — but the date label, picks,
+                    // and bucketing flip to the new TZ on this load.
+                    loadData();
+                  } catch (e) {
+                    console.warn('Timezone update failed:', e);
+                  }
+                };
+                // STATE 3: change dialog
+                if (editingTimezone) {
+                  return (
+                    <div>
+                      <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>Change timezone</div>
+                      <select
+                        defaultValue={userTimezone || deviceTz}
+                        onChange={(e) => writeTz(e.target.value)}
+                        style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid " + C.border, background: C.bg, color: C.text, fontSize: 13, marginBottom: 10, fontFamily: "inherit" }}
+                      >
+                        {commonTzs.map(([tz, label]) => (
+                          <option key={tz} value={tz}>{label} ({tz})</option>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.5, marginBottom: 12 }}>
+                        Your day rolls over at midnight in the selected timezone. Tasks completed before that moment clear; recurring tasks reset.
                       </div>
-                      {mismatch && (
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                         <button
-                          onClick={async () => {
-                            if (!user) return;
-                            try {
-                              await profileDb.update(user.id, { timezone: deviceTz });
-                              setUserTimezone(deviceTz);
-                              // Force a fresh data load so the cutoff math
-                              // re-runs with the new TZ and any spuriously
-                              // reset tasks bucket correctly again.
-                              loadData();
-                            } catch (e) {
-                              console.warn('Timezone update failed:', e);
-                            }
-                          }}
-                          style={{ padding: "8px 14px", background: "var(--rt-grad-btn)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", whiteSpace: "nowrap", flexShrink: 0 }}
+                          onClick={() => setEditingTimezone(false)}
+                          style={{ padding: "6px 12px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                         >
-                          Use device TZ
+                          Cancel
                         </button>
-                      )}
-                    </div>
-                    {mismatch && (
-                      <div style={{ fontSize: 11.5, color: C.danger, lineHeight: 1.5, paddingTop: 10, borderTop: "1px solid " + C.borderLight }}>
-                        <b>Mismatch detected.</b> Tasks may reset at unexpected times. Tap "Use device TZ" to align the stored value with your device.
                       </div>
-                    )}
+                    </div>
+                  );
+                }
+                // STATE 2: mismatch
+                if (mismatch) {
+                  return (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 12 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{userTimezone}</div>
+                          <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>Your day rolls over at midnight {userTimezone.split("/").pop().replace(/_/g, " ")} time.</div>
+                        </div>
+                        <button
+                          onClick={() => setEditingTimezone(true)}
+                          style={{ padding: "6px 12px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                        >
+                          Change
+                        </button>
+                      </div>
+                      <div style={{ background: "#FBF1DC", borderRadius: 8, padding: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <div style={{ fontSize: 16, color: "#B47A0F", flexShrink: 0, lineHeight: 1, marginTop: 1 }}>⚠</div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 13, color: "#7A4F08", fontWeight: 600, marginBottom: 4 }}>This device is in {deviceTz}.</div>
+                          <div style={{ fontSize: 12, color: "#7A4F08", lineHeight: 1.5, marginBottom: 10 }}>
+                            Your tasks roll over at midnight {userTimezone.split("/").pop().replace(/_/g, " ")} time, which is at a different time on this device. Update if you've moved.
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              onClick={() => writeTz(deviceTz)}
+                              style={{ padding: "6px 12px", background: "var(--rt-grad-btn)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}
+                            >
+                              Use {deviceTz}
+                            </button>
+                            <button
+                              onClick={() => {/* dismiss — leave stored as is */}}
+                              style={{ padding: "6px 12px", background: "transparent", color: "#7A4F08", border: "1px solid #D9B056", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              Keep {userTimezone}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                // STATE 1: aligned
+                return (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{userTimezone || "(loading...)"}</div>
+                      <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>
+                        {userTimezone ? `Your day rolls over at midnight ${userTimezone.split("/").pop().replace(/_/g, " ")} time.` : ""}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setEditingTimezone(true)}
+                      style={{ padding: "6px 12px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                    >
+                      Change
+                    </button>
                   </div>
                 );
               })()}
@@ -15434,10 +15519,13 @@ export default function App({ user }) {
                                     overflowY: "auto",
                                   }}>
                                     {(() => {
-                                      // TODAY · M/D/YY reference line
+                                      // TODAY · M/D/YY reference line — uses stored TZ for consistency.
                                       const _now = new Date();
-                                      const _tStr = `${_now.getMonth() + 1}/${_now.getDate()}/${String(_now.getFullYear()).slice(-2)}`;
-                                      const _todayISO = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+                                      const _todayParts = userTimezone
+                                        ? new Intl.DateTimeFormat("en-US", { timeZone: userTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(_now).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {})
+                                        : { year: String(_now.getFullYear()), month: String(_now.getMonth() + 1).padStart(2, "0"), day: String(_now.getDate()).padStart(2, "0") };
+                                      const _tStr = `${parseInt(_todayParts.month, 10)}/${parseInt(_todayParts.day, 10)}/${_todayParts.year.slice(-2)}`;
+                                      const _todayISO = `${_todayParts.year}-${_todayParts.month}-${_todayParts.day}`;
                                       const [yr, mo] = renewalCalendarMonth.split("-").map(Number);
                                       const firstOfMonth = new Date(yr, mo - 1, 1);
                                       const startDow = firstOfMonth.getDay();
