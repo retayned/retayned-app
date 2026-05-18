@@ -13800,10 +13800,10 @@ export default function App({ user }) {
                                     <Avatar id={r.id} name={r.name} size={18} />
                                     <span style={{ fontSize: 11.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                                   </div>
-                                  <span style={{ fontSize: 11, color: C.retGood, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${r.revenue.toLocaleString()}/mo</span>
+                                  <span style={{ fontSize: 11, color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${r.revenue.toLocaleString()}/mo</span>
                                 </div>
-                                <div style={{ height: 6, background: C.borderLight, borderRadius: 3, overflow: "hidden" }}>
-                                  <div style={{ width: pct + "%", height: "100%", background: "linear-gradient(90deg, " + C.retGood + " 0%, #2C9A76 100%)", borderRadius: 3 }} />
+                                <div style={{ height: 4, background: C.borderLight, borderRadius: 2, overflow: "hidden" }}>
+                                  <div style={{ width: pct + "%", height: "100%", background: C.text, borderRadius: 2 }} />
                                 </div>
                               </div>
                             );
@@ -13830,7 +13830,7 @@ export default function App({ user }) {
                           const isActive = activeAsk?.name === q.name;
                           const st = strengthFor(q.askScore);
                           return (
-                            <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: isActive ? C.primarySoft : "transparent", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                            <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", ...(isActive ? { background: C.primarySoft } : {}) }}>
                               <Avatar id={q.name} name={q.name} size={30} />
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
@@ -14413,8 +14413,7 @@ export default function App({ user }) {
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
                           return (
-                            <button key={e.id} onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, background: isActive ? C.primarySoft : "transparent", border: "1px solid " + (isActive ? C.primary : "transparent"), cursor: "pointer", fontFamily: "inherit" }}>
-                              <Avatar id={e.id} name={name} size={22} />
+                            <button key={e.id} onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, border: "1px solid " + (isActive ? C.primary : "transparent"), cursor: "pointer", fontFamily: "inherit", ...(isActive ? { background: C.primarySoft } : {}) }}>                              <Avatar id={e.id} name={name} size={22} />
                               <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
                                 <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1 }}>{e.type === "former" ? "Former" : "One-off"}{contact ? " · " + contact.split(" ")[0] : ""}</div>
