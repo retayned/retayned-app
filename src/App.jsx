@@ -639,6 +639,16 @@ function retColor(v) {
   return "#B4341F";                    // Critical (retCrit)
 }
 
+// Avatar background — retention-score base color with a top-light /
+// bottom-shade sheen overlay so the chip reads as a physical disk
+// instead of a flat fill. Single source of truth used by every avatar
+// site-wide (Today task page, Clients page, Referrals, Rolodex, Health).
+// The overlay never overpowers the base color; the retention signal
+// (green/amber/red) always reads through.
+function retGradient(v) {
+  return `linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.12) 100%), ${retColor(v)}`;
+}
+
 // Whitelist of verbs that signal a thinking/planning task — i.e. one
 // where the user is pausing to deliberate, not executing. When a task
 // matches one of these (and has a client tag), we surface a "Discuss
@@ -2431,7 +2441,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       {/* Optional header */}
       {showHeader && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
-          <Icon name="due" size={26} color={C.textMuted} accent={C.textSec} />
+          <Icon name="due" size={20} color={C.primaryMuted} accent={C.primaryMutedDeep} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
               {selectedDay === "today" ? "Today" : "Tomorrow"}
@@ -2624,18 +2634,21 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               timeColor = C.textSec;
               titleWeight = 600;
             } else { // upcoming
-              // Deep cream gradient block with dark ink text + cream-toned
-              // shadow + bright left-edge highlight (inset). Reads as a
-              // warm sticky-note on the timeline — calm, friendly, doesn't
+              // Soft cream block with dark ink text + cream-toned shadow +
+              // bright left-edge highlight (inset). Reads as a quiet
+              // sticky-note on the timeline — calm, friendly, doesn't
               // compete with the rest of the page. Cream sits between
               // purple (Rai) and green (retention) without claiming
               // hierarchy it shouldn't have.
+              // Gradient delta intentionally small (~6% darker on bottom
+              // end) so the block reads as a single warm surface, not a
+              // saturated tan. Previous values (D2C6A8) were too dark.
               containerStyle = {
-                background: "linear-gradient(135deg, #EAE4D6 0%, #D2C6A8 100%)",
+                background: "linear-gradient(135deg, #F0EADC 0%, #E4DCC8 100%)",
                 border: "none",
                 borderRadius: 8,
                 paddingLeft: 11,
-                boxShadow: "0 1px 2px rgba(80,60,30,0.10), 0 4px 12px rgba(120,90,40,0.14), inset 3px 0 0 0 rgba(255,255,255,0.50)",
+                boxShadow: "0 1px 2px rgba(80,60,30,0.06), 0 3px 10px rgba(120,90,40,0.08), inset 3px 0 0 0 rgba(255,255,255,0.55)",
               };
               titleColor = C.text;
               timeColor = C.textMuted;
@@ -3646,20 +3659,29 @@ function ReferralNetworkD3({
         }
         if (n.kind === "child") {
           const ch = n.data;
+          const clickable = n.canRefer && !!onNodeClick;
           return (
-            <div style={{
-              position: "absolute",
-              left: Math.min(tooltipPos.x + 14, W - 240),
-              top: Math.max(8, tooltipPos.y - 10),
-              background: C.card,
-              borderRadius: 10,
-              padding: "10px 12px",
-              boxShadow: n.canRefer ? "var(--rt-sh-purple)" : "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
-              minWidth: 200,
-              maxWidth: 260,
-              pointerEvents: "none",
-              zIndex: 50,
-            }}>
+            <div
+              onClick={clickable ? () => onNodeClick({ kind: "child", data: ch }) : undefined}
+              style={{
+                position: "absolute",
+                left: Math.min(tooltipPos.x + 14, W - 240),
+                top: Math.max(8, tooltipPos.y - 10),
+                background: C.card,
+                borderRadius: 10,
+                padding: "10px 12px",
+                boxShadow: n.canRefer ? "var(--rt-sh-purple)" : "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
+                minWidth: 200,
+                maxWidth: 260,
+                // Clickable when canRefer — tooltip fires the same action
+                // as clicking the node so the "Click to draft an ask →"
+                // hint at the bottom is actually live. Otherwise
+                // pointer-events stays off so tooltip doesn't intercept
+                // hover or block underlying clicks.
+                pointerEvents: clickable ? "auto" : "none",
+                cursor: clickable ? "pointer" : "default",
+                zIndex: 50,
+              }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: ch.hasName ? C.text : C.textMuted, fontStyle: ch.hasName ? "normal" : "italic", marginBottom: 4 }}>
                 {ch.hasName ? ch.name : "Name not set — click to edit"}
               </div>
@@ -8132,15 +8154,12 @@ export default function App({ user }) {
           const ClientAvatar = ({ client, size = 32 }) => {
             if (!client) return null;
             const initials = client.name.split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
-            const color = retColor(client.ret || 60);
-            // Polish: keep the score-driven base color (carries information —
-            // red=at-risk, green=healthy) and overlay a soft top-light /
-            // bottom-shade gradient sheen for depth. Plus a 1px shadow so the
-            // avatar reads as a small physical chip rather than a flat circle.
+            // Score-driven retention base color + sheen overlay via retGradient.
+            // Single source of truth so this matches every avatar site-wide.
             return (
               <div style={{
                 width: size, height: size, borderRadius: "50%",
-                background: `linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.12) 100%), ${color}`,
+                background: retGradient(client.ret || 60),
                 color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: size * 0.35, fontWeight: 700,
@@ -10498,7 +10517,7 @@ export default function App({ user }) {
                 </svg>
                 <div style={{
                   position: "absolute", inset: 3, borderRadius: "50%",
-                  background: color, color: "#fff",
+                  background: retGradient(score), color: "#fff",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: size * 0.28, fontWeight: 700, letterSpacing: 0.2,
                 }}>{initials}</div>
@@ -12517,7 +12536,7 @@ export default function App({ user }) {
                             {overdueDays > 0 && (
                               <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: 4, background: C.retCrit }} />
                             )}
-                            <div style={{ width: 24, height: 24, borderRadius: 12, background: retColor(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 }}>
+                            <div style={{ width: 24, height: 24, borderRadius: 12, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
                               {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -12559,7 +12578,7 @@ export default function App({ user }) {
                       return (
                         <div key={i} style={{ background: C.card, borderRadius: 12, border: "1px solid " + (isOpen ? C.primary + "55" : C.border), boxShadow: "var(--rt-sh-card)", transition: "border-color 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 18, background: retColor(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 18, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
                               {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -13568,9 +13587,17 @@ export default function App({ user }) {
           const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#D17A1B", "#12523F"];
           const getInitials = (name) => (name || "?").split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
           const getAvatarColor = (id) => { const s = String(id || ""); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AVATAR_COLORS[h % AVATAR_COLORS.length]; };
-          const Avatar = ({ id, name, size = 32 }) => (
-            <div style={{ width: size, height: size, borderRadius: size / 2, flexShrink: 0, background: getAvatarColor(id), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 600, letterSpacing: 0.2 }}>{getInitials(name)}</div>
-          );
+          // Avatar — score-driven retention gradient (matches Today task page).
+          // Looks up the client by name to pull their actual retention score.
+          // For non-client referrals (referred-to people who didn't convert),
+          // falls back to a neutral mid-tone gradient.
+          const Avatar = ({ id, name, size = 32 }) => {
+            const c = clients.find(x => x.name === name);
+            const ret = c ? (c.ret || 60) : 60;
+            return (
+              <div style={{ width: size, height: size, borderRadius: size / 2, flexShrink: 0, background: retGradient(ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, letterSpacing: 0.2, boxShadow: "var(--rt-sh-xs)" }}>{getInitials(name)}</div>
+            );
+          };
 
           // ─── Aggregates ─────────────────────────────────────────────────
           const totalRefs = refs.length;
@@ -13635,8 +13662,20 @@ export default function App({ user }) {
             return "Signals look right. Timing matters more than the script here.";
           };
 
-          // Active ask — selected from queue, defaults to top of queue
-          const activeAsk = askQueue.find(c => c.name === askActiveId) || askQueue[0];
+          // Active ask — selected from queue OR any client (for network-graph
+          // click-throughs). When a user clicks a referrer/child in the network
+          // map, that client may not be in askQueue (e.g., they've already
+          // referred someone). Fall through to the full clients list so the
+          // composer can still populate with their info.
+          const activeAsk = (() => {
+            if (askActiveId) {
+              const fromQueue = askQueue.find(c => c.name === askActiveId);
+              if (fromQueue) return fromQueue;
+              const fromClients = clients.find(c => c.name === askActiveId);
+              if (fromClients) return { ...fromClients, askScore: calcAskScore(fromClients) };
+            }
+            return askQueue[0];
+          })();
 
           // Tone-shifted draft template
           const buildDraft = (client, tone) => {
@@ -13801,16 +13840,15 @@ export default function App({ user }) {
                           {sorted.map(r => {
                             const pct = (r.revenue / max) * 100;
                             // Match by name to pull real retention score for the avatar
-                            // color — same color the client's score dot uses everywhere
-                            // else on the site (Clients page, Today, Health).
+                            // gradient — same look as Today task page chips.
                             const matchedClient = clients.find(c => c.name === r.name);
-                            const avColor = matchedClient ? retColor(matchedClient.ret || 0) : C.textSec;
+                            const avRet = matchedClient ? (matchedClient.ret || 60) : 60;
                             const initials = r.name.split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase();
                             return (
                               <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                                    <div style={{ width: 18, height: 18, borderRadius: 9, background: avColor, color: "#fff", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initials}</div>
+                                    <div style={{ width: 18, height: 18, borderRadius: 9, background: retGradient(avRet), color: "#fff", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>{initials}</div>
                                     <span style={{ fontSize: 11.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                                   </div>
                                   <span style={{ fontSize: 11, color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${r.revenue.toLocaleString()}/mo</span>
@@ -13844,7 +13882,7 @@ export default function App({ user }) {
                           const st = strengthFor(q.askScore);
                           return (
                             <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", ...(isActive ? { background: C.primarySoft } : {}) }}>
-                              <div style={{ width: 30, height: 30, borderRadius: 15, background: retColor(q.ret || 0), color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{q.name.split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase()}</div>
+                              <div style={{ width: 30, height: 30, borderRadius: 15, background: retGradient(q.ret || 0), color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>{q.name.split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase()}</div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Score {q.askScore} · {q.months || 0}mo tenure</div>
@@ -13918,35 +13956,42 @@ export default function App({ user }) {
                         }));
 
                       const handleNodeClick = (payload) => {
-                        if (payload.kind === "child") {
-                          // status === "ask" → predicted referrer placed as
-                          // direct child of the hub. No referral row exists
-                          // yet; prefill the form with them as "from."
-                          if (payload.data.status === "ask") {
-                            setRefFrom(payload.data.name);
-                            setRefForm(true);
-                            return;
-                          }
+                        // Network click target — find the matching client
+                        // by name and set as the composer's active ask.
+                        // Works for: existing client referrers, child nodes
+                        // that map to a client in our list, and ASK ghosts
+                        // (predicted referrers, always a client). The
+                        // composer's activeAsk lookup falls through to
+                        // clients[] so anyone here lands cleanly.
+                        const targetName = payload.data?.name;
+                        if (!targetName) return;
+                        const matchedClient = clients.find(c => c.name === targetName);
+                        if (matchedClient) {
+                          setAskActiveId(targetName);
+                          setAskDraft("");
+                          // Scroll the composer card into view so it's obvious
+                          // the click took effect.
+                          setTimeout(() => {
+                            const composerEl = document.getElementById("ask-composer");
+                            if (composerEl) composerEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }, 0);
+                          return;
+                        }
+                        // No matching client (e.g. a referred-to person who
+                        // never became a client). Fall back to the old
+                        // behavior: open the referral row for editing if it
+                        // exists, else scroll to log.
+                        if (payload.kind === "child" && payload.data.status !== "ask") {
                           const refId = payload.data.id;
                           const r = refs.find(x => x.id === refId);
                           if (r) {
                             setRefEditData({ to: r.to, from: r.from, status: r.status, converted: r.converted, revenue: r.revenue, totalRevenue: r.totalRevenue });
                             setRefEditing(refId);
-                          }
-                        } else if (payload.kind === "referrer") {
-                          // canRefer referrer → also a predicted "ask next"
-                          // candidate. Open the form prefilled with them as
-                          // "from" so user can log the new referral they're
-                          // about to ask for.
-                          if (payload.canRefer) {
-                            setRefFrom(payload.data.name);
-                            setRefForm(true);
                             return;
                           }
-                          // Otherwise scroll the referral-log section into view
-                          const logEl = document.getElementById("ref-log");
-                          if (logEl) logEl.scrollIntoView({ behavior: "smooth", block: "start" });
                         }
+                        const logEl = document.getElementById("ref-log");
+                        if (logEl) logEl.scrollIntoView({ behavior: "smooth", block: "start" });
                       };
 
                       return (
@@ -14003,7 +14048,7 @@ export default function App({ user }) {
 
                   {/* ASK DRAFT CARD */}
                   {activeAsk && (
-                    <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "16px 18px" }}>
+                    <div id="ask-composer" style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "16px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10, flexWrap: "wrap" }}>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>Ask {activeAsk.name}</div>
@@ -14032,30 +14077,15 @@ export default function App({ user }) {
                           })}
                         </div>
                       </div>
-                      {/* Rai primer — purple territory throughout: purple
-                          wash background (btnSoft), purple left bar, italic
-                          Fraunces serif (Rai's editorial voice). No green —
-                          green is retention territory, this is Rai speaking. */}
-                      <div style={{
-                        fontSize: 13.5,
-                        color: C.textSec,
-                        fontFamily: "'Fraunces', Georgia, serif",
-                        fontStyle: "italic",
-                        fontWeight: 500,
-                        padding: "10px 14px",
-                        background: "#F3EEFB",
-                        borderLeft: "2px solid " + C.btn,
-                        borderRadius: "0 8px 8px 0",
-                        marginBottom: 12,
-                        lineHeight: 1.5,
-                      }}>
-                        {getPrimer(activeAsk)}
-                      </div>
-                      {/* Editable draft */}
+                      {/* Editable draft. minHeight comfortably fits the
+                          neutral/firmer/softer drafts without scrolling.
+                          overflow: hidden eliminates the right-rail
+                          scrollbar that fired when the content brushed
+                          the boundary. Resize: vertical still works. */}
                       <textarea
                         value={displayedDraft}
                         onChange={e => { setAskDraft(e.target.value); if (activeAsk) setAskActiveId(activeAsk.name); }}
-                        style={{ width: "100%", minHeight: 150, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap" }}
+                        style={{ width: "100%", minHeight: 200, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap", overflow: "hidden", border: "none" }}
                       />
                       {/* Action row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -14174,9 +14204,16 @@ export default function App({ user }) {
           const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#D17A1B", "#12523F"];
           const getInitials = (name) => (name || "?").split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
           const getAvatarColor = (id) => { const s = String(id || ""); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AVATAR_COLORS[h % AVATAR_COLORS.length]; };
-          const Avatar = ({ id, name, size = 32 }) => (
-            <div style={{ width: size, height: size, borderRadius: size / 2, flexShrink: 0, background: getAvatarColor(id), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 600, letterSpacing: 0.2 }}>{getInitials(name)}</div>
-          );
+          // Avatar — score-driven retention gradient (matches Today task page).
+          // Lookup client by name; falls back to neutral mid-tone for
+          // former clients / one-offs not in the active client list.
+          const Avatar = ({ id, name, size = 32 }) => {
+            const c = clients.find(x => x.name === name);
+            const ret = c ? (c.ret || 60) : 60;
+            return (
+              <div style={{ width: size, height: size, borderRadius: size / 2, flexShrink: 0, background: retGradient(ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, letterSpacing: 0.2, boxShadow: "var(--rt-sh-xs)" }}>{getInitials(name)}</div>
+            );
+          };
 
           // Heat score: 0-100.
           //   Recency (40%): ≤30d=100, 31-90=70, 91-180=40, >180=10
