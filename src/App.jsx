@@ -2431,7 +2431,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       {/* Optional header */}
       {showHeader && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
-          <Icon name="due" size={26} color={C.primaryMuted} accent={C.primaryMutedDeep} />
+          <Icon name="due" size={26} color={C.textMuted} accent={C.textSec} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
               {selectedDay === "today" ? "Today" : "Tomorrow"}
@@ -3192,37 +3192,42 @@ function ReferralNetworkD3({
     // Hub — anchored. fx/fy = fixed position d3-force respects.
     ns.push({ id: "__hub__", kind: "hub", fx: cx, fy: cy });
 
-    // Predicted-referrer ID set for fast lookup. Anyone in this set who
+    // Predicted-referrer NAME set for fast lookup. Anyone in this set who
     // ALREADY appears as a referrer or as a referrer's child gets a
     // canRefer flag instead of a separate ghost node. Eliminates the
     // "same person rendered twice" bug — one node per person, period.
-    const predictedSet = new Set(predictedReferrers.map(p => p.id));
+    // Match by NAME because child nodes use referral row IDs (r.id), not
+    // client IDs, so ID-based matching never worked for children.
+    const predictedNameSet = new Set(predictedReferrers.map(p => (p.name || "").trim().toLowerCase()).filter(Boolean));
     // Track which predicted referrers got placed via an existing node
-    // so we know which ones still need a standalone slot.
-    const placedPredicted = new Set();
+    // (by name) so we know which ones still need a standalone slot.
+    const placedPredictedNames = new Set();
 
     visibleReferrers.forEach(r => {
+      const rNameKey = (r.name || "").trim().toLowerCase();
+      const refCanRefer = predictedNameSet.has(rNameKey);
       ns.push({
         id: "ref:" + r.id,
         kind: "referrer",
         data: r,
         radius: 22 + Math.min(8, Math.log(1 + r.revenue / 1000)),
-        canRefer: predictedSet.has(r.id),
+        canRefer: refCanRefer,
       });
-      if (predictedSet.has(r.id)) placedPredicted.add(r.id);
+      if (refCanRefer) placedPredictedNames.add(rNameKey);
       ls.push({ source: "__hub__", target: "ref:" + r.id, kind: "hub-ref" });
 
       r.children.forEach((ch, i) => {
         const chId = ch.id || i;
-        const canRefer = ch.id ? predictedSet.has(ch.id) : false;
-        if (canRefer) placedPredicted.add(ch.id);
+        const chNameKey = (ch.name || "").trim().toLowerCase();
+        const childCanRefer = chNameKey ? predictedNameSet.has(chNameKey) : false;
+        if (childCanRefer) placedPredictedNames.add(chNameKey);
         ns.push({
           id: "child:" + r.id + ":" + chId,
           kind: "child",
           data: ch,
           parentId: r.id,
           radius: 11,
-          canRefer,
+          canRefer: childCanRefer,
         });
         ls.push({
           source: "ref:" + r.id,
@@ -3233,13 +3238,11 @@ function ReferralNetworkD3({
       });
     });
 
-    // Predicted referrers not already placed via the visible-referrer
-    // tree (= they haven't referred anyone yet AND aren't themselves
-    // a child of a referrer). Render as direct children of YOU with
-    // canRefer flagged. No ghost node concept anymore — just a normal
-    // child node with the ASK treatment.
+    // Predicted referrers not already placed in the visible-referrer tree.
+    // Filter by name match so anyone already in the chain (as referrer or
+    // child) doesn't get a duplicate ghost slot.
     predictedReferrers.slice(0, 4)
-      .filter(p => !placedPredicted.has(p.id))
+      .filter(p => !placedPredictedNames.has((p.name || "").trim().toLowerCase()))
       .forEach(p => {
         ns.push({
           id: "askchild:" + p.id,
@@ -3510,7 +3513,7 @@ function ReferralNetworkD3({
               opacity={dim}
               style={{ cursor: "pointer" }}
               onMouseEnter={(e) => handleEnter(n.id, e)}
-              onClick={() => onNodeClick && onNodeClick({ kind: "referrer", data: n.data })}
+              onClick={() => onNodeClick && onNodeClick({ kind: "referrer", data: n.data, canRefer: n.canRefer })}
             >
               <circle cx={n.x} cy={n.y} r={highlighted ? n.radius + 4 : n.radius} fill={getAvatarColor(n.id)} stroke="#fff" strokeWidth="3" filter="url(#softShadowD3)" style={{ transition: "r 180ms" }} />
               <text x={n.x} y={n.y + 4} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
@@ -13642,7 +13645,7 @@ export default function App({ user }) {
             // Sign-off uses the user's actual first name from their profile.
             const userFullName = user?.user_metadata?.full_name || "";
             const userFirst = userFullName.trim().split(/\s+/)[0] || "";
-            const signoff = userFirst || "";
+            const signoff = userFirst || "[Your Name]";
             if (tone === "softer") {
               return `Hi ${firstName},\n\nHope you're doing well. I've been thinking about who in your network might benefit from what we do together — no pressure at all. If anyone comes to mind, I'd love an intro. If not, no worries.\n\nAppreciate you either way.\n\n${signoff}`;
             } else if (tone === "firmer") {
@@ -13931,7 +13934,16 @@ export default function App({ user }) {
                             setRefEditing(refId);
                           }
                         } else if (payload.kind === "referrer") {
-                          // Scroll the referral-log section into view
+                          // canRefer referrer → also a predicted "ask next"
+                          // candidate. Open the form prefilled with them as
+                          // "from" so user can log the new referral they're
+                          // about to ask for.
+                          if (payload.canRefer) {
+                            setRefFrom(payload.data.name);
+                            setRefForm(true);
+                            return;
+                          }
+                          // Otherwise scroll the referral-log section into view
                           const logEl = document.getElementById("ref-log");
                           if (logEl) logEl.scrollIntoView({ behavior: "smooth", block: "start" });
                         }
@@ -14058,7 +14070,6 @@ export default function App({ user }) {
                           </a>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button className="rt-purple-link" onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 4px", fontSize: 12.5, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Ask someone else</button>
                           <button className="r-btn" data-tone="purple" onClick={() => markAsked(activeAsk)} style={{ padding: "8px 18px", fontSize: 12.5, color: "#fff", background: C.btn, borderRadius: 8, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}>Mark Asked</button>
                         </div>
                       </div>
@@ -14115,28 +14126,28 @@ export default function App({ user }) {
               {/* Referral form modal — preserved from v1 */}
               {refForm && (
                 <div onClick={() => setRefForm(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 18 }}>Log Referral</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, border: "2px solid " + C.primary, padding: 24, width: "100%", maxWidth: 480, boxShadow: "var(--rt-sh-card)" }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: C.text }}>Log Referral</h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>New client name</label>
-                        <input value={refName} onChange={e => setRefName(e.target.value)} placeholder="e.g. White Mountain Puzzles" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={refName} onChange={e => setRefName(e.target.value)} placeholder="e.g. White Mountain Puzzles" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
-                        <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }}>
+                        <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }}>
                           <option value="">Choose a client…</option>
                           {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Monthly revenue (optional)</label>
-                        <input value={refRevenue} onChange={e => setRefRevenue(e.target.value)} placeholder="4000" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={refRevenue} onChange={e => setRefRevenue(e.target.value)} placeholder="4000" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={addRef} disabled={!refName.trim() || !refFrom} style={{ flex: 1, padding: "10px", background: (refName.trim() && refFrom) ? C.btn : C.surface, color: (refName.trim() && refFrom) ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: (refName.trim() && refFrom) ? "pointer" : "default", fontFamily: "inherit" }}>Log Referral</button>
-                      <button onClick={() => { setRefForm(false); setRefName(""); setRefFrom(""); setRefRevenue(""); }} style={{ padding: "10px 18px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      <button className="r-btn" data-tone="purple" onClick={addRef} disabled={!refName.trim() || !refFrom} style={{ flex: 1, padding: "10px", background: (refName.trim() && refFrom) ? C.btn : C.surface, color: (refName.trim() && refFrom) ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: (refName.trim() && refFrom) ? "pointer" : "default", fontFamily: "inherit" }}>Log Referral</button>
+                      <button onClick={() => { setRefForm(false); setRefName(""); setRefFrom(""); setRefRevenue(""); }} style={{ padding: "10px 14px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   </div>
                 </div>
