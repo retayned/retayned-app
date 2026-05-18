@@ -3478,6 +3478,27 @@ function ReferralNetworkD3({
           const highlighted = hoverId === n.id;
           const name = n.data?.name || "Unknown";
           const displayName = name.length > 18 ? name.slice(0, 17) + "…" : name;
+          // ─── Radial label placement away from hub ─────────────────
+          // Name + revenue stack OUTWARD from hub (in the direction
+          // away from center). Keeps referrer labels from colliding
+          // with the hub label and other referrers nearby.
+          const hub = findNode("__hub__");
+          const dx = hub ? (n.x - hub.x) : 0;
+          const dy = hub ? (n.y - hub.y) : -1;
+          const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+          const ux = dx / mag;
+          const uy = dy / mag;
+          const nameOffset = n.radius + 16;
+          const revOffset = n.radius + 32;
+          const askOffset = n.radius + 16; // ASK sits on the OPPOSITE side (toward hub)
+          const nameX = n.x + ux * nameOffset;
+          const nameY = n.y + uy * nameOffset;
+          const revX = n.x + ux * revOffset;
+          const revY = n.y + uy * revOffset;
+          const askX = n.x - ux * askOffset;
+          const askY = n.y - uy * askOffset;
+          const textAnchor = ux > 0.4 ? "start" : ux < -0.4 ? "end" : "middle";
+          const askAnchor = -ux > 0.4 ? "start" : -ux < -0.4 ? "end" : "middle";
           return (
             <g
               key={n.id}
@@ -3488,16 +3509,12 @@ function ReferralNetworkD3({
             >
               <circle cx={n.x} cy={n.y} r={highlighted ? n.radius + 4 : n.radius} fill={getAvatarColor(n.id)} stroke="#fff" strokeWidth="3" filter="url(#softShadowD3)" style={{ transition: "r 180ms" }} />
               <text x={n.x} y={n.y + 4} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
-              <text x={n.x} y={n.y - n.radius - 14} fontSize="12" fill={C.text} textAnchor="middle" fontWeight="600">{displayName}</text>
+              <text x={nameX} y={nameY} fontSize="12" fill={C.text} textAnchor={textAnchor} fontWeight="600">{displayName}</text>
               {n.data?.revenue > 0 && (
-                <text x={n.x} y={n.y - n.radius - 28} fontSize="10" fill={C.retGood} textAnchor="middle" fontWeight="700">${(n.data.revenue / 1000).toFixed(n.data.revenue >= 10000 ? 0 : 1)}k/mo</text>
+                <text x={revX} y={revY} fontSize="10" fill={C.retGood} textAnchor={textAnchor} fontWeight="700">${(n.data.revenue / 1000).toFixed(n.data.revenue >= 10000 ? 0 : 1)}k/mo</text>
               )}
-              {/* ASK pill below circle — applies when this referrer
-                  ALSO scores high as a future referral source. Sits
-                  opposite the name (which is above the circle) so the
-                  two labels don't fight for the same airspace. */}
               {n.canRefer && (
-                <text x={n.x} y={n.y + n.radius + 16} fontSize="10" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
+                <text x={askX} y={askY} fontSize="10" fill={C.btn} textAnchor={askAnchor} fontWeight="700" letterSpacing="0.5">ASK?</text>
               )}
             </g>
           );
@@ -3514,6 +3531,26 @@ function ReferralNetworkD3({
           const hasName = ch.hasName;
           const rawName = ch.name || "Untitled";
           const displayName = rawName.length > 16 ? rawName.slice(0, 15) + "…" : rawName;
+          // ─── Radial label placement ─────────────────────────────
+          // Place labels in the direction AWAY from the parent node.
+          // For a child below its referrer, this puts the label BELOW
+          // the child (away from referrer). For a child to the right,
+          // labels go further right. Prevents the common collision
+          // where child labels overlap referrer labels above.
+          const parent = findNode("ref:" + n.parentId) || findNode("__hub__");
+          const dx = parent ? (n.x - parent.x) : 0;
+          const dy = parent ? (n.y - parent.y) : 1;
+          const mag = Math.sqrt(dx * dx + dy * dy) || 1;
+          const ux = dx / mag;
+          const uy = dy / mag;
+          const labelOffset = n.radius + 14;
+          const secondaryOffset = n.radius + 28;
+          const labelX = n.x + ux * labelOffset;
+          const labelY = n.y + uy * labelOffset;
+          const secondaryX = n.x + ux * secondaryOffset;
+          const secondaryY = n.y + uy * secondaryOffset;
+          // Text anchor by the dominant axis of the offset direction
+          const textAnchor = ux > 0.4 ? "start" : ux < -0.4 ? "end" : "middle";
           return (
             <g
               key={n.id}
@@ -3532,18 +3569,14 @@ function ReferralNetworkD3({
               <circle cx={n.x} cy={n.y} r={meHovered ? n.radius + 2 : n.radius} fill={color} filter="url(#softShadowD3)" style={{ transition: "r 180ms" }} />
               <circle cx={n.x} cy={n.y} r="3" fill="#fff" opacity="0.9" />
               {hasName ? (
-                <text x={n.x} y={n.y + n.radius + 14} fontSize="11" fill={C.text} textAnchor="middle" fontWeight="500">{displayName}</text>
+                <text x={labelX} y={labelY} fontSize="11" fill={C.text} textAnchor={textAnchor} fontWeight="500">{displayName}</text>
               ) : (
-                <text x={n.x} y={n.y + n.radius + 14} fontSize="10.5" fill={C.textMuted} textAnchor="middle" fontStyle="italic" fontWeight="500">? add name</text>
+                <text x={labelX} y={labelY} fontSize="10.5" fill={C.textMuted} textAnchor={textAnchor} fontStyle="italic" fontWeight="500">? add name</text>
               )}
-              {/* Revenue OR ASK pill in the secondary slot. Mutually
-                  exclusive: paying client shows MRR; predicted
-                  referrer shows ASK. Never both — one secondary line
-                  per node keeps the graph readable. */}
               {ch.mrr > 0 ? (
-                <text x={n.x} y={n.y + n.radius + 28} fontSize="9.5" fill={C.textMuted} textAnchor="middle" fontWeight="500">${(ch.mrr / 1000).toFixed(ch.mrr >= 10000 ? 0 : 1)}k/mo</text>
+                <text x={secondaryX} y={secondaryY} fontSize="9.5" fill={C.textMuted} textAnchor={textAnchor} fontWeight="500">${(ch.mrr / 1000).toFixed(ch.mrr >= 10000 ? 0 : 1)}k/mo</text>
               ) : n.canRefer ? (
-                <text x={n.x} y={n.y + n.radius + 28} fontSize="9.5" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
+                <text x={secondaryX} y={secondaryY} fontSize="9.5" fill={C.btn} textAnchor={textAnchor} fontWeight="700" letterSpacing="0.5">ASK?</text>
               ) : null}
             </g>
           );
@@ -6325,6 +6358,17 @@ export default function App({ user }) {
         .row-hover-neutral { transition: background 0.1s, transform 180ms var(--rt-ease-out); cursor: pointer; }
         .row-hover-neutral:hover { background: rgba(0,0,0,0.03); transform: translateX(2px); }
 
+        /* ── .rt-soft-row — queue row with sage hover preview ──
+           Used by left-side widget queues (Who to ask next, Awaiting
+           retro, Health queue). Idle = transparent. Hover = sage wash
+           (#EAEDE9) which previews the active soft-green commit state
+           without being as loud. Active state is set inline at the
+           call site (typically primarySoft bg + primary border-left).
+           The :not selector ensures hover doesn't override the active
+           treatment when the row is also active. */
+        .rt-soft-row { transition: background 140ms, border-left-color 140ms; cursor: pointer; }
+        .rt-soft-row:not(.is-active):hover { background: #EAEDE9; }
+
         /* ════════════════════════════════════════════════════
            DESIGN LANGUAGE — single source of truth.
            Every Btn / Card / Pill / Toggle / IconBtn renders
@@ -6911,7 +6955,7 @@ export default function App({ user }) {
           border-color: ${C.success} !important;
           transform: scale(1.18);
         }
-        .rc-queue-item:hover { background: ${C.primaryGhost} !important; }
+        .rc-queue-item:hover:not([data-active="true"]) { background: #EAEDE9 !important; }
         /* Rai sidebar — reveal star/delete on row hover */
         .r-convo-row:hover:not([style*="rgba(91,33,182"]) { background: var(--rt-deep-cream) !important; color: var(--rt-text) !important; }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
@@ -11433,7 +11477,7 @@ export default function App({ user }) {
                                   const ca = stubCadenceActual(c);
                                   const delta = stubDelta(c.name);
                                   return (
-                                    <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
+                                    <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                         <ScoreRing2 client={c} size={32} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -11485,7 +11529,7 @@ export default function App({ user }) {
                         const ca = stubCadenceActual(c);
                         const delta = stubDelta(c.name);
                         return (
-                          <div key={c.id} className="row-hover" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
+                          <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
                             <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                               <ScoreRing2 client={c} size={34} />
@@ -12449,6 +12493,7 @@ export default function App({ user }) {
                         return (
                           <div key={i} onClick={() => setHcOpen(isOpen ? null : h.client)}
                             className="rc-queue-item"
+                            data-active={isOpen ? "true" : "false"}
                             style={{
                             position: "relative",
                             padding: "10px 12px", borderRadius: 8, cursor: "pointer",
@@ -13729,37 +13774,6 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {/* Who to ask next */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
-                    <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
-                      <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who to ask next</div>
-                      <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Strongest signals first</div>
-                    </div>
-                    {askQueue.length === 0 ? (
-                      <div style={{ padding: "20px 14px", textAlign: "center" }}>
-                        <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>No strong referral asks right now.</div>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>Build deeper profiles on your clients to unlock new asks.</div>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        {askQueue.map((q, i) => {
-                          const isActive = activeAsk?.name === q.name;
-                          const st = strengthFor(q.askScore);
-                          return (
-                            <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: isActive ? C.primarySoft : "transparent", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "background 120ms" }}>
-                              <Avatar id={q.name} name={q.name} size={30} />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
-                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Score {q.askScore} · {q.months || 0}mo tenure</div>
-                              </div>
-                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3, whiteSpace: "nowrap", flexShrink: 0, color: q.askScore >= 80 ? "#fff" : C.textSec, background: q.askScore >= 80 ? C.retGood : C.borderLight }}>{st.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
                   {/* Compounding ribbon — who's sent the most revenue */}
                   {referrers.length > 0 && (() => {
                     const sorted = [...referrers].sort((a, b) => b.revenue - a.revenue);
@@ -13790,58 +13804,41 @@ export default function App({ user }) {
                       </div>
                     );
                   })()}
+
+                  {/* Who to ask next */}
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
+                      <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who to ask next</div>
+                      <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Strongest signals first</div>
+                    </div>
+                    {askQueue.length === 0 ? (
+                      <div style={{ padding: "20px 14px", textAlign: "center" }}>
+                        <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>No strong referral asks right now.</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6 }}>Build deeper profiles on your clients to unlock new asks.</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {askQueue.map((q, i) => {
+                          const isActive = activeAsk?.name === q.name;
+                          const st = strengthFor(q.askScore);
+                          return (
+                            <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: isActive ? C.primarySoft : "transparent", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                              <Avatar id={q.name} name={q.name} size={30} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
+                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Score {q.askScore} · {q.months || 0}mo tenure</div>
+                              </div>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3, whiteSpace: "nowrap", flexShrink: 0, color: q.askScore >= 80 ? "#fff" : C.textSec, background: q.askScore >= 80 ? C.retGood : C.borderLight }}>{st.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* MAIN COLUMN */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-
-                  {/* ASK DRAFT CARD */}
-                  {activeAsk && (
-                    <div style={{ background: C.card, border: "1.5px solid " + C.retGood, borderRadius: 14, boxShadow: "0 2px 8px rgba(10,10,10,0.06)", padding: "16px 18px" }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10, flexWrap: "wrap" }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>Ask {activeAsk.name}</div>
-                          <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                            <Icon name="sparkles" size={11} color={C.btn} />
-                            Score {activeAsk.askScore} · {(() => { const p = activeAsk.profile_scores || {}; const pieces = []; if ((p.loyalty || 0) >= 8) pieces.push("high loyalty"); if ((p.relationship_depth || 0) >= 8) pieces.push("deep relationship"); return pieces.join(" · ") || "strong composite signals"; })()}
-                          </div>
-                        </div>
-                        {/* Tone toggle */}
-                        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.bg, borderRadius: 8 }}>
-                          {["softer", "neutral", "firmer"].map(t => (
-                            <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 6, textTransform: "capitalize", letterSpacing: 0.2, border: "none", cursor: "pointer", fontFamily: "inherit", background: askTone === t ? C.text : "transparent", color: askTone === t ? "#fff" : C.textMuted, fontWeight: askTone === t ? 600 : 500, transition: "all 120ms" }}>{t}</button>
-                          ))}
-                        </div>
-                      </div>
-                      {/* Primer */}
-                      <div style={{ fontSize: 12, color: C.textSec, fontStyle: "italic", padding: "8px 12px", background: C.primarySoft, borderLeft: "2px solid " + C.btn, borderRadius: 4, marginBottom: 12, lineHeight: 1.45 }}>
-                        {getPrimer(activeAsk)}
-                      </div>
-                      {/* Editable draft */}
-                      <textarea
-                        value={displayedDraft}
-                        onChange={e => { setAskDraft(e.target.value); if (activeAsk) setAskActiveId(activeAsk.name); }}
-                        style={{ width: "100%", minHeight: 150, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap" }}
-                      />
-                      {/* Action row */}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <a href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
-                            <Icon name="mail" size={13} color={C.textSec} />
-                            <span>Email</span>
-                          </a>
-                          <a href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
-                            <Icon name="phone" size={13} color={C.textSec} />
-                            <span>Text</span>
-                          </a>
-                        </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 12px", fontSize: 12, color: C.textMuted, background: "transparent", border: "none", borderRadius: 7, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Ask someone else →</button>
-                          <button onClick={() => markAsked(activeAsk)} style={{ padding: "8px 16px", fontSize: 12.5, color: "#fff", background: C.retGood, borderRadius: 7, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-card)" }}>Mark asked</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* NETWORK MAP — d3-force live simulation */}
                   <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "18px 20px" }}>
@@ -13878,6 +13875,10 @@ export default function App({ user }) {
                       // anyone already in the referrer set.
                       const existingReferrerNames = new Set(referrers.map(r => r.name));
                       const predicted = clients
+                        // Must have a real name — empty/whitespace names render as
+                        // "? add name" placeholders in the graph and clutter the
+                        // network with anonymous ASK ghosts.
+                        .filter(c => c.name && c.name.trim().length > 0)
                         .filter(c => !existingReferrerNames.has(c.name))
                         .map(c => ({ ...c, askScore: calcAskScore(c) }))
                         .filter(c => c.askScore >= 60)
@@ -13969,6 +13970,69 @@ export default function App({ user }) {
                       );
                     })()}
                   </div>
+
+                  {/* ASK DRAFT CARD */}
+                  {activeAsk && (
+                    <div style={{ background: C.card, border: "1.5px solid " + C.retGood, borderRadius: 14, boxShadow: "0 2px 8px rgba(10,10,10,0.06)", padding: "16px 18px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10, flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>Ask {activeAsk.name}</div>
+                          <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                            <Icon name="sparkles" size={11} color={C.btn} />
+                            Score {activeAsk.askScore} · {(() => { const p = activeAsk.profile_scores || {}; const pieces = []; if ((p.loyalty || 0) >= 8) pieces.push("high loyalty"); if ((p.relationship_depth || 0) >= 8) pieces.push("deep relationship"); return pieces.join(" · ") || "strong composite signals"; })()}
+                          </div>
+                        </div>
+                        {/* Tone toggle */}
+                        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.bg, borderRadius: 8 }}>
+                          {["softer", "neutral", "firmer"].map(t => (
+                            <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 6, textTransform: "capitalize", letterSpacing: 0.2, border: "none", cursor: "pointer", fontFamily: "inherit", background: askTone === t ? C.text : "transparent", color: askTone === t ? "#fff" : C.textMuted, fontWeight: askTone === t ? 600 : 500, transition: "all 120ms" }}>{t}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Rai primer — purple territory throughout: purple
+                          wash background (btnSoft), purple left bar, italic
+                          Fraunces serif (Rai's editorial voice). No green —
+                          green is retention territory, this is Rai speaking. */}
+                      <div style={{
+                        fontSize: 13.5,
+                        color: "#3D2070",
+                        fontFamily: "'Fraunces', Georgia, serif",
+                        fontStyle: "italic",
+                        fontWeight: 500,
+                        padding: "10px 14px",
+                        background: "#F3EEFB",
+                        borderLeft: "2px solid " + C.btn,
+                        borderRadius: "0 8px 8px 0",
+                        marginBottom: 12,
+                        lineHeight: 1.5,
+                      }}>
+                        {getPrimer(activeAsk)}
+                      </div>
+                      {/* Editable draft */}
+                      <textarea
+                        value={displayedDraft}
+                        onChange={e => { setAskDraft(e.target.value); if (activeAsk) setAskActiveId(activeAsk.name); }}
+                        style={{ width: "100%", minHeight: 150, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap" }}
+                      />
+                      {/* Action row */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <a href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+                            <Icon name="mail" size={13} color={C.textSec} />
+                            <span>Email</span>
+                          </a>
+                          <a href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+                            <Icon name="phone" size={13} color={C.textSec} />
+                            <span>Text</span>
+                          </a>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 12px", fontSize: 12, color: C.textMuted, background: "transparent", border: "none", borderRadius: 7, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Ask someone else →</button>
+                          <button onClick={() => markAsked(activeAsk)} style={{ padding: "8px 16px", fontSize: 12.5, color: "#fff", background: C.retGood, borderRadius: 7, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-card)" }}>Mark asked</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* REFERRAL LOG (compact) */}
                   <div id="ref-log">
@@ -14328,7 +14392,7 @@ export default function App({ user }) {
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
                           return (
-                            <button key={e.id} onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, background: isActive ? C.primarySoft : "transparent", border: "1px solid " + (isActive ? C.primary : "transparent"), cursor: "pointer", transition: "all 120ms", fontFamily: "inherit" }}>
+                            <button key={e.id} onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, background: isActive ? C.primarySoft : "transparent", border: "1px solid " + (isActive ? C.primary : "transparent"), cursor: "pointer", fontFamily: "inherit" }}>
                               <Avatar id={e.id} name={name} size={22} />
                               <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
