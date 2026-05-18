@@ -2552,14 +2552,13 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             >
               <span style={{
                 position: "absolute",
-                top: -7,
+                top: -12,
                 left: 0,
                 fontSize: 10,
                 color: C.textMuted,
                 fontVariantNumeric: "tabular-nums",
                 fontWeight: 500,
-                background: C.card,
-                paddingRight: 4,
+                paddingRight: 6,
               }}>
                 {formatHourLabel(h)}
               </span>
@@ -2644,11 +2643,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               // end) so the block reads as a single warm surface, not a
               // saturated tan. Previous values (D2C6A8) were too dark.
               containerStyle = {
-                background: "linear-gradient(135deg, #F0EADC 0%, #E4DCC8 100%)",
+                background: "linear-gradient(135deg, #FBF7EC 0%, #F3EDDD 100%)",
                 border: "none",
                 borderRadius: 8,
                 paddingLeft: 11,
-                boxShadow: "0 1px 2px rgba(80,60,30,0.06), 0 3px 10px rgba(120,90,40,0.08), inset 3px 0 0 0 rgba(255,255,255,0.55)",
+                boxShadow: "0 1px 2px rgba(80,60,30,0.03), 0 2px 6px rgba(120,90,40,0.05), inset 3px 0 0 0 rgba(255,255,255,0.65)",
               };
               titleColor = C.text;
               timeColor = C.textMuted;
