@@ -5200,16 +5200,20 @@ export default function App({ user }) {
         const profRes = await profileDb.get(user.id);
         if (cancelled) return;
         setGoogleCalPromptDismissed(!!profRes?.data?.google_cal_prompt_dismissed);
-        const storedTz = profRes?.data?.timezone || null;
-        if (storedTz) {
-          setUserTimezone(storedTz);
-        } else {
-          // First-time seed only. After this write the column is non-null
-          // and this branch never runs again for this user.
-          const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-          setUserTimezone(detectedTz);
-          await profileDb.update(user.id, { timezone: detectedTz });
-        }
+          const storedTz = profRes?.data?.timezone || null;
+          if (storedTz) {
+            setUserTimezone(storedTz);
+          } else {
+            // First-time seed only. After this write the column is non-null
+            // and this branch never runs again for this user.
+            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            // Forensic log — if profiles.timezone ever mysteriously goes
+            // null this branch fires and writes whatever the device says.
+            // The log captures who/when so we can audit.
+            console.log('[TZ-SEED]', { user_id: user.id, detectedTz, profRes_data: profRes?.data, ts: new Date().toISOString(), stack: new Error().stack });
+            setUserTimezone(detectedTz);
+            await profileDb.update(user.id, { timezone: detectedTz });
+          }
       } catch (e) {
         // Non-blocking — fall back to device TZ in-memory only. Do NOT
         // write the fallback to the database; that's how drift happens.
@@ -14914,18 +14918,32 @@ export default function App({ user }) {
                 ];
                 const writeTz = async (tz) => {
                   if (!user) return;
+                  // Forensic log — captures every TZ write site so we can
+                  // see what fired if the value mysteriously reverts.
+                  console.log('[TZ-WRITE]', { user_id: user.id, requested: tz, ts: new Date().toISOString(), stack: new Error().stack });
                   try {
-                    await profileDb.update(user.id, { timezone: tz });
+                    // profileDb.update returns { data, error } — must check
+                    // both. A silent failure (.update succeeds at network
+                    // level but RLS blocks it, or value didn't actually
+                    // change) is the bug we've been chasing.
+                    const res = await profileDb.update(user.id, { timezone: tz });
+                    if (res?.error) {
+                      console.error('[TZ-WRITE] DB error:', res.error);
+                      alert('Failed to save timezone: ' + (res.error.message || res.error));
+                      return;
+                    }
+                    // Verify the response actually carries the value we asked for.
+                    if (res?.data?.timezone && res.data.timezone !== tz) {
+                      console.error('[TZ-WRITE] Persisted value differs from requested:', { requested: tz, persisted: res.data.timezone });
+                      alert('Timezone save returned unexpected value: ' + res.data.timezone);
+                      return;
+                    }
                     setUserTimezone(tz);
                     setEditingTimezone(false);
-                    // Re-run loadData so the cutoff math uses the new TZ
-                    // immediately. Any tasks that were spuriously cleared
-                    // earlier (because old stored TZ rolled over wrong)
-                    // stay cleared in DB — but the date label, picks,
-                    // and bucketing flip to the new TZ on this load.
                     loadData();
                   } catch (e) {
-                    console.warn('Timezone update failed:', e);
+                    console.error('[TZ-WRITE] Threw:', e);
+                    alert('Failed to save timezone: ' + (e?.message || e));
                   }
                 };
                 // STATE 3: change dialog
