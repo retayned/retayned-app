@@ -3244,7 +3244,10 @@ function ReferralNetworkD3({
         ns.push({
           id: "askchild:" + p.id,
           kind: "child",
-          data: { ...p, status: "ask" },
+          // hasName: true — predicted referrers come from `predicted` which
+          // already filtered to clients with a real name. Without this flag
+          // the child render falls back to "? add name" placeholder.
+          data: { ...p, status: "ask", hasName: true },
           parentId: "__hub__",
           radius: 14,
           canRefer: true,
@@ -3489,12 +3492,14 @@ function ReferralNetworkD3({
           const ux = dx / mag;
           const uy = dy / mag;
           const nameOffset = n.radius + 16;
-          const revOffset = n.radius + 32;
           const askOffset = n.radius + 16; // ASK sits on the OPPOSITE side (toward hub)
           const nameX = n.x + ux * nameOffset;
           const nameY = n.y + uy * nameOffset;
-          const revX = n.x + ux * revOffset;
-          const revY = n.y + uy * revOffset;
+          // Revenue stacks BELOW the name line on the Y axis, not further
+          // out radially. Prevents 'Matte Collection $4.5k/mo' running
+          // together horizontally when the node sits left/right of hub.
+          const revX = nameX;
+          const revY = nameY + 14;
           const askX = n.x - ux * askOffset;
           const askY = n.y - uy * askOffset;
           const textAnchor = ux > 0.4 ? "start" : ux < -0.4 ? "end" : "middle";
@@ -3544,11 +3549,14 @@ function ReferralNetworkD3({
           const ux = dx / mag;
           const uy = dy / mag;
           const labelOffset = n.radius + 14;
-          const secondaryOffset = n.radius + 28;
           const labelX = n.x + ux * labelOffset;
           const labelY = n.y + uy * labelOffset;
-          const secondaryX = n.x + ux * secondaryOffset;
-          const secondaryY = n.y + uy * secondaryOffset;
+          // Secondary line stacks BELOW the name line on the Y axis,
+          // not further out radially. Prevents horizontal run-together
+          // ("Matte Collection $4.5k/mo" on the same line) when nodes
+          // sit to the left/right of their parent.
+          const secondaryX = labelX;
+          const secondaryY = labelY + 13;
           // Text anchor by the dominant axis of the offset direction
           const textAnchor = ux > 0.4 ? "start" : ux < -0.4 ? "end" : "middle";
           return (
@@ -13760,7 +13768,7 @@ export default function App({ user }) {
                           {projLCV > 0 && (
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, fontSize: 12.5, color: C.textSec }}>
                               <span>Projected LCV</span>
-                              <b style={{ color: C.btn, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${projLCV.toLocaleString()}</b>
+                              <b style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${projLCV.toLocaleString()}</b>
                             </div>
                           )}
                           {becameClients > 0 && (
@@ -13973,7 +13981,7 @@ export default function App({ user }) {
 
                   {/* ASK DRAFT CARD */}
                   {activeAsk && (
-                    <div style={{ background: C.card, border: "1.5px solid " + C.retGood, borderRadius: 14, boxShadow: "0 2px 8px rgba(10,10,10,0.06)", padding: "16px 18px" }}>
+                    <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "16px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10, flexWrap: "wrap" }}>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>Ask {activeAsk.name}</div>
@@ -13982,11 +13990,24 @@ export default function App({ user }) {
                             Score {activeAsk.askScore} · {(() => { const p = activeAsk.profile_scores || {}; const pieces = []; if ((p.loyalty || 0) >= 8) pieces.push("high loyalty"); if ((p.relationship_depth || 0) >= 8) pieces.push("deep relationship"); return pieces.join(" · ") || "strong composite signals"; })()}
                           </div>
                         </div>
-                        {/* Tone toggle */}
-                        <div style={{ display: "inline-flex", gap: 2, padding: 3, background: C.bg, borderRadius: 8 }}>
-                          {["softer", "neutral", "firmer"].map(t => (
-                            <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 6, textTransform: "capitalize", letterSpacing: 0.2, border: "none", cursor: "pointer", fontFamily: "inherit", background: askTone === t ? C.text : "transparent", color: askTone === t ? "#fff" : C.textMuted, fontWeight: askTone === t ? 600 : 500, transition: "all 120ms" }}>{t}</button>
-                          ))}
+                        {/* Tone toggle — matches rc-view-toggle pattern from
+                            Clients page (Table/Columns/Heatmap). Active state:
+                            embossed white card + card-lift shadow + slight lift.
+                            Idle state: transparent, hover darkens text. */}
+                        <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, borderRadius: 8 }}>
+                          {["softer", "neutral", "firmer"].map(t => {
+                            const isActive = askTone === t;
+                            return (
+                              <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} className={isActive ? "" : "rt-view-opt"} style={{
+                                padding: "5px 12px", fontSize: 12, borderRadius: 6, textTransform: "capitalize",
+                                border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: isActive ? 600 : 500,
+                                transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
+                                ...(isActive
+                                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
+                                  : { background: "transparent", color: C.textMuted }),
+                              }}>{t}</button>
+                            );
+                          })}
                         </div>
                       </div>
                       {/* Rai primer — purple territory throughout: purple
@@ -14017,18 +14038,18 @@ export default function App({ user }) {
                       {/* Action row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <a href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+                          <a className="rt-composer-pill" href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.card, border: "none", borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none", boxShadow: "var(--rt-sh-xs)" }}>
                             <Icon name="mail" size={13} color={C.textSec} />
                             <span>Email</span>
                           </a>
-                          <a href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.bg, borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none" }}>
+                          <a className="rt-composer-pill" href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.card, border: "none", borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none", boxShadow: "var(--rt-sh-xs)" }}>
                             <Icon name="phone" size={13} color={C.textSec} />
                             <span>Text</span>
                           </a>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 12px", fontSize: 12, color: C.textMuted, background: "transparent", border: "none", borderRadius: 7, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Ask someone else →</button>
-                          <button onClick={() => markAsked(activeAsk)} style={{ padding: "8px 16px", fontSize: 12.5, color: "#fff", background: C.retGood, borderRadius: 7, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-card)" }}>Mark asked</button>
+                          <button className="r-btn" onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 14px", fontSize: 12.5, color: C.textSec, background: C.surface, border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Ask someone else</button>
+                          <button className="r-btn" data-tone="purple" onClick={() => markAsked(activeAsk)} style={{ padding: "8px 18px", fontSize: 12.5, color: "#fff", background: C.btn, borderRadius: 8, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}>Mark asked</button>
                         </div>
                       </div>
                     </div>
