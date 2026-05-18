@@ -6374,8 +6374,8 @@ export default function App({ user }) {
            call site (typically primarySoft bg + primary border-left).
            The :not selector ensures hover doesn't override the active
            treatment when the row is also active. */
-        .rt-soft-row { transition: background 140ms, border-left-color 140ms; cursor: pointer; }
-        .rt-soft-row:not(.is-active):hover { background: #EAEDE9; }
+        .rt-soft-row { transition: background 140ms, border-left-color 140ms; cursor: pointer; background: transparent; }
+        .rt-soft-row:not(.is-active):hover { background: #EAEDE9 !important; }
 
         /* ════════════════════════════════════════════════════
            DESIGN LANGUAGE — single source of truth.
@@ -13639,12 +13639,16 @@ export default function App({ user }) {
           const buildDraft = (client, tone) => {
             if (!client) return "";
             const firstName = (client.contact || client.name).split(/\s+/)[0];
+            // Sign-off uses the user's actual first name from their profile.
+            const userFullName = user?.user_metadata?.full_name || "";
+            const userFirst = userFullName.trim().split(/\s+/)[0] || "";
+            const signoff = userFirst || "";
             if (tone === "softer") {
-              return `Hi ${firstName},\n\nHope you're doing well. I've been thinking about who in your network might benefit from what we do together — no pressure at all. If anyone comes to mind, I'd love an intro. If not, no worries.\n\nAppreciate you either way.\n\n[Your name]`;
+              return `Hi ${firstName},\n\nHope you're doing well. I've been thinking about who in your network might benefit from what we do together — no pressure at all. If anyone comes to mind, I'd love an intro. If not, no worries.\n\nAppreciate you either way.\n\n${signoff}`;
             } else if (tone === "firmer") {
-              return `Hi ${firstName},\n\nQuick ask: who are 2-3 people in your network who'd benefit from what we've built together? I'm looking to take on one or two more clients like you this quarter, and the best ones always come from intros.\n\nHappy to write the first email so you just forward it.\n\n[Your name]`;
+              return `Hi ${firstName},\n\nQuick ask: who are 2-3 people in your network who'd benefit from what we've built together? I'm looking to take on one or two more clients like you this quarter, and the best ones always come from intros.\n\nHappy to write the first email so you just forward it.\n\n${signoff}`;
             }
-            return `Hi ${firstName},\n\nI'm reaching out because clients like you are my best source of new work. If anyone in your network could use what we do, I'd love an introduction — even a quick "here's someone worth a call" email works.\n\nNo rush. Just know the door's open.\n\n[Your name]`;
+            return `Hi ${firstName},\n\nI'm reaching out because clients like you are my best source of new work. If anyone in your network could use what we do, I'd love an introduction — even a quick "here's someone worth a call" email works.\n\nNo rush. Just know the door's open.\n\n${signoff}`;
           };
 
           // Draft shown in textarea: user's edits take priority; otherwise compute from active + tone.
@@ -13793,11 +13797,17 @@ export default function App({ user }) {
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {sorted.map(r => {
                             const pct = (r.revenue / max) * 100;
+                            // Match by name to pull real retention score for the avatar
+                            // color — same color the client's score dot uses everywhere
+                            // else on the site (Clients page, Today, Health).
+                            const matchedClient = clients.find(c => c.name === r.name);
+                            const avColor = matchedClient ? retColor(matchedClient.ret || 0) : C.textSec;
+                            const initials = r.name.split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase();
                             return (
                               <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                                   <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                                    <Avatar id={r.id} name={r.name} size={18} />
+                                    <div style={{ width: 18, height: 18, borderRadius: 9, background: avColor, color: "#fff", fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initials}</div>
                                     <span style={{ fontSize: 11.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
                                   </div>
                                   <span style={{ fontSize: 11, color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${r.revenue.toLocaleString()}/mo</span>
@@ -13831,7 +13841,7 @@ export default function App({ user }) {
                           const st = strengthFor(q.askScore);
                           return (
                             <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", ...(isActive ? { background: C.primarySoft } : {}) }}>
-                              <Avatar id={q.name} name={q.name} size={30} />
+                              <div style={{ width: 30, height: 30, borderRadius: 15, background: retColor(q.ret || 0), color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{q.name.split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase()}</div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Score {q.askScore} · {q.months || 0}mo tenure</div>
@@ -13986,7 +13996,7 @@ export default function App({ user }) {
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>Ask {activeAsk.name}</div>
                           <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                            <Icon name="sparkles" size={11} color={C.btn} />
+                            <span style={{ color: C.btn, fontSize: 12, lineHeight: 1, display: "inline-flex", alignItems: "center" }}>✦</span>
                             Score {activeAsk.askScore} · {(() => { const p = activeAsk.profile_scores || {}; const pieces = []; if ((p.loyalty || 0) >= 8) pieces.push("high loyalty"); if ((p.relationship_depth || 0) >= 8) pieces.push("deep relationship"); return pieces.join(" · ") || "strong composite signals"; })()}
                           </div>
                         </div>
@@ -14016,7 +14026,7 @@ export default function App({ user }) {
                           green is retention territory, this is Rai speaking. */}
                       <div style={{
                         fontSize: 13.5,
-                        color: "#3D2070",
+                        color: C.textSec,
                         fontFamily: "'Fraunces', Georgia, serif",
                         fontStyle: "italic",
                         fontWeight: 500,
@@ -14048,8 +14058,8 @@ export default function App({ user }) {
                           </a>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button className="r-btn" onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 14px", fontSize: 12.5, color: C.textSec, background: C.surface, border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Ask someone else</button>
-                          <button className="r-btn" data-tone="purple" onClick={() => markAsked(activeAsk)} style={{ padding: "8px 18px", fontSize: 12.5, color: "#fff", background: C.btn, borderRadius: 8, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}>Mark asked</button>
+                          <button className="rt-purple-link" onClick={() => { const nextIdx = askQueue.findIndex(c => c.name === activeAsk.name) + 1; const nxt = askQueue[nextIdx]; if (nxt) { setAskActiveId(nxt.name); setAskDraft(""); } else { setAskActiveId(null); setAskDraft(""); } }} style={{ padding: "8px 4px", fontSize: 12.5, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Ask someone else</button>
+                          <button className="r-btn" data-tone="purple" onClick={() => markAsked(activeAsk)} style={{ padding: "8px 18px", fontSize: 12.5, color: "#fff", background: C.btn, borderRadius: 8, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}>Mark Asked</button>
                         </div>
                       </div>
                     </div>
