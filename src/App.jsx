@@ -2431,7 +2431,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       {/* Optional header */}
       {showHeader && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 0 8px" }}>
-          <Icon name="due" size={26} color={C.primaryLight} accent={C.primary} />
+          <Icon name="due" size={26} color={C.primaryMuted} accent={C.primaryMutedDeep} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 700 }}>
               {selectedDay === "today" ? "Today" : "Tomorrow"}
@@ -3192,43 +3192,65 @@ function ReferralNetworkD3({
     // Hub — anchored. fx/fy = fixed position d3-force respects.
     ns.push({ id: "__hub__", kind: "hub", fx: cx, fy: cy });
 
+    // Predicted-referrer ID set for fast lookup. Anyone in this set who
+    // ALREADY appears as a referrer or as a referrer's child gets a
+    // canRefer flag instead of a separate ghost node. Eliminates the
+    // "same person rendered twice" bug — one node per person, period.
+    const predictedSet = new Set(predictedReferrers.map(p => p.id));
+    // Track which predicted referrers got placed via an existing node
+    // so we know which ones still need a standalone slot.
+    const placedPredicted = new Set();
+
     visibleReferrers.forEach(r => {
       ns.push({
         id: "ref:" + r.id,
         kind: "referrer",
         data: r,
         radius: 22 + Math.min(8, Math.log(1 + r.revenue / 1000)),
+        canRefer: predictedSet.has(r.id),
       });
+      if (predictedSet.has(r.id)) placedPredicted.add(r.id);
       ls.push({ source: "__hub__", target: "ref:" + r.id, kind: "hub-ref" });
 
       r.children.forEach((ch, i) => {
+        const chId = ch.id || i;
+        const canRefer = ch.id ? predictedSet.has(ch.id) : false;
+        if (canRefer) placedPredicted.add(ch.id);
         ns.push({
-          id: "child:" + r.id + ":" + (ch.id || i),
+          id: "child:" + r.id + ":" + chId,
           kind: "child",
           data: ch,
           parentId: r.id,
           radius: 11,
+          canRefer,
         });
         ls.push({
           source: "ref:" + r.id,
-          target: "child:" + r.id + ":" + (ch.id || i),
+          target: "child:" + r.id + ":" + chId,
           kind: "ref-child",
           status: ch.status,
         });
       });
     });
 
-    // Predicted referrers — rendered as ghosts. Limited to top 4 to avoid
-    // cluttering the graph; assumes caller already pre-sorted.
-    predictedReferrers.slice(0, 4).forEach(p => {
-      ns.push({
-        id: "ghost:" + p.id,
-        kind: "ghost",
-        data: p,
-        radius: 18,
+    // Predicted referrers not already placed via the visible-referrer
+    // tree (= they haven't referred anyone yet AND aren't themselves
+    // a child of a referrer). Render as direct children of YOU with
+    // canRefer flagged. No ghost node concept anymore — just a normal
+    // child node with the ASK treatment.
+    predictedReferrers.slice(0, 4)
+      .filter(p => !placedPredicted.has(p.id))
+      .forEach(p => {
+        ns.push({
+          id: "askchild:" + p.id,
+          kind: "child",
+          data: { ...p, status: "ask" },
+          parentId: "__hub__",
+          radius: 14,
+          canRefer: true,
+        });
+        ls.push({ source: "__hub__", target: "askchild:" + p.id, kind: "hub-ask" });
       });
-      ls.push({ source: "__hub__", target: "ghost:" + p.id, kind: "hub-ghost" });
-    });
 
     return { nodes: ns, links: ls };
   }, [visibleReferrers, predictedReferrers, cx, cy]);
@@ -3268,18 +3290,23 @@ function ReferralNetworkD3({
         .id(d => d.id)
         .distance(link => {
           if (link.kind === "hub-ref") return 130;
-          if (link.kind === "hub-ghost") return 200; // ghosts orbit further out
+          if (link.kind === "hub-ask") return 150; // ASK children sit a little further out
           return 60; // ref-child
         })
         .strength(link => link.kind === "ref-child" ? 0.9 : 0.4))
       .force("charge", forceManyBody().strength(d => {
         if (d.kind === "hub") return -800;
         if (d.kind === "referrer") return -350;
-        if (d.kind === "ghost") return -150;
-        return -120; // child
+        return -160; // child (includes canRefer children)
       }))
       .force("center", forceCenter(cx, cy).strength(0.05))
-      .force("collide", forceCollide().radius(d => d.radius + 8).strength(0.9))
+      // Collision radius bumped well past the circle: labels render
+      // 14-28px outside the node, and we don't want neighbouring
+      // labels to overlap. The previous +8 left enough room only for
+      // the circles themselves. +28 gives breathing space for the
+      // name line; revenue/ASK lines sit even further out but they're
+      // shorter so we accept occasional minor overlap.
+      .force("collide", forceCollide().radius(d => d.radius + 28).strength(0.95))
       .force("x", d3forceX(cx).strength(0.04))
       .force("y", d3forceY(cy).strength(0.04))
       .alpha(1)
@@ -3337,6 +3364,7 @@ function ReferralNetworkD3({
   const statusColor = (status) => {
     if (status === "converted" || status === "active" || status === "closed") return C.retGood;
     if (status === "pending") return "#D17A1B"; // amber
+    if (status === "ask") return C.btn; // predicted referrer placed as direct child of hub
     return C.textMuted; // lost / rejected / other
   };
   const edgeStrokeDash = (status) => {
@@ -3391,66 +3419,58 @@ function ReferralNetworkD3({
           const t = findNode(typeof link.target === "object" ? link.target.id : link.target);
           if (!s || !t) return null;
           const dim = hoverId && hoverId !== s.id && hoverId !== t.id ? 0.15 : 1;
-          if (link.kind === "hub-ghost") {
+          if (link.kind === "hub-ask") {
+            // Predicted referrer who hasn't been placed in the chain
+            // anywhere — they hang off YOU as a child with a purple
+            // dashed connector to signal "no relationship yet, but
+            // they could refer."
             return (
               <line
                 key={"ln-" + idx}
                 x1={s.x} y1={s.y} x2={t.x} y2={t.y}
-                stroke="#C4C4BD"
+                stroke={C.btn}
                 strokeWidth="1.5"
-                strokeDasharray="1 6"
-                opacity={dim * 0.7}
+                strokeDasharray="2 5"
+                opacity={dim * 0.5}
                 strokeLinecap="round"
               />
             );
           }
           if (link.kind === "hub-ref") {
+            // Direct referrer (level 1 of the chain) — solid green,
+            // thicker stroke. The chain's main trunk.
             return (
               <line
                 key={"ln-" + idx}
                 x1={s.x} y1={s.y} x2={t.x} y2={t.y}
                 stroke={C.retGood}
                 strokeWidth="2.5"
-                opacity={dim * 0.55}
+                opacity={dim * 0.6}
                 strokeLinecap="round"
                 onClick={() => onEdgeClick && onEdgeClick(link)}
                 style={{ cursor: onEdgeClick ? "pointer" : "default" }}
               />
             );
           }
-          // ref-child edge
+          // ref-child edge — downstream in the chain (level 2+).
+          // Thinner stroke than the trunk so the eye can follow
+          // the chain structure visually.
           return (
             <line
               key={"ln-" + idx}
               x1={s.x} y1={s.y} x2={t.x} y2={t.y}
               stroke={statusColor(link.status)}
-              strokeWidth="1.5"
+              strokeWidth="1.25"
               strokeDasharray={edgeStrokeDash(link.status)}
-              opacity={dim * 0.55}
+              opacity={dim * 0.5}
               strokeLinecap="round"
             />
           );
         })}
 
-        {/* Ghost referrer nodes (predicted) */}
-        {nodesRef.current.filter(n => n.kind === "ghost").map(n => {
-          const dim = hoverId && hoverId !== n.id ? 0.3 : 1;
-          const name = n.data?.name || "";
-          return (
-            <g
-              key={n.id}
-              opacity={dim}
-              style={{ cursor: "pointer" }}
-              onMouseEnter={(e) => handleEnter(n.id, e)}
-              onClick={() => onNodeClick && onNodeClick({ kind: "ghost", data: n.data })}
-            >
-              <circle cx={n.x} cy={n.y} r={n.radius} fill="url(#ghostGradD3)" filter="url(#purpleHaloD3)" opacity="0.95" />
-              <text x={n.x} y={n.y + 4} fontSize="11" fill="#fff" textAnchor="middle" fontWeight="700">{getInitials(name)}</text>
-              <text x={n.x} y={n.y - n.radius - 14} fontSize="10.5" fill={C.btn} textAnchor="middle" fontWeight="600" opacity="0.85">{name.length > 16 ? name.slice(0, 15) + "…" : name}</text>
-              <text x={n.x} y={n.y + n.radius + 16} fontSize="10" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
-            </g>
-          );
-        })}
+        {/* Ghost nodes removed — predicted referrers now render as
+            child nodes with canRefer:true. Same person never gets
+            two circles. */}
 
         {/* Referrer nodes */}
         {nodesRef.current.filter(n => n.kind === "referrer").map(n => {
@@ -3471,6 +3491,13 @@ function ReferralNetworkD3({
               <text x={n.x} y={n.y - n.radius - 14} fontSize="12" fill={C.text} textAnchor="middle" fontWeight="600">{displayName}</text>
               {n.data?.revenue > 0 && (
                 <text x={n.x} y={n.y - n.radius - 28} fontSize="10" fill={C.retGood} textAnchor="middle" fontWeight="700">${(n.data.revenue / 1000).toFixed(n.data.revenue >= 10000 ? 0 : 1)}k/mo</text>
+              )}
+              {/* ASK pill below circle — applies when this referrer
+                  ALSO scores high as a future referral source. Sits
+                  opposite the name (which is above the circle) so the
+                  two labels don't fight for the same airspace. */}
+              {n.canRefer && (
+                <text x={n.x} y={n.y + n.radius + 16} fontSize="10" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
               )}
             </g>
           );
@@ -3509,9 +3536,15 @@ function ReferralNetworkD3({
               ) : (
                 <text x={n.x} y={n.y + n.radius + 14} fontSize="10.5" fill={C.textMuted} textAnchor="middle" fontStyle="italic" fontWeight="500">? add name</text>
               )}
-              {ch.mrr > 0 && (
+              {/* Revenue OR ASK pill in the secondary slot. Mutually
+                  exclusive: paying client shows MRR; predicted
+                  referrer shows ASK. Never both — one secondary line
+                  per node keeps the graph readable. */}
+              {ch.mrr > 0 ? (
                 <text x={n.x} y={n.y + n.radius + 28} fontSize="9.5" fill={C.textMuted} textAnchor="middle" fontWeight="500">${(ch.mrr / 1000).toFixed(ch.mrr >= 10000 ? 0 : 1)}k/mo</text>
-              )}
+              ) : n.canRefer ? (
+                <text x={n.x} y={n.y + n.radius + 28} fontSize="9.5" fill={C.btn} textAnchor="middle" fontWeight="700" letterSpacing="0.5">ASK?</text>
+              ) : null}
             </g>
           );
         })}
@@ -3577,7 +3610,7 @@ function ReferralNetworkD3({
               background: C.card,
               borderRadius: 10,
               padding: "10px 12px",
-              boxShadow: "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
+              boxShadow: n.canRefer ? "var(--rt-sh-purple)" : "0 8px 20px rgba(10,10,10,0.10), 0 2px 4px rgba(10,10,10,0.06)",
               minWidth: 200,
               maxWidth: 260,
               pointerEvents: "none",
@@ -3587,36 +3620,17 @@ function ReferralNetworkD3({
                 {ch.hasName ? ch.name : "Name not set — click to edit"}
               </div>
               <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.6 }}>
-                <div>Status: <span style={{ color: statusColor(ch.status), fontWeight: 600 }}>{ch.status}</span></div>
+                {ch.status !== "ask" && <div>Status: <span style={{ color: statusColor(ch.status), fontWeight: 600 }}>{ch.status}</span></div>}
                 {ch.mrr > 0 && <div>${ch.mrr.toLocaleString()}/mo</div>}
                 {ch.totalRevenue > 0 && <div>${ch.totalRevenue.toLocaleString()} total</div>}
                 {ch.on && <div style={{ marginTop: 2, fontSize: 10.5 }}>Referred {ch.on}</div>}
-              </div>
-            </div>
-          );
-        }
-        if (n.kind === "ghost") {
-          const p = n.data;
-          return (
-            <div style={{
-              position: "absolute",
-              left: Math.min(tooltipPos.x + 14, W - 240),
-              top: Math.max(8, tooltipPos.y - 10),
-              background: C.card,
-              border: "none",
-              borderRadius: 12,
-              padding: "10px 12px",
-              boxShadow: "var(--rt-sh-purple)",
-              minWidth: 200,
-              maxWidth: 260,
-              pointerEvents: "none",
-              zIndex: 50,
-            }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>{p.name}</div>
-              <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.6 }}>
-                <div style={{ color: C.btn, fontWeight: 600 }}>Likely to refer</div>
-                {p.reason && <div style={{ marginTop: 2 }}>{p.reason}</div>}
-                <div style={{ marginTop: 4, color: C.btn, fontWeight: 600 }}>Click to draft an ask →</div>
+                {n.canRefer && (
+                  <>
+                    <div style={{ color: C.btn, fontWeight: 600, marginTop: 4 }}>Likely to refer</div>
+                    {ch.reason && <div style={{ marginTop: 2 }}>{ch.reason}</div>}
+                    <div style={{ marginTop: 4, color: C.btn, fontWeight: 600 }}>Click to draft an ask →</div>
+                  </>
+                )}
               </div>
             </div>
           );
@@ -3736,6 +3750,7 @@ export default function App({ user }) {
   const [overviewEditData, setOverviewEditData] = useState({});
   const [editingProfile, setEditingProfile] = useState(false);
   const [editScores, setEditScores] = useState({});
+  const [radarHoverDim, setRadarHoverDim] = useState(null); // key of dimension being hovered/tapped on the client profile radar
   // Toggle for the "edit historical baseline" disclosure inside the edit-client
   // modal. Hidden by default — most users will never need to touch this.
   // Resets when client modal opens (handled by the selectedClient reset effect).
@@ -12238,7 +12253,6 @@ export default function App({ user }) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    <Icon name="health" size={14} simple color="#fff" />
                     <span>Start Check</span>
                   </button>
                 </div>
@@ -13644,7 +13658,7 @@ export default function App({ user }) {
                 <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3, marginBottom: 4 }}>Word of mouth · this quarter</div>
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Referrals</h1>
-                  {/* Subhead carries volume + outcome rate only. The $
+                  {/* Subhead carries volume + outcome only. The $
                       stats (MRR added, projected LCV) moved into the
                       "Revenue from referrals" rail card below — they
                       fought the subhead's editorial tone and pulled
@@ -13653,10 +13667,6 @@ export default function App({ user }) {
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{totalRefs}</b> referrals</span>
                     <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{becameClients}</b> became clients</span>
-                    {totalRefs > 0 && (<>
-                      <span className="rt-sep" />
-                      <span><b style={{ color: C.retGood, fontWeight: 700 }}>{Math.round((becameClients / totalRefs) * 100)}%</b> conversion</span>
-                    </>)}
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
@@ -13681,11 +13691,11 @@ export default function App({ user }) {
                       state lives elsewhere on the page. */}
                   {becameClients > 0 && (
                     <div style={{
-                      background: "linear-gradient(135deg, " + C.primaryGhost + " 0%, " + C.card + " 100%)",
+                      background: C.card,
                       borderRadius: 12,
                       boxShadow: "var(--rt-sh-card)",
                       padding: 16,
-                      border: "1px solid " + C.primarySoft,
+                      border: "1px solid " + C.border,
                     }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 12 }}>
                         Revenue from referrals
@@ -13887,6 +13897,14 @@ export default function App({ user }) {
 
                       const handleNodeClick = (payload) => {
                         if (payload.kind === "child") {
+                          // status === "ask" → predicted referrer placed as
+                          // direct child of the hub. No referral row exists
+                          // yet; prefill the form with them as "from."
+                          if (payload.data.status === "ask") {
+                            setRefFrom(payload.data.name);
+                            setRefForm(true);
+                            return;
+                          }
                           const refId = payload.data.id;
                           const r = refs.find(x => x.id === refId);
                           if (r) {
@@ -13897,10 +13915,6 @@ export default function App({ user }) {
                           // Scroll the referral-log section into view
                           const logEl = document.getElementById("ref-log");
                           if (logEl) logEl.scrollIntoView({ behavior: "smooth", block: "start" });
-                        } else if (payload.kind === "ghost") {
-                          // Predicted referrer — prefill the referral form with them as "from"
-                          setRefFrom(payload.data.name);
-                          setRefForm(true);
                         }
                       };
 
@@ -15837,70 +15851,111 @@ export default function App({ user }) {
                     {!editingProfile ? (
                       <div>
                         {Object.keys(dims).length > 0 ? (
-                          <div style={{ display: "flex", justifyContent: "center", padding: "4px 0 8px" }}>
-                            {/* Radar visualization — 12-point polygon with labels
-                                integrated at each spoke endpoint. The SHAPE
-                                carries the meaning: dents (low dimensions) read
-                                visually without needing a numeric legend.
-                                SVG is responsive (width 100%, max 320, keeps
-                                viewBox 0 0 320 320) so on mobile the polygon
-                                scales down with the container — labels no
-                                longer get clipped at the viewport edge.
-                                Labels use d.short (e.g. "Comm Freq" not
-                                "Communication Frequency") so they fit at the
-                                spoke endpoint at smaller widths. Full names
-                                still appear in the Edit Profile sliders. */}
-                            <svg width="100%" viewBox="0 0 320 320" style={{ flexShrink: 0, maxWidth: 320 }}>
+                          <div
+                            style={{ display: "flex", justifyContent: "center", padding: "4px 0 8px", position: "relative" }}
+                            onMouseLeave={() => setRadarHoverDim(null)}
+                            onClick={(e) => {
+                              // Clicking the empty area (not a dot) dismisses tap-pinned tooltip on mobile.
+                              if (e.target.tagName !== "circle") setRadarHoverDim(null);
+                            }}
+                          >
+                            {/* Radar — 12-point polygon with labels in a 60px
+                                outer ring (away from the polygon) so long
+                                names like "Communication Frequency" and
+                                "Replacement" render in full without clipping.
+                                Leader lines connect the spoke endpoint to the
+                                label ring. Each dot has an invisible larger
+                                hit-area circle around it for easier hover/tap.
+                                Hovered dot enlarges + tooltip card surfaces
+                                the dimension name and current value (0-10).
+                                viewBox = 440 x 360 so labels have room to
+                                breathe even on the longest names. */}
+                            <svg width="100%" viewBox="0 0 440 360" style={{ flexShrink: 0, maxWidth: 440, overflow: "visible" }}>
                               {/* Background quartile rings */}
                               <g fill="none" stroke={C.borderLight} strokeWidth="1">
-                                <circle cx="160" cy="160" r="25" />
-                                <circle cx="160" cy="160" r="50" />
-                                <circle cx="160" cy="160" r="75" />
-                                <circle cx="160" cy="160" r="100" />
+                                <circle cx="220" cy="180" r="25" />
+                                <circle cx="220" cy="180" r="50" />
+                                <circle cx="220" cy="180" r="75" />
+                                <circle cx="220" cy="180" r="100" />
                               </g>
-                              {/* Faint spokes from center */}
+                              {/* Faint spokes from center to polygon edge */}
                               <g fill="none" stroke={C.borderLight} strokeWidth="0.5">
                                 {profileDimensions.map((d, i) => {
                                   const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
-                                  const x = 160 + 100 * Math.cos(angle);
-                                  const y = 160 + 100 * Math.sin(angle);
-                                  return <line key={d.key} x1="160" y1="160" x2={x} y2={y} />;
+                                  const x = 220 + 100 * Math.cos(angle);
+                                  const y = 180 + 100 * Math.sin(angle);
+                                  return <line key={d.key} x1="220" y1="180" x2={x} y2={y} />;
                                 })}
                               </g>
-                              {/* Polygon + corner dots */}
-                              {(() => {
-                                const points = profileDimensions.map((d, i) => {
-                                  const val = dims[d.key] !== undefined && dims[d.key] !== null ? Number(dims[d.key]) : 0;
+                              {/* Leader lines from polygon edge to label ring */}
+                              <g fill="none" stroke={C.borderLight} strokeWidth="0.5">
+                                {profileDimensions.map((d, i) => {
                                   const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
-                                  const r = (Math.max(0, Math.min(10, val)) / 10) * 100;
-                                  return [160 + r * Math.cos(angle), 160 + r * Math.sin(angle)];
+                                  const x1 = 220 + 100 * Math.cos(angle);
+                                  const y1 = 180 + 100 * Math.sin(angle);
+                                  const x2 = 220 + 122 * Math.cos(angle);
+                                  const y2 = 180 + 122 * Math.sin(angle);
+                                  return <line key={d.key} x1={x1} y1={y1} x2={x2} y2={y2} />;
+                                })}
+                              </g>
+                              {/* Polygon + dots. Dots are interactive: hover
+                                  triggers tooltip via radarHoverDim state. An
+                                  invisible larger circle around each dot is
+                                  the actual hit area (12px radius) so the
+                                  user doesn't have to land exactly on the
+                                  2.5px dot. */}
+                              {(() => {
+                                const dotsData = profileDimensions.map((d, i) => {
+                                  const val = dims[d.key] !== undefined && dims[d.key] !== null ? Number(dims[d.key]) : 0;
+                                  const clamped = Math.max(0, Math.min(10, val));
+                                  const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
+                                  const r = (clamped / 10) * 100;
+                                  return { key: d.key, name: d.name, val: clamped, x: 220 + r * Math.cos(angle), y: 180 + r * Math.sin(angle) };
                                 });
-                                const polyStr = points.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+                                const polyStr = dotsData.map(p => p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
                                 return (
                                   <>
                                     <polygon points={polyStr} fill={C.primary} fillOpacity="0.18" stroke={C.primary} strokeWidth="1.5" strokeLinejoin="round" />
-                                    {points.map((p, i) => (
-                                      <circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill={C.primary} />
-                                    ))}
+                                    {dotsData.map((p) => {
+                                      const isHovered = radarHoverDim === p.key;
+                                      return (
+                                        <g key={p.key}>
+                                          {/* Visible dot */}
+                                          <circle cx={p.x} cy={p.y} r={isHovered ? 5 : 2.5} fill={C.primary} stroke={isHovered ? "#fff" : "none"} strokeWidth={isHovered ? 2 : 0} style={{ transition: "r 140ms, stroke-width 140ms" }} />
+                                          {/* Invisible hit area */}
+                                          <circle
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r="12"
+                                            fill="transparent"
+                                            style={{ cursor: "pointer" }}
+                                            onMouseEnter={() => setRadarHoverDim(p.key)}
+                                            onMouseLeave={() => setRadarHoverDim(null)}
+                                            onClick={(e) => { e.stopPropagation(); setRadarHoverDim(p.key); }}
+                                          />
+                                        </g>
+                                      );
+                                    })}
                                   </>
                                 );
                               })()}
-                              {/* Spoke labels at radius 122. Short names from
-                                  d.short keep the label widths small so even
-                                  on mobile the label can't push past the
-                                  SVG viewBox edge. textAnchor picks
-                                  left/middle/right from cos(angle); vertical
-                                  alignment picks alphabetic/middle/hanging
-                                  from sin(angle). */}
-                              <g fontFamily="Manrope, sans-serif" fontSize="10.5" fontWeight="600" fill={C.textSec}>
+                              {/* Labels at radius 130 — outside the polygon
+                                  with breathing room. Full text (d.name).
+                                  textAnchor and dominantBaseline picked by
+                                  angle to keep labels nicely positioned
+                                  around the ring. Hovered dim's label bolds
+                                  and darkens so it's clear which one the
+                                  tooltip refers to. */}
+                              <g fontFamily="Manrope, sans-serif" fontSize="11" fontWeight="500">
                                 {profileDimensions.map((d, i) => {
                                   const angle = (i / profileDimensions.length) * 2 * Math.PI - Math.PI / 2;
                                   const cos = Math.cos(angle);
                                   const sin = Math.sin(angle);
-                                  const x = 160 + 122 * cos;
-                                  const y = 160 + 122 * sin;
+                                  const x = 220 + 130 * cos;
+                                  const y = 180 + 130 * sin;
                                   const textAnchor = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
                                   const dominantBaseline = sin > 0.35 ? "hanging" : sin < -0.35 ? "auto" : "middle";
+                                  const isHovered = radarHoverDim === d.key;
                                   return (
                                     <text
                                       key={d.key}
@@ -15908,13 +15963,51 @@ export default function App({ user }) {
                                       y={y}
                                       textAnchor={textAnchor}
                                       dominantBaseline={dominantBaseline}
+                                      fill={isHovered ? C.text : C.textSec}
+                                      fontWeight={isHovered ? 700 : 500}
+                                      style={{ cursor: "pointer", transition: "fill 140ms, font-weight 140ms" }}
+                                      onMouseEnter={() => setRadarHoverDim(d.key)}
+                                      onMouseLeave={() => setRadarHoverDim(null)}
+                                      onClick={(e) => { e.stopPropagation(); setRadarHoverDim(d.key); }}
                                     >
-                                      {d.short || d.name}
+                                      {d.name}
                                     </text>
                                   );
                                 })}
                               </g>
                             </svg>
+                            {/* Tooltip card — only when a dimension is
+                                hovered/tapped. Positioned dead-center over
+                                the radar, sized small, dark surface so it
+                                pops against the cream. Mobile tap-pins via
+                                same state; tap-elsewhere dismisses (handled
+                                by the outer div's onClick). */}
+                            {radarHoverDim && (() => {
+                              const d = profileDimensions.find(x => x.key === radarHoverDim);
+                              if (!d) return null;
+                              const val = dims[d.key] !== undefined && dims[d.key] !== null ? Number(dims[d.key]) : 0;
+                              const clamped = Math.max(0, Math.min(10, val));
+                              return (
+                                <div style={{
+                                  position: "absolute",
+                                  top: "50%",
+                                  left: "50%",
+                                  transform: "translate(-50%, -50%)",
+                                  background: "#1E261F",
+                                  color: "#fff",
+                                  borderRadius: 10,
+                                  padding: "10px 14px",
+                                  boxShadow: "0 8px 20px rgba(10,10,10,0.25), 0 2px 4px rgba(10,10,10,0.10)",
+                                  pointerEvents: "none",
+                                  fontFamily: "Manrope, sans-serif",
+                                  textAlign: "center",
+                                  minWidth: 100,
+                                }}>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{d.name}</div>
+                                  <div style={{ fontSize: 26, fontWeight: 800, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{clamped.toFixed(clamped % 1 === 0 ? 0 : 1)}<span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,255,255,0.5)", marginLeft: 4 }}>/10</span></div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ) : (
                           <div style={{ textAlign: "center", padding: "20px 0", color: C.textMuted, fontSize: 14 }}>
