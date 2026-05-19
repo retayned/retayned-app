@@ -2517,17 +2517,17 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           // the day. Computed from current hour: cool blue-cream morning
           // (6–10am), neutral cream midday (10am–2pm), warming amber
           // afternoon (2–5pm), full golden hour (5–7pm), deep amber dusk
-          // (7pm+). Three-stop gradient with the strongest tint in the
-          // center, fading softer at top and bottom — the "heart of the
-          // day" focus. Previously the top stop was fully transparent,
-          // which combined with midday's already-low alpha (0.04) made
-          // the wash visually disappear during 10am-2pm. Now the top
-          // stop is a fraction of the middle, so the gradient is always
-          // visibly present without losing the center-peak character.
+          // (7pm+).
+          //
+          // Banded gradient (May 2026): color sits in the middle band of
+          // the visible viewport and fades fully to zero at top + bottom.
+          // The band evokes a "workday" focus in the user's current scroll
+          // window without drawing literal 9-5 lines — color is felt, not
+          // seen at the corners. Alpha multiplier (0.75x) softens the
+          // overall wash so the panel doesn't read as too dark.
           background: (() => {
             const h = new Date().getHours();
-            // [r,g,b] tint for the wash + center alpha intensity.
-            // Alphas roughly 1.25x the original values — visible but not loud.
+            // [r,g,b] tint for the wash + peak alpha intensity.
             let tint, alpha;
             if (h < 6)        { tint = "180,190,205"; alpha = 0.12; }   // pre-dawn — cool blue
             else if (h < 10)  { tint = "220,225,225"; alpha = 0.075; }  // morning — soft cool cream
@@ -2536,12 +2536,12 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             else if (h < 19)  { tint = "245,210,160"; alpha = 0.175; }  // golden hour — deep amber
             else if (h < 22)  { tint = "235,195,150"; alpha = 0.15; }   // dusk — warm amber
             else              { tint = "200,180,165"; alpha = 0.125; }  // night — muted warmth
-            // Three-stop: top = 40% of center alpha, center = full, bottom = 60% of center.
-            // Top is non-zero so the gradient never visually disappears.
-            const aTop = (alpha * 0.4).toFixed(3);
-            const aMid = alpha.toFixed(3);
-            const aBot = (alpha * 0.6).toFixed(3);
-            return `linear-gradient(180deg, rgba(${tint},${aTop}) 0%, rgba(${tint},${aMid}) 50%, rgba(${tint},${aBot}) 100%)`;
+            // Six-stop band: transparent 0-18%, ramp to peak by 38%, hold
+            // peak through 62%, ramp back to transparent by 82%, transparent
+            // 82-100%. Peak alpha is 0.75x the source value (dialed back
+            // from the previous always-visible wash).
+            const a = (alpha * 0.75).toFixed(3);
+            return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 18%, rgba(${tint},${a}) 38%, rgba(${tint},${a}) 62%, rgba(${tint},0) 82%, rgba(${tint},0) 100%)`;
           })(),
         }}
       >
@@ -3184,7 +3184,12 @@ function ReferralNetworkD3({
   // Mobile uses a taller/narrower viewBox so the network has vertical room
   // to spread out at typical phone widths (~380px). Without this, the 820w
   // landscape viewBox scales down to ~232h on a phone — nodes become tiny.
-  const W = isMobile ? 380 : 820;
+  // Mobile (May 2026): viewBox tightened to 340w so the SVG scales up
+  // to fill typical 390-430px phone viewports, making nodes visibly
+  // larger. Link distances bumped from 60% to ~80% of desktop so nodes
+  // spread out within the (now-larger-on-screen) canvas instead of
+  // clumping in the center.
+  const W = isMobile ? 340 : 820;
   const H = isMobile ? 560 : 500;
   const cx = W / 2, cy = H / 2;
 
@@ -3321,24 +3326,26 @@ function ReferralNetworkD3({
       .force("link", forceLink(links.map(l => ({ ...l })))
         .id(d => d.id)
         .distance(link => {
-          // Mobile uses ~60% link distance — tighter clustering for the
-          // narrower 380×560 viewport. Desktop unchanged.
-          if (link.kind === "hub-ref") return isMobile ? 80 : 130;
-          if (link.kind === "hub-ask") return isMobile ? 95 : 150;
-          return isMobile ? 42 : 60; // ref-child
+          // Mobile uses ~80% link distance — gives nodes room to spread
+          // within the tighter viewBox. Previously 60% which made the
+          // graph clump in the center and read as too small.
+          if (link.kind === "hub-ref") return isMobile ? 105 : 130;
+          if (link.kind === "hub-ask") return isMobile ? 120 : 150;
+          return isMobile ? 50 : 60; // ref-child
         })
         .strength(link => link.kind === "ref-child" ? 0.9 : 0.4))
       .force("charge", forceManyBody().strength(d => {
-        // Mobile repulsion scaled down proportionally.
-        if (d.kind === "hub") return isMobile ? -500 : -800;
-        if (d.kind === "referrer") return isMobile ? -220 : -350;
-        return isMobile ? -100 : -160; // child
+        // Mobile repulsion bumped up to ~80% of desktop (was 60%) so
+        // nodes push each other apart enough to fill the canvas.
+        if (d.kind === "hub") return isMobile ? -650 : -800;
+        if (d.kind === "referrer") return isMobile ? -280 : -350;
+        return isMobile ? -130 : -160; // child
       }))
       .force("center", forceCenter(cx, cy).strength(0.05))
       // Collision radius bumped well past the circle: labels render
       // 14-28px outside the node. Mobile uses tighter collision so labels
       // overlap less aggressively when nodes are crowded.
-      .force("collide", forceCollide().radius(d => d.radius + (isMobile ? 18 : 28)).strength(0.95))
+      .force("collide", forceCollide().radius(d => d.radius + (isMobile ? 22 : 28)).strength(0.95))
       .force("x", d3forceX(cx).strength(0.04))
       .force("y", d3forceY(cy).strength(0.04))
       .alpha(1)
@@ -3702,12 +3709,10 @@ function ReferralNetworkD3({
                 {ch.status !== "ask" && <div>Status: <span style={{ color: statusColor(ch.status), fontWeight: 600 }}>{ch.status}</span></div>}
                 {ch.mrr > 0 && <div>${ch.mrr.toLocaleString()}/mo</div>}
                 {ch.totalRevenue > 0 && <div>${ch.totalRevenue.toLocaleString()} total</div>}
-                {ch.on && <div style={{ marginTop: 2, fontSize: 10.5 }}>Referred {ch.on}</div>}
                 {n.canRefer && (
                   <>
                     <div style={{ color: C.btn, fontWeight: 600, marginTop: 4 }}>Likely to refer</div>
                     {ch.reason && <div style={{ marginTop: 2 }}>{ch.reason}</div>}
-                    <div style={{ marginTop: 4, color: C.btn, fontWeight: 600 }}>Click to draft an ask →</div>
                   </>
                 )}
               </div>
