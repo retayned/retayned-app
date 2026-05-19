@@ -2515,24 +2515,32 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           paddingRight: 2,
           // Golden-hour wash — soft atmospheric tint that shifts through
           // the day. Computed from current hour: cool blue-cream morning
-          // (6–10am), neutral white midday (10am–2pm), warming amber
+          // (6–10am), neutral cream midday (10am–2pm), warming amber
           // afternoon (2–5pm), full golden hour (5–7pm), deep amber dusk
-          // (7pm+). 100% white→tint gradient at 8–12% alpha so it sits
-          // ON TOP of timeline content without obscuring anything. The
-          // tint follows real time so the page reflects when in the day
-          // the user is reading it. Subtle but immediately distinctive.
+          // (7pm+). Three-stop gradient with the strongest tint in the
+          // center, fading softer at top and bottom — the "heart of the
+          // day" focus. Previously the top stop was fully transparent,
+          // which combined with midday's already-low alpha (0.04) made
+          // the wash visually disappear during 10am-2pm. Now the top
+          // stop is a fraction of the middle, so the gradient is always
+          // visibly present without losing the center-peak character.
           background: (() => {
             const h = new Date().getHours();
-            // [r,g,b] tint for the wash + alpha intensity
+            // [r,g,b] tint for the wash + center alpha intensity
             let tint, alpha;
             if (h < 6)        { tint = "180,190,205"; alpha = 0.10; }   // pre-dawn — cool blue
-            else if (h < 10)  { tint = "220,225,225"; alpha = 0.06; }   // morning — soft cool cream
-            else if (h < 14)  { tint = "255,255,250"; alpha = 0.04; }   // midday — neutral white
-            else if (h < 17)  { tint = "250,235,205"; alpha = 0.10; }   // afternoon — warming amber
-            else if (h < 19)  { tint = "245,210,160"; alpha = 0.14; }   // golden hour — deep amber
-            else if (h < 22)  { tint = "235,195,150"; alpha = 0.12; }   // dusk — warm amber
-            else              { tint = "200,180,165"; alpha = 0.10; }   // night — muted warmth
-            return `linear-gradient(180deg, transparent 0%, rgba(${tint},${alpha}) 50%, rgba(${tint},${alpha * 0.6}) 100%)`;
+            else if (h < 10)  { tint = "220,225,225"; alpha = 0.08; }   // morning — soft cool cream
+            else if (h < 14)  { tint = "245,235,215"; alpha = 0.10; }   // midday — warm neutral cream (bumped from near-zero)
+            else if (h < 17)  { tint = "250,235,205"; alpha = 0.12; }   // afternoon — warming amber
+            else if (h < 19)  { tint = "245,210,160"; alpha = 0.16; }   // golden hour — deep amber
+            else if (h < 22)  { tint = "235,195,150"; alpha = 0.14; }   // dusk — warm amber
+            else              { tint = "200,180,165"; alpha = 0.12; }   // night — muted warmth
+            // Three-stop: top = 40% of center alpha, center = full, bottom = 60% of center.
+            // Top is non-zero so the gradient never visually disappears.
+            const aTop = (alpha * 0.4).toFixed(3);
+            const aMid = alpha.toFixed(3);
+            const aBot = (alpha * 0.6).toFixed(3);
+            return `linear-gradient(180deg, rgba(${tint},${aTop}) 0%, rgba(${tint},${aMid}) 50%, rgba(${tint},${aBot}) 100%)`;
           })(),
         }}
       >
@@ -3816,6 +3824,10 @@ export default function App({ user }) {
   const [editingProfile, setEditingProfile] = useState(false);
   const [editScores, setEditScores] = useState({});
   const [radarHoverDim, setRadarHoverDim] = useState(null); // key of dimension being hovered/tapped on the client profile radar
+  // Inline edit state for client name in the profile header. Null when not
+  // editing; holds the in-progress draft string when active. Clicking the
+  // name swaps the h2 for an input field — Enter saves, Esc cancels.
+  const [editingClientName, setEditingClientName] = useState(null);
   // Toggle for the "edit historical baseline" disclosure inside the edit-client
   // modal. Hidden by default — most users will never need to touch this.
   // Resets when client modal opens (handled by the selectedClient reset effect).
@@ -8612,7 +8624,7 @@ export default function App({ user }) {
                       >
                         {pickClient.name}
                       </span>
-                      {" "}&mdash;{" "}{cleanedReason}.{" "}-Rai
+                      {" "}&mdash;{" "}{cleanedReason}.
                     </div>
                   );
                 })()}
@@ -9245,7 +9257,7 @@ export default function App({ user }) {
                                               cursor: "pointer",
                                               fontFamily: "inherit",
                                               ...(isSel
-                                                ? { background: C.btnLight, color: C.btn, boxShadow: "var(--rt-sh-chip-purple)" }
+                                                ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                                                 : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
                                           >
@@ -9283,7 +9295,7 @@ export default function App({ user }) {
                                                 fontFamily: "inherit",
                                                 padding: 0,
                                                 ...(isSel
-                                                  ? { background: C.btn, color: "#fff", boxShadow: "var(--rt-sh-chip-purple)" }
+                                                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                                                   : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                               }}
                                             >{label}</button>
@@ -9304,7 +9316,7 @@ export default function App({ user }) {
                                               border: "none",
                                               borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                                               ...(newTaskRecurrencePattern.kind === "monthly_date"
-                                                ? { background: C.btnLight, color: C.btn, boxShadow: "var(--rt-sh-chip-purple)" }
+                                                ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                                                 : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
                                           >Date of month</button>
@@ -9319,7 +9331,7 @@ export default function App({ user }) {
                                               border: "none",
                                               borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                                               ...(newTaskRecurrencePattern.kind === "monthly_weekday"
-                                                ? { background: C.btnLight, color: C.btn, boxShadow: "var(--rt-sh-chip-purple)" }
+                                                ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                                                 : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
                                           >Day of week</button>
@@ -9458,7 +9470,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 5,
                             ...(rankMode === "rai"
-                              ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
+                              ? { background: C.card, color: C.btn, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}
                         >
@@ -15513,7 +15525,72 @@ export default function App({ user }) {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <h2 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, color: C.text, margin: 0, lineHeight: 1.15 }}>{sc.name}</h2>
+                    {editingClientName !== null ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingClientName}
+                        onChange={(e) => setEditingClientName(e.target.value)}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            const trimmed = editingClientName.trim();
+                            if (!trimmed || trimmed === sc.name) {
+                              setEditingClientName(null);
+                              return;
+                            }
+                            // Optimistic update — flip in-memory state first
+                            // so the UI feels instant. DB write follows.
+                            const oldName = sc.name;
+                            setClients(prev => prev.map(c => c.id === sc.id ? { ...c, name: trimmed } : c));
+                            // Also patch any in-memory tasks that reference
+                            // this client by name (denormalized field).
+                            setTasks(prev => prev.map(t => t.client === oldName ? { ...t, client: trimmed } : t));
+                            setEditingClientName(null);
+                            try {
+                              const res = await clientsDb.update(sc.id, { name: trimmed });
+                              if (res?.error) {
+                                // Roll back optimistic update on DB failure
+                                setClients(prev => prev.map(c => c.id === sc.id ? { ...c, name: oldName } : c));
+                                setTasks(prev => prev.map(t => t.client === trimmed ? { ...t, client: oldName } : t));
+                                alert("Failed to rename: " + (res.error.message || res.error));
+                              }
+                            } catch (err) {
+                              setClients(prev => prev.map(c => c.id === sc.id ? { ...c, name: oldName } : c));
+                              setTasks(prev => prev.map(t => t.client === trimmed ? { ...t, client: oldName } : t));
+                              alert("Failed to rename: " + (err?.message || err));
+                            }
+                          } else if (e.key === "Escape") {
+                            setEditingClientName(null);
+                          }
+                        }}
+                        onBlur={() => setEditingClientName(null)}
+                        style={{
+                          fontSize: 24, fontWeight: 700, letterSpacing: -0.5,
+                          color: C.text, margin: 0, lineHeight: 1.15,
+                          background: C.surfaceWarm,
+                          border: "none",
+                          borderRadius: 6,
+                          padding: "2px 8px",
+                          outline: "none",
+                          width: "100%",
+                          maxWidth: 480,
+                          fontFamily: "inherit",
+                          boxShadow: "inset 0 0 0 1px " + C.border,
+                        }}
+                      />
+                    ) : (
+                      <h2
+                        onClick={() => setEditingClientName(sc.name)}
+                        title="Click to rename"
+                        style={{
+                          fontSize: 24, fontWeight: 700, letterSpacing: -0.5,
+                          color: C.text, margin: 0, lineHeight: 1.15,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {sc.name}
+                      </h2>
+                    )}
                     {(() => {
                       // Pause status line: "Currently paused since May 4 · 2 previous pauses"
                       // Renders only when relevant — if a client has never been paused,
