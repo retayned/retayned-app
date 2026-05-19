@@ -4507,6 +4507,11 @@ export default function App({ user }) {
   // midnight (tasks.completed_at is nulled by the rollover).
   // This array is the source of truth for cross-time worker stats.
   const [workerCompletions, setWorkerCompletions] = useState([]);
+  // Occurrence-model state — populated alongside workerCompletions during
+  // hydration. Each row is one (template, date) record. Used by Phase 3
+  // readers behind the corresponding `occurrence_flags` feature flag.
+  const [taskOccurrences, setTaskOccurrences] = useState([]);
+  const [occurrenceFlags, setOccurrenceFlags] = useState({});
   const [newTaskWorkerId, setNewTaskWorkerId] = useState(null);   // composer: assigned worker for new task
   const [workerPickerOpen, setWorkerPickerOpen] = useState(false); // composer popover
   const [addWorkerOpen, setAddWorkerOpen] = useState(false);       // add-worker modal
@@ -4563,7 +4568,7 @@ export default function App({ user }) {
     if (!userTimezone) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -4631,6 +4636,24 @@ export default function App({ user }) {
       (typeof tasksDb.getCompletedCounts === "function")
         ? tasksDb.getCompletedCounts(uid).catch(e => { console.warn("task completion counts failed:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
+      // Phase 3 occurrence-model — fetch last 90 days of task_occurrences
+      // (covers any reader's window need; smallest window is 7d, biggest
+      // is ~30d). Plus the user's occurrence_flags feature-flag map.
+      // Both feed Phase 3 cutovers behind their respective flags. Safe to
+      // run even before any reader is migrated — state just sits unused.
+      supabase
+        .from('task_occurrences')
+        .select('*')
+        .eq('user_id', uid)
+        .gte('occurrence_date', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+        .order('occurrence_date', { ascending: false })
+        .then(r => r, () => ({ data: [], error: null })),
+      supabase
+        .from('profiles')
+        .select('occurrence_flags')
+        .eq('id', uid)
+        .single()
+        .then(r => r, () => ({ data: { occurrence_flags: {} }, error: null })),
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
@@ -4760,17 +4783,56 @@ export default function App({ user }) {
       const toReset = [];
       const toClear = [];
 
+      // Phase 3 cutover via `today_recurring_display` flag.
+      // When on, override done/completed_at on recurring tasks from
+      // today's matching task_occurrences row. The occurrence row is
+      // the canonical "is this done today" record — tasks.is_done becomes
+      // a legacy mirror. One-off tasks unchanged.
+      const flagsForToday = profileFlagsRes?.data?.occurrence_flags || {};
+      const useOccurrencesForToday = flagsForToday.today_recurring_display === true;
+      let occByTaskIdToday = null;
+      if (useOccurrencesForToday && occurrencesRes?.data) {
+        const userTz = profileFlagsRes?.data?.timezone
+          || (await profileDb.get(uid))?.data?.timezone
+          || 'UTC';
+        const todayInTz = new Intl.DateTimeFormat('en-CA', {
+          timeZone: userTz, year: 'numeric', month: '2-digit', day: '2-digit',
+        }).format(new Date());
+        occByTaskIdToday = {};
+        for (const o of occurrencesRes.data) {
+          if (o.occurrence_date === todayInTz) {
+            occByTaskIdToday[o.task_id] = o;
+          }
+        }
+      }
+
       // Build local task list excluding cleared IDs and applying recurring resets
       const clearedIds = new Set(toClear.map(t => t.id));
       // Also exclude any task already cleared on a previous load
       const loadedTasks = taskRes.data.filter(t => !clearedIds.has(t.id) && !t.cleared_at).map(t => {
         const reset = toReset.find(r => r.id === t.id);
+        // When occurrence flag on, recurring tasks get done/completed_at from
+        // today's occurrence row (canonical source). Non-recurring unchanged.
+        let doneVal = reset ? false : t.is_done;
+        let completedVal = reset ? null : t.completed_at;
+        if (occByTaskIdToday && t.is_recurring) {
+          const occ = occByTaskIdToday[t.id];
+          if (occ) {
+            doneVal = occ.is_done;
+            completedVal = occ.completed_at;
+          } else {
+            // No occurrence row for today → task hasn't been materialized
+            // yet. Default to not done.
+            doneVal = false;
+            completedVal = null;
+          }
+        }
         return {
           id: t.id,
           text: t.text,
           client: t.client_name || "",
-          done: reset ? false : t.is_done,
-          completed_at: reset ? null : t.completed_at,
+          done: doneVal,
+          completed_at: completedVal,
           alert: t.is_alert,
           recurring: t.is_recurring,
           recurrence_pattern: t.recurrence_pattern || null,
@@ -4883,10 +4945,69 @@ export default function App({ user }) {
     if (workersRes?.data) setWorkersList(workersRes.data);
     if (workersComplRes?.data) setWorkerCompletions(workersComplRes.data);
 
+    // Phase 3 occurrence-model hydration. Both are no-ops if the flags
+    // for any reader are false (default) — state is set but unread.
+    if (occurrencesRes?.data) setTaskOccurrences(occurrencesRes.data);
+    if (profileFlagsRes?.data?.occurrence_flags) {
+      setOccurrenceFlags(profileFlagsRes.data.occurrence_flags || {});
+    }
+
     // Visible-on-load surfaces — calendar widget + sidebar Portfolio.
     // Now in critical path so they hydrate alongside the rest, no pop-in.
     if (personalCalRes?.data) setPersonalEvents(personalCalRes.data);
-    if (taskCompletionsRes?.data) setTaskCompletedCounts(taskCompletionsRes.data);
+
+    // Phase 3 cutover via `sidebar_completed_counts` flag.
+    //   - flag ON  → compute counts from task_occurrences (new model)
+    //   - flag OFF → tasksDb.getCompletedCounts response (current)
+    // We compute the new-model counts inline so we don't need to change
+    // db.js or add a second RPC. taskOccurrences is already loaded in
+    // the same Promise.all batch above.
+    const flagsForCounts = profileFlagsRes?.data?.occurrence_flags || {};
+    const useOccurrencesForCounts = flagsForCounts.sidebar_completed_counts === true;
+    if (useOccurrencesForCounts && occurrencesRes?.data) {
+      const occs = occurrencesRes.data.filter(o => o.is_done && o.completed_at);
+      const now = new Date();
+      const nowMs = now.getTime();
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const todayCutoff = new Date(now); todayCutoff.setHours(0, 0, 0, 0);
+      const todayMs = todayCutoff.getTime();
+      const weekMs = nowMs - 7 * DAY_MS;
+      const monthMs = nowMs - 30 * DAY_MS;
+      const yearMs = nowMs - 365 * DAY_MS;
+      let today = 0, week = 0, month = 0, year = 0;
+      const weekHistory = Array(12).fill(0);
+      const monthHistory = Array(12).fill(0);
+      const daysWithCompletions = new Set();
+      const localDayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      for (const o of occs) {
+        const t = new Date(o.completed_at);
+        const tMs = t.getTime();
+        if (tMs >= yearMs) year++;
+        if (tMs >= monthMs) month++;
+        if (tMs >= weekMs) week++;
+        if (tMs >= todayMs) today++;
+        if (tMs >= yearMs) daysWithCompletions.add(localDayKey(t));
+        // 12 rolling 7-day buckets
+        for (let i = 0; i < 12; i++) {
+          const bStart = nowMs - (12 - i) * 7 * DAY_MS;
+          const bEnd = bStart + 7 * DAY_MS;
+          if (tMs >= bStart && tMs < bEnd) weekHistory[i]++;
+          const mbStart = nowMs - (12 - i) * 30 * DAY_MS;
+          const mbEnd = mbStart + 30 * DAY_MS;
+          if (tMs >= mbStart && tMs < mbEnd) monthHistory[i]++;
+        }
+      }
+      // Streak: walk backwards from today, count consecutive days
+      let dayStreak = 0;
+      const walker = new Date(now); walker.setHours(0, 0, 0, 0);
+      while (daysWithCompletions.has(localDayKey(walker))) {
+        dayStreak++;
+        walker.setDate(walker.getDate() - 1);
+      }
+      setTaskCompletedCounts({ today, week, month, year, weekHistory, monthHistory, dayStreak });
+    } else if (taskCompletionsRes?.data) {
+      setTaskCompletedCounts(taskCompletionsRes.data);
+    }
 
     setDataLoaded(true);
 
@@ -13011,9 +13132,30 @@ export default function App({ user }) {
           // Without (2), refreshing wiped historical completion data because
           // the daily midnight rollover nulls tasks.completed_at on recurring
           // tasks to surface them as open the next day.
+          // Phase 3 cutover via `worker_stats` flag.
+          //   - flag ON  → derive worker stats from task_occurrences (new)
+          //   - flag OFF → workerCompletions / task_completions (current)
+          // We unify the shape so computeStats doesn't need to branch
+          // internally — both sources produce rows with the same fields.
+          const useOccurrencesForWorkers = occurrenceFlags.worker_stats === true;
+          const workerCompletionRows = useOccurrencesForWorkers
+            ? (taskOccurrences || [])
+                .filter(o => o.is_done && o.completed_at)
+                .map(o => ({
+                  task_id: o.task_id,
+                  user_id: o.user_id,
+                  client_id: o.client_id,
+                  client_name: o.client_name,
+                  task_text: o.task_text,
+                  completed_at: o.completed_at,
+                  assigned_worker_id: o.assigned_worker_id,
+                  was_on_time: o.was_on_time,
+                }))
+            : workerCompletions;
+
           const computeStats = (workerId) => {
             const wOpen = allAssigned.filter(t => t.assigned_worker_id === workerId);
-            const wCompletions = workerCompletions.filter(c => c.assigned_worker_id === workerId);
+            const wCompletions = workerCompletionRows.filter(c => c.assigned_worker_id === workerId);
 
             // Pending + overdue come from currently-open tasks only.
             const pending = wOpen.filter(t => !t.done).length;
@@ -15543,10 +15685,13 @@ export default function App({ user }) {
                           // Recurring tasks have their tasks.completed_at nulled
                           // by the midnight rollover, so the in-memory tasks
                           // array only carries TODAY's recurring completions.
-                          // task_completions (workerCompletions) is the
-                          // immutable history — pull from there for the
-                          // 7d window, then dedupe with today's in-memory
-                          // tasks by (task_id, calendar day).
+                          // Need an immutable history source for the 7d window.
+                          //
+                          // Phase 3 cutover via `client_recent_activity` flag:
+                          //   - flag ON  → task_occurrences (new model)
+                          //   - flag OFF → workerCompletions / task_completions (old)
+                          const useOccurrences = occurrenceFlags.client_recent_activity === true;
+
                           const taskEventsToday = (tasks || [])
                             .filter(t => t.client === sc.name && t.done && t.completed_at)
                             .map(t => {
@@ -15556,12 +15701,32 @@ export default function App({ user }) {
                             .filter(e => (NOW - e.ts) <= SEVEN_D);
 
                           const todayDedupeKeys = new Set(taskEventsToday.map(e => `${e._taskId}|${e._ymd}`));
-                          const taskEventsHistory = (workerCompletions || [])
-                            .filter(c => (c.client_name === sc.name || c.client_id === sc.id) && c.completed_at)
-                            .map(c => {
-                              const ts = new Date(c.completed_at).getTime();
-                              return { ts, kind: "task", text: c.task_text, _taskId: c.task_id, _ymd: new Date(c.completed_at).toISOString().slice(0, 10) };
-                            })
+
+                          const historySource = useOccurrences
+                            ? (taskOccurrences || [])
+                                .filter(o =>
+                                  (o.client_name === sc.name || o.client_id === sc.id) &&
+                                  o.is_done &&
+                                  o.completed_at
+                                )
+                                .map(o => ({
+                                  ts: new Date(o.completed_at).getTime(),
+                                  kind: "task",
+                                  text: o.task_text,
+                                  _taskId: o.task_id,
+                                  _ymd: o.occurrence_date,
+                                }))
+                            : (workerCompletions || [])
+                                .filter(c => (c.client_name === sc.name || c.client_id === sc.id) && c.completed_at)
+                                .map(c => ({
+                                  ts: new Date(c.completed_at).getTime(),
+                                  kind: "task",
+                                  text: c.task_text,
+                                  _taskId: c.task_id,
+                                  _ymd: new Date(c.completed_at).toISOString().slice(0, 10),
+                                }));
+
+                          const taskEventsHistory = historySource
                             .filter(e => (NOW - e.ts) <= SEVEN_D)
                             .filter(e => !todayDedupeKeys.has(`${e._taskId}|${e._ymd}`));
 
