@@ -4503,7 +4503,8 @@ export default function App({ user }) {
   // All historical completions attributed to workers. Read from
   // task_completions table on hydration. The in-memory `tasks` array
   // is only today's open tasks — completion history older than today
-  // would otherwise be lost the moment tasksDb.resetRecurring fires.
+  // would otherwise be lost when recurring tasks get rolled over each
+  // midnight (tasks.completed_at is nulled by the rollover).
   // This array is the source of truth for cross-time worker stats.
   const [workerCompletions, setWorkerCompletions] = useState([]);
   const [newTaskWorkerId, setNewTaskWorkerId] = useState(null);   // composer: assigned worker for new task
@@ -4745,32 +4746,19 @@ export default function App({ user }) {
       // If two devices are both open, both compute the same cutoff (because
       // both read the same stored value) and Realtime sync coalesces the
       // writes — no rogue-device problem.
-      // If userTimezone hasn't hydrated yet (very brief, just on first mount),
-      // skip rollover this pass; the next loadData (triggered when
-      // userTimezone resolves) will run it with the real value.
-      let toReset = [];
-      let toClear = [];
-      if (userTimezone) {
-        const cutoffMs = tzMidnightInstant(userTimezone, new Date(), 0);
-        const cutoff = new Date(cutoffMs);
-
-        // Recurring + done + completed before cutoff → reset to incomplete
-        toReset = taskRes.data.filter(t =>
-          t.is_recurring && t.is_done &&
-          t.completed_at && new Date(t.completed_at) < cutoff
-        );
-
-        // Non-recurring + done + completed before cutoff → soft-clear from active view
-        // (row stays in DB; only hidden from frontend's active Today list)
-        toClear = taskRes.data.filter(t =>
-          !t.is_recurring && t.is_done && !t.cleared_at &&
-          t.completed_at && new Date(t.completed_at) < cutoff
-        );
-
-        // Fire off DB mutations in background (don't block UI render)
-        toReset.forEach(t => { tasksDb.toggle(t.id, false); });
-        toClear.forEach(t => { tasksDb.clearFromActive(t.id); });
-      }
+      // Day rollover (reset of recurring + soft-clear of completed one-offs)
+      // does NOT happen inside loadData anymore. It fires exclusively from
+      // the midnight scheduler timeout (see useEffect below). Reasoning:
+      // loadData runs on mount, on visibility change, on user re-auth, on
+      // realtime sync events, on Settings TZ changes — any of which can
+      // happen at any time of day. Coupling the reset to loadData meant
+      // the reset could fire multiple times per day with different
+      // userTimezone snapshots, leading to the 10pm-MT-and-midnight-MT
+      // double-fire we observed. The midnight scheduler is the ONLY place
+      // that knows "the day just changed" — so it's the only place that
+      // should mutate task state for the rollover.
+      const toReset = [];
+      const toClear = [];
 
       // Build local task list excluding cleared IDs and applying recurring resets
       const clearedIds = new Set(toClear.map(t => t.id));
@@ -5210,7 +5198,6 @@ export default function App({ user }) {
             // Forensic log — if profiles.timezone ever mysteriously goes
             // null this branch fires and writes whatever the device says.
             // The log captures who/when so we can audit.
-            console.log('[TZ-SEED]', { user_id: user.id, detectedTz, profRes_data: profRes?.data, ts: new Date().toISOString(), stack: new Error().stack });
             setUserTimezone(detectedTz);
             await profileDb.update(user.id, { timezone: detectedTz });
           }
@@ -5238,6 +5225,48 @@ export default function App({ user }) {
   useEffect(() => {
     if (!user) return;
     let timeoutId;
+
+    // Day-rollover effects: reset recurring tasks + soft-clear completed
+    // one-offs. Fires AT MOST once per calendar day in stored TZ, gated
+    // by a localStorage idempotency token. Reusable so both the scheduled
+    // midnight tick AND the effect-mount catch-up (for laptop-sleep / tab
+    // reopen) share the same write path and same lock.
+    const runRolloverIfNeeded = async () => {
+      if (!userTimezone) return;
+      try {
+        const todayYmd = ymdInTz(userTimezone, new Date());
+        const lastRolloverKey = `rt:lastRolloverYmd:${user.id}`;
+        let lastRolloverYmd = null;
+        try { lastRolloverYmd = localStorage.getItem(lastRolloverKey); } catch (_) { /* localStorage unavailable */ }
+        if (lastRolloverYmd === todayYmd) return; // already done today
+        const cutoffMs = tzMidnightInstant(userTimezone, new Date(), 0);
+        const cutoff = new Date(cutoffMs);
+        const allRes = await tasksDb.listToday(user.id);
+        if (!allRes?.data) return;
+        const recurringToReset = allRes.data.filter(t =>
+          t.is_recurring && t.is_done &&
+          t.completed_at && new Date(t.completed_at) < cutoff
+        );
+        const oneOffsToClear = allRes.data.filter(t =>
+          !t.is_recurring && t.is_done && !t.cleared_at &&
+          t.completed_at && new Date(t.completed_at) < cutoff
+        );
+        await Promise.all([
+          ...recurringToReset.map(t => tasksDb.toggle(t.id, false)),
+          ...oneOffsToClear.map(t => tasksDb.clearFromActive(t.id)),
+        ]);
+        try { localStorage.setItem(lastRolloverKey, todayYmd); } catch (_) { /* localStorage unavailable */ }
+      } catch (e) {
+        console.warn('Midnight rollover failed:', e);
+      }
+    };
+
+    // Catch-up: on mount/effect-run, fire rollover if it hasn't run today.
+    // Handles laptop-sleep across midnight (timer pauses, missed fire),
+    // tab reopened next morning, or userTimezone resolved late after
+    // already crossing local midnight. Followed by loadData to refresh UI.
+    runRolloverIfNeeded().then(() => loadData());
+
     const scheduleNextMidnight = () => {
       const now = new Date();
       const nextMidnightMs = userTimezone
@@ -5249,7 +5278,8 @@ export default function App({ user }) {
             return d.getTime();
           })();
       const msUntil = Math.max(0, nextMidnightMs - now.getTime());
-      timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(async () => {
+        await runRolloverIfNeeded();
         loadData();
         scheduleNextMidnight();
       }, msUntil);
@@ -5257,7 +5287,13 @@ export default function App({ user }) {
     scheduleNextMidnight();
 
     // Also refresh when tab regains focus — catches laptop-sleep case where setTimeout
-    // may have paused across system sleep and missed the midnight fire
+    // may have paused across system sleep and missed the midnight fire.
+    // Importantly this only re-reads data (loadData). It does NOT run the
+    // rollover. If the user returns the next day, the FIRST loadData of
+    // that day will find the rollover hasn't fired (key in localStorage is
+    // yesterday's YMD), and the scheduleNextMidnight chain will catch up
+    // when the next timer fires — typically within ms since we always
+    // schedule against the NEXT midnight from "now."
     const onVisible = () => { if (document.visibilityState === "visible") loadData(); };
     document.addEventListener("visibilitychange", onVisible);
 
@@ -12968,12 +13004,13 @@ export default function App({ user }) {
           //       Used for: pending, overdue, currently-open client mix.
           //   (2) `workerCompletions` — historical completion events from
           //       the task_completions table. Persists across day rollovers
-          //       and resetRecurring (the in-memory tasks array loses these
-          //       on refresh). Used for: all-time completed counts, on-time
-          //       rates, time-windowed counts, completion-based client mix.
+          //       (the in-memory tasks array loses these on refresh).
+          //       Used for: all-time completed counts, on-time rates,
+          //       time-windowed counts, completion-based client mix.
           //
           // Without (2), refreshing wiped historical completion data because
-          // resetRecurring nulls tasks.completed_at every morning.
+          // the daily midnight rollover nulls tasks.completed_at on recurring
+          // tasks to surface them as open the next day.
           const computeStats = (workerId) => {
             const wOpen = allAssigned.filter(t => t.assigned_worker_id === workerId);
             const wCompletions = workerCompletions.filter(c => c.assigned_worker_id === workerId);
@@ -14918,23 +14955,13 @@ export default function App({ user }) {
                 ];
                 const writeTz = async (tz) => {
                   if (!user) return;
-                  // Forensic log — captures every TZ write site so we can
-                  // see what fired if the value mysteriously reverts.
-                  console.log('[TZ-WRITE]', { user_id: user.id, requested: tz, ts: new Date().toISOString(), stack: new Error().stack });
                   try {
-                    // profileDb.update returns { data, error } — must check
-                    // both. A silent failure (.update succeeds at network
-                    // level but RLS blocks it, or value didn't actually
-                    // change) is the bug we've been chasing.
                     const res = await profileDb.update(user.id, { timezone: tz });
                     if (res?.error) {
-                      console.error('[TZ-WRITE] DB error:', res.error);
                       alert('Failed to save timezone: ' + (res.error.message || res.error));
                       return;
                     }
-                    // Verify the response actually carries the value we asked for.
                     if (res?.data?.timezone && res.data.timezone !== tz) {
-                      console.error('[TZ-WRITE] Persisted value differs from requested:', { requested: tz, persisted: res.data.timezone });
                       alert('Timezone save returned unexpected value: ' + res.data.timezone);
                       return;
                     }
@@ -14942,7 +14969,6 @@ export default function App({ user }) {
                     setEditingTimezone(false);
                     loadData();
                   } catch (e) {
-                    console.error('[TZ-WRITE] Threw:', e);
                     alert('Failed to save timezone: ' + (e?.message || e));
                   }
                 };
@@ -15514,13 +15540,32 @@ export default function App({ user }) {
                           const NOW = Date.now();
                           const SEVEN_D = 7 * 24 * 60 * 60 * 1000;
 
-                          const taskEvents = (tasks || [])
+                          // Recurring tasks have their tasks.completed_at nulled
+                          // by the midnight rollover, so the in-memory tasks
+                          // array only carries TODAY's recurring completions.
+                          // task_completions (workerCompletions) is the
+                          // immutable history — pull from there for the
+                          // 7d window, then dedupe with today's in-memory
+                          // tasks by (task_id, calendar day).
+                          const taskEventsToday = (tasks || [])
                             .filter(t => t.client === sc.name && t.done && t.completed_at)
                             .map(t => {
                               const ts = new Date(t.completed_at).getTime();
-                              return { ts, kind: "task", text: t.text };
+                              return { ts, kind: "task", text: t.text, _taskId: t.id, _ymd: new Date(t.completed_at).toISOString().slice(0, 10) };
                             })
                             .filter(e => (NOW - e.ts) <= SEVEN_D);
+
+                          const todayDedupeKeys = new Set(taskEventsToday.map(e => `${e._taskId}|${e._ymd}`));
+                          const taskEventsHistory = (workerCompletions || [])
+                            .filter(c => (c.client_name === sc.name || c.client_id === sc.id) && c.completed_at)
+                            .map(c => {
+                              const ts = new Date(c.completed_at).getTime();
+                              return { ts, kind: "task", text: c.task_text, _taskId: c.task_id, _ymd: new Date(c.completed_at).toISOString().slice(0, 10) };
+                            })
+                            .filter(e => (NOW - e.ts) <= SEVEN_D)
+                            .filter(e => !todayDedupeKeys.has(`${e._taskId}|${e._ymd}`));
+
+                          const taskEvents = [...taskEventsToday, ...taskEventsHistory];
 
                           const tpEvents = (allTouchpoints || [])
                             .filter(tp => (tp.client_name === sc.name || tp.client_id === sc.id) && tp.occurred_at)
