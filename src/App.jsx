@@ -2527,16 +2527,15 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           background: (() => {
             const h = new Date().getHours();
             // [r,g,b] tint for the wash + center alpha intensity.
-            // Alphas roughly 2x previous values so the wash reads as a
-            // visible warm wash, not "is it on?" — was too subtle before.
+            // Alphas roughly 1.25x the original values — visible but not loud.
             let tint, alpha;
-            if (h < 6)        { tint = "180,190,205"; alpha = 0.18; }   // pre-dawn — cool blue
-            else if (h < 10)  { tint = "220,225,225"; alpha = 0.16; }   // morning — soft cool cream
-            else if (h < 14)  { tint = "245,225,190"; alpha = 0.20; }   // midday — warm cream (more saturated)
-            else if (h < 17)  { tint = "250,220,175"; alpha = 0.24; }   // afternoon — warming amber
-            else if (h < 19)  { tint = "245,200,140"; alpha = 0.30; }   // golden hour — deep amber
-            else if (h < 22)  { tint = "230,180,135"; alpha = 0.26; }   // dusk — warm amber
-            else              { tint = "200,175,155"; alpha = 0.22; }   // night — muted warmth
+            if (h < 6)        { tint = "180,190,205"; alpha = 0.12; }   // pre-dawn — cool blue
+            else if (h < 10)  { tint = "220,225,225"; alpha = 0.075; }  // morning — soft cool cream
+            else if (h < 14)  { tint = "245,235,215"; alpha = 0.05; }   // midday — warm neutral cream
+            else if (h < 17)  { tint = "250,235,205"; alpha = 0.125; }  // afternoon — warming amber
+            else if (h < 19)  { tint = "245,210,160"; alpha = 0.175; }  // golden hour — deep amber
+            else if (h < 22)  { tint = "235,195,150"; alpha = 0.15; }   // dusk — warm amber
+            else              { tint = "200,180,165"; alpha = 0.125; }  // night — muted warmth
             // Three-stop: top = 40% of center alpha, center = full, bottom = 60% of center.
             // Top is non-zero so the gradient never visually disappears.
             const aTop = (alpha * 0.4).toFixed(3);
@@ -3179,9 +3178,14 @@ function ReferralNetworkD3({
   C,
   getAvatarColor,
   getInitials,
+  isMobile = false,
 }) {
-  // SVG viewport — fixed pixel size, scales via CSS width:100%.
-  const W = 820, H = 500;
+  // SVG viewport — landscape on desktop, portrait on mobile.
+  // Mobile uses a taller/narrower viewBox so the network has vertical room
+  // to spread out at typical phone widths (~380px). Without this, the 820w
+  // landscape viewBox scales down to ~232h on a phone — nodes become tiny.
+  const W = isMobile ? 380 : 820;
+  const H = isMobile ? 560 : 500;
   const cx = W / 2, cy = H / 2;
 
   // Filter to as-of date for time-travel slider. Each child carries an
@@ -3317,24 +3321,24 @@ function ReferralNetworkD3({
       .force("link", forceLink(links.map(l => ({ ...l })))
         .id(d => d.id)
         .distance(link => {
-          if (link.kind === "hub-ref") return 130;
-          if (link.kind === "hub-ask") return 150; // ASK children sit a little further out
-          return 60; // ref-child
+          // Mobile uses ~60% link distance — tighter clustering for the
+          // narrower 380×560 viewport. Desktop unchanged.
+          if (link.kind === "hub-ref") return isMobile ? 80 : 130;
+          if (link.kind === "hub-ask") return isMobile ? 95 : 150;
+          return isMobile ? 42 : 60; // ref-child
         })
         .strength(link => link.kind === "ref-child" ? 0.9 : 0.4))
       .force("charge", forceManyBody().strength(d => {
-        if (d.kind === "hub") return -800;
-        if (d.kind === "referrer") return -350;
-        return -160; // child (includes canRefer children)
+        // Mobile repulsion scaled down proportionally.
+        if (d.kind === "hub") return isMobile ? -500 : -800;
+        if (d.kind === "referrer") return isMobile ? -220 : -350;
+        return isMobile ? -100 : -160; // child
       }))
       .force("center", forceCenter(cx, cy).strength(0.05))
       // Collision radius bumped well past the circle: labels render
-      // 14-28px outside the node, and we don't want neighbouring
-      // labels to overlap. The previous +8 left enough room only for
-      // the circles themselves. +28 gives breathing space for the
-      // name line; revenue/ASK lines sit even further out but they're
-      // shorter so we accept occasional minor overlap.
-      .force("collide", forceCollide().radius(d => d.radius + 28).strength(0.95))
+      // 14-28px outside the node. Mobile uses tighter collision so labels
+      // overlap less aggressively when nodes are crowded.
+      .force("collide", forceCollide().radius(d => d.radius + (isMobile ? 18 : 28)).strength(0.95))
       .force("x", d3forceX(cx).strength(0.04))
       .force("y", d3forceY(cy).strength(0.04))
       .alpha(1)
@@ -3415,7 +3419,7 @@ function ReferralNetworkD3({
   // Render
   return (
     <div style={{ position: "relative", width: "100%" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: 520, display: "block" }} onMouseLeave={handleLeave}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: isMobile ? 600 : 520, display: "block" }} onMouseLeave={handleLeave}>
         <defs>
           <radialGradient id="hubGlowD3" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor={C.primary} stopOpacity="0.25" />
@@ -12694,7 +12698,7 @@ export default function App({ user }) {
                           const overdueDays = h.overdue;
                           const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
                           const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Start early · in ${h.daysUntil}d`;
-                          const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.btn : C.retOk;
+                          const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.textSec : C.retOk;
                           return (
                             <button
                               key={i}
@@ -14206,6 +14210,7 @@ export default function App({ user }) {
                             C={C}
                             getAvatarColor={getAvatarColor}
                             getInitials={getInitials}
+                            isMobile={isMobile}
                           />
 
                           {/* Time-as-of slider — drag to see the network grow.
@@ -14700,7 +14705,6 @@ export default function App({ user }) {
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>
                               </div>
-                              {isActive && <span style={{ width: 7, height: 7, borderRadius: 4, background: C.primary, boxShadow: "0 0 0 3px " + C.primarySoft, flexShrink: 0 }} />}
                             </button>
                           );
                         })}
