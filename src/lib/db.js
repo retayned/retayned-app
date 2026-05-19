@@ -231,12 +231,12 @@ export const tasks = {
   //   - When done=false, delete today's task_completions row for this
   //     task (the "I clicked it by mistake" undo case).
   //
-  // task_completions exists because tasksDb.resetRecurring nulls
-  // tasks.completed_at on recurring tasks every morning. Without a
-  // separate record, recurring completions are invisible to the sweep
-  // and the sidebar counter. The new table holds every completion as
-  // an immutable record; tasks.completed_at remains the "current
-  // state" field.
+  // task_completions exists because the daily midnight rollover nulls
+  // tasks.completed_at on recurring tasks (to surface them as open the
+  // next day). Without a separate record, recurring completions are
+  // invisible to the sweep and the sidebar counter. This table holds
+  // every completion as an immutable record; tasks.completed_at remains
+  // the "current state" field.
   toggle: async (taskId, isDone) => {
     // Read the row to capture task metadata for the completion record
     // (denormalized snapshots). Also tells us the user_id and client_id.
@@ -381,18 +381,6 @@ export const tasks = {
     );
     const results = await Promise.all(promises);
     return { errors: results.filter(r => r.error).map(r => r.error) };
-  },
-
-  // Reset recurring tasks (called at start of day)
-  resetRecurring: async (userId) => {
-    const { data, error } = await supabase
-      .from('tasks')
-      .update({ is_done: false, completed_at: null })
-      .eq('user_id', userId)
-      .eq('is_recurring', true)
-      .eq('is_done', true)
-      .select();
-    return { data, error };
   },
 
   // Get count of completed tasks for week/month/year windows + history buckets.
@@ -2080,9 +2068,9 @@ export const workers = {
 
   // ALL historical completions attributed to workers. Used by the Workers
   // page to compute long-running stats that the in-memory `tasks` array
-  // can't preserve — once tasks.resetRecurring nulls completed_at each
-  // morning, the only way to know "worker X completed task Y" is to read
-  // task_completions.
+  // can't preserve — once the midnight rollover nulls completed_at on
+  // recurring tasks, the only way to know "worker X completed task Y" is
+  // to read task_completions.
   //
   // Returns the raw rows (sorted newest-first). Workers page composes
   // them with the in-memory open tasks to compute pending/overdue/etc.
