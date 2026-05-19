@@ -2526,15 +2526,17 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           // visibly present without losing the center-peak character.
           background: (() => {
             const h = new Date().getHours();
-            // [r,g,b] tint for the wash + center alpha intensity
+            // [r,g,b] tint for the wash + center alpha intensity.
+            // Alphas roughly 2x previous values so the wash reads as a
+            // visible warm wash, not "is it on?" — was too subtle before.
             let tint, alpha;
-            if (h < 6)        { tint = "180,190,205"; alpha = 0.10; }   // pre-dawn — cool blue
-            else if (h < 10)  { tint = "220,225,225"; alpha = 0.08; }   // morning — soft cool cream
-            else if (h < 14)  { tint = "245,235,215"; alpha = 0.10; }   // midday — warm neutral cream (bumped from near-zero)
-            else if (h < 17)  { tint = "250,235,205"; alpha = 0.12; }   // afternoon — warming amber
-            else if (h < 19)  { tint = "245,210,160"; alpha = 0.16; }   // golden hour — deep amber
-            else if (h < 22)  { tint = "235,195,150"; alpha = 0.14; }   // dusk — warm amber
-            else              { tint = "200,180,165"; alpha = 0.12; }   // night — muted warmth
+            if (h < 6)        { tint = "180,190,205"; alpha = 0.18; }   // pre-dawn — cool blue
+            else if (h < 10)  { tint = "220,225,225"; alpha = 0.16; }   // morning — soft cool cream
+            else if (h < 14)  { tint = "245,225,190"; alpha = 0.20; }   // midday — warm cream (more saturated)
+            else if (h < 17)  { tint = "250,220,175"; alpha = 0.24; }   // afternoon — warming amber
+            else if (h < 19)  { tint = "245,200,140"; alpha = 0.30; }   // golden hour — deep amber
+            else if (h < 22)  { tint = "230,180,135"; alpha = 0.26; }   // dusk — warm amber
+            else              { tint = "200,175,155"; alpha = 0.22; }   // night — muted warmth
             // Three-stop: top = 40% of center alpha, center = full, bottom = 60% of center.
             // Top is non-zero so the gradient never visually disappears.
             const aTop = (alpha * 0.4).toFixed(3);
@@ -3824,10 +3826,6 @@ export default function App({ user }) {
   const [editingProfile, setEditingProfile] = useState(false);
   const [editScores, setEditScores] = useState({});
   const [radarHoverDim, setRadarHoverDim] = useState(null); // key of dimension being hovered/tapped on the client profile radar
-  // Inline edit state for client name in the profile header. Null when not
-  // editing; holds the in-progress draft string when active. Clicking the
-  // name swaps the h2 for an input field — Enter saves, Esc cancels.
-  const [editingClientName, setEditingClientName] = useState(null);
   // Toggle for the "edit historical baseline" disclosure inside the edit-client
   // modal. Hidden by default — most users will never need to touch this.
   // Resets when client modal opens (handled by the selectedClient reset effect).
@@ -9470,7 +9468,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 5,
                             ...(rankMode === "rai"
-                              ? { background: C.card, color: C.btn, boxShadow: "var(--rt-sh-card)" }
+                              ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
                               : {}),
                           }}
                         >
@@ -12677,48 +12675,58 @@ export default function App({ user }) {
                       </div>
                     );
                   })()}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Queue</span>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{activeQueue.length}</span>
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Queue</div>
+                        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Overdue first, then upcoming</div>
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999, flexShrink: 0 }}>{activeQueue.length}</span>
                     </div>
-                    {activeQueue.length === 0 && (
-                      <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "10px 0" }}>All caught up.</div>
+                    {activeQueue.length === 0 ? (
+                      <div style={{ padding: "20px 14px", textAlign: "center" }}>
+                        <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>All caught up.</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {activeQueue.map((h, i) => {
+                          const isOpen = hcOpen === h.client;
+                          const overdueDays = h.overdue;
+                          const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
+                          const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Start early · in ${h.daysUntil}d`;
+                          const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.btn : C.retOk;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => setHcOpen(isOpen ? null : h.client)}
+                              className={"rt-soft-row" + (isOpen ? " is-active" : "")}
+                              style={{
+                                position: "relative",
+                                display: "flex", alignItems: "center", gap: 10,
+                                padding: "12px 14px",
+                                border: "none",
+                                borderBottom: i === activeQueue.length - 1 ? "none" : "1px solid " + C.borderLight,
+                                borderLeft: isOpen ? "3px solid " + C.primary : "3px solid transparent",
+                                cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                                ...(isOpen ? { background: C.primarySoft } : {}),
+                              }}
+                            >
+                              {/* Overdue red dot — top right corner */}
+                              {overdueDays > 0 && (
+                                <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: 4, background: C.retCrit }} />
+                              )}
+                              <div style={{ width: 30, height: 30, borderRadius: 15, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
+                                {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.client}</div>
+                                <div style={{ fontSize: 11, color: subColor, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subLabel}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {activeQueue.map((h, i) => {
-                        const isOpen = hcOpen === h.client;
-                        const overdueDays = h.overdue;
-                        const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
-                        const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Start early · in ${h.daysUntil}d`;
-                        const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.btn : C.retOk;
-                        return (
-                          <div key={i} onClick={() => setHcOpen(isOpen ? null : h.client)}
-                            className="rc-queue-item"
-                            data-active={isOpen ? "true" : "false"}
-                            style={{
-                            position: "relative",
-                            padding: "10px 12px", borderRadius: 8, cursor: "pointer",
-                            background: isOpen ? C.primarySoft : "transparent",
-                            border: "1px solid " + (isOpen ? C.primary + "55" : "transparent"),
-                            display: "flex", alignItems: "center", gap: 10,
-                            transition: "background 140ms",
-                          }}>
-                            {/* Overdue red dot — top right */}
-                            {overdueDays > 0 && (
-                              <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: 4, background: C.retCrit }} />
-                            )}
-                            <div style={{ width: 24, height: 24, borderRadius: 12, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
-                              {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.client}</div>
-                              <div style={{ fontSize: 10.5, color: subColor, marginTop: 1 }}>{subLabel}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
                 </div>
 
@@ -14652,23 +14660,45 @@ export default function App({ user }) {
                     })}
                   </div>
 
-                  {/* Awaiting retro queue */}
+                  {/* Awaiting retro queue — matches Referrals "Who to ask next" pattern.
+                      Card with header section (borderBottom divider), rows with 3px
+                      primary left-bar on active + borderBottom between rows. Same
+                      soft-row hover wash, same retention-gradient avatars, same
+                      two-line content layout. */}
                   {queued.length > 0 && (
-                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                        <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Awaiting retro</div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999 }}>{queued.length}</span>
+                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                      <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Awaiting retro</div>
+                          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Most recent first</div>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999, flexShrink: 0 }}>{queued.length}</span>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {queued.map(e => {
+                      <div style={{ display: "flex", flexDirection: "column" }}>
+                        {queued.map((e, i) => {
                           const isActive = active?.id === e.id;
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
+                          const meta = (e.type === "former" ? "Former" : "One-off") + (contact ? " · " + contact.split(" ")[0] : "");
                           return (
-                            <button key={e.id} onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 8, border: "1px solid " + (isActive ? C.primary : "transparent"), cursor: "pointer", fontFamily: "inherit", ...(isActive ? { background: C.primarySoft } : {}) }}>                              <Avatar id={e.id} name={name} size={22} />
-                              <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-                                <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1 }}>{e.type === "former" ? "Former" : "One-off"}{contact ? " · " + contact.split(" ")[0] : ""}</div>
+                            <button
+                              key={e.id}
+                              onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }}
+                              className={"rt-soft-row" + (isActive ? " is-active" : "")}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 10,
+                                padding: "12px 14px",
+                                border: "none",
+                                borderBottom: i === queued.length - 1 ? "none" : "1px solid " + C.borderLight,
+                                borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent",
+                                cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                                ...(isActive ? { background: C.primarySoft } : {}),
+                              }}
+                            >
+                              <Avatar id={e.id} name={name} size={30} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>
                               </div>
                               {isActive && <span style={{ width: 7, height: 7, borderRadius: 4, background: C.primary, boxShadow: "0 0 0 3px " + C.primarySoft, flexShrink: 0 }} />}
                             </button>
@@ -15525,72 +15555,7 @@ export default function App({ user }) {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {editingClientName !== null ? (
-                      <input
-                        autoFocus
-                        type="text"
-                        value={editingClientName}
-                        onChange={(e) => setEditingClientName(e.target.value)}
-                        onKeyDown={async (e) => {
-                          if (e.key === "Enter") {
-                            const trimmed = editingClientName.trim();
-                            if (!trimmed || trimmed === sc.name) {
-                              setEditingClientName(null);
-                              return;
-                            }
-                            // Optimistic update — flip in-memory state first
-                            // so the UI feels instant. DB write follows.
-                            const oldName = sc.name;
-                            setClients(prev => prev.map(c => c.id === sc.id ? { ...c, name: trimmed } : c));
-                            // Also patch any in-memory tasks that reference
-                            // this client by name (denormalized field).
-                            setTasks(prev => prev.map(t => t.client === oldName ? { ...t, client: trimmed } : t));
-                            setEditingClientName(null);
-                            try {
-                              const res = await clientsDb.update(sc.id, { name: trimmed });
-                              if (res?.error) {
-                                // Roll back optimistic update on DB failure
-                                setClients(prev => prev.map(c => c.id === sc.id ? { ...c, name: oldName } : c));
-                                setTasks(prev => prev.map(t => t.client === trimmed ? { ...t, client: oldName } : t));
-                                alert("Failed to rename: " + (res.error.message || res.error));
-                              }
-                            } catch (err) {
-                              setClients(prev => prev.map(c => c.id === sc.id ? { ...c, name: oldName } : c));
-                              setTasks(prev => prev.map(t => t.client === trimmed ? { ...t, client: oldName } : t));
-                              alert("Failed to rename: " + (err?.message || err));
-                            }
-                          } else if (e.key === "Escape") {
-                            setEditingClientName(null);
-                          }
-                        }}
-                        onBlur={() => setEditingClientName(null)}
-                        style={{
-                          fontSize: 24, fontWeight: 700, letterSpacing: -0.5,
-                          color: C.text, margin: 0, lineHeight: 1.15,
-                          background: C.surfaceWarm,
-                          border: "none",
-                          borderRadius: 6,
-                          padding: "2px 8px",
-                          outline: "none",
-                          width: "100%",
-                          maxWidth: 480,
-                          fontFamily: "inherit",
-                          boxShadow: "inset 0 0 0 1px " + C.border,
-                        }}
-                      />
-                    ) : (
-                      <h2
-                        onClick={() => setEditingClientName(sc.name)}
-                        title="Click to rename"
-                        style={{
-                          fontSize: 24, fontWeight: 700, letterSpacing: -0.5,
-                          color: C.text, margin: 0, lineHeight: 1.15,
-                          cursor: "pointer",
-                        }}
-                      >
-                        {sc.name}
-                      </h2>
-                    )}
+                    <h2 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, color: C.text, margin: 0, lineHeight: 1.15 }}>{sc.name}</h2>
                     {(() => {
                       // Pause status line: "Currently paused since May 4 · 2 previous pauses"
                       // Renders only when relevant — if a client has never been paused,
@@ -15863,6 +15828,10 @@ export default function App({ user }) {
                       <>
                         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Edit Client Details</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div>
+                            <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Company name</label>
+                            <input value={overviewEditData.name ?? sc.name} onChange={e => setOverviewEditData({ ...overviewEditData, name: e.target.value })} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                          </div>
                           {[{ key: "contact", label: "Contact name" }, { key: "role", label: "Role" }, { key: "tag", label: "Industry" }].map(f => (
                             <div key={f.key}>
                               <label style={{ fontSize: 14, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>{f.label}</label>
@@ -16082,6 +16051,10 @@ export default function App({ user }) {
                             const newBaseline = Number(overviewEditData.lifetime_revenue_at_entry) || 0;
                             const rateChanged = newRate !== Number(sc.revenue || 0);
 
+                            const oldName = sc.name;
+                            const newName = (overviewEditData.name ?? sc.name).trim() || sc.name;
+                            const nameChanged = newName !== oldName;
+
                             // Always save the non-revenue fields via clientsDb.update.
                             // Revenue specifically goes through revenueHistoryDb.changeRate
                             // when it changed — that closes the active history row, opens
@@ -16095,6 +16068,7 @@ export default function App({ user }) {
                               renewal_date: overviewEditData.renewal_date || null,
                               lifetime_revenue_at_entry: newBaseline,
                             };
+                            if (nameChanged) baseUpdates.name = newName;
                             // If revenue did NOT change, include it in the update so we
                             // don't make an extra call.
                             if (!rateChanged) baseUpdates.revenue = newRate;
@@ -16103,6 +16077,7 @@ export default function App({ user }) {
                             const updated = {
                               ...sc,
                               ...baseUpdates,
+                              name: newName,
                               revenue: newRate,
                               // ltv recompute: pre-entry baseline + history. Since rate
                               // change just happened (or didn't), the current row's
@@ -16111,6 +16086,11 @@ export default function App({ user }) {
                               ltv: newBaseline + (Number(sc.ltv || 0) - Number(sc.lifetime_revenue_at_entry || 0)),
                             };
                             setClients(prev => prev.map(c => c.id === sc.id ? updated : c));
+                            // Patch denormalized client name on in-memory tasks so
+                            // task.client lookups don't break after rename.
+                            if (nameChanged) {
+                              setTasks(prev => prev.map(t => t.client === oldName ? { ...t, client: newName } : t));
+                            }
                             setSelectedClient(updated);
                             setEditingOverview(false);
 
