@@ -216,6 +216,52 @@ export const tasks = {
       .insert({ user_id: userId, ...task })
       .select()
       .single();
+    if (error || !data) return { data, error };
+
+    // ─── DUAL-WRITE: materialize today's occurrence for new recurring
+    // templates so the task shows in the UI immediately (otherwise it
+    // wouldn't appear until tomorrow's cron creates today's row).
+    if (data.is_recurring) {
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('timezone')
+          .eq('id', userId)
+          .single();
+        const tz = prof?.timezone || 'UTC';
+        const todayInTz = new Intl.DateTimeFormat('en-CA', {
+          timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+        }).format(new Date());
+
+        let clientName = null;
+        if (data.client_id) {
+          const { data: cli } = await supabase
+            .from('clients')
+            .select('name')
+            .eq('id', data.client_id)
+            .single();
+          clientName = cli?.name ?? null;
+        }
+
+        const { error: occErr } = await supabase
+          .from('task_occurrences')
+          .upsert({
+            task_id: data.id,
+            user_id: userId,
+            occurrence_date: todayInTz,
+            is_done: false,
+            completed_at: null,
+            assigned_worker_id: data.assigned_worker_id || null,
+            client_id: data.client_id,
+            client_name: clientName,
+            task_text: data.text,
+          }, { onConflict: 'task_id,occurrence_date' });
+        if (occErr) console.warn('task_occurrences materialize-on-create failed:', occErr);
+      } catch (e) {
+        console.warn('task_occurrences materialize-on-create threw:', e);
+      }
+    }
+
     return { data, error };
   },
 
@@ -324,6 +370,68 @@ export const tasks = {
         .gte('completed_at', todayStart.toISOString())
         .lte('completed_at', todayEnd.toISOString());
       if (delErr) console.warn('task_completions delete (undo) failed:', delErr);
+    }
+
+    // ─── DUAL-WRITE: also update task_occurrences for today ────────────
+    // Phase 2 of the occurrence-model migration. Every toggle writes to
+    // both the old fields (above) AND the corresponding occurrence row
+    // here. Phase 3 will cut readers over to occurrences one at a time;
+    // Phase 4 removes the old writes. This is best-effort — failures
+    // log but don't fail the toggle (old fields are still authoritative
+    // until Phase 4).
+    try {
+      // Determine "today" in the user's stored timezone. Same logic the
+      // SQL materializer uses, so the occurrence date matches what
+      // pg_cron will create for tomorrow's auto-materialization.
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('timezone')
+        .eq('id', existing.user_id)
+        .single();
+      const tz = prof?.timezone || 'UTC';
+      // Compute YYYY-MM-DD in user's stored TZ using Intl. This is the
+      // same date the SQL function (now() AT TIME ZONE tz)::date returns
+      // for the same moment, so writes from JS and SQL agree.
+      const todayInTz = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date());
+
+      let clientName = null;
+      if (existing.client_id) {
+        const { data: cli } = await supabase
+          .from('clients')
+          .select('name')
+          .eq('id', existing.client_id)
+          .single();
+        clientName = cli?.name ?? null;
+      }
+
+      // Upsert: if a row exists for (task_id, today), update is_done +
+      // completed_at. If not, insert a new occurrence row with all
+      // snapshot fields. The UNIQUE(task_id, occurrence_date) constraint
+      // turns this into a deterministic upsert via ON CONFLICT.
+      const wasOnTime = !existing.due_date
+        ? true
+        : (nowIso.slice(0, 10) <= String(existing.due_date).slice(0, 10));
+
+      const { error: occErr } = await supabase
+        .from('task_occurrences')
+        .upsert({
+          task_id: taskId,
+          user_id: existing.user_id,
+          occurrence_date: todayInTz,
+          is_done: isDone,
+          completed_at: isDone ? nowIso : null,
+          assigned_worker_id: existing.assigned_worker_id || null,
+          worker_completed_at: null, // worker flow not wired here yet
+          was_on_time: isDone ? wasOnTime : null,
+          client_id: existing.client_id,
+          client_name: clientName,
+          task_text: existing.text,
+        }, { onConflict: 'task_id,occurrence_date' });
+      if (occErr) console.warn('task_occurrences upsert failed:', occErr);
+    } catch (occCatch) {
+      console.warn('task_occurrences dual-write threw:', occCatch);
     }
 
     return { data, error: null };
