@@ -2356,8 +2356,10 @@ export const personalCalendar = {
   },
 
   // Insert a manual event. Caller is responsible for parsing user input
-  // into { title, starts_at, ends_at? }. RLS enforces source='manual'.
-  create: async (userId, { title, starts_at, ends_at = null }) => {
+  // into { title, starts_at, ends_at?, client_id?, client_name? }.
+  // RLS enforces source='manual'. client_id/client_name link the event
+  // to a client so it becomes a signal Rai can read.
+  create: async (userId, { title, starts_at, ends_at = null, client_id = null, client_name = null }) => {
     const { data, error } = await supabase
       .from('personal_calendar_events')
       .insert({
@@ -2365,6 +2367,8 @@ export const personalCalendar = {
         title,
         starts_at,
         ends_at,
+        client_id,
+        client_name,
         source: 'manual',
       })
       .select()
@@ -2380,6 +2384,8 @@ export const personalCalendar = {
     if (typeof patch.title === 'string') allowed.title = patch.title;
     if (patch.starts_at) allowed.starts_at = patch.starts_at;
     if (patch.ends_at !== undefined) allowed.ends_at = patch.ends_at;
+    if (patch.client_id !== undefined) allowed.client_id = patch.client_id;
+    if (patch.client_name !== undefined) allowed.client_name = patch.client_name;
     const { data, error } = await supabase
       .from('personal_calendar_events')
       .update(allowed)
