@@ -5224,7 +5224,7 @@ export default function App({ user }) {
     // tracking individual INSERT/UPDATE/DELETE events.
     const raiPickSubscription = realtimeDb.onRaiPickChange(user.id, async () => {
       try {
-        const pickRes = await raiPicksDb.getCurrent(user.id);
+        const pickRes = await raiPicksDb.getCurrent(user.id, userTimezone || null);
         setRaiPicks(pickRes?.data || null);
       } catch (e) {
         console.warn("Failed to refetch rai pick after change:", e);
