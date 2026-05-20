@@ -17,7 +17,7 @@ import {
 } from "d3-force";
 import { zoom as d3zoom, zoomIdentity } from "d3-zoom";
 import { select as d3select } from "d3-selection";
- 
+
 // ============================================================
 // PALETTE
 // ============================================================
@@ -3188,11 +3188,10 @@ function ReferralNetworkD3({
   // landscape viewBox scales down to ~232h on a phone — nodes become tiny.
   // Mobile (May 2026): viewBox tightened to 340w so the SVG scales up
   // to fill typical 390-430px phone viewports, making nodes visibly
-  // larger. Link distances bumped from 60% to ~80% of desktop so nodes
-  // spread out within the (now-larger-on-screen) canvas instead of
-  // clumping in the center.
+  // larger. H reduced to 420 so the SVG doesn't reserve dead vertical
+  // space below the nodes (was 560 — left a half-screen of whitespace).
   const W = isMobile ? 340 : 820;
-  const H = isMobile ? 560 : 500;
+  const H = isMobile ? 420 : 500;
   const cx = W / 2, cy = H / 2;
 
   // Filter to as-of date for time-travel slider. Each child carries an
@@ -3461,7 +3460,19 @@ function ReferralNetworkD3({
   // Render
   return (
     <div style={{ position: "relative", width: "100%" }}>
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: isMobile ? 600 : 520, display: "block", touchAction: isMobile ? "none" : "auto" }} onMouseLeave={handleLeave}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: "100%", height: "auto", maxHeight: isMobile ? 460 : 520, display: "block", touchAction: isMobile ? "none" : "auto" }}
+        onMouseLeave={handleLeave}
+        onClick={(e) => {
+          // Tap-outside-to-close on mobile: if the user taps an empty
+          // area of the SVG (not on a node <g>), clear the tooltip.
+          // Node clicks bubble up here too but we only act when the
+          // direct event target is the svg element itself.
+          if (e.target === e.currentTarget) handleLeave();
+        }}
+      >
         <defs>
           <radialGradient id="hubGlowD3" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor={C.primary} stopOpacity="0.25" />
@@ -13836,7 +13847,7 @@ export default function App({ user }) {
         {dataLoaded && page === "referrals" && (() => {
           try {
           // ─── Helpers ───────────────────────────────────────────────────
-          const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#12523F"];
+          const AVATAR_COLORS = ["#1F7A5C"];
           const getInitials = (name) => (name || "?").split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
           const getAvatarColor = (id) => { const s = String(id || ""); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AVATAR_COLORS[h % AVATAR_COLORS.length]; };
           // Avatar — score-driven retention gradient (matches Today task page).
@@ -14331,17 +14342,13 @@ export default function App({ user }) {
                         </div>
                       </div>
                       {/* Editable draft. minHeight fits softer/neutral
-                          drafts without scrolling; firmer (longest) gets
-                          a scrollbar only when needed. Previous fix used
-                          overflow: hidden to suppress a scrollbar that
-                          fired when content brushed the boundary — but
-                          that clipped the longer firmer variant. Now:
-                          overflow: auto + slightly taller minHeight so
-                          the scrollbar only appears when actually needed. */}
+                          drafts without much trailing whitespace; firmer
+                          (longest) gets a scrollbar only when needed.
+                          overflow: auto so content is never clipped. */}
                       <textarea
                         value={displayedDraft}
                         onChange={e => { setAskDraft(e.target.value); if (activeAsk) setAskActiveId(activeAsk.name); }}
-                        style={{ width: "100%", minHeight: 260, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap", overflow: "auto", border: "none" }}
+                        style={{ width: "100%", minHeight: 210, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap", overflow: "auto", border: "none" }}
                       />
                       {/* Action row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -14457,7 +14464,7 @@ export default function App({ user }) {
           try {
           // ─── Helpers ───────────────────────────────────────────────────
           // Avatars: deterministic palette by id, initials from name.
-          const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#12523F"];
+          const AVATAR_COLORS = ["#1F7A5C"];
           const getInitials = (name) => (name || "?").split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
           const getAvatarColor = (id) => { const s = String(id || ""); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AVATAR_COLORS[h % AVATAR_COLORS.length]; };
           // Avatar — score-driven retention gradient (matches Today task page).
@@ -15054,7 +15061,13 @@ export default function App({ user }) {
                             <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onChange={e => { handleFilePick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
                             <Icon name="plus" size={16} />
                           </label>
-                          <button onClick={() => sendAi()} disabled={!aiInput.trim() && aiAttachments.length === 0} style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? C.btn : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 0.15s" }}>
+                          <button
+                            onClick={() => sendAi()}
+                            disabled={!aiInput.trim() && aiAttachments.length === 0}
+                            className={(aiInput.trim() || aiAttachments.length > 0) ? "r-btn" : ""}
+                            data-tone={(aiInput.trim() || aiAttachments.length > 0) ? "purple" : undefined}
+                            style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? undefined : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 0.15s" }}
+                          >
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13L13 8L3 3V7L9 8L3 9V13Z" fill="#fff"/></svg>
                           </button>
                         </div>
@@ -15140,7 +15153,13 @@ export default function App({ user }) {
                         <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onChange={e => { handleFilePick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
                         <Icon name="plus" size={14} />
                       </label>
-                      <button onClick={() => sendAi()} disabled={!aiInput.trim() && aiAttachments.length === 0} style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? C.btn : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 0.15s" }}>
+                      <button
+                        onClick={() => sendAi()}
+                        disabled={!aiInput.trim() && aiAttachments.length === 0}
+                        className={(aiInput.trim() || aiAttachments.length > 0) ? "r-btn" : ""}
+                        data-tone={(aiInput.trim() || aiAttachments.length > 0) ? "purple" : undefined}
+                        style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? undefined : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 0.15s" }}
+                      >
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 13L13 8L3 3V7L9 8L3 9V13Z" fill="#fff"/></svg>
                       </button>
                     </div>
@@ -17140,11 +17159,9 @@ export default function App({ user }) {
 
               </div>
 
-              {/* Sticky action footer — Discuss · Edit · Pause/Resume · Remove.
+              {/* Sticky action footer — Edit · Pause/Resume · Remove.
                   Sits at the bottom of the modal regardless of which tab is
-                  open. The Discuss button uses the gradient + halo Rai-territory
-                  treatment (same as armed Add Task, New Rai Chat). Edit/Pause/
-                  Remove are chip-language buttons (card + sh-xs).
+                  open. All three buttons flex equally to fill the row.
                   Auto-switches to Overview tab when a destructive action is
                   triggered so the existing inline confirm dialog is visible.
                   When a confirm is already active the footer hides — the
@@ -17166,37 +17183,9 @@ export default function App({ user }) {
                   padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
                   zIndex: 5,
                   display: "flex",
-                  gap: 6,
+                  gap: 8,
                   alignItems: "stretch",
                 }}>
-                  <button
-                    onClick={() => {
-                      // Open Rai chat preloaded with this client.
-                      const opener = coachOpeners[sc.name] || `Let's talk about ${sc.name}. What's on your mind?`;
-                      setAiConvoId(null);
-                      setAiMessages([{ role: "ai", text: opener }]);
-                      setSelectedClient(null);
-                      setPage("coach");
-                    }}
-                    className="r-btn"
-                    data-tone="purple"
-                    style={{
-                      flex: 1,
-                      padding: "10px 16px",
-                      border: "none",
-                      borderRadius: 8,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                    }}
-                  >
-                    <span>Discuss</span>
-                  </button>
                   <button
                     onClick={() => {
                       setClientTab("overview");
@@ -17204,7 +17193,7 @@ export default function App({ user }) {
                       setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" });
                     }}
                     className="rt-cm-btn-secondary"
-                    style={{ padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ flex: 1, padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >Edit</button>
                   <button
                     onClick={() => {
@@ -17215,7 +17204,7 @@ export default function App({ user }) {
                       setRolodexConfirm(false); setRemoveConfirm(false);
                     }}
                     className="rt-cm-btn-secondary"
-                    style={{ padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ flex: 1, padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >{sc.is_paused ? "Resume" : "Pause"}</button>
                   <button
                     onClick={() => {
@@ -17226,7 +17215,7 @@ export default function App({ user }) {
                       setPauseConfirm(false); setResumeConfirm(false); setRemoveConfirm(false);
                     }}
                     className="rt-cm-btn-danger"
-                    style={{ padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ flex: 1, padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                   >Remove</button>
                 </div>
               )}
