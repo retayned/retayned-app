@@ -1352,6 +1352,18 @@ function parseComposer(rawText, clients, workers) {
     const validClients = clients.filter(c => c && c.name && c.name.trim());
     const sortedClients = [...validClients].sort((a, b) => b.name.length - a.name.length);
 
+    // Contact first-name uniqueness map. A bare first name ("Henry")
+    // should only match a client if exactly ONE client has a contact
+    // with that first name — otherwise it's ambiguous and we don't
+    // guess. Built once here, consulted in the contact-match tier below.
+    const firstNameCounts = {};
+    for (const c of validClients) {
+      const first = (c.contact || "").trim().split(/\s+/)[0].toLowerCase();
+      if (first && first.length >= 2) {
+        firstNameCounts[first] = (firstNameCounts[first] || 0) + 1;
+      }
+    }
+
     // Build the ranked candidate list per client. Higher score wins overall.
     // We collect ALL candidate matches across clients and pick the best.
     const allCandidates = []; // {client, score, start, end}
@@ -1366,6 +1378,40 @@ function parseComposer(rawText, clients, workers) {
       if (fullM && fullM.index !== undefined) {
         allCandidates.push({ client: c, score: 100, start: fullM.index, end: fullM.index + fullM[0].length });
         continue; // best possible — skip lower-priority candidates for this client
+      }
+
+      // 95 — full contact name match ("Henry Stone"). The person's full
+      // name is nearly as specific as the company name. Only fires when
+      // the client has a multi-word contact (a bare first name is handled
+      // by the score-70 tier below with a uniqueness guard).
+      const contactName = (c.contact || "").trim();
+      if (contactName && contactName.includes(" ")) {
+        const contactRe = new RegExp(
+          `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(contactName.toLowerCase())}(?:'s)?(?=[^\\p{L}\\p{N}]|$)`,
+          "iu"
+        );
+        const cm = lower.match(contactRe);
+        if (cm && cm.index !== undefined) {
+          allCandidates.push({ client: c, score: 95, start: cm.index, end: cm.index + cm[0].length });
+          continue;
+        }
+      }
+
+      // 70 — contact FIRST name alone ("Henry"). Convenient but riskier:
+      // only fires if exactly one client has a contact with this first
+      // name (uniqueness guard built above). If two clients have a
+      // "Henry", a bare "Henry" matches neither — we don't guess.
+      const firstName = contactName.split(/\s+/)[0].toLowerCase();
+      if (firstName && firstName.length >= 2 && firstNameCounts[firstName] === 1) {
+        const firstRe = new RegExp(
+          `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(firstName)}(?:'s)?(?=[^\\p{L}\\p{N}]|$)`,
+          "iu"
+        );
+        const fm = lower.match(firstRe);
+        if (fm && fm.index !== undefined) {
+          allCandidates.push({ client: c, score: 70, start: fm.index, end: fm.index + fm[0].length });
+          continue;
+        }
       }
 
       // 90 — meaningful single-token match ("Motley", "Fool", "Matte")
