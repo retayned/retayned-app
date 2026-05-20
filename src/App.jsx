@@ -2515,39 +2515,54 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           height: visibleHeight,
           overflowY: "auto",
           paddingRight: 2,
-          // Golden-hour wash — soft atmospheric tint that shifts through
-          // the day. Computed from current hour: cool blue-cream morning
-          // (6–10am), neutral cream midday (10am–2pm), warming amber
-          // afternoon (2–5pm), full golden hour (5–7pm), deep amber dusk
-          // (7pm+).
-          //
-          // Banded gradient (May 2026): color sits in the middle band of
-          // the visible viewport and fades fully to zero at top + bottom.
-          // The band evokes a "workday" focus in the user's current scroll
-          // window without drawing literal 9-5 lines — color is felt, not
-          // seen at the corners. Alpha multiplier (0.75x) softens the
-          // overall wash so the panel doesn't read as too dark.
-          background: (() => {
-            const h = new Date().getHours();
-            // [r,g,b] tint for the wash + peak alpha intensity.
-            let tint, alpha;
-            if (h < 6)        { tint = "180,190,205"; alpha = 0.12; }   // pre-dawn — cool blue
-            else if (h < 10)  { tint = "220,225,225"; alpha = 0.075; }  // morning — soft cool cream
-            else if (h < 14)  { tint = "245,235,215"; alpha = 0.05; }   // midday — warm neutral cream
-            else if (h < 17)  { tint = "250,235,205"; alpha = 0.125; }  // afternoon — warming amber
-            else if (h < 19)  { tint = "245,210,160"; alpha = 0.175; }  // golden hour — deep amber
-            else if (h < 22)  { tint = "235,195,150"; alpha = 0.15; }   // dusk — warm amber
-            else              { tint = "200,180,165"; alpha = 0.125; }  // night — muted warmth
-            // Six-stop band: transparent 0-12%, ramp to peak by 32%, hold
-            // peak through 68%, ramp back to transparent by 88%, transparent
-            // 88-100%. Peak alpha is 0.75x the source value. Band extended
-            // ~6% each way (~30min at 8h visible) for a slightly taller wash.
-            const a = (alpha * 0.75).toFixed(3);
-            return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 12%, rgba(${tint},${a}) 32%, rgba(${tint},${a}) 68%, rgba(${tint},0) 88%, rgba(${tint},0) 100%)`;
-          })(),
         }}
       >
-        <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight }}>
+        {/* Golden-hour wash — pinned to the visible viewport, not the
+            inner scrollable timeline. Lives in its own non-scrolling
+            overlay so the colored "workday" band sits where the user
+            is looking, not at the vertical middle of the full
+            17-hour day (which is what happens if you put the
+            gradient on the scroll container itself).
+            ──────────────────────────────────────────────────────
+            Computed from current hour:
+              pre-dawn (<6)   — cool blue
+              morning (<10)   — soft cool cream
+              midday (<14)    — warm neutral cream
+              afternoon (<17) — warming amber
+              golden (<19)    — deep amber peak
+              dusk (<22)      — warm amber
+              night           — muted warmth
+            Six-stop band: transparent 0-12%, ramp to peak by 32%,
+            hold through 68%, ramp back to transparent by 88%. Peak
+            alpha multiplied by 0.75 so the wash sits behind events
+            without overpowering them. */}
+        <div
+          aria-hidden
+          style={{
+            position: "sticky",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: visibleHeight,
+            marginBottom: -visibleHeight, // collapse the layout box so the next sibling renders at top: 0
+            pointerEvents: "none",
+            zIndex: 0,
+            background: (() => {
+              const h = new Date().getHours();
+              let tint, alpha;
+              if (h < 6)        { tint = "180,190,205"; alpha = 0.12; }
+              else if (h < 10)  { tint = "220,225,225"; alpha = 0.075; }
+              else if (h < 14)  { tint = "245,235,215"; alpha = 0.05; }
+              else if (h < 17)  { tint = "250,235,205"; alpha = 0.125; }
+              else if (h < 19)  { tint = "245,210,160"; alpha = 0.175; }
+              else if (h < 22)  { tint = "235,195,150"; alpha = 0.15; }
+              else              { tint = "200,180,165"; alpha = 0.125; }
+              const a = (alpha * 0.75).toFixed(3);
+              return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 12%, rgba(${tint},${a}) 32%, rgba(${tint},${a}) 68%, rgba(${tint},0) 88%, rgba(${tint},0) 100%)`;
+            })(),
+          }}
+        />
+        <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight, zIndex: 1 }}>
           {/* Hour grid */}
           {hourLabels.map(h => (
             <div
@@ -2653,8 +2668,12 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               // Gradient delta intentionally small (~6% darker on bottom
               // end) so the block reads as a single warm surface, not a
               // saturated tan. Previous values (D2C6A8) were too dark.
+              // Lightened May 2026 — previous tones (#FBF7EC → #F3EDDD)
+              // read as too dark next to the timeline wash. New tones
+              // sit closer to white while preserving the warm cream
+              // character and the same diagonal gradient direction.
               containerStyle = {
-                background: "linear-gradient(135deg, #FBF7EC 0%, #F3EDDD 100%)",
+                background: "linear-gradient(135deg, #FDFAF1 0%, #F7F1E1 100%)",
                 border: "none",
                 borderRadius: 8,
                 paddingLeft: 11,
