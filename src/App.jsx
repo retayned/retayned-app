@@ -3984,7 +3984,6 @@ export default function App({ user }) {
   // the device (that's how the Eastern-vs-Denver drift bug happened pre-fix).
   // null means "not loaded yet"; effects that depend on it must guard.
   const [userTimezone, setUserTimezone] = useState(null);
-  const [editingTimezone, setEditingTimezone] = useState(false);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -5403,19 +5402,22 @@ export default function App({ user }) {
         const profRes = await profileDb.get(user.id);
         if (cancelled) return;
         setGoogleCalPromptDismissed(!!profRes?.data?.google_cal_prompt_dismissed);
-          const storedTz = profRes?.data?.timezone || null;
-          if (storedTz) {
-            setUserTimezone(storedTz);
-          } else {
-            // First-time seed only. After this write the column is non-null
-            // and this branch never runs again for this user.
-            const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-            // Forensic log — if profiles.timezone ever mysteriously goes
-            // null this branch fires and writes whatever the device says.
-            // The log captures who/when so we can audit.
-            setUserTimezone(detectedTz);
-            await profileDb.update(user.id, { timezone: detectedTz });
-          }
+        // ─── DEVICE TZ ALWAYS WINS (May 2026) ─────────────────────
+        // Whatever timezone the user's device reports IS the user's
+        // timezone — full stop. The stored profile.timezone exists
+        // only so the backend (Edge Functions, SQL) has a value to
+        // anchor cron gates and date math; it gets resynced from
+        // the device on every load. No banner, no prompt, no
+        // manual picker. "Wherever I am is midnight."
+        const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const storedTz = profRes?.data?.timezone || null;
+        setUserTimezone(detectedTz);
+        if (storedTz !== detectedTz) {
+          // Silently sync. Best-effort write — if it fails, the
+          // in-memory value still drives the UI for this session.
+          try { await profileDb.update(user.id, { timezone: detectedTz }); }
+          catch (writeErr) { console.warn('TZ silent sync failed:', writeErr); }
+        }
       } catch (e) {
         // Non-blocking — fall back to device TZ in-memory only. Do NOT
         // write the fallback to the database; that's how drift happens.
@@ -5509,7 +5511,23 @@ export default function App({ user }) {
     // yesterday's YMD), and the scheduleNextMidnight chain will catch up
     // when the next timer fires — typically within ms since we always
     // schedule against the NEXT midnight from "now."
-    const onVisible = () => { if (document.visibilityState === "visible") loadData(); };
+    //
+    // Also re-checks device TZ. If the user traveled across timezones
+    // while the tab was hidden (closed laptop in Denver, opened in NYC),
+    // this picks up the new device TZ and silently syncs it to the
+    // profile. "Wherever I am is midnight."
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      if (deviceTz && deviceTz !== userTimezone) {
+        setUserTimezone(deviceTz);
+        if (user?.id) {
+          profileDb.update(user.id, { timezone: deviceTz })
+            .catch(err => console.warn('TZ silent sync on visibility failed:', err));
+        }
+      }
+      loadData();
+    };
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
@@ -15317,146 +15335,19 @@ export default function App({ user }) {
           <div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
 
-            {/* Timezone — single source of truth for all today/midnight
-                math across the app: task rollover, Rai pick, bucketing,
-                date label. Three states:
-                  1. Aligned (stored matches device) → quiet card
-                  2. Mismatch → yellow warning with two CTAs
-                  3. Changing → timezone picker dropdown
-                Device timezone is only used as a comparison signal — it
-                never drives behavior, only flags the user when their
-                stored value may be wrong. */}
+            {/* Timezone — read-only. The app now auto-syncs to the
+                user's device timezone silently on every load and on
+                tab visibility change. There is no manual override:
+                wherever the user's device says they are IS where
+                their day rolls over. This block exists only so the
+                user (or support) can verify what the system
+                currently thinks the TZ is. */}
             <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Timezone</div>
-              {(() => {
-                const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-                const mismatch = userTimezone && deviceTz && userTimezone !== deviceTz;
-                // Common TZ list — kept short, covers ~99% of US users.
-                // For anyone else, "Other..." prompts them to type/select via the
-                // browser's native datalist. This is more discoverable than
-                // a giant scrollable list of 400+ IANA strings.
-                const commonTzs = [
-                  ["America/New_York", "Eastern"],
-                  ["America/Chicago", "Central"],
-                  ["America/Denver", "Mountain"],
-                  ["America/Los_Angeles", "Pacific"],
-                  ["America/Anchorage", "Alaska"],
-                  ["Pacific/Honolulu", "Hawaii"],
-                  ["America/Phoenix", "Arizona (no DST)"],
-                  ["Europe/London", "London"],
-                  ["Europe/Paris", "Paris"],
-                  ["Europe/Berlin", "Berlin"],
-                  ["Asia/Tokyo", "Tokyo"],
-                  ["Australia/Sydney", "Sydney"],
-                  ["UTC", "UTC"],
-                ];
-                const writeTz = async (tz) => {
-                  if (!user) return;
-                  try {
-                    const res = await profileDb.update(user.id, { timezone: tz });
-                    if (res?.error) {
-                      alert('Failed to save timezone: ' + (res.error.message || res.error));
-                      return;
-                    }
-                    if (res?.data?.timezone && res.data.timezone !== tz) {
-                      alert('Timezone save returned unexpected value: ' + res.data.timezone);
-                      return;
-                    }
-                    setUserTimezone(tz);
-                    setEditingTimezone(false);
-                    loadData();
-                  } catch (e) {
-                    alert('Failed to save timezone: ' + (e?.message || e));
-                  }
-                };
-                // STATE 3: change dialog
-                if (editingTimezone) {
-                  return (
-                    <div>
-                      <div style={{ fontSize: 13, color: C.text, marginBottom: 10 }}>Change timezone</div>
-                      <select
-                        defaultValue={userTimezone || deviceTz}
-                        onChange={(e) => writeTz(e.target.value)}
-                        style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid " + C.border, background: C.bg, color: C.text, fontSize: 13, marginBottom: 10, fontFamily: "inherit" }}
-                      >
-                        {commonTzs.map(([tz, label]) => (
-                          <option key={tz} value={tz}>{label} ({tz})</option>
-                        ))}
-                      </select>
-                      <div style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.5, marginBottom: 12 }}>
-                        Your day rolls over at midnight in the selected timezone. Tasks completed before that moment clear; recurring tasks reset.
-                      </div>
-                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                        <button
-                          onClick={() => setEditingTimezone(false)}
-                          style={{ padding: "6px 12px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-                // STATE 2: mismatch
-                if (mismatch) {
-                  return (
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 12 }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{userTimezone}</div>
-                          <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>Your day rolls over at midnight {userTimezone.split("/").pop().replace(/_/g, " ")} time.</div>
-                        </div>
-                        <button
-                          onClick={() => setEditingTimezone(true)}
-                          style={{ padding: "6px 12px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                        >
-                          Change
-                        </button>
-                      </div>
-                      <div style={{ background: "#FBF1DC", borderRadius: 8, padding: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <div style={{ fontSize: 16, color: "#B47A0F", flexShrink: 0, lineHeight: 1, marginTop: 1 }}>⚠</div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 13, color: "#7A4F08", fontWeight: 600, marginBottom: 4 }}>This device is in {deviceTz}.</div>
-                          <div style={{ fontSize: 12, color: "#7A4F08", lineHeight: 1.5, marginBottom: 10 }}>
-                            Your tasks roll over at midnight {userTimezone.split("/").pop().replace(/_/g, " ")} time, which is at a different time on this device. Update if you've moved.
-                          </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                              onClick={() => writeTz(deviceTz)}
-                              style={{ padding: "6px 12px", background: "var(--rt-grad-btn)", color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}
-                            >
-                              Use {deviceTz}
-                            </button>
-                            <button
-                              onClick={() => {/* dismiss — leave stored as is */}}
-                              style={{ padding: "6px 12px", background: "transparent", color: "#7A4F08", border: "1px solid #D9B056", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                            >
-                              Keep {userTimezone}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-                // STATE 1: aligned
-                return (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{userTimezone || "(loading...)"}</div>
-                      <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>
-                        {userTimezone ? `Your day rolls over at midnight ${userTimezone.split("/").pop().replace(/_/g, " ")} time.` : ""}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setEditingTimezone(true)}
-                      style={{ padding: "6px 12px", background: "transparent", color: C.textSec, border: "1px solid " + C.border, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                    >
-                      Change
-                    </button>
-                  </div>
-                );
-              })()}
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{userTimezone || "(loading...)"}</div>
+              <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>
+                {userTimezone ? `Your day rolls over at midnight ${userTimezone.split("/").pop().replace(/_/g, " ")} time. Detected from this device — moves with you.` : ""}
+              </div>
             </div>
 
             {/* Integrations — real, all-tiers. Currently just Google
