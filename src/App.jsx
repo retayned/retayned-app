@@ -4660,6 +4660,11 @@ export default function App({ user }) {
   };
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
+  // Mobile: the month calendar inside the Due picker is collapsed by
+  // default and revealed when the user taps "Later" — keeps the picker
+  // compact (4 short rows) instead of a tall sheet. Desktop always
+  // shows the calendar (plenty of room), so this only gates mobile.
+  const [dueShowCalendar, setDueShowCalendar] = useState(false);
   // Renewal date picker popover state — used by the client profile edit
   // form (replaces the native <input type="date"> which renders poorly
   // and inconsistently on mobile, and doesn't match the site's picker
@@ -7525,27 +7530,26 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — the chip wrapper is a narrow,
-             mid-row positioned ancestor, so chip-relative anchoring
-             (left:0 runs off the right edge; right:0 runs off the left
-             edge) can never sit correctly. Anchor to the VIEWPORT
-             instead with position:fixed, but as a compact centered
-             popover — NOT the old full-bleed sheet. Centered with
-             16px side margins, dropped to a fixed top offset that
-             clears the composer, height-capped so the calendar
-             scrolls internally. The fixed backdrop already handles
-             outside-tap dismissal. */
+          /* DUE PICKER ON MOBILE — now that the calendar is collapsed
+             behind "Later" by default, the picker content is compact
+             (4 short rows), so it can anchor directly under the chip
+             like Worker/Client instead of floating detached in the
+             viewport. Due is the rightmost chip, so anchor right:0
+             (picker's right edge aligns to the chip's right edge) and
+             open downward + leftward. Width fits comfortably on a phone
+             now that content is short. When "Later" expands the calendar,
+             max-height caps it and the calendar scrolls internally. */
           .rt-due-picker {
-            position: fixed !important;
-            top: 300px !important;
-            left: 16px !important;
-            right: 16px !important;
+            position: absolute !important;
+            top: calc(100% + 8px) !important;
+            left: auto !important;
+            right: 0 !important;
             bottom: auto !important;
-            margin: 0 auto !important;
-            width: auto !important;
+            margin: 0 !important;
+            width: 280px !important;
             min-width: 0 !important;
-            max-width: 360px !important;
-            max-height: 56vh !important;
+            max-width: calc(100vw - 32px) !important;
+            max-height: 64vh !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
             box-shadow:
@@ -9268,7 +9272,7 @@ export default function App({ user }) {
                     <div style={{ position: "relative", flexShrink: 0 }}>
                       <button
                         type="button"
-                        onClick={() => setDuePickerOpen(!duePickerOpen)}
+                        onClick={() => { setDuePickerOpen(!duePickerOpen); setDueShowCalendar(false); }}
                         className={"rt-composer-pill" + ((newTaskDueDate || newTaskRecurring) ? " is-filled" : "") + (pulseChip === "due" ? " chip-pulse" : "")}
                         style={{
                           display: "inline-flex", alignItems: "center", gap: 5,
@@ -9342,19 +9346,32 @@ export default function App({ user }) {
                               <>
                                 {opts.map(o => {
                                   const isSel = !newTaskRecurring && newTaskDueDate === o.value;
+                                  const isLater = o.label === "Later";
                                   return (
                                     <button
                                       key={o.value}
                                       className={"rt-picker-item" + (isSel ? " is-active" : "")}
-                                      onClick={() => { setNewTaskDueDate(o.value); setNewTaskRecurring(false); setDuePickerOpen(false); }}
+                                      onClick={() => {
+                                        // On mobile, "Later" reveals the month calendar
+                                        // inline instead of jumping 6 days out + closing.
+                                        // Keeps the default picker compact.
+                                        if (isLater && isMobile && !dueShowCalendar) {
+                                          setDueShowCalendar(true);
+                                          return;
+                                        }
+                                        setNewTaskDueDate(o.value); setNewTaskRecurring(false); setDuePickerOpen(false);
+                                      }}
                                       style={{ fontWeight: isSel ? 600 : 500 }}
                                     >
                                       {o.label}
                                     </button>
                                   );
                                 })}
-                                {/* CALENDAR GRID — pick any date. Hidden in recurring mode. */}
-                                {!newTaskRecurring && (() => {
+                                {/* CALENDAR GRID — pick any date. Hidden in recurring mode.
+                                    On mobile, also hidden until the user taps "Later"
+                                    (dueShowCalendar) so the picker stays compact. Desktop
+                                    always shows it. */}
+                                {!newTaskRecurring && (!isMobile || dueShowCalendar) && (() => {
                                   const [yr, mo] = calendarMonth.split("-").map(Number);
                                   const firstOfMonth = new Date(yr, mo - 1, 1);
                                   const startDow = firstOfMonth.getDay();
@@ -17581,7 +17598,6 @@ export default function App({ user }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          paddingBottom: quickLogOpen ? 0 : 4,
           transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
           transition: "transform 180ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out)",
           zIndex: 200,
