@@ -7613,7 +7613,7 @@ export default function App({ user }) {
             clipped by the sidebar's overflow-y: auto. */}
         <div style={{ padding: sidebarCollapsed ? "22px 0 18px" : "22px 22px 18px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
           <span style={{
-            fontFamily: "'Outfit', system-ui, sans-serif",
+            fontFamily: "system-ui, -apple-system, sans-serif",
             fontWeight: 900,
             fontSize: 22,
             color: C.primary,
@@ -14977,7 +14977,7 @@ export default function App({ user }) {
                   ];
                   return (
                     <div style={{ width: "100%", margin: "0 auto", textAlign: "center" }}>
-                      <h1 style={{ fontSize: 34, fontWeight: 600, color: C.text, lineHeight: 1.15, letterSpacing: "-0.02em", margin: 0, fontFamily: "'Outfit', system-ui, sans-serif" }}>
+                      <h1 style={{ fontSize: 34, fontWeight: 600, color: C.text, lineHeight: 1.15, letterSpacing: "-0.02em", margin: 0, fontFamily: "system-ui, -apple-system, sans-serif" }}>
                         {greeting}{firstName ? ", " + firstName : ""}.
                       </h1>
                       <p style={{ fontSize: 19, fontWeight: 400, color: C.textSec, lineHeight: 1.5, marginTop: 10, marginBottom: 36, letterSpacing: "-0.01em" }}>
