@@ -1803,7 +1803,7 @@ function parseComposer(rawText, clients, workers) {
 //
 // The parser is forgiving: time tokens can appear anywhere in the input;
 // the remaining text becomes the title.
-function parseCalendarEntry(rawText, anchorDate = new Date()) {
+function parseCalendarEntry(rawText, anchorDate = new Date(), clients = null) {
   if (!rawText || !rawText.trim()) return null;
   const text = rawText.trim();
 
@@ -2068,10 +2068,32 @@ function parseCalendarEntry(rawText, anchorDate = new Date()) {
   // Capitalize first letter
   title = title.charAt(0).toUpperCase() + title.slice(1);
 
+  // ─── Client detection ───────────────────────────────────────
+  // Reuse the task composer's client matcher (single source of
+  // truth for "find a client name in free text"). We only want
+  // its matchedClient result — the time/title parsing above is
+  // the calendar parser's own job. Runs against the ORIGINAL raw
+  // text so the matcher sees the client name before we stripped
+  // time tokens. Linking the event to a client makes scheduled
+  // time a signal Rai can read.
+  let client_id = null;
+  let client_name = null;
+  if (clients && clients.length > 0) {
+    try {
+      const composed = parseComposer(rawText, clients, []);
+      if (composed && composed.matchedClient) {
+        client_id = composed.matchedClient.id;
+        client_name = composed.matchedClient.name;
+      }
+    } catch { /* matcher failure is non-fatal — event still saves without a client */ }
+  }
+
   return {
     starts_at: starts.toISOString(),
     ends_at: ends ? ends.toISOString() : null,
     title,
+    client_id,
+    client_name,
   };
 }
 
@@ -2203,7 +2225,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 //
 // Note: this component reads `C` from a closure-free import-only style —
 // since `C` is declared inside the App function, we pass it via props.
-function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null, promptDismissed = false, onDismissConnectPrompt = null }) {
+function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = false, showHeader = true, C, googleConnected = false, onConnectClick = null, promptDismissed = false, onDismissConnectPrompt = null, clients = [] }) {
   const [composerText, setComposerText] = useState("");
   const [composerError, setComposerError] = useState(null);
   const [hoveredId, setHoveredId] = useState(null);
@@ -2395,7 +2417,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
     // tomorrow's date when the view is Tomorrow, with hh:mm matching now.
     const parseAnchor = new Date(now);
     if (selectedDay === "tomorrow") parseAnchor.setDate(parseAnchor.getDate() + 1);
-    const parsed = parseCalendarEntry(composerText, parseAnchor);
+    const parsed = parseCalendarEntry(composerText, parseAnchor, clients);
     if (!parsed) {
       setComposerError("Add a time (e.g. 2pm, 9:30am, noon)");
       return;
@@ -8836,6 +8858,7 @@ export default function App({ user }) {
                 {todayStripOpen && (
                   <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, borderRadius: 10, padding: "14px" }}>
                     <TodayTimeline
+                      clients={clients}
                       events={personalEvents}
                       C={C}
                       showHeader={true}
@@ -9728,6 +9751,7 @@ export default function App({ user }) {
                   {todayStripOpen && (
                     <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, borderRadius: 10, padding: "14px" }}>
                       <TodayTimeline
+                        clients={clients}
                         events={personalEvents}
                         C={C}
                         showHeader={true}
@@ -10608,6 +10632,7 @@ export default function App({ user }) {
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
                 <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "14px 16px" }}>
                   <TodayTimeline
+                    clients={clients}
                     events={personalEvents}
                     C={C}
                     showHeader={true}
