@@ -7616,7 +7616,7 @@ export default function App({ user }) {
             fontFamily: "'Outfit', system-ui, sans-serif",
             fontWeight: 900,
             fontSize: 22,
-            color: C.primaryDeep,
+            color: C.primary,
             letterSpacing: "-0.04em",
             lineHeight: 1.15,
             display: "inline-block",
