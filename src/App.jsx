@@ -2550,19 +2550,18 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             background: (() => {
               const h = new Date().getHours();
               let tint, alpha;
-              // Alphas raised May 2026 — prior values bottomed out at
-              // 0.05 midday which, after the 0.75 multiplier, rendered
-              // at ~3.7% opacity (invisible over the white card). These
-              // floors keep the wash perceptible at every hour while
-              // still peaking warm in the late afternoon. Multiplier
-              // dropped too — the band now uses the raw alpha.
-              if (h < 6)        { tint = "180,190,205"; alpha = 0.22; }  // pre-dawn — cool blue
-              else if (h < 10)  { tint = "220,225,225"; alpha = 0.18; }  // morning — soft cool cream
-              else if (h < 14)  { tint = "248,236,212"; alpha = 0.20; }  // midday — warm neutral cream
-              else if (h < 17)  { tint = "250,230,195"; alpha = 0.26; }  // afternoon — warming amber
-              else if (h < 19)  { tint = "245,205,150"; alpha = 0.32; }  // golden hour — deep amber
-              else if (h < 22)  { tint = "235,190,145"; alpha = 0.28; }  // dusk — warm amber
-              else              { tint = "200,180,165"; alpha = 0.24; }  // night — muted warmth
+              // Curve halved May 2026 — the prior values (0.18–0.32)
+              // were tuned blind and rendered far too hot once the
+              // overlay was actually visible. These keep the same
+              // time-of-day arc (cool dawn → warm golden hour) at
+              // roughly half intensity, so events stay legible on top.
+              if (h < 6)        { tint = "180,190,205"; alpha = 0.11; }  // pre-dawn — cool blue
+              else if (h < 10)  { tint = "220,225,225"; alpha = 0.09; }  // morning — soft cool cream
+              else if (h < 14)  { tint = "248,236,212"; alpha = 0.10; }  // midday — warm neutral cream
+              else if (h < 17)  { tint = "250,230,195"; alpha = 0.13; }  // afternoon — warming amber
+              else if (h < 19)  { tint = "245,205,150"; alpha = 0.16; }  // golden hour — deep amber
+              else if (h < 22)  { tint = "235,190,145"; alpha = 0.14; }  // dusk — warm amber
+              else              { tint = "200,180,165"; alpha = 0.12; }  // night — muted warmth
               const a = alpha.toFixed(3);
               return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 12%, rgba(${tint},${a}) 32%, rgba(${tint},${a}) 68%, rgba(${tint},0) 88%, rgba(${tint},0) 100%)`;
             })(),
@@ -2674,12 +2673,13 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               // Gradient delta intentionally small (~6% darker on bottom
               // end) so the block reads as a single warm surface, not a
               // saturated tan. Previous values (D2C6A8) were too dark.
-              // Lightened May 2026 — previous tones (#FBF7EC → #F3EDDD)
-              // read as too dark next to the timeline wash. New tones
-              // sit closer to white while preserving the warm cream
-              // character and the same diagonal gradient direction.
+              // Reverted to original tones May 2026 — the timeline wash
+              // got significantly stronger (alphas raised so it's visible
+              // at all hours), and the lightened card tones disappeared
+              // into it. Original darker cream gives events the contrast
+              // they need to read as distinct surfaces on top of the wash.
               containerStyle = {
-                background: "linear-gradient(135deg, #FDFAF1 0%, #F7F1E1 100%)",
+                background: "linear-gradient(135deg, #FBF7EC 0%, #F3EDDD 100%)",
                 border: "none",
                 borderRadius: 8,
                 paddingLeft: 11,
