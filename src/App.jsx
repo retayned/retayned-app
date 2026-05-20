@@ -7016,6 +7016,35 @@ export default function App({ user }) {
            overflow itself plus the inertia/snap behavior. */
         .rt-mob-nav-scroll::-webkit-scrollbar { display: none; }
         .rt-mob-nav-scroll { -ms-overflow-style: none; }
+        /* Mobile-only Revenue-from-referrals card. The desktop version
+           lives in the .rc-rail sticky column, which is display:none
+           below 768px — so on phones the $ widget vanished entirely.
+           This wrapper renders the same content above the network map
+           on mobile and hides itself on desktop. */
+        .rt-refs-money-mobile { display: none; }
+        @media (max-width: 768px) {
+          .rt-refs-money-mobile { display: block; margin-bottom: 14px; }
+        }
+        /* QuickLog FAB — mobile-first positioning so the floating "+"
+           button doesn't cover the bottom navigation strip (which lives
+           ~82px above the viewport bottom). At ≥768px the bottom nav is
+           hidden, so we drop the FAB back down to a normal 24px offset. */
+        .rt-quicklog-fab { bottom: 100px; }
+        @media (min-width: 768px) {
+          .rt-quicklog-fab { bottom: 24px; }
+        }
+        /* QuickLog popover — anchored above the FAB. Same mobile/desktop
+           pair so the popover follows the button. */
+        .rt-quicklog-popover { bottom: 168px; }
+        @media (min-width: 768px) {
+          .rt-quicklog-popover { bottom: 90px; }
+        }
+        /* QuickLog toast — sits just above the FAB on mobile, just above
+           the FAB on desktop too (same offset relationship). */
+        .rt-quicklog-toast { bottom: 168px; }
+        @media (min-width: 768px) {
+          .rt-quicklog-toast { bottom: 90px; }
+        }
         /* Timeline scroll container hides its scrollbar — the partial-day
            visible window plus the NOW marker make scroll affordance clear
            enough without a visible track. Covers all three browser engines:
@@ -14066,6 +14095,53 @@ export default function App({ user }) {
                 </div>
               </div>
 
+              {/* Mobile-only Revenue from referrals card — desktop renders
+                  this same card in the .rc-rail (hidden on mobile).
+                  Same content, same styles; the wrapper class toggles
+                  visibility by breakpoint. Renders only when at least
+                  one referral has converted, matching the desktop gate. */}
+              {becameClients > 0 && (
+                <div className="rt-refs-money-mobile">
+                  <div style={{
+                    background: C.card,
+                    borderRadius: 12,
+                    boxShadow: "var(--rt-sh-card)",
+                    padding: 16,
+                    border: "1px solid " + C.border,
+                  }}>
+                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 12 }}>
+                      Revenue from referrals
+                    </div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, lineHeight: 1 }}>
+                      <span style={{ fontSize: 28, fontWeight: 800, color: C.retGood, letterSpacing: -0.6, fontVariantNumeric: "tabular-nums" }}>
+                        ${mrrAdded.toLocaleString()}
+                      </span>
+                      <span style={{ fontSize: 13, color: C.textMuted, fontWeight: 600 }}>/mo</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 4 }}>
+                      Added MRR · this quarter
+                    </div>
+                    {(projLCV > 0 || becameClients > 0) && (
+                      <>
+                        <div style={{ height: 1, background: C.borderLight, margin: "14px 0 12px" }} />
+                        {projLCV > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, fontSize: 12.5, color: C.textSec }}>
+                            <span>Projected LCV</span>
+                            <b style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${projLCV.toLocaleString()}</b>
+                          </div>
+                        )}
+                        {becameClients > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12.5, color: C.textSec }}>
+                            <span>Avg deal size</span>
+                            <b style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>${Math.round(mrrAdded / becameClients).toLocaleString()}/mo</b>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
               <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
 
@@ -14452,20 +14528,40 @@ export default function App({ user }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred client</label>
-                        <select value={refName} onChange={e => setRefName(e.target.value)} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }}>
-                          <option value="">Choose a client…</option>
-                          {clients.filter(c => c.name !== refFrom).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                        </select>
-                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
-                          Add the client on the Clients page first if they're not in this list.
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <select value={refName} onChange={e => setRefName(e.target.value)} style={{ flex: 1, padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box", minWidth: 0 }}>
+                            <option value="">Choose a client…</option>
+                            {clients.filter(c => c.name !== refFrom).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => { setRefForm(false); setPage("clients"); setShowAddClient(true); }}
+                            title="Add new client"
+                            style={{ flexShrink: 0, padding: "0 12px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                          >+ New</button>
                         </div>
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
-                        <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }}>
-                          <option value="">Choose a client…</option>
-                          {clients.filter(c => c.name !== refName).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                        </select>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ flex: 1, padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box", minWidth: 0 }}>
+                            <option value="">Choose a referrer…</option>
+                            <optgroup label="Clients">
+                              {clients.filter(c => c.name !== refName).map(c => <option key={"c-" + c.id} value={c.name}>{c.name}</option>)}
+                            </optgroup>
+                            {rolodex && rolodex.length > 0 && (
+                              <optgroup label="Rolodex">
+                                {rolodex.filter(r => r.client && r.client !== refName).map(r => <option key={"r-" + r.id} value={r.client}>{r.client}</option>)}
+                              </optgroup>
+                            )}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => { setRefForm(false); setPage("retros"); setShowAddRolodex(true); }}
+                            title="Add new rolodex contact"
+                            style={{ flexShrink: 0, padding: "0 12px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                          >+ New</button>
+                        </div>
                       </div>
                       {refName && (() => {
                         const refClient = clients.find(c => c.name === refName);
@@ -17560,23 +17656,48 @@ export default function App({ user }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred client</label>
-                    <select value={refEditData.to || ""} onChange={e => setRefEditData({...refEditData, to: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }}>
-                      <option value="">Choose a client…</option>
-                      {refEditData.to && !clients.find(c => c.name === refEditData.to) && (
-                        <option value={refEditData.to}>{refEditData.to} (legacy — not in client list)</option>
-                      )}
-                      {clients.filter(c => c.name !== refEditData.from).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <select value={refEditData.to || ""} onChange={e => setRefEditData({...refEditData, to: e.target.value})} style={{ flex: 1, padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minWidth: 0 }}>
+                        <option value="">Choose a client…</option>
+                        {refEditData.to && !clients.find(c => c.name === refEditData.to) && (
+                          <option value={refEditData.to}>{refEditData.to} (legacy — not in client list)</option>
+                        )}
+                        {clients.filter(c => c.name !== refEditData.from).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => { setRefEditing(null); setPage("clients"); setShowAddClient(true); }}
+                        title="Add new client"
+                        style={{ flexShrink: 0, padding: "0 12px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                      >+ New</button>
+                    </div>
                     <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
                       Add the client on the Clients page first if they're not in this list.
                     </div>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {[...clients].sort((a, b) => b.ret - a.ret).map(c => (
-                        <span key={c.id} onClick={() => setRefEditData({...refEditData, from: c.name})} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, background: refEditData.from === c.name ? C.primarySoft : C.bg, border: "1.5px solid " + (refEditData.from === c.name ? C.primary : C.borderLight), cursor: "pointer", fontWeight: refEditData.from === c.name ? 600 : 500, color: refEditData.from === c.name ? C.primary : C.textSec }}>{c.name}</span>
-                      ))}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <select value={refEditData.from || ""} onChange={e => setRefEditData({...refEditData, from: e.target.value})} style={{ flex: 1, padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg, minWidth: 0 }}>
+                        <option value="">Choose a referrer…</option>
+                        {refEditData.from && !clients.find(c => c.name === refEditData.from) && (!rolodex || !rolodex.find(r => r.client === refEditData.from)) && (
+                          <option value={refEditData.from}>{refEditData.from} (legacy)</option>
+                        )}
+                        <optgroup label="Clients">
+                          {[...clients].sort((a, b) => b.ret - a.ret).filter(c => c.name !== refEditData.to).map(c => <option key={"c-" + c.id} value={c.name}>{c.name}</option>)}
+                        </optgroup>
+                        {rolodex && rolodex.length > 0 && (
+                          <optgroup label="Rolodex">
+                            {rolodex.filter(r => r.client && r.client !== refEditData.to).map(r => <option key={"r-" + r.id} value={r.client}>{r.client}</option>)}
+                          </optgroup>
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => { setRefEditing(null); setPage("retros"); setShowAddRolodex(true); }}
+                        title="Add new rolodex contact"
+                        style={{ flexShrink: 0, padding: "0 12px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                      >+ New</button>
                     </div>
                   </div>
                   <div>
@@ -17724,9 +17845,9 @@ export default function App({ user }) {
         onClick={() => setQuickLogOpen(v => !v)}
         aria-label="Quick log"
         title="Quick log (⌘K)"
+        className="rt-quicklog-fab"
         style={{
           position: "fixed",
-          bottom: 24,
           right: 24,
           width: 52,
           height: 52,
@@ -17759,9 +17880,8 @@ export default function App({ user }) {
             onClick={() => { setQuickLogOpen(false); setQuickLogText(""); }}
             style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.18)", zIndex: 199 }}
           />
-          <div style={{
+          <div className="rt-quicklog-popover" style={{
             position: "fixed",
-            bottom: 90,
             right: 24,
             width: 340,
             maxWidth: "calc(100vw - 40px)",
@@ -17967,13 +18087,13 @@ function QuickLogToast({ toast, onUndo, onDismiss, C }) {
   }, [toast.id, onDismiss]);
   if (toast.error) {
     return (
-      <div style={{ position: "fixed", bottom: 90, right: 24, background: C.danger, color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
+      <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: C.danger, color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
         <span>Couldn't save — try again</span>
       </div>
     );
   }
   return (
-    <div style={{ position: "fixed", bottom: 90, right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
+    <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
       <span style={{ color: "#5DCAA5" }}>✓</span>
       <span>{toast.kind === "touchpoint" ? "Touchpoint logged" : "Task added"}{toast.label ? " · " + toast.label : ""}</span>
       <button onClick={onUndo} style={{ background: "none", border: "none", color: "#A8B0A8", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>Undo</button>
