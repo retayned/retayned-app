@@ -17882,11 +17882,25 @@ export default function App({ user }) {
                       due_date: dueDateForCreate,
                       assigned_worker_id: null,
                     });
+                    // Build a short due-date hint for the toast so the user
+                    // sees where the task landed (today / tomorrow / specific
+                    // date). Without this, a "tomorrow" task vanishes from
+                    // the Today bucket and feels lost.
+                    const todayStr = localYmd();
+                    const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return localYmd(d); })();
+                    let dueHint = "";
+                    if (dueDateForCreate === todayStr) dueHint = "today";
+                    else if (dueDateForCreate === tomorrowStr) dueHint = "tomorrow";
+                    else if (dueDateForCreate) {
+                      const d = new Date(dueDateForCreate + "T00:00:00");
+                      dueHint = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                    }
+                    const toastLabel = (matchedClient?.name || "personal task") + (dueHint ? " · " + dueHint : "");
                     if (created?.id) {
                       setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
-                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: matchedClient?.name || "personal task" });
+                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: toastLabel });
                     } else {
-                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: matchedClient?.name || "personal task" });
+                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: toastLabel });
                     }
                   } catch (err) {
                     setTasks(prev => prev.filter(t => t.id !== optimisticId));
