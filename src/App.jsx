@@ -3931,17 +3931,6 @@ export default function App({ user }) {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
-  // Measure composer + pin the mobile Due picker directly beneath it.
-  // Recomputes whenever the picker opens or the calendar expands (which
-  // changes height but not the anchor). Desktop ignores this — CSS there
-  // anchors the picker normally.
-  useEffect(() => {
-    if (!duePickerOpen || !isMobile) { setDuePickerPos(null); return; }
-    const composer = document.querySelector(".rt-composer");
-    if (!composer) return;
-    const r = composer.getBoundingClientRect();
-    setDuePickerPos({ top: r.bottom + 8, left: r.left, width: r.width });
-  }, [duePickerOpen, isMobile, dueShowCalendar]);
   useEffect(() => {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
     if (!vv) return;
@@ -4682,6 +4671,18 @@ export default function App({ user }) {
   // wrapper it's nested in is a narrow mid-row box, so chip-relative
   // anchoring always overflows one edge or the other.
   const [duePickerPos, setDuePickerPos] = useState(null);
+  // Measure composer + pin the mobile Due picker directly beneath it.
+  // Recomputes whenever the picker opens or the calendar expands (which
+  // changes height but not the anchor). Desktop ignores this — CSS there
+  // anchors the picker normally. Placed AFTER the state declarations it
+  // reads (duePickerOpen etc.) to avoid a temporal-dead-zone crash.
+  useEffect(() => {
+    if (!duePickerOpen || !isMobile) { setDuePickerPos(null); return; }
+    const composer = document.querySelector(".rt-composer");
+    if (!composer) return;
+    const r = composer.getBoundingClientRect();
+    setDuePickerPos({ top: r.bottom + 8, left: r.left, width: r.width });
+  }, [duePickerOpen, isMobile, dueShowCalendar]);
   // Renewal date picker popover state — used by the client profile edit
   // form (replaces the native <input type="date"> which renders poorly
   // and inconsistently on mobile, and doesn't match the site's picker
