@@ -1138,16 +1138,68 @@ export const raiPicks = {
   // Filtering on expires_at > NOW() has the row visible exactly
   // until its replacement gets written (or until 24h passes if the
   // next sweep fails to rotate), with no magic hour-number tuning.
-  getCurrent: async (userId) => {
+  // Returns today's Client of the Day, or null if none has been
+  // written yet today.
+  //
+  // Strict "today in user TZ" filter — the row's picked_at must be
+  // on or after the user's local midnight. We intentionally do NOT
+  // fall back to yesterday's pick even if its expires_at is still
+  // in the future, because doing so caused yesterday's pick to
+  // appear as today's pick on days when the sweep wrote no new row
+  // (May 2026 bug). With the corresponding Edge Function change
+  // that guarantees a pick every day, this filter should always
+  // find a row in normal operation.
+  //
+  // userTimezone is optional — if not provided, falls back to the
+  // browser's local timezone. The Edge Function writes picks
+  // anchored to the user's stored profile.timezone, so passing
+  // userTimezone here keeps the two sides agreeing.
+  getCurrent: async (userId, userTimezone = null) => {
+    const tz = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    // YYYY-MM-DD of "now" in user TZ — matches the en-CA format the
+    // Edge Function uses for its `today` parameter.
+    const todayLocal = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+    // Compute the ISO timestamp of today's local midnight. Search
+    // forward from the en-CA date string converted via a Date
+    // assumption: take the user's TZ offset at "now" and roll back
+    // to local 00:00. Simpler approach: use the same trick that
+    // already works elsewhere — anchor to today + noon UTC then
+    // adjust via fmt. But for a SELECT cutoff we only need an
+    // approximate lower bound; using `todayLocal + 'T00:00:00'`
+    // interpreted as a date string and converted is OK for any TZ
+    // because Postgres will compare timestamptz vs the supplied
+    // ISO string after both are normalized to UTC.
+    //
+    // Pragmatic approach: subtract 30 hours from now and use the
+    // resulting ISO timestamp as a coarse cutoff. Any pick older
+    // than that is definitely not today. Then we filter the
+    // result client-side using the same en-CA local-date logic to
+    // catch the precise day boundary.
+    const coarseCutoffIso = new Date(Date.now() - 30 * 3600 * 1000).toISOString();
     const { data, error } = await supabase
       .from('rai_picks')
       .select('*')
       .eq('user_id', userId)
       .gt('expires_at', new Date().toISOString())
+      .gte('picked_at', coarseCutoffIso)
       .order('picked_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return { data, error };
+      .limit(5);
+    if (error) return { data: null, error };
+    // Client-side precise day check — only return picks whose
+    // local-date in the user's TZ matches today.
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    const todaysPick = (data || []).find(row => {
+      try {
+        return fmt.format(new Date(row.picked_at)) === todayLocal;
+      } catch {
+        return false;
+      }
+    });
+    return { data: todaysPick || null, error: null };
   },
 
   // Mark a pick as annotated (= the frontend assigned its client to a
