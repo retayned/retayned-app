@@ -4665,6 +4665,22 @@ export default function App({ user }) {
   // compact (4 short rows) instead of a tall sheet. Desktop always
   // shows the calendar (plenty of room), so this only gates mobile.
   const [dueShowCalendar, setDueShowCalendar] = useState(false);
+  const dueChipRef = useRef(null);
+  const [duePickerPos, setDuePickerPos] = useState(null);
+  // Mobile: pin the Due picker fixed, just below the composer, aligned
+  // to the left content gutter (16px) and full content width. We derive
+  // the vertical position from the Due chip's own rect (always visible
+  // when the picker is open) — chip.bottom + a gap clears the composer
+  // row. This attaches it visually to the composer without depending on
+  // the chip's horizontal position (which, being rightmost, is what
+  // broke every left/right anchor attempt).
+  useEffect(() => {
+    if (!duePickerOpen || !isMobile) { setDuePickerPos(null); return; }
+    const el = dueChipRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setDuePickerPos({ top: r.bottom + 10 });
+  }, [duePickerOpen, isMobile, dueShowCalendar]);
   // Renewal date picker popover state — used by the client profile edit
   // form (replaces the native <input type="date"> which renders poorly
   // and inconsistently on mobile, and doesn't match the site's picker
@@ -7530,21 +7546,17 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — fixed to the viewport, full content
-             width (16px gutters matching .r-main padding), anchored just
-             above the bottom nav. This is bulletproof: it does not depend
-             on the chip wrapper (narrow, mid-row — always overflowed one
-             edge) or on JS measurement. Left/right 16px makes it exactly
-             the composer's width and x-position; bottom-anchoring puts it
-             in a fixed, always-on-screen spot. Compact by default (calendar
-             collapsed behind "Later"); when expanded, max-height caps it
-             and the calendar scrolls internally. */
+          /* DUE PICKER ON MOBILE — fixed, full content width (16px
+             gutters = composer width/position). Vertical position is set
+             inline from the Due chip's measured rect so it sits right
+             under the composer, attached. Inline top + bottom:auto
+             override the fallback bottom below (used only if JS hasn't
+             measured yet). Cannot clip horizontally — gutters are fixed. */
           .rt-due-picker {
             position: fixed !important;
-            top: auto !important;
             left: 16px !important;
             right: 16px !important;
-            bottom: 84px !important;
+            bottom: 84px;
             margin: 0 !important;
             width: auto !important;
             min-width: 0 !important;
@@ -9269,7 +9281,7 @@ export default function App({ user }) {
                       );
                     })()}
                     {/* Due chip — opens date picker. Mutually exclusive with Recurring (which lives inside the menu). */}
-                    <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div ref={dueChipRef} style={{ position: "relative", flexShrink: 0 }}>
                       <button
                         type="button"
                         onClick={() => { setDuePickerOpen(!duePickerOpen); setDueShowCalendar(false); }}
@@ -9326,6 +9338,7 @@ export default function App({ user }) {
                           display: "flex",
                           flexDirection: "column",
                           gap: 2,
+                          ...(duePickerPos ? { top: duePickerPos.top, bottom: "auto" } : {}),
                         }}>                          {(() => {
                             const _later6 = new Date(_now);
                             _later6.setDate(_later6.getDate() + 6);
