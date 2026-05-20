@@ -3865,6 +3865,14 @@ export default function App({ user }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientTab, setClientTab] = useState("overview");
   const [clientBilling, setClientBilling] = useState({});
+  // QuickLog — global FAB composer for fast personal-task capture.
+  // Shell v1 (May 2026): plain task creation, no parsing. v2 will add
+  // client matching + tense detection (past = touchpoint, future = task).
+  const [quickLogOpen, setQuickLogOpen] = useState(false);
+  const [quickLogText, setQuickLogText] = useState("");
+  // Toast shape: { id, taskId, taskRef } where taskRef is the optimistic
+  // task object so undo can restore it precisely.
+  const [quickLogToast, setQuickLogToast] = useState(null);
   // Per-(client, month) invoiced/paid status, hydrated on load.
   // Shape: { [client_id]: { [month]: { id, invoiced, paid, invoiced_at, paid_at } } }
   const [billingMonthStatus, setBillingMonthStatus] = useState({});
@@ -4008,6 +4016,20 @@ export default function App({ user }) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Cmd+K (or Ctrl+K) opens QuickLog from anywhere in the app. Same
+  // muscle memory as command palettes in Linear/Notion/Slack. Esc inside
+  // the popover is handled by the popover itself.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setQuickLogOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   // Rank mode: 'rai' (default, sorted by Profile Score) or 'manual' (user drag-and-drop order).
   // Persisted in localStorage. Manual order also persisted, restored when user toggles back to manual.
   const [rankMode, _setRankMode] = useState(() => {
@@ -4055,6 +4077,7 @@ export default function App({ user }) {
   const [removeConfirm, setRemoveConfirm] = useState(false);
   const [pauseConfirm, setPauseConfirm] = useState(false);
   const [resumeConfirm, setResumeConfirm] = useState(false);
+  const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const [selectedRolodex, setSelectedRolodex] = useState(null);
   const [rolodexRemoveConfirm, setRolodexRemoveConfirm] = useState(false);
   const [rolodexEditing, setRolodexEditing] = useState(false);
@@ -5765,16 +5788,21 @@ export default function App({ user }) {
   const addRef = async () => {
     if (!refName.trim() || !refFrom) return;
     const clientObj = clients.find(c => c.name === refFrom);
+    // Snapshot revenue from the referred-to client's profile at submit
+    // time. If the client's revenue changes later, the referral keeps
+    // the original number — referrals are historical records.
+    const referredToClient = clients.find(c => c.name === refName.trim());
+    const snapshotRevenue = referredToClient?.revenue || 0;
     const { data: created } = await referralsDb.create(user.id, {
       referred_to: refName.trim(),
       referred_by: refFrom,
       referred_by_client_id: clientObj?.id || null,
       status: refStatus,
-      revenue: parseInt(refRevenue) || 0,
-      total_revenue: parseInt(refTotalRevenue) || 0,
+      revenue: snapshotRevenue,
+      total_revenue: 0,
       date_added: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     });
-    setRefs([{ id: created?.id || "ref" + Date.now(), from: refFrom, to: refName.trim(), date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }), converted: refStatus === "converted" || refStatus === "closed", revenue: parseInt(refRevenue) || 0, totalRevenue: parseInt(refTotalRevenue) || 0, status: refStatus }, ...refs]);
+    setRefs([{ id: created?.id || "ref" + Date.now(), from: refFrom, to: refName.trim(), date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }), converted: refStatus === "converted" || refStatus === "closed", revenue: snapshotRevenue, totalRevenue: 0, status: refStatus }, ...refs]);
     setRefName(""); setRefFrom(""); setRefStatus("converted"); setRefRevenue(""); setRefTotalRevenue(""); setRefForm(false);
   };
 
@@ -14423,20 +14451,37 @@ export default function App({ user }) {
                     <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, color: C.text }}>Log Referral</h3>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
                       <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>New client name</label>
-                        <input value={refName} onChange={e => setRefName(e.target.value)} placeholder="e.g. White Mountain Puzzles" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
+                        <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred client</label>
+                        <select value={refName} onChange={e => setRefName(e.target.value)} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }}>
+                          <option value="">Choose a client…</option>
+                          {clients.filter(c => c.name !== refFrom).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                        </select>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
+                          Add the client on the Clients page first if they're not in this list.
+                        </div>
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
                         <select value={refFrom} onChange={e => setRefFrom(e.target.value)} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }}>
                           <option value="">Choose a client…</option>
-                          {clients.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                          {clients.filter(c => c.name !== refName).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                         </select>
                       </div>
-                      <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Monthly revenue (optional)</label>
-                        <input value={refRevenue} onChange={e => setRefRevenue(e.target.value)} placeholder="4000" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, boxSizing: "border-box" }} />
-                      </div>
+                      {refName && (() => {
+                        const refClient = clients.find(c => c.name === refName);
+                        const rev = refClient?.revenue || 0;
+                        return (
+                          <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Monthly revenue</label>
+                            <div style={{ padding: "12px 16px", borderRadius: 8, fontSize: 14, color: rev > 0 ? C.text : C.textMuted, background: C.bg, fontWeight: rev > 0 ? 600 : 500 }}>
+                              {rev > 0 ? "$" + rev.toLocaleString() + "/mo" : "Not set on client profile"}
+                            </div>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
+                              Pulled from {refName}'s client profile.
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="r-btn" data-tone="purple" onClick={addRef} disabled={!refName.trim() || !refFrom} style={{ flex: 1, padding: "10px", background: (refName.trim() && refFrom) ? C.btn : C.surface, color: (refName.trim() && refFrom) ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: (refName.trim() && refFrom) ? "pointer" : "default", fontFamily: "inherit" }}>Log Referral</button>
@@ -15614,7 +15659,91 @@ export default function App({ user }) {
                         <span>{currentIdx + 1} of {total}</span>
                       </div>
                     )}
-                    <button onClick={() => setSelectedClient(null)} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1, padding: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                    {/* Overflow menu (Edit / Pause / Remove). Replaces the old
+                        sticky bottom footer — actions live in a discoverable
+                        ⋯ menu instead of taking permanent vertical real estate. */}
+                    <div style={{ marginLeft: "auto", position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setClientMenuOpen(v => !v); }}
+                        aria-label="Client actions"
+                        style={{
+                          background: clientMenuOpen ? C.surfaceWarm : "none",
+                          border: "none",
+                          fontSize: 20,
+                          cursor: "pointer",
+                          color: clientMenuOpen ? C.text : C.textSec,
+                          lineHeight: 1,
+                          padding: 0,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 6,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 700,
+                          transition: "background 120ms ease",
+                        }}
+                      >⋯</button>
+                      {clientMenuOpen && (
+                        <>
+                          {/* Click-outside catcher — sits behind menu, captures
+                              any click that isn't on the menu itself. */}
+                          <div
+                            onClick={() => setClientMenuOpen(false)}
+                            style={{ position: "fixed", inset: 0, zIndex: 4 }}
+                          />
+                          <div style={{
+                            position: "absolute",
+                            top: 36,
+                            right: 0,
+                            background: C.card,
+                            border: "1px solid " + C.borderLight,
+                            borderRadius: 10,
+                            boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)",
+                            minWidth: 180,
+                            padding: 6,
+                            zIndex: 5,
+                          }}>
+                            <div
+                              onClick={() => {
+                                setClientMenuOpen(false);
+                                setClientTab("overview");
+                                setEditingOverview(true);
+                                setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" });
+                              }}
+                              style={{ padding: "10px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >Edit details</div>
+                            <div
+                              onClick={() => {
+                                setClientMenuOpen(false);
+                                setClientTab("overview");
+                                if (sc.is_paused) { setResumeConfirm(true); }
+                                else { setPauseConfirm(true); }
+                                setRolodexConfirm(false); setRemoveConfirm(false);
+                              }}
+                              style={{ padding: "10px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >{sc.is_paused ? "Resume client" : "Pause client"}</div>
+                            <div style={{ borderTop: "1px solid " + C.borderLight, margin: "4px 0" }} />
+                            <div
+                              onClick={() => {
+                                setClientMenuOpen(false);
+                                setClientTab("overview");
+                                setRolodexConfirm(true);
+                                setPauseConfirm(false); setResumeConfirm(false); setRemoveConfirm(false);
+                              }}
+                              style={{ padding: "10px 12px", fontSize: 13, color: C.danger, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >Remove client</div>
+                          </div>
+                        </>
+                      )}
+                      <button onClick={() => setSelectedClient(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1, padding: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                    </div>
                   </div>
                 );
               })()}
@@ -17159,66 +17288,6 @@ export default function App({ user }) {
 
               </div>
 
-              {/* Sticky action footer — Edit · Pause/Resume · Remove.
-                  Sits at the bottom of the modal regardless of which tab is
-                  open. All three buttons flex equally to fill the row.
-                  Auto-switches to Overview tab when a destructive action is
-                  triggered so the existing inline confirm dialog is visible.
-                  When a confirm is already active the footer hides — the
-                  confirm UI in the Overview tab takes over. */}
-              {!pauseConfirm && !resumeConfirm && !rolodexConfirm && !removeConfirm && (
-                <div style={{
-                  position: "sticky",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  background: "rgba(255,255,255,0.96)",
-                  backdropFilter: "blur(8px)",
-                  WebkitBackdropFilter: "blur(8px)",
-                  borderTop: "1px solid " + C.borderLight,
-                  // Top padding fixed; bottom padding includes the iOS
-                  // safe-area-inset so the footer clears Safari's home
-                  // indicator / bottom toolbar on mobile. Falls back to
-                  // 12px on browsers without env() support.
-                  padding: "12px 16px calc(12px + env(safe-area-inset-bottom, 0px))",
-                  zIndex: 5,
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "stretch",
-                }}>
-                  <button
-                    onClick={() => {
-                      setClientTab("overview");
-                      setEditingOverview(true);
-                      setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" });
-                    }}
-                    className="rt-cm-btn-secondary"
-                    style={{ flex: 1, padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                  >Edit</button>
-                  <button
-                    onClick={() => {
-                      // Auto-switch to Overview so the confirm dialog is visible.
-                      setClientTab("overview");
-                      if (sc.is_paused) { setResumeConfirm(true); }
-                      else { setPauseConfirm(true); }
-                      setRolodexConfirm(false); setRemoveConfirm(false);
-                    }}
-                    className="rt-cm-btn-secondary"
-                    style={{ flex: 1, padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                  >{sc.is_paused ? "Resume" : "Pause"}</button>
-                  <button
-                    onClick={() => {
-                      // Remove = Move to Rolodex (the soft-remove path).
-                      // Auto-switch to Overview so the confirm dialog is visible.
-                      setClientTab("overview");
-                      setRolodexConfirm(true);
-                      setPauseConfirm(false); setResumeConfirm(false); setRemoveConfirm(false);
-                    }}
-                    className="rt-cm-btn-danger"
-                    style={{ flex: 1, padding: "10px 14px", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                  >Remove</button>
-                </div>
-              )}
             </div>
           </>
         );
@@ -17490,8 +17559,17 @@ export default function App({ user }) {
                 {/* Details */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred person or company</label>
-                    <input value={refEditData.to || ""} onChange={e => setRefEditData({...refEditData, to: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred client</label>
+                    <select value={refEditData.to || ""} onChange={e => setRefEditData({...refEditData, to: e.target.value})} style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }}>
+                      <option value="">Choose a client…</option>
+                      {refEditData.to && !clients.find(c => c.name === refEditData.to) && (
+                        <option value={refEditData.to}>{refEditData.to} (legacy — not in client list)</option>
+                      )}
+                      {clients.filter(c => c.name !== refEditData.from).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
+                      Add the client on the Clients page first if they're not in this list.
+                    </div>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Referred by</label>
@@ -17513,28 +17591,40 @@ export default function App({ user }) {
                       })}
                     </div>
                   </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Average monthly revenue ($)</label>
-                    <input type="number" value={refEditData.revenue || ""} onChange={e => setRefEditData({...refEditData, revenue: e.target.value})} placeholder="0" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
-                  </div>
-                  {(refEditData.status === "closed") && (
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Total revenue earned ($)</label>
-                      <input type="number" value={refEditData.totalRevenue || ""} onChange={e => setRefEditData({...refEditData, totalRevenue: e.target.value})} placeholder="0" style={{ width: "100%", padding: "12px 16px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.surfaceWarm, background: C.bg }} />
-                    </div>
-                  )}
+                  {refEditData.to && (() => {
+                    const refClient = clients.find(c => c.name === refEditData.to);
+                    const rev = refClient?.revenue || 0;
+                    return (
+                      <div>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Monthly revenue</label>
+                        <div style={{ padding: "12px 16px", borderRadius: 8, fontSize: 14, color: rev > 0 ? C.text : C.textMuted, background: C.bg, fontWeight: rev > 0 ? 600 : 500 }}>
+                          {refClient ? (rev > 0 ? "$" + rev.toLocaleString() + "/mo" : "Not set on client profile") : "—"}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
+                          {refClient ? `Pulled from ${refEditData.to}'s client profile.` : "Legacy referral — no linked client record."}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
                   <button onClick={() => setRefEditing(null)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                   <button className="r-btn" data-tone="purple" onClick={() => {
-                    setRefs(prev => prev.map((x, idx) => (x.id || idx) === refEditing ? { ...x, to: refEditData.to, from: refEditData.from, status: refEditData.status, converted: refEditData.status === "converted" || refEditData.status === "closed", revenue: parseInt(refEditData.revenue) || 0, totalRevenue: parseInt(refEditData.totalRevenue) || 0 } : x));
-                    // Persist
+                    // Snapshot revenue from the referred-to client at save
+                    // time. Legacy referrals where the referred-to name
+                    // isn't in the client list keep whatever revenue was
+                    // previously stored on the row (refEditData.revenue).
+                    const refClient = clients.find(c => c.name === refEditData.to);
+                    const snapshotRevenue = refClient
+                      ? (refClient.revenue || 0)
+                      : (parseInt(refEditData.revenue) || 0);
+                    setRefs(prev => prev.map((x, idx) => (x.id || idx) === refEditing ? { ...x, to: refEditData.to, from: refEditData.from, status: refEditData.status, converted: refEditData.status === "converted" || refEditData.status === "closed", revenue: snapshotRevenue, totalRevenue: parseInt(refEditData.totalRevenue) || 0 } : x));
                     referralsDb.update(refEditing, {
                       referred_to: refEditData.to,
                       referred_by: refEditData.from,
                       status: refEditData.status,
-                      revenue: parseInt(refEditData.revenue) || 0,
+                      revenue: snapshotRevenue,
                       total_revenue: parseInt(refEditData.totalRevenue) || 0,
                     });
                     setRefEditing(null);
@@ -17623,6 +17713,176 @@ export default function App({ user }) {
           );
         })}
       </div>
+
+      {/* ─── QUICKLOG — global FAB composer ─────────────────────────
+          Floating purple "+" anchored bottom-right on every page.
+          Click (or Cmd+K) opens a small popover with a textarea.
+          v1 shell: free-form text → creates a personal task (no client,
+          due today). v2 will add a parser that detects client name and
+          past/future tense (past → touchpoint, future → task). */}
+      <button
+        onClick={() => setQuickLogOpen(v => !v)}
+        aria-label="Quick log"
+        title="Quick log (⌘K)"
+        style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          border: "none",
+          background: "var(--rt-grad-btn)",
+          color: "#fff",
+          fontSize: 28,
+          fontWeight: 300,
+          lineHeight: 1,
+          cursor: "pointer",
+          boxShadow: "var(--rt-sh-purple)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingBottom: quickLogOpen ? 0 : 4,
+          transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
+          transition: "transform 180ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out)",
+          zIndex: 200,
+          fontFamily: "inherit",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple-hover)"; e.currentTarget.style.background = "var(--rt-grad-btn-hover)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple)"; e.currentTarget.style.background = "var(--rt-grad-btn)"; }}
+      >+</button>
+
+      {quickLogOpen && (
+        <>
+          {/* Click-outside catcher */}
+          <div
+            onClick={() => { setQuickLogOpen(false); setQuickLogText(""); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.18)", zIndex: 199 }}
+          />
+          <div style={{
+            position: "fixed",
+            bottom: 90,
+            right: 24,
+            width: 340,
+            maxWidth: "calc(100vw - 40px)",
+            background: C.card,
+            borderRadius: 14,
+            boxShadow: "0 12px 36px rgba(20,30,22,0.20), 0 4px 10px rgba(20,30,22,0.08)",
+            border: "0.5px solid " + C.borderLight,
+            padding: 14,
+            zIndex: 200,
+          }}>
+            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.5, fontWeight: 600, marginBottom: 8 }}>QUICK LOG</div>
+            <textarea
+              autoFocus
+              value={quickLogText}
+              onChange={e => setQuickLogText(e.target.value)}
+              onKeyDown={async e => {
+                if (e.key === "Escape") {
+                  setQuickLogOpen(false); setQuickLogText("");
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const text = quickLogText.trim();
+                  if (!text) return;
+                  // Close popover immediately for snappy UX. The save
+                  // continues in the background.
+                  setQuickLogOpen(false);
+                  setQuickLogText("");
+                  const todayStr = localYmd();
+                  const optimisticId = "ql" + Date.now();
+                  const optimisticTask = {
+                    id: optimisticId,
+                    text,
+                    client: null,
+                    done: false,
+                    ai: false,
+                    recurring: false,
+                    recurrence_pattern: null,
+                    due_date: todayStr,
+                    raiPriority: false,
+                    alert: false,
+                    created_at: Date.now(),
+                    assigned_worker_id: null,
+                  };
+                  setTasks(prev => [optimisticTask, ...prev]);
+                  try {
+                    const { data: created } = await tasksDb.create(user.id, {
+                      text,
+                      client_name: null,
+                      client_id: null,
+                      is_recurring: false,
+                      recurrence_pattern: null,
+                      due_date: todayStr,
+                      assigned_worker_id: null,
+                    });
+                    if (created?.id) {
+                      // Swap optimistic id for the real db id so undo
+                      // can delete the right row.
+                      setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
+                      setQuickLogToast({ id: Date.now(), taskId: created.id, taskRef: { ...optimisticTask, id: created.id } });
+                    } else {
+                      setQuickLogToast({ id: Date.now(), taskId: optimisticId, taskRef: optimisticTask });
+                    }
+                  } catch (err) {
+                    // Roll back optimistic insert on failure.
+                    setTasks(prev => prev.filter(t => t.id !== optimisticId));
+                    setQuickLogToast({ id: Date.now(), taskId: null, error: true });
+                  }
+                }
+              }}
+              placeholder="What just happened, or what's next?"
+              rows={3}
+              style={{ width: "100%", padding: "8px 0", border: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, minHeight: 60, boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, paddingTop: 10, borderTop: "0.5px solid " + C.borderLight }}>
+              <span style={{ fontSize: 11, color: C.textMuted }}>Saves as personal task · today</span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>⏎ to log · Esc to close</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Toast — bottom-right confirmation with undo */}
+      {quickLogToast && (
+        <QuickLogToast
+          toast={quickLogToast}
+          onUndo={() => {
+            if (quickLogToast.taskId) {
+              setTasks(prev => prev.filter(t => t.id !== quickLogToast.taskId));
+              tasksDb.delete(quickLogToast.taskId);
+            }
+            setQuickLogToast(null);
+          }}
+          onDismiss={() => setQuickLogToast(null)}
+          C={C}
+        />
+      )}
+    </div>
+  );
+}
+
+// Quick log confirmation toast — auto-dismisses after 4s. Pulled out
+// as its own component so the setTimeout cleanup is tied to the toast's
+// lifecycle, not the parent's render cycle.
+function QuickLogToast({ toast, onUndo, onDismiss, C }) {
+  useEffect(() => {
+    const t = setTimeout(() => onDismiss(), 4000);
+    return () => clearTimeout(t);
+  }, [toast.id, onDismiss]);
+  if (toast.error) {
+    return (
+      <div style={{ position: "fixed", bottom: 90, right: 24, background: C.danger, color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
+        <span>Couldn't save — try again</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ position: "fixed", bottom: 90, right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
+      <span style={{ color: "#5DCAA5" }}>✓</span>
+      <span>Logged</span>
+      <button onClick={onUndo} style={{ background: "none", border: "none", color: "#A8B0A8", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>Undo</button>
     </div>
   );
 }
