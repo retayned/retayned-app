@@ -7480,7 +7480,7 @@ export default function App({ user }) {
             "tasks focus";
         }
         .rt-mob-strip { display: none; }
-        @media (max-width: 900px) {
+        @media (max-width: 1099px) {
           .rt-today-v4 {
             grid-template-columns: 1fr;
             grid-template-areas:
@@ -7490,6 +7490,8 @@ export default function App({ user }) {
           }
           .rt-focus-col { display: none !important; }
           .rt-rai-col { display: none !important; }
+        }
+        @media (max-width: 900px) {
           /* Mobile band — condensed Option 1 layout. */
           .rt-band {
             display: flex !important;
@@ -7523,44 +7525,41 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — fixed to viewport, centered.
-             Problem with chip-anchored absolute positioning: the chip
-             sits in the middle of the composer row (Add Task button is
-             to its right). Anchoring the picker left:0 pushes it
-             rightward off-screen on narrow phones (~280px picker on a
-             375px viewport — fits, but only barely, and the chip is
-             not at x:0). Anchoring right:0 pushes the picker leftward
-             past the left edge.
-             Solution: on mobile, use position:fixed and pin to the
-             viewport directly. Centered horizontally with 12px viewport
-             margins. Vertically anchored to bottom: 96px so it floats
-             above the 80px-tall mobile bottom nav with a small gap.
-             Picker now never overflows the viewport regardless of
-             where the chip sits.
-             Sibling backdrop already uses position:fixed inset:0 to
-             catch outside-taps for dismissal — that keeps working. */
+          /* DUE PICKER ON MOBILE — anchored popover under the composer,
+             matching Worker/Client behavior. Earlier iterations pinned
+             this to the viewport (position:fixed, bottom:96px) which made
+             it feel like a disconnected full-screen takeover — especially
+             with the month calendar inflating its height. Now it drops
+             below the composer as a normal absolutely-positioned popover,
+             spans the composer width (left/right 0), and caps its height
+             so the calendar scrolls internally instead of eating the
+             screen. The chip relationship stays clear and it matches the
+             other two pickers.
+             Anchored to the composer card (the .rt-composer-row's
+             positioned ancestor), not the chip itself, so it doesn't
+             shoot off-screen from the chip's mid-row x-position. */
           .rt-due-picker {
-            position: fixed !important;
-            top: auto !important;
-            left: 12px !important;
-            right: 12px !important;
-            bottom: 96px !important;
-            width: auto !important;
+            position: absolute !important;
+            top: calc(100% + 8px) !important;
+            left: auto !important;
+            right: 0 !important;
+            bottom: auto !important;
+            width: 300px !important;
             min-width: 0 !important;
-            max-width: none !important;
-            max-height: calc(100vh - 140px) !important;
+            max-width: calc(100vw - 32px) !important;
+            max-height: 60vh !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
             box-shadow:
               0 1px 3px rgba(20, 30, 22, 0.10),
               0 12px 32px rgba(20, 30, 22, 0.18) !important;
           }
-          /* Compact calendar cells on mobile so the grid doesn't bloat
-             the picker. Smaller height, smaller font. */
+          /* Compact calendar cells on mobile so the grid stays tight and
+             the picker reads as a small popover, not a page. */
           .rt-due-picker [role="grid"] button,
           .rt-due-picker > div > div > div > button {
-            height: 22px !important;
-            font-size: 10.5px !important;
+            height: 30px !important;
+            font-size: 12px !important;
           }
         }
         /* Rai pick clamp + fade — universal (desktop AND mobile).
@@ -7634,8 +7633,11 @@ export default function App({ user }) {
           transform: translateY(0) scale(0.97);
           transition: transform 80ms var(--rt-ease-press);
         }
-        /* Wide desktop (>=1440px): 3 cols, Rai spans composer+tasks rows */
-        @media (min-width: 1440px) {
+        /* Wide desktop (>=1500px): 3 cols — notes (daybook) joins only
+           when there's genuine room. Below this, tasks + calendar share
+           the width and notes stays hidden so it never crowds out what
+           matters. Raised from 1440 (tasks were getting ~440px there). */
+        @media (min-width: 1500px) {
           .rt-today-v4 {
             grid-template-columns: minmax(0, 1fr) 360px 360px;
             grid-template-rows: auto auto 1fr;
@@ -9693,7 +9695,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 5,
                             ...(rankMode === "rai"
-                              ? { background: C.btnLight, color: C.btn, boxShadow: "0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08)" }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}
                         >
@@ -16103,7 +16105,7 @@ export default function App({ user }) {
                 <div style={{ marginTop: 18 }}>
                   {!rolodexConfirm && !removeConfirm && !pauseConfirm && !resumeConfirm ? null : pauseConfirm ? (
                     <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px" }}>
-                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be paused. Their tasks stay visible but Rai stops surfacing them, and their retention score will drop -4. Tenure clock freezes until you resume.</p>
+                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be paused but will still count as a client in your roster. Their tasks stay visible but Rai stops surfacing them, and tenure clock freezes until you resume.</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={async () => {
                           // Optimistic: flip is_paused, drop ret -4
@@ -17070,6 +17072,33 @@ export default function App({ user }) {
                         </div>
                       );
                     })}
+                    {/* Paused — fifth entry. Unlike the four above, this is
+                        NOT an independently-toggleable qualifying flag: it
+                        mirrors the client's actual pause state (is_paused),
+                        the single source of truth. Toggling it routes through
+                        the same pause/resume confirmation modal as the
+                        overflow menu, so the -4 is applied in exactly one
+                        place (the pause handler) and never double-counts.
+                        Shown here purely for transparency — so the user sees
+                        the pause penalty alongside the other score factors. */}
+                    {(() => {
+                      const on = !!sc.is_paused;
+                      return (
+                        <div onClick={() => {
+                          setClientTab("overview");
+                          if (on) { setResumeConfirm(true); } else { setPauseConfirm(true); }
+                          setRolodexConfirm(false); setRemoveConfirm(false);
+                        }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 0", borderBottom: "1px solid " + C.borderLight, cursor: "pointer" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Paused</div>
+                            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>Relationship is on hold — tenure clock frozen</div>
+                          </div>
+                          <div style={{ width: 40, height: 22, borderRadius: 11, background: on ? C.warning : C.border, padding: 2, transition: "background 0.2s", display: "flex", alignItems: "center", flexShrink: 0 }}>
+                            <div style={{ width: 18, height: 18, borderRadius: 9, background: "#fff", transform: on ? "translateX(18px)" : "translateX(0)", transition: "transform 0.2s" }} />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
