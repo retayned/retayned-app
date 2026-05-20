@@ -4665,24 +4665,6 @@ export default function App({ user }) {
   // compact (4 short rows) instead of a tall sheet. Desktop always
   // shows the calendar (plenty of room), so this only gates mobile.
   const [dueShowCalendar, setDueShowCalendar] = useState(false);
-  // Mobile: the Due picker is pinned (fixed) directly under the composer
-  // card, measured from the composer's bounding rect when it opens. This
-  // is the only reliable way to attach it to the composer — the chip
-  // wrapper it's nested in is a narrow mid-row box, so chip-relative
-  // anchoring always overflows one edge or the other.
-  const [duePickerPos, setDuePickerPos] = useState(null);
-  // Measure composer + pin the mobile Due picker directly beneath it.
-  // Recomputes whenever the picker opens or the calendar expands (which
-  // changes height but not the anchor). Desktop ignores this — CSS there
-  // anchors the picker normally. Placed AFTER the state declarations it
-  // reads (duePickerOpen etc.) to avoid a temporal-dead-zone crash.
-  useEffect(() => {
-    if (!duePickerOpen || !isMobile) { setDuePickerPos(null); return; }
-    const composer = document.querySelector(".rt-composer");
-    if (!composer) return;
-    const r = composer.getBoundingClientRect();
-    setDuePickerPos({ top: r.bottom + 8, left: r.left, width: r.width });
-  }, [duePickerOpen, isMobile, dueShowCalendar]);
   // Renewal date picker popover state — used by the client profile edit
   // form (replaces the native <input type="date"> which renders poorly
   // and inconsistently on mobile, and doesn't match the site's picker
@@ -7548,26 +7530,26 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — now that the calendar is collapsed
-             behind "Later" by default, the picker content is compact
-             (4 short rows), so it can anchor directly under the chip
-             like Worker/Client instead of floating detached in the
-             viewport. Due is the rightmost chip, so anchor right:0
-             (picker's right edge aligns to the chip's right edge) and
-             open downward + leftward. Width fits comfortably on a phone
-             now that content is short. When "Later" expands the calendar,
-             max-height caps it and the calendar scrolls internally. */
+          /* DUE PICKER ON MOBILE — fixed to the viewport, full content
+             width (16px gutters matching .r-main padding), anchored just
+             above the bottom nav. This is bulletproof: it does not depend
+             on the chip wrapper (narrow, mid-row — always overflowed one
+             edge) or on JS measurement. Left/right 16px makes it exactly
+             the composer's width and x-position; bottom-anchoring puts it
+             in a fixed, always-on-screen spot. Compact by default (calendar
+             collapsed behind "Later"); when expanded, max-height caps it
+             and the calendar scrolls internally. */
           .rt-due-picker {
-            position: absolute !important;
-            top: calc(100% + 8px) !important;
-            left: auto !important;
-            right: 0 !important;
-            bottom: auto !important;
+            position: fixed !important;
+            top: auto !important;
+            left: 16px !important;
+            right: 16px !important;
+            bottom: 84px !important;
             margin: 0 !important;
-            width: 280px !important;
+            width: auto !important;
             min-width: 0 !important;
-            max-width: calc(100vw - 32px) !important;
-            max-height: 64vh !important;
+            max-width: none !important;
+            max-height: 60vh !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
             box-shadow:
@@ -9336,30 +9318,14 @@ export default function App({ user }) {
                           style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
                         />
                         <div className="rt-due-picker rt-picker-panel" style={{
-                          // Desktop: position owned by CSS (.rt-due-picker).
-                          // Mobile: duePickerPos is measured from the composer
-                          // rect and applied inline here — inline beats the
-                          // CSS !important rules, pinning the picker directly
-                          // under the composer card at its exact width. This
-                          // is what finally attaches it to the composer; the
-                          // chip wrapper it's nested in is too narrow/mid-row
-                          // to anchor against.
+                          // Position owned by CSS (.rt-due-picker): desktop
+                          // anchors under the chip; mobile pins fixed above
+                          // the bottom nav at full content width.
                           zIndex: 50,
                           minWidth: 240,
                           display: "flex",
                           flexDirection: "column",
                           gap: 2,
-                          ...(duePickerPos ? {
-                            position: "fixed",
-                            top: duePickerPos.top,
-                            left: duePickerPos.left,
-                            width: duePickerPos.width,
-                            right: "auto",
-                            minWidth: 0,
-                            maxWidth: "none",
-                            maxHeight: "64vh",
-                            overflowY: "auto",
-                          } : {}),
                         }}>                          {(() => {
                             const _later6 = new Date(_now);
                             _later6.setDate(_later6.getDate() + 6);
