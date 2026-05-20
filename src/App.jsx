@@ -3931,6 +3931,17 @@ export default function App({ user }) {
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+  // Measure composer + pin the mobile Due picker directly beneath it.
+  // Recomputes whenever the picker opens or the calendar expands (which
+  // changes height but not the anchor). Desktop ignores this — CSS there
+  // anchors the picker normally.
+  useEffect(() => {
+    if (!duePickerOpen || !isMobile) { setDuePickerPos(null); return; }
+    const composer = document.querySelector(".rt-composer");
+    if (!composer) return;
+    const r = composer.getBoundingClientRect();
+    setDuePickerPos({ top: r.bottom + 8, left: r.left, width: r.width });
+  }, [duePickerOpen, isMobile, dueShowCalendar]);
   useEffect(() => {
     const vv = typeof window !== "undefined" ? window.visualViewport : null;
     if (!vv) return;
@@ -4665,6 +4676,12 @@ export default function App({ user }) {
   // compact (4 short rows) instead of a tall sheet. Desktop always
   // shows the calendar (plenty of room), so this only gates mobile.
   const [dueShowCalendar, setDueShowCalendar] = useState(false);
+  // Mobile: the Due picker is pinned (fixed) directly under the composer
+  // card, measured from the composer's bounding rect when it opens. This
+  // is the only reliable way to attach it to the composer — the chip
+  // wrapper it's nested in is a narrow mid-row box, so chip-relative
+  // anchoring always overflows one edge or the other.
+  const [duePickerPos, setDuePickerPos] = useState(null);
   // Renewal date picker popover state — used by the client profile edit
   // form (replaces the native <input type="date"> which renders poorly
   // and inconsistently on mobile, and doesn't match the site's picker
@@ -9318,22 +9335,31 @@ export default function App({ user }) {
                           style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
                         />
                         <div className="rt-due-picker rt-picker-panel" style={{
-                          // Position is owned by CSS (.rt-due-picker rule) so
-                          // we can apply different positioning per viewport
-                          // via media queries. Previously inline styles set
-                          // position:absolute + left:0 here, which won the
-                          // specificity battle against any !important CSS
-                          // rule (React inline styles can't take !important).
-                          // That's why repeated mobile fixes never landed —
-                          // the inline always won. Inline now only carries
-                          // properties that don't vary by viewport.
+                          // Desktop: position owned by CSS (.rt-due-picker).
+                          // Mobile: duePickerPos is measured from the composer
+                          // rect and applied inline here — inline beats the
+                          // CSS !important rules, pinning the picker directly
+                          // under the composer card at its exact width. This
+                          // is what finally attaches it to the composer; the
+                          // chip wrapper it's nested in is too narrow/mid-row
+                          // to anchor against.
                           zIndex: 50,
                           minWidth: 240,
                           display: "flex",
                           flexDirection: "column",
                           gap: 2,
-                        }}>
-                          {(() => {
+                          ...(duePickerPos ? {
+                            position: "fixed",
+                            top: duePickerPos.top,
+                            left: duePickerPos.left,
+                            width: duePickerPos.width,
+                            right: "auto",
+                            minWidth: 0,
+                            maxWidth: "none",
+                            maxHeight: "64vh",
+                            overflowY: "auto",
+                          } : {}),
+                        }}>                          {(() => {
                             const _later6 = new Date(_now);
                             _later6.setDate(_later6.getDate() + 6);
                             const _later6Str = `${_later6.getFullYear()}-${String(_later6.getMonth() + 1).padStart(2, "0")}-${String(_later6.getDate()).padStart(2, "0")}`;
