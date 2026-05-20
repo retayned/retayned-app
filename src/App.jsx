@@ -17784,23 +17784,88 @@ export default function App({ user }) {
                 }
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  const text = quickLogText.trim();
-                  if (!text) return;
-                  // Close popover immediately for snappy UX. The save
-                  // continues in the background.
+                  const rawText = quickLogText.trim();
+                  if (!rawText) return;
+                  // Close popover immediately for snappy UX.
                   setQuickLogOpen(false);
                   setQuickLogText("");
-                  const todayStr = localYmd();
+
+                  // ─── Parse the input via the same parser the task composer
+                  // uses. Reuses client matching (exact / token / abbrev /
+                  // prefix-typo) and date hints — single source of truth for
+                  // "how do we interpret typed input."
+                  const parsed = parseComposer(rawText, clients, workers);
+                  const matchedClient = parsed.matchedClient || null;
+                  const cleanedText = parsed.title || rawText;
+
+                  // ─── Tense detection — past = touchpoint, future/neutral = task.
+                  // Word-boundary match on the raw lowercased input. Past verbs
+                  // beat future verbs if both appear ("called and need to
+                  // follow up" → touchpoint, because the action that already
+                  // happened is what's being logged).
+                  const lower = rawText.toLowerCase();
+                  const hasWord = (w) => new RegExp(`\\b${w}\\b`, "i").test(lower);
+                  // Past verbs → touchpoint
+                  const PAST_VERBS = ["talked", "called", "met", "emailed", "texted", "spoke", "chatted", "wrote", "messaged", "dm'd", "dmed", "responded", "replied", "heard from", "got off", "had a call", "had a meeting", "spoke with", "caught up"];
+                  // Channel inference from the past verb
+                  let detectedChannel = null;
+                  let isPast = false;
+                  for (const v of PAST_VERBS) {
+                    if (new RegExp(`\\b${v.replace(/'/g, "['']?")}\\b`, "i").test(lower)) {
+                      isPast = true;
+                      if (/call|spoke|got off|chat/i.test(v)) detectedChannel = "call";
+                      else if (/email/i.test(v)) detectedChannel = "email";
+                      else if (/text|message|dm/i.test(v)) detectedChannel = "text";
+                      else if (/met|meeting|caught up/i.test(v)) detectedChannel = "meeting";
+                      else detectedChannel = "note";
+                      break;
+                    }
+                  }
+
+                  // ─── ROUTE A: TOUCHPOINT (past tense)
+                  if (isPast && matchedClient) {
+                    const optimisticId = "qltp" + Date.now();
+                    setTpLogged(prev => [
+                      { id: optimisticId, client: matchedClient.name, channel: detectedChannel || "note" },
+                      ...prev,
+                    ]);
+                    try {
+                      const { data: created } = await touchpointsDb.create(user.id, {
+                        client_id: matchedClient.id,
+                        client_name: matchedClient.name,
+                        channel: detectedChannel || "note",
+                        notes: cleanedText,
+                      });
+                      if (created?.id) {
+                        setTpLogged(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
+                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: created.id, label: matchedClient.name });
+                      } else {
+                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: optimisticId, label: matchedClient.name });
+                      }
+                    } catch (err) {
+                      setTpLogged(prev => prev.filter(t => t.id !== optimisticId));
+                      setQuickLogToast({ id: Date.now(), error: true });
+                    }
+                    return;
+                  }
+
+                  // ─── ROUTE B: TASK (future / neutral / no client match for past)
+                  // If past tense fired but no client matched, fall through to
+                  // task — we can't make a touchpoint without a client_id.
+                  const dueDateForCreate = parsed.matchedDate
+                    ? localYmd(parsed.matchedDate.date)
+                    : localYmd();
                   const optimisticId = "ql" + Date.now();
                   const optimisticTask = {
                     id: optimisticId,
-                    text,
-                    client: null,
+                    text: cleanedText,
+                    client: matchedClient?.name || null,
+                    client_id: matchedClient?.id || null,
                     done: false,
                     ai: false,
                     recurring: false,
                     recurrence_pattern: null,
-                    due_date: todayStr,
+                    due_date: dueDateForCreate,
                     raiPriority: false,
                     alert: false,
                     created_at: Date.now(),
@@ -17809,36 +17874,33 @@ export default function App({ user }) {
                   setTasks(prev => [optimisticTask, ...prev]);
                   try {
                     const { data: created } = await tasksDb.create(user.id, {
-                      text,
-                      client_name: null,
-                      client_id: null,
+                      text: cleanedText,
+                      client_name: matchedClient?.name || null,
+                      client_id: matchedClient?.id || null,
                       is_recurring: false,
                       recurrence_pattern: null,
-                      due_date: todayStr,
+                      due_date: dueDateForCreate,
                       assigned_worker_id: null,
                     });
                     if (created?.id) {
-                      // Swap optimistic id for the real db id so undo
-                      // can delete the right row.
                       setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
-                      setQuickLogToast({ id: Date.now(), taskId: created.id, taskRef: { ...optimisticTask, id: created.id } });
+                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: matchedClient?.name || "personal task" });
                     } else {
-                      setQuickLogToast({ id: Date.now(), taskId: optimisticId, taskRef: optimisticTask });
+                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: matchedClient?.name || "personal task" });
                     }
                   } catch (err) {
-                    // Roll back optimistic insert on failure.
                     setTasks(prev => prev.filter(t => t.id !== optimisticId));
-                    setQuickLogToast({ id: Date.now(), taskId: null, error: true });
+                    setQuickLogToast({ id: Date.now(), error: true });
                   }
                 }
               }}
-              placeholder="What just happened, or what's next?"
+              placeholder="Add a task or log a touchpoint."
               rows={3}
               style={{ width: "100%", padding: "8px 0", border: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, minHeight: 60, boxSizing: "border-box" }}
             />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, paddingTop: 10, borderTop: "0.5px solid " + C.borderLight }}>
-              <span style={{ fontSize: 11, color: C.textMuted }}>Saves as personal task · today</span>
-              <span style={{ fontSize: 11, color: C.textMuted }}>⏎ to log · Esc to close</span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>Past tense → touchpoint · future → task</span>
+              <span style={{ fontSize: 11, color: C.textMuted }}>⏎ to log · Esc</span>
             </div>
           </div>
         </>
@@ -17849,9 +17911,12 @@ export default function App({ user }) {
         <QuickLogToast
           toast={quickLogToast}
           onUndo={() => {
-            if (quickLogToast.taskId) {
-              setTasks(prev => prev.filter(t => t.id !== quickLogToast.taskId));
-              tasksDb.delete(quickLogToast.taskId);
+            if (quickLogToast.kind === "task" && quickLogToast.recordId) {
+              setTasks(prev => prev.filter(t => t.id !== quickLogToast.recordId));
+              tasksDb.delete(quickLogToast.recordId);
+            } else if (quickLogToast.kind === "touchpoint" && quickLogToast.recordId) {
+              setTpLogged(prev => prev.filter(t => t.id !== quickLogToast.recordId));
+              touchpointsDb.delete(quickLogToast.recordId);
             }
             setQuickLogToast(null);
           }}
@@ -17881,7 +17946,7 @@ function QuickLogToast({ toast, onUndo, onDismiss, C }) {
   return (
     <div style={{ position: "fixed", bottom: 90, right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
       <span style={{ color: "#5DCAA5" }}>✓</span>
-      <span>Logged</span>
+      <span>{toast.kind === "touchpoint" ? "Touchpoint logged" : "Task added"}{toast.label ? " · " + toast.label : ""}</span>
       <button onClick={onUndo} style={{ background: "none", border: "none", color: "#A8B0A8", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>Undo</button>
     </div>
   );
