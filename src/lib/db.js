@@ -1799,13 +1799,14 @@ export const touchpoints = {
     return { data: flat, error };
   },
 
-  create: async (userId, { client_id, client_name, channel }) => {
+  create: async (userId, { client_id, client_name, channel, notes }) => {
     const { data, error } = await supabase
       .from('touchpoints')
       .insert({
         user_id: userId,
         client_id,
         channel,
+        notes: notes || null,
         occurred_at: new Date().toISOString()
       })
       .select()
