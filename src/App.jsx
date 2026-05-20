@@ -2550,14 +2550,20 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             background: (() => {
               const h = new Date().getHours();
               let tint, alpha;
-              if (h < 6)        { tint = "180,190,205"; alpha = 0.12; }
-              else if (h < 10)  { tint = "220,225,225"; alpha = 0.075; }
-              else if (h < 14)  { tint = "245,235,215"; alpha = 0.05; }
-              else if (h < 17)  { tint = "250,235,205"; alpha = 0.125; }
-              else if (h < 19)  { tint = "245,210,160"; alpha = 0.175; }
-              else if (h < 22)  { tint = "235,195,150"; alpha = 0.15; }
-              else              { tint = "200,180,165"; alpha = 0.125; }
-              const a = (alpha * 0.75).toFixed(3);
+              // Alphas raised May 2026 — prior values bottomed out at
+              // 0.05 midday which, after the 0.75 multiplier, rendered
+              // at ~3.7% opacity (invisible over the white card). These
+              // floors keep the wash perceptible at every hour while
+              // still peaking warm in the late afternoon. Multiplier
+              // dropped too — the band now uses the raw alpha.
+              if (h < 6)        { tint = "180,190,205"; alpha = 0.22; }  // pre-dawn — cool blue
+              else if (h < 10)  { tint = "220,225,225"; alpha = 0.18; }  // morning — soft cool cream
+              else if (h < 14)  { tint = "248,236,212"; alpha = 0.20; }  // midday — warm neutral cream
+              else if (h < 17)  { tint = "250,230,195"; alpha = 0.26; }  // afternoon — warming amber
+              else if (h < 19)  { tint = "245,205,150"; alpha = 0.32; }  // golden hour — deep amber
+              else if (h < 22)  { tint = "235,190,145"; alpha = 0.28; }  // dusk — warm amber
+              else              { tint = "200,180,165"; alpha = 0.24; }  // night — muted warmth
+              const a = alpha.toFixed(3);
               return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 12%, rgba(${tint},${a}) 32%, rgba(${tint},${a}) 68%, rgba(${tint},0) 88%, rgba(${tint},0) 100%)`;
             })(),
           }}
@@ -4124,11 +4130,6 @@ export default function App({ user }) {
   useEffect(() => {
     try { localStorage.setItem("clients-view", clientsView); } catch (e) {}
   }, [clientsView]);
-  const [showImport, setShowImport] = useState(false);
-  const [importTab, setImportTab] = useState("csv"); // "csv" | "paste"
-  const [importPaste, setImportPaste] = useState("");
-  const [importPreview, setImportPreview] = useState([]);
-  const [importFile, setImportFile] = useState(null);
   const [newClient, setNewClient] = useState({ name: "", contact: "", role: "", tag: "", revenue: "", months: "", lifetime_revenue_at_entry: "", latePayments: false, prevTerminated: false, otherVendors: false, fromReferral: false });
   const [profileStep, setProfileStep] = useState(0);
   const [profileScores, setProfileScores] = useState({});
@@ -11063,15 +11064,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  {tier === "enterprise" && (
-                    <button
-                      onClick={() => { setShowImport(!showImport); setShowAddClient(false); }}
-                      style={{ padding: "8px 14px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background 120ms ease, border-color 120ms ease" }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(51,84,62,0.06)"; e.currentTarget.style.borderColor = C.primary + "88"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = C.primary + "44"; }}
-                    >Import Clients</button>
-                  )}
-                  <button className="r-btn" data-tone="purple" onClick={() => { setShowAddClient(true); setShowImport(false); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="purple" onClick={() => { setShowAddClient(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
                     Add Client
                   </button>
                 </div>
@@ -11204,288 +11197,6 @@ export default function App({ user }) {
                 {/* MAIN COLUMN */}
                 <div style={{ minWidth: 0 }}>
 
-                  {/* Import & Add Client — unchanged blocks, preserved as-is */}
-            {showImport && tier === "enterprise" && (
-              <div style={{ background: C.card, borderRadius: 14, border: "1.5px solid " + C.primary, padding: "20px", marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>Import Clients</div>
-                  <button onClick={() => { setShowImport(false); setImportPreview([]); setImportPaste(""); setImportFile(null); }} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: C.textMuted }}>×</button>
-                </div>
-
-                {/* Tab toggle */}
-                <div style={{ display: "flex", gap: 0, marginBottom: 16, background: C.surface, borderRadius: 8, padding: 3 }}>
-                  {[{ id: "csv", label: "Upload CSV" }, { id: "paste", label: "Paste from Spreadsheet" }].map(t => (
-                    <button key={t.id} onClick={() => { setImportTab(t.id); setImportPreview([]); }} style={{ flex: 1, padding: "8px", borderRadius: 6, border: "none", background: importTab === t.id ? C.card : "transparent", color: importTab === t.id ? C.text : C.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: importTab === t.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>{t.label}</button>
-                  ))}
-                </div>
-
-                {/* CSV Upload */}
-                {importTab === "csv" && (
-                  <div>
-                    <div
-                      onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = C.primary; }}
-                      onDragLeave={e => { e.currentTarget.style.borderColor = C.border; }}
-                      onDrop={e => {
-                        e.preventDefault();
-                        e.currentTarget.style.borderColor = C.border;
-                        const file = e.dataTransfer.files[0];
-                        if (file && file.name.endsWith(".csv")) {
-                          setImportFile(file);
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            const lines = ev.target.result.split("\n").filter(l => l.trim());
-                            const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, ""));
-                            const rows = lines.slice(1).map(line => {
-                              const cols = line.split(",").map(c => c.trim().replace(/"/g, ""));
-                              return { name: cols[0] || "", contact: cols[1] || "", email: cols[2] || "", role: cols[3] || "", tag: cols[4] || "", revenue: parseInt(cols[5]) || 0, months: parseInt(cols[6]) || 0, valid: !!(cols[0] && cols[1] && cols[2]) };
-                            });
-                            setImportPreview(rows);
-                          };
-                          reader.readAsText(file);
-                        }
-                      }}
-                      style={{ border: "2px dashed " + C.border, borderRadius: 10, padding: "32px 20px", textAlign: "center", marginBottom: 12, transition: "border-color 0.2s" }}
-                    >
-                      {importFile ? (
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 600 }}>📄 {importFile.name}</div>
-                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>{importPreview.length} rows found</div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ fontSize: 24, marginBottom: 8 }}>📁</div>
-                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Drag & drop your CSV here</div>
-                          <div style={{ fontSize: 12, color: C.textMuted }}>or <label style={{ color: C.primary, cursor: "pointer", fontWeight: 600 }}>browse files<input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              setImportFile(file);
-                              const reader = new FileReader();
-                              reader.onload = (ev) => {
-                                const lines = ev.target.result.split("\n").filter(l => l.trim());
-                                const rows = lines.slice(1).map(line => {
-                                  const cols = line.split(",").map(c => c.trim().replace(/"/g, ""));
-                                  return { name: cols[0] || "", contact: cols[1] || "", email: cols[2] || "", role: cols[3] || "", tag: cols[4] || "", revenue: parseInt(cols[5]) || 0, months: parseInt(cols[6]) || 0, valid: !!(cols[0] && cols[1] && cols[2]) };
-                                });
-                                setImportPreview(rows);
-                              };
-                              reader.readAsText(file);
-                            }
-                          }} /></label></div>
-                          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8 }}>Expected columns: Business Name, Contact Name, Email, Role, Industry, Revenue, Months</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Paste from Spreadsheet */}
-                {importTab === "paste" && (
-                  <div>
-                    <textarea
-                      value={importPaste}
-                      onChange={e => {
-                        setImportPaste(e.target.value);
-                        const lines = e.target.value.split("\n").filter(l => l.trim());
-                        const rows = lines.map(line => {
-                          const cols = line.split(/\t|,/).map(c => c.trim().replace(/"/g, ""));
-                          return { name: cols[0] || "", contact: cols[1] || "", email: cols[2] || "", role: cols[3] || "", tag: cols[4] || "", revenue: parseInt(cols[5]) || 0, months: parseInt(cols[6]) || 0, valid: !!(cols[0] && cols[1] && cols[2]) };
-                        });
-                        setImportPreview(rows);
-                      }}
-                      placeholder={"Business Name\tContact Name\tEmail\tRole\tIndustry\tRevenue\tMonths\nAcme Corp\tJane Smith\tjane@acme.com\tCMO\tSaaS\t5000\t12"}
-                      rows={6}
-                      style={{ width: "100%", padding: "12px 14px", border: "none", boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)", borderRadius: 8, fontSize: 14, fontFamily: "monospace", outline: "none", background: C.surfaceWarm, resize: "vertical", lineHeight: 1.6 }}
-                    />
-                    <div style={{ fontSize: 12, color: C.textMuted, marginTop: 6 }}>Paste rows from Excel or Google Sheets. Tab or comma-separated. First 3 columns required.</div>
-                  </div>
-                )}
-
-                {/* Preview Table */}
-                {importPreview.length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Preview ({importPreview.filter(r => r.valid).length} valid of {importPreview.length})</div>
-                    <div style={{ background: C.bg, borderRadius: 10, overflow: "hidden" }}>
-                      {/* Header */}
-                      <div style={{ display: "flex", padding: "8px 12px", borderBottom: "1px solid " + C.border, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
-                        <span style={{ width: 24 }}></span>
-                        <span style={{ flex: 2, minWidth: 0 }}>Business</span>
-                        <span style={{ flex: 2, minWidth: 0 }}>Contact</span>
-                        <span style={{ flex: 2, minWidth: 0 }}>Email</span>
-                        <span style={{ flex: 1, minWidth: 0 }}>Role</span>
-                      </div>
-                      {importPreview.slice(0, 10).map((r, i) => (
-                        <div key={i} style={{ display: "flex", padding: "8px 12px", borderBottom: i < Math.min(importPreview.length, 10) - 1 ? "1px solid " + C.borderLight : "none", fontSize: 12, alignItems: "center" }}>
-                          <span style={{ width: 24, color: r.valid ? C.success : C.danger, fontWeight: 700 }}>{r.valid ? "✓" : "✗"}</span>
-                          <span style={{ flex: 2, minWidth: 0, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name || "—"}</span>
-                          <span style={{ flex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.contact || "—"}</span>
-                          <span style={{ flex: 2, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.textMuted }}>{r.email || "—"}</span>
-                          <span style={{ flex: 1, minWidth: 0, color: C.textMuted }}>{r.role || "—"}</span>
-                        </div>
-                      ))}
-                      {importPreview.length > 10 && (
-                        <div style={{ padding: "8px 12px", fontSize: 12, color: C.textMuted, textAlign: "center" }}>+ {importPreview.length - 10} more rows</div>
-                      )}
-                    </div>
-                    {importPreview.some(r => !r.valid) && (
-                      <div style={{ fontSize: 12, color: C.danger, marginTop: 6 }}>{importPreview.filter(r => !r.valid).length} row{importPreview.filter(r => !r.valid).length > 1 ? "s" : ""} missing required fields (Business Name, Contact Name, Email) — will be skipped</div>
-                    )}
-                  </div>
-                )}
-
-                {/* Actions */}
-                {importPreview.filter(r => r.valid).length > 0 && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                    <button className="r-btn" data-tone="purple" onClick={async () => {
-                      // BEFORE THIS FIX: import wrote only to local React state. Imported
-                      // clients appeared in the list, then vanished on refresh because
-                      // nothing was persisted to Supabase. Same exact failure mode as
-                      // the rolodex move-to-rolodex bug.
-                      //
-                      // Now we persist each valid row through clientsDb.create, then
-                      // also seed an initial client_revenue_history row when revenue>0
-                      // so LTV math is correct from minute one. Parallel insert via
-                      // Promise.allSettled so a single failure doesn't block the rest.
-                      const validRows = importPreview.filter(r => r.valid);
-                      const todayIsoDate = localYmd();
-                      const todayMs = Date.now();
-                      const MS_PER_MONTH = 30.44 * 24 * 60 * 60 * 1000;
-
-                      // Optimistic UI: insert with temp negative IDs so we can swap
-                      // them for real DB IDs once the inserts return. Negative IDs
-                      // can't collide with real UUIDs.
-                      const tempBase = -todayMs;
-                      const optimistic = validRows.map((r, idx) => ({
-                        id: tempBase - idx,
-                        _isTemp: true,
-                        name: r.name,
-                        contact: r.contact,
-                        role: r.role || "",
-                        tag: r.tag || "",
-                        months: r.months || 0,
-                        revenue: r.revenue || 0,
-                        lifetime_revenue_at_entry: 0,
-                        ltv: 0,
-                        velocity: "normal",
-                        lastHC: null,
-                        lastContact: "today",
-                        ret: 50,
-                        referrals: 0,
-                        profileScores: {},
-                        qualifyingFlags: {},
-                        daysOld: 0,
-                        is_paused: false,
-                        engagement_started_at: localYmd(new Date(todayMs - (r.months || 0) * MS_PER_MONTH)),
-                      }));
-                      setClients(prev => [...prev, ...optimistic]);
-                      setShowImport(false);
-                      setImportPreview([]);
-                      setImportPaste("");
-                      setImportFile(null);
-
-                      // Persist each row. Track successes + failures so we can
-                      // reconcile the local state with what actually landed.
-                      const results = await Promise.allSettled(
-                        validRows.map(async (r) => {
-                          const tenureMonths = parseInt(r.months) || 0;
-                          const monthlyRate = parseInt(r.revenue) || 0;
-                          const engagementStart = localYmd(new Date(todayMs - tenureMonths * MS_PER_MONTH));
-                          const payload = {
-                            name: r.name,
-                            contact: r.contact || "",
-                            role: r.role || "",
-                            tag: r.tag || "",
-                            revenue: monthlyRate,
-                            months: tenureMonths, // legacy field; engagement_started_at is the truth
-                            engagement_started_at: engagementStart,
-                            lifetime_revenue_at_entry: 0,
-                            retention_score: 50,
-                            profile_scores: {},
-                            qualifying_flags: {},
-                          };
-                          const { data: created, error } = await clientsDb.create(user.id, payload);
-                          if (error) throw error;
-                          // Seed initial revenue history row when there's a rate.
-                          // Without this, LTV math has no anchor and Rai signals
-                          // about revenue won't surface for imported clients.
-                          if (created?.id && monthlyRate > 0) {
-                            try {
-                              await supabase.from('client_revenue_history').insert({
-                                user_id: user.id,
-                                client_id: created.id,
-                                monthly_rate: monthlyRate,
-                                started_at: new Date().toISOString(),
-                                ended_at: null,
-                              });
-                            } catch (e) {
-                              // Non-fatal — client exists; revenue history can
-                              // be filled in later through the UI.
-                              console.warn("Revenue history seed failed for imported client:", e);
-                            }
-                          }
-                          return { rowName: r.name, created };
-                        })
-                      );
-
-                      // Reconcile: swap optimistic temp IDs for real DB IDs on
-                      // successes; remove temp rows for failures.
-                      const succeeded = [];
-                      const failed = [];
-                      results.forEach((res, idx) => {
-                        const tempId = tempBase - idx;
-                        if (res.status === "fulfilled" && res.value.created) {
-                          succeeded.push({ tempId, real: res.value.created });
-                        } else {
-                          failed.push({ tempId, rowName: validRows[idx].name, reason: res.reason });
-                        }
-                      });
-
-                      setClients(prev => {
-                        const tempIds = new Set([
-                          ...succeeded.map(s => s.tempId),
-                          ...failed.map(f => f.tempId),
-                        ]);
-                        // Drop ALL temp rows first
-                        const kept = prev.filter(c => !tempIds.has(c.id));
-                        // Add back the succeeded ones with real DB shape
-                        const realRows = succeeded.map(s => ({
-                          ...s.real,
-                          contact: s.real.contact || "",
-                          role: s.real.role || "",
-                          tag: s.real.tag || "",
-                          months: s.real.months || 0,
-                          revenue: s.real.revenue || 0,
-                          lifetime_revenue_at_entry: Number(s.real.lifetime_revenue_at_entry || 0),
-                          ltv: Number(s.real.lifetime_revenue_at_entry || 0),
-                          velocity: "normal",
-                          lastHC: null,
-                          lastContact: "today",
-                          ret: s.real.retention_score || 50,
-                          referrals: 0,
-                          profileScores: s.real.profile_scores || {},
-                          qualifyingFlags: s.real.qualifying_flags || {},
-                          daysOld: 0,
-                          is_paused: false,
-                        }));
-                        return [...kept, ...realRows].sort((a, b) => (b.ret || 0) - (a.ret || 0));
-                      });
-
-                      // Tell the user what landed and what didn't. Silent partial
-                      // failure is worse than a clear message.
-                      if (failed.length > 0) {
-                        const failedNames = failed.map(f => f.rowName).join(", ");
-                        console.error("Import failures:", failed);
-                        alert(
-                          succeeded.length > 0
-                            ? `Imported ${succeeded.length} client${succeeded.length === 1 ? "" : "s"}. ${failed.length} failed: ${failedNames}. Please try again.`
-                            : `Import failed. None of the ${failed.length} client${failed.length === 1 ? " was" : "s were"} saved. Please try again.`
-                        );
-                      }
-                    }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Import {importPreview.filter(r => r.valid).length} Client{importPreview.filter(r => r.valid).length > 1 ? "s" : ""}</button>
-                    <button onClick={() => { setShowImport(false); setImportPreview([]); setImportPaste(""); setImportFile(null); }} style={{ padding: "10px 16px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                  </div>
-                )}
-              </div>
-            )}
 
             {showAddClient && (
               <div style={{ background: C.card, borderRadius: 14, border: "2px solid " + C.primary, padding: "20px", marginBottom: 16, boxShadow: "var(--rt-sh-card)" }}>
@@ -11930,8 +11641,7 @@ export default function App({ user }) {
                       icon="clients"
                       headline="Your client book starts here."
                       body="Add the people you work with and Retayned starts reading the room — drift, cadence, who needs a check-in. Most users add 10 to start."
-                      cta={{ label: "Add Client", onClick: () => { setShowAddClient(true); setShowImport(false); } }}
-                      secondaryCta={{ label: "Import Clients", onClick: () => { setShowImport(true); setShowAddClient(false); } }}
+                      cta={{ label: "Add Client", onClick: () => { setShowAddClient(true); } }}
                     />
                   )}
 
