@@ -7525,29 +7525,27 @@ export default function App({ user }) {
           .rt-composer-pill { padding: 6px 8px !important; gap: 4px !important; }
           .rt-composer-pill span { font-size: 11.5px !important; }
           .rt-row-meta span:nth-child(n+4) { display: none !important; }
-          /* DUE PICKER ON MOBILE — anchored popover under the composer,
-             matching Worker/Client behavior. Earlier iterations pinned
-             this to the viewport (position:fixed, bottom:96px) which made
-             it feel like a disconnected full-screen takeover — especially
-             with the month calendar inflating its height. Now it drops
-             below the composer as a normal absolutely-positioned popover,
-             spans the composer width (left/right 0), and caps its height
-             so the calendar scrolls internally instead of eating the
-             screen. The chip relationship stays clear and it matches the
-             other two pickers.
-             Anchored to the composer card (the .rt-composer-row's
-             positioned ancestor), not the chip itself, so it doesn't
-             shoot off-screen from the chip's mid-row x-position. */
+          /* DUE PICKER ON MOBILE — the chip wrapper is a narrow,
+             mid-row positioned ancestor, so chip-relative anchoring
+             (left:0 runs off the right edge; right:0 runs off the left
+             edge) can never sit correctly. Anchor to the VIEWPORT
+             instead with position:fixed, but as a compact centered
+             popover — NOT the old full-bleed sheet. Centered with
+             16px side margins, dropped to a fixed top offset that
+             clears the composer, height-capped so the calendar
+             scrolls internally. The fixed backdrop already handles
+             outside-tap dismissal. */
           .rt-due-picker {
-            position: absolute !important;
-            top: calc(100% + 8px) !important;
-            left: auto !important;
-            right: 0 !important;
+            position: fixed !important;
+            top: 300px !important;
+            left: 16px !important;
+            right: 16px !important;
             bottom: auto !important;
-            width: 300px !important;
+            margin: 0 auto !important;
+            width: auto !important;
             min-width: 0 !important;
-            max-width: calc(100vw - 32px) !important;
-            max-height: 60vh !important;
+            max-width: 360px !important;
+            max-height: 56vh !important;
             overflow-y: auto !important;
             overflow-x: hidden !important;
             box-shadow:
