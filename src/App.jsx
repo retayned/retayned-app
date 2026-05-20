@@ -17794,7 +17794,7 @@ export default function App({ user }) {
                   // uses. Reuses client matching (exact / token / abbrev /
                   // prefix-typo) and date hints — single source of truth for
                   // "how do we interpret typed input."
-                  const parsed = parseComposer(rawText, clients, workers);
+                  const parsed = parseComposer(rawText, clients, workersList);
                   const matchedClient = parsed.matchedClient || null;
                   const cleanedText = parsed.title || rawText;
 
@@ -17804,18 +17804,25 @@ export default function App({ user }) {
                   // follow up" → touchpoint, because the action that already
                   // happened is what's being logged).
                   const lower = rawText.toLowerCase();
-                  const hasWord = (w) => new RegExp(`\\b${w}\\b`, "i").test(lower);
-                  // Past verbs → touchpoint
-                  const PAST_VERBS = ["talked", "called", "met", "emailed", "texted", "spoke", "chatted", "wrote", "messaged", "dm'd", "dmed", "responded", "replied", "heard from", "got off", "had a call", "had a meeting", "spoke with", "caught up"];
-                  // Channel inference from the past verb
+                  // Past verbs → touchpoint. Apostrophe in "dm'd" allowed to
+                  // be a curly or straight apostrophe so paste from iOS works.
+                  const PAST_VERBS = [
+                    "talked", "called", "met", "emailed", "texted", "spoke",
+                    "chatted", "wrote", "messaged", "dm'd", "dmed", "responded",
+                    "replied", "heard from", "got off", "had a call",
+                    "had a meeting", "spoke with", "caught up", "sent", "pinged",
+                    "followed up", "checked in", "reached out", "rang",
+                  ];
                   let detectedChannel = null;
                   let isPast = false;
                   for (const v of PAST_VERBS) {
-                    if (new RegExp(`\\b${v.replace(/'/g, "['']?")}\\b`, "i").test(lower)) {
+                    // Normalize the apostrophe forms (straight or curly).
+                    const vPattern = v.replace(/'/g, "['\u2019]?");
+                    if (new RegExp(`\\b${vPattern}\\b`, "i").test(lower)) {
                       isPast = true;
-                      if (/call|spoke|got off|chat/i.test(v)) detectedChannel = "call";
+                      if (/call|spoke|got off|chat|rang/i.test(v)) detectedChannel = "call";
                       else if (/email/i.test(v)) detectedChannel = "email";
-                      else if (/text|message|dm/i.test(v)) detectedChannel = "text";
+                      else if (/text|message|dm|pinged/i.test(v)) detectedChannel = "text";
                       else if (/met|meeting|caught up/i.test(v)) detectedChannel = "meeting";
                       else detectedChannel = "note";
                       break;
@@ -17852,9 +17859,15 @@ export default function App({ user }) {
                   // ─── ROUTE B: TASK (future / neutral / no client match for past)
                   // If past tense fired but no client matched, fall through to
                   // task — we can't make a touchpoint without a client_id.
+                  //
+                  // Use the user's stored timezone for the due_date string so
+                  // it matches what the rest of the app's bucketing logic uses
+                  // (otherwise the task could land in a different bucket near
+                  // midnight if browser TZ differs from profile TZ).
+                  const ymdLocal = (d) => userTimezone ? ymdInTz(userTimezone, d) : localYmd(d);
                   const dueDateForCreate = parsed.matchedDate
-                    ? localYmd(parsed.matchedDate.date)
-                    : localYmd();
+                    ? ymdLocal(parsed.matchedDate.date)
+                    : ymdLocal(new Date());
                   const optimisticId = "ql" + Date.now();
                   const optimisticTask = {
                     id: optimisticId,
@@ -17885,9 +17898,11 @@ export default function App({ user }) {
                     // Build a short due-date hint for the toast so the user
                     // sees where the task landed (today / tomorrow / specific
                     // date). Without this, a "tomorrow" task vanishes from
-                    // the Today bucket and feels lost.
-                    const todayStr = localYmd();
-                    const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return localYmd(d); })();
+                    // the Today bucket and feels lost. Uses same tz-aware
+                    // helper as the due_date itself.
+                    const _now = new Date();
+                    const todayStr = ymdLocal(_now);
+                    const tomorrowStr = ymdLocal(new Date(_now.getTime() + 86400000));
                     let dueHint = "";
                     if (dueDateForCreate === todayStr) dueHint = "today";
                     else if (dueDateForCreate === tomorrowStr) dueHint = "tomorrow";
