@@ -15,6 +15,8 @@ import {
   forceX as d3forceX,
   forceY as d3forceY,
 } from "d3-force";
+import { zoom as d3zoom, zoomIdentity } from "d3-zoom";
+import { select as d3select } from "d3-selection";
 
 // ============================================================
 // PALETTE
@@ -2536,12 +2538,12 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             else if (h < 19)  { tint = "245,210,160"; alpha = 0.175; }  // golden hour — deep amber
             else if (h < 22)  { tint = "235,195,150"; alpha = 0.15; }   // dusk — warm amber
             else              { tint = "200,180,165"; alpha = 0.125; }  // night — muted warmth
-            // Six-stop band: transparent 0-18%, ramp to peak by 38%, hold
-            // peak through 62%, ramp back to transparent by 82%, transparent
-            // 82-100%. Peak alpha is 0.75x the source value (dialed back
-            // from the previous always-visible wash).
+            // Six-stop band: transparent 0-12%, ramp to peak by 32%, hold
+            // peak through 68%, ramp back to transparent by 88%, transparent
+            // 88-100%. Peak alpha is 0.75x the source value. Band extended
+            // ~6% each way (~30min at 8h visible) for a slightly taller wash.
             const a = (alpha * 0.75).toFixed(3);
-            return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 18%, rgba(${tint},${a}) 38%, rgba(${tint},${a}) 62%, rgba(${tint},0) 82%, rgba(${tint},0) 100%)`;
+            return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 12%, rgba(${tint},${a}) 32%, rgba(${tint},${a}) 68%, rgba(${tint},0) 88%, rgba(${tint},0) 100%)`;
           })(),
         }}
       >
@@ -3326,26 +3328,27 @@ function ReferralNetworkD3({
       .force("link", forceLink(links.map(l => ({ ...l })))
         .id(d => d.id)
         .distance(link => {
-          // Mobile uses ~80% link distance — gives nodes room to spread
-          // within the tighter viewBox. Previously 60% which made the
-          // graph clump in the center and read as too small.
-          if (link.kind === "hub-ref") return isMobile ? 105 : 130;
-          if (link.kind === "hub-ask") return isMobile ? 120 : 150;
-          return isMobile ? 50 : 60; // ref-child
+          // Mobile uses ~65% link distance — bumped slightly from 60%
+          // (original) to give nodes a touch more room within the
+          // tightened 340w viewBox, but not so much that they push
+          // outside the canvas.
+          if (link.kind === "hub-ref") return isMobile ? 85 : 130;
+          if (link.kind === "hub-ask") return isMobile ? 100 : 150;
+          return isMobile ? 44 : 60; // ref-child
         })
         .strength(link => link.kind === "ref-child" ? 0.9 : 0.4))
       .force("charge", forceManyBody().strength(d => {
-        // Mobile repulsion bumped up to ~80% of desktop (was 60%) so
-        // nodes push each other apart enough to fill the canvas.
-        if (d.kind === "hub") return isMobile ? -650 : -800;
-        if (d.kind === "referrer") return isMobile ? -280 : -350;
-        return isMobile ? -130 : -160; // child
+        // Mobile repulsion bumped slightly from 60% to ~65% of desktop,
+        // matching the toned-down link distances above.
+        if (d.kind === "hub") return isMobile ? -540 : -800;
+        if (d.kind === "referrer") return isMobile ? -240 : -350;
+        return isMobile ? -110 : -160; // child
       }))
       .force("center", forceCenter(cx, cy).strength(0.05))
       // Collision radius bumped well past the circle: labels render
       // 14-28px outside the node. Mobile uses tighter collision so labels
       // overlap less aggressively when nodes are crowded.
-      .force("collide", forceCollide().radius(d => d.radius + (isMobile ? 22 : 28)).strength(0.95))
+      .force("collide", forceCollide().radius(d => d.radius + (isMobile ? 19 : 28)).strength(0.95))
       .force("x", d3forceX(cx).strength(0.04))
       .force("y", d3forceY(cy).strength(0.04))
       .alpha(1)
@@ -3377,6 +3380,38 @@ function ReferralNetworkD3({
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
+
+  // ─── Pan + pinch-zoom (mobile only) ──────────────────────────────
+  // Mobile users can't reach nodes that get pushed to the canvas edges
+  // by the force layout. d3-zoom adds finger-drag panning and two-finger
+  // pinch-zoom so any node is reachable. Desktop unchanged — nodes there
+  // fit on screen without panning.
+  //
+  // Implementation: attach d3-zoom to the SVG; on every zoom event,
+  // store the transform in React state; apply it to the inner <g> via
+  // a transform="translate(...) scale(...)" string. Scale clamped to
+  // [0.5, 2.5]. Pan extent gives the user 1 viewBox-worth of slack
+  // beyond the canvas in every direction so they can drag edge nodes
+  // toward center.
+  const svgRef = useRef(null);
+  const zoomGroupTransform = useRef("");
+  const [, forceZoomRender] = useState(0);
+  useEffect(() => {
+    if (!isMobile || !svgRef.current) return;
+    const svg = d3select(svgRef.current);
+    const zoomBehavior = d3zoom()
+      .scaleExtent([0.5, 2.5])
+      .translateExtent([[-W, -H], [W * 2, H * 2]])
+      .on("zoom", (event) => {
+        const { x, y, k } = event.transform;
+        zoomGroupTransform.current = `translate(${x},${y}) scale(${k})`;
+        forceZoomRender(v => v + 1);
+      });
+    svg.call(zoomBehavior);
+    // Reset to identity on mount so nothing's offset on first paint.
+    svg.call(zoomBehavior.transform, zoomIdentity);
+    return () => { svg.on(".zoom", null); };
+  }, [isMobile, W, H]);
 
   // Hover handler: bump alpha when hovering to "settle" the network.
   const handleEnter = (id, evt) => {
@@ -3426,7 +3461,7 @@ function ReferralNetworkD3({
   // Render
   return (
     <div style={{ position: "relative", width: "100%" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: isMobile ? 600 : 520, display: "block" }} onMouseLeave={handleLeave}>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", maxHeight: isMobile ? 600 : 520, display: "block", touchAction: isMobile ? "none" : "auto" }} onMouseLeave={handleLeave}>
         <defs>
           <radialGradient id="hubGlowD3" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor={C.primary} stopOpacity="0.25" />
@@ -3444,6 +3479,11 @@ function ReferralNetworkD3({
             <stop offset="100%" stopColor="#4C1D95" />
           </linearGradient>
         </defs>
+
+        {/* Pan/zoom transform group — mobile only. Desktop renders with
+            empty transform string (no-op). All visual content lives
+            inside this group so panning/zooming moves everything in sync. */}
+        <g transform={isMobile ? zoomGroupTransform.current : ""}>
 
         {/* Hub glow */}
         {(() => {
@@ -3637,6 +3677,7 @@ function ReferralNetworkD3({
             </g>
           );
         })()}
+        </g>
       </svg>
 
       {/* Tooltip — appears next to hovered node */}
@@ -13795,7 +13836,7 @@ export default function App({ user }) {
         {dataLoaded && page === "referrals" && (() => {
           try {
           // ─── Helpers ───────────────────────────────────────────────────
-          const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#D17A1B", "#12523F"];
+          const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#12523F"];
           const getInitials = (name) => (name || "?").split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
           const getAvatarColor = (id) => { const s = String(id || ""); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AVATAR_COLORS[h % AVATAR_COLORS.length]; };
           // Avatar — score-driven retention gradient (matches Today task page).
@@ -14289,15 +14330,18 @@ export default function App({ user }) {
                           })}
                         </div>
                       </div>
-                      {/* Editable draft. minHeight comfortably fits the
-                          neutral/firmer/softer drafts without scrolling.
-                          overflow: hidden eliminates the right-rail
-                          scrollbar that fired when the content brushed
-                          the boundary. Resize: vertical still works. */}
+                      {/* Editable draft. minHeight fits softer/neutral
+                          drafts without scrolling; firmer (longest) gets
+                          a scrollbar only when needed. Previous fix used
+                          overflow: hidden to suppress a scrollbar that
+                          fired when content brushed the boundary — but
+                          that clipped the longer firmer variant. Now:
+                          overflow: auto + slightly taller minHeight so
+                          the scrollbar only appears when actually needed. */}
                       <textarea
                         value={displayedDraft}
                         onChange={e => { setAskDraft(e.target.value); if (activeAsk) setAskActiveId(activeAsk.name); }}
-                        style={{ width: "100%", minHeight: 200, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap", overflow: "hidden", border: "none" }}
+                        style={{ width: "100%", minHeight: 260, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box", marginBottom: 12, whiteSpace: "pre-wrap", overflow: "auto", border: "none" }}
                       />
                       {/* Action row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -14413,7 +14457,7 @@ export default function App({ user }) {
           try {
           // ─── Helpers ───────────────────────────────────────────────────
           // Avatars: deterministic palette by id, initials from name.
-          const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#D17A1B", "#12523F"];
+          const AVATAR_COLORS = ["#1F7A5C", "#2C9A76", "#0C3A2E", C.btn, "#12523F"];
           const getInitials = (name) => (name || "?").split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
           const getAvatarColor = (id) => { const s = String(id || ""); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return AVATAR_COLORS[h % AVATAR_COLORS.length]; };
           // Avatar — score-driven retention gradient (matches Today task page).
