@@ -4676,6 +4676,12 @@ export default function App({ user }) {
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   // Which task row's inline due-picker popover is open (desktop). Null = none.
   const [rowDuePickerId, setRowDuePickerId] = useState(null);
+  // Screen position for the row due-picker popover. It renders fixed (portal-
+  // style) anchored to the pill's measured rect — this is the only way to
+  // escape the task list's nested stacking contexts (row wraps with
+  // transitions/transforms), which kept letting rows below paint over a
+  // normally-positioned popover regardless of z-index.
+  const [rowDuePickerPos, setRowDuePickerPos] = useState(null);
   // Close the row due-picker on any click outside the popover/pill, or on
   // Escape. Document-level listener instead of a backdrop element — a fixed
   // backdrop nested inside the row gets trapped in the row's stacking
@@ -4686,14 +4692,17 @@ export default function App({ user }) {
     const onDown = (e) => {
       if (e.target.closest && e.target.closest(".rt-row-due-pop")) return; // click inside menu
       if (e.target.closest && e.target.closest(".rt-row-due")) return;     // click on the pill itself (toggles)
-      setRowDuePickerId(null);
+      setRowDuePickerId(null); setRowDuePickerPos(null);
     };
-    const onKey = (e) => { if (e.key === "Escape") setRowDuePickerId(null); };
+    const onKey = (e) => { if (e.key === "Escape") { setRowDuePickerId(null); setRowDuePickerPos(null); } };
+    const onScroll = () => { setRowDuePickerId(null); setRowDuePickerPos(null); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [rowDuePickerId]);
   // Mobile: the month calendar inside the Due picker is collapsed by
@@ -7244,7 +7253,7 @@ export default function App({ user }) {
            but it disconnected them from the source chip and looked sloppy.
            Falling back to the inline JSX position (absolute, dropping below
            the chip) makes the relationship clear and matches Worker. */
-        .r-main { padding: 16px 16px 96px; }
+        .r-main { padding: 16px 16px 96px; scrollbar-gutter: stable; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         .r-today-panel { display: none !important; }
         .r-client-modal { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; transform: none !important; max-width: 100% !important; max-height: 100% !important; border-radius: 0 !important; }
@@ -10164,7 +10173,7 @@ export default function App({ user }) {
                         const isExiting = !!exitingDoneIds[t.id];
 
                         return (
-                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible", zIndex: rowDuePickerId === t.id ? 200 : "auto" }}>
+                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
                             {/* Swipe action background. Two directions:
                                 - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
                                 - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
@@ -10245,7 +10254,7 @@ export default function App({ user }) {
                                 : "box-shadow 200ms var(--rt-ease-out), opacity 120ms, transform 200ms var(--rt-ease-out)",
                               touchAction: swipeable ? "pan-y" : "auto",
                               position: "relative",
-                              zIndex: rowDuePickerId === t.id ? 70 : 2,
+                              zIndex: 2,
                             }}>
                             {isManual && (
                               <div
@@ -10495,9 +10504,9 @@ export default function App({ user }) {
                                 fontWeight: 600,
                                 flexShrink: 0,
                                 color: C.textSec,
-                                border: "1px solid " + C.border,
+                                border: "none",
                                 background: C.card,
-                                boxShadow: "none",
+                                boxShadow: "var(--rt-sh-xs)",
                               }} title={formatRecurrenceLabel(t.recurrence_pattern)}>
                                 <Icon name="infinity" size={12} color={C.textSec} />
                                 <span className="rt-row-text">{formatRecurrenceLabel(t.recurrence_pattern)}</span>
@@ -10517,7 +10526,15 @@ export default function App({ user }) {
                               return (
                                 <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); if (isDone) return; setRowDuePickerId(rowDuePickerId === t.id ? null : t.id); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isDone) return;
+                                    if (rowDuePickerId === t.id) { setRowDuePickerId(null); setRowDuePickerPos(null); return; }
+                                    const r = e.currentTarget.getBoundingClientRect();
+                                    // Right-align the menu to the pill's right edge, open below.
+                                    setRowDuePickerPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+                                    setRowDuePickerId(t.id);
+                                  }}
                                   className={"rt-row-due " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
                                   display: "inline-flex", alignItems: "center", gap: 4,
                                   padding: "3px 8px 3px 9px",
@@ -10531,8 +10548,8 @@ export default function App({ user }) {
                                   // collapses to the muted "future" treatment.
                                   background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.08)" : C.card),
                                   color: isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec),
-                                  border: isDone ? "none" : (isOverdue ? "1px solid rgba(196,67,43,0.30)" : "1px solid " + C.border),
-                                  boxShadow: "none",
+                                  border: "none",
+                                  boxShadow: isDone ? "none" : "var(--rt-sh-xs)",
                                 }}>
                                   <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec)} />
                                   <span className="rt-row-text">{label}</span>
@@ -10542,21 +10559,19 @@ export default function App({ user }) {
                                     </svg>
                                   )}
                                 </button>
-                                {rowDuePickerId === t.id && (
-                                  <>
-                                    <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 1001, minWidth: 130 }}>
-                                      {[
-                                        { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
-                                        { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
-                                        { label: "Later", on: () => pushToLater(t.id) },
-                                      ].map(opt => (
-                                        <button key={opt.label}
-                                          className="rt-picker-item"
-                                          onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); }}
-                                        >{opt.label}</button>
-                                      ))}
-                                    </div>
-                                  </>
+                                {rowDuePickerId === t.id && rowDuePickerPos && (
+                                  <div className="rt-row-due-pop" style={{ position: "fixed", top: rowDuePickerPos.top, right: rowDuePickerPos.right, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 4000, minWidth: 130 }}>
+                                    {[
+                                      { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
+                                      { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
+                                      { label: "Later", on: () => pushToLater(t.id) },
+                                    ].map(opt => (
+                                      <button key={opt.label}
+                                        className="rt-picker-item"
+                                        onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); setRowDuePickerPos(null); }}
+                                      >{opt.label}</button>
+                                    ))}
+                                  </div>
                                 )}
                                 </span>
                               );
