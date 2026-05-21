@@ -10164,7 +10164,7 @@ export default function App({ user }) {
                         const isExiting = !!exitingDoneIds[t.id];
 
                         return (
-                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
+                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible", zIndex: rowDuePickerId === t.id ? 200 : "auto" }}>
                             {/* Swipe action background. Two directions:
                                 - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
                                 - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
@@ -10494,12 +10494,12 @@ export default function App({ user }) {
                                 fontSize: 11,
                                 fontWeight: 600,
                                 flexShrink: 0,
-                                color: C.textMuted,
-                                border: "none",
-                                background: C.surfaceWarm,
-                                boxShadow: "var(--rt-sh-xs)",
+                                color: C.textSec,
+                                border: "1px solid " + C.border,
+                                background: C.card,
+                                boxShadow: "none",
                               }} title={formatRecurrenceLabel(t.recurrence_pattern)}>
-                                <Icon name="infinity" size={12} color={C.textMuted} />
+                                <Icon name="infinity" size={12} color={C.textSec} />
                                 <span className="rt-row-text">{formatRecurrenceLabel(t.recurrence_pattern)}</span>
                               </span>
                             ) : t.due_date ? (() => {
@@ -10529,12 +10529,12 @@ export default function App({ user }) {
                                   cursor: isDone ? "default" : "pointer",
                                   // When the task is done, the Today/Overdue pill
                                   // collapses to the muted "future" treatment.
-                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : C.surfaceWarm),
-                                  color: isDone ? C.textMuted : (isOverdue ? C.danger : C.textMuted),
-                                  border: "none",
-                                  boxShadow: isDone ? "none" : "var(--rt-sh-xs)",
+                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.08)" : C.card),
+                                  color: isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec),
+                                  border: isDone ? "none" : (isOverdue ? "1px solid rgba(196,67,43,0.30)" : "1px solid " + C.border),
+                                  boxShadow: "none",
                                 }}>
-                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textMuted)} />
+                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec)} />
                                   <span className="rt-row-text">{label}</span>
                                   {!isDone && (
                                     <svg className="rt-due-chevron" width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
