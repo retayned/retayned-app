@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "./lib/supabase";
 import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
@@ -4676,6 +4677,12 @@ export default function App({ user }) {
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   // Which task row's inline due-picker popover is open (desktop). Null = none.
   const [rowDuePickerId, setRowDuePickerId] = useState(null);
+  // Screen-space anchor for the row due-picker. The popover renders in a
+  // portal at document.body level so it escapes the bucket's opacity:0.76
+  // (which both dimmed the menu AND trapped it in a stacking context).
+  // Stored as the pill's measured viewport rect.
+  const [rowDuePickerRect, setRowDuePickerRect] = useState(null);
+  const [rowDuePickerActions, setRowDuePickerActions] = useState(null);
   // Close the row due-picker on any click outside the popover/pill, or on
   // Escape. Document-level listener instead of a backdrop element — a fixed
   // backdrop nested inside the row gets trapped in the row's stacking
@@ -4686,10 +4693,10 @@ export default function App({ user }) {
     const onDown = (e) => {
       if (e.target.closest && e.target.closest(".rt-row-due-pop")) return; // click inside menu
       if (e.target.closest && e.target.closest(".rt-row-due")) return;     // click on the pill itself (toggles)
-      setRowDuePickerId(null);
+      setRowDuePickerId(null); setRowDuePickerRect(null); setRowDuePickerActions(null);
     };
-    const onKey = (e) => { if (e.key === "Escape") setRowDuePickerId(null); };
-    const onScroll = () => setRowDuePickerId(null);
+    const onKey = (e) => { if (e.key === "Escape") { setRowDuePickerId(null); setRowDuePickerRect(null); setRowDuePickerActions(null); } };
+    const onScroll = () => { setRowDuePickerId(null); setRowDuePickerRect(null); setRowDuePickerActions(null); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
@@ -10520,7 +10527,18 @@ export default function App({ user }) {
                               return (
                                 <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); if (isDone) return; setRowDuePickerId(rowDuePickerId === t.id ? null : t.id); }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isDone) return;
+                                    if (rowDuePickerId === t.id) { setRowDuePickerId(null); setRowDuePickerRect(null); return; }
+                                    setRowDuePickerRect(e.currentTarget.getBoundingClientRect());
+                                    setRowDuePickerActions({
+                                      today: () => setTaskDueDate(t.id, _todayStr),
+                                      tomorrow: () => setTaskDueDate(t.id, _tomorrowStr),
+                                      later: () => pushToLater(t.id),
+                                    });
+                                    setRowDuePickerId(t.id);
+                                  }}
                                   className={"rt-row-due rt-composer-pill " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
                                   display: "inline-flex", alignItems: "center", gap: 4,
                                   padding: "3px 8px 3px 9px",
@@ -10545,20 +10563,6 @@ export default function App({ user }) {
                                     </svg>
                                   )}
                                 </button>
-                                {rowDuePickerId === t.id && (
-                                  <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 1001, minWidth: 130 }}>
-                                    {[
-                                      { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
-                                      { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
-                                      { label: "Later", on: () => pushToLater(t.id) },
-                                    ].map(opt => (
-                                      <button key={opt.label}
-                                        className="rt-picker-item"
-                                        onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); }}
-                                      >{opt.label}</button>
-                                    ))}
-                                  </div>
-                                )}
                                 </span>
                               );
                             })() : null}
@@ -17178,6 +17182,35 @@ export default function App({ user }) {
 
 
       {/* ROLODEX SLIDE-OVER */}
+      {rowDuePickerId && rowDuePickerRect && rowDuePickerActions && createPortal(
+        <div
+          className="rt-row-due-pop"
+          style={{
+            position: "fixed",
+            top: rowDuePickerRect.bottom + 6,
+            left: rowDuePickerRect.right - 140,
+            background: C.card,
+            border: "1px solid " + C.borderLight,
+            borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)",
+            padding: 5,
+            zIndex: 5000,
+            width: 140,
+          }}
+        >
+          {[
+            { label: "Today", on: rowDuePickerActions.today },
+            { label: "Tomorrow", on: rowDuePickerActions.tomorrow },
+            { label: "Later", on: rowDuePickerActions.later },
+          ].map(opt => (
+            <button key={opt.label}
+              className="rt-picker-item"
+              onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); setRowDuePickerRect(null); setRowDuePickerActions(null); }}
+            >{opt.label}</button>
+          ))}
+        </div>,
+        document.body
+      )}
       {selectedRolodex && (() => {
         const sr = selectedRolodex;
         const answers = retroAnswers[sr.id] || {};
