@@ -14557,7 +14557,7 @@ export default function App({ user }) {
             if (ended.includes("good")) tags.push("Good terms");
             if (refer.includes("yes")) tags.push("Would refer");
             if (comeback.includes("yes")) tags.push("Would come back");
-            if (r.type === "oneoff") tags.push("One-off");
+            if (r.type === "oneoff") tags.push("New lead");
             return tags;
           };
 
@@ -14578,13 +14578,13 @@ export default function App({ user }) {
                 { v: "no",    label: "Unlikely", tone: C.textMuted }] },
             { id: "priority", q: "Where in the deck?",    kind: "priority" },
           ];
+          // New leads are forward-looking prospects — there's no
+          // engagement to retro. So instead of history questions
+          // ("what happened / how it ended"), a lead just captures
+          // optional context and where it sits in the deck.
           const RETRO_STEPS_ONEOFF = [
-            { id: "did",      q: "What did you do for them?", kind: "text", placeholder: "The work in one line…" },
-            { id: "refer",    q: "Would they refer you?",     kind: "pick", options: [
-                { v: "yes",   label: "Yes — has people in mind", tone: C.retGood },
-                { v: "maybe", label: "Probably", tone: C.retWarn },
-                { v: "no",    label: "Unlikely", tone: C.textMuted }] },
-            { id: "priority", q: "Where in the deck?",        kind: "priority" },
+            { id: "context",  q: "What's the opportunity?", kind: "text", placeholder: "Where they came from, what they need…" },
+            { id: "priority", q: "Where in the deck?",      kind: "priority" },
           ];
 
           // ─── Data slices ────────────────────────────────────────────────
@@ -14776,7 +14776,7 @@ export default function App({ user }) {
                           const isActive = active?.id === e.id;
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
-                          const meta = (e.type === "former" ? "Former" : "One-off") + (contact ? " · " + contact.split(" ")[0] : "");
+                          const meta = (e.type === "former" ? "Former" : "New lead") + (contact ? " · " + contact.split(" ")[0] : "");
                           return (
                             <button
                               key={e.id}
@@ -14820,10 +14820,10 @@ export default function App({ user }) {
                           <Avatar id={active.id} name={active.client_name || active.client} size={44} />
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>{active.client_name || active.client}</div>
-                            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{active.contact_name || active.contact || "No contact"}{active.type === "former" ? " · Former client" : " · One-off"}</div>
+                            <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{active.contact_name || active.contact || "No contact"}{active.type === "former" ? " · Former client" : " · New lead"}</div>
                           </div>
                           <span style={{ fontSize: 10.5, fontWeight: 700, color: active.type === "former" ? C.retGood : C.btn, background: active.type === "former" ? "#E8F3EC" : C.primarySoft, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.3, textTransform: "uppercase" }}>
-                            {active.type === "former" ? "Former client" : "One-off"}
+                            {active.type === "former" ? "Former client" : "New lead"}
                           </span>
                         </div>
                         {/* Progress */}
@@ -14939,7 +14939,7 @@ export default function App({ user }) {
                               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
                                 <span style={{ fontSize: 14.5, fontWeight: 600, color: C.text, letterSpacing: -0.2 }}>{name}</span>
                                 <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: e.type === "former" ? C.retGood : C.btn, background: e.type === "former" ? "#E8F3EC" : C.primarySoft }}>
-                                  {e.type === "former" ? "Former" : "One-off"}
+                                  {e.type === "former" ? "Former" : "New lead"}
                                 </span>
                                 {e.priority === "high" && (
                                   <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "linear-gradient(90deg, #D17A1B, #C04323)" }}>Heat {heat}</span>
@@ -14980,7 +14980,7 @@ export default function App({ user }) {
                 <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>New rolodex contact</div>
-                    <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>Add someone to your deck. You'll run a quick retro to file them.</div>
+                    <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>{newRolodexEntry.type === "oneoff" ? "Add a lead to your deck and set where it sits." : "Add someone to your deck. You'll run a quick retro to file them."}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Company / client name</label>
@@ -14993,7 +14993,7 @@ export default function App({ user }) {
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Type</label>
                         <div style={{ display: "flex", gap: 8 }}>
-                          {[{ v: "former", label: "Former client" }, { v: "oneoff", label: "One-off" }].map(t => (
+                          {[{ v: "former", label: "Former client" }, { v: "oneoff", label: "New lead" }].map(t => (
                             <button key={t.v} onClick={() => setNewRolodexEntry({ ...newRolodexEntry, type: t.v })} style={{ flex: 1, padding: "8px 12px", background: newRolodexEntry.type === t.v ? C.primarySoft : C.card, border: "1px solid " + (newRolodexEntry.type === t.v ? C.primary : C.border), borderRadius: 8, fontSize: 13, fontWeight: 500, color: newRolodexEntry.type === t.v ? C.primary : C.textSec, cursor: "pointer", fontFamily: "inherit" }}>{t.label}</button>
                           ))}
                         </div>
@@ -15021,7 +15021,7 @@ export default function App({ user }) {
                             }
                             setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" });
                             setShowAddRolodex(false);
-                          }} style={{ flex: 1, padding: "10px", background: ready ? C.btn : C.surface, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit" }}>Add & start retro</button>
+                          }} style={{ flex: 1, padding: "10px", background: ready ? C.btn : C.surface, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit" }}>{newRolodexEntry.type === "oneoff" ? "Add lead" : "Add & start retro"}</button>
                         );
                       })()}
                       <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); }} style={{ padding: "10px 18px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
@@ -17265,7 +17265,7 @@ export default function App({ user }) {
               {/* Hero — gradient band: type · name, matching client modal hero. */}
               <div style={{ padding: "20px 20px 14px", background: "linear-gradient(180deg, " + C.surfaceWarm + " 0%, " + C.card + " 100%)" }}>
                 <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginBottom: 6 }}>
-                  {sr.type === "oneoff" ? "One-off" : "Former Client"}{sr.months > 0 ? " · " + (sr.months >= 12 ? (sr.months / 12).toFixed(1) + " years" : sr.months + " months") : ""}
+                  {sr.type === "oneoff" ? "New lead" : "Former Client"}{sr.months > 0 ? " · " + (sr.months >= 12 ? (sr.months / 12).toFixed(1) + " years" : sr.months + " months") : ""}
                 </div>
                 <h2 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, color: C.text, margin: 0, lineHeight: 1.15 }}>{sr.client}</h2>
               </div>
@@ -17455,7 +17455,7 @@ export default function App({ user }) {
                         if ((ed.terms || "").toLowerCase().includes("good")) tags.push("Good terms");
                         if ((ed.refer || "").toLowerCase().includes("yes")) tags.push("Would refer");
                         if ((ed.comeback || "").toLowerCase().includes("yes")) tags.push("Would come back");
-                        if (sr.type === "oneoff") tags.push("One-off");
+                        if (sr.type === "oneoff") tags.push("New lead");
                         const newRetroAnswers = { ...(retroAnswers[sr.id] || {}), what: ed.what, work: ed.work, terms: ed.terms, comeback: ed.comeback, refer: ed.refer };
                         const updated = { ...sr, contact: ed.contact, months: ed.months, priority: ed.priority, notes: ed.notes, tags };
                         // Persist to DB. Before this fix, edits were local-only —
