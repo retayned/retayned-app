@@ -2585,6 +2585,27 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           paddingRight: 2,
         }}
       >
+        {/* Fixed daylight wash — a single warm cream tint, pinned to the
+            visible viewport, with a gentle vertical fade (soft at top and
+            bottom, a touch warmer through the middle band where the user's
+            looking). One locked color at every hour — NO time-of-day hue
+            shift. The earlier version recolored by hour (cool dawn → amber
+            golden hour) which read as the calendar randomly discoloring;
+            this keeps the subtle depth without ever changing color. */}
+        <div
+          aria-hidden
+          style={{
+            position: "sticky",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: visibleHeight,
+            marginBottom: -visibleHeight, // collapse layout box so timeline renders at top: 0
+            pointerEvents: "none",
+            zIndex: 0,
+            background: "linear-gradient(180deg, rgba(245,232,210,0) 0%, rgba(245,232,210,0) 12%, rgba(245,232,210,0.10) 32%, rgba(245,232,210,0.10) 68%, rgba(245,232,210,0) 88%, rgba(245,232,210,0) 100%)",
+          }}
+        />
         <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight, zIndex: 1 }}>
           {/* Hour grid */}
           {hourLabels.map(h => (
