@@ -9729,7 +9729,7 @@ export default function App({ user }) {
                           className={"rt-rank-opt" + (rankMode === "rai" ? " is-active" : "")}
                           onClick={() => setRankMode("rai")}
                           style={{
-                            padding: "6px 14px",
+                            padding: "6px 14px 6px 11px",
                             // Option B "perfectly nested" geometry: inner radius
                             // = (outer height ÷ 2) − container padding. Locked
                             // to current button dimensions (padding 6/14, fontSize 12,
@@ -10214,7 +10214,7 @@ export default function App({ user }) {
                                 : "box-shadow 200ms var(--rt-ease-out), opacity 120ms, transform 200ms var(--rt-ease-out)",
                               touchAction: swipeable ? "pan-y" : "auto",
                               position: "relative",
-                              zIndex: 2,
+                              zIndex: rowDuePickerId === t.id ? 70 : 2,
                             }}>
                             {isManual && (
                               <div
