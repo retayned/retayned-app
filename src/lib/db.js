@@ -874,6 +874,7 @@ export const rolodex = {
       .from('rolodex')
       .select('*')
       .eq('user_id', userId)
+      .is('archived_at', null)
       .order('created_at', { ascending: false });
     return { data: data || [], error };
   },
@@ -897,10 +898,13 @@ export const rolodex = {
     return { data, error };
   },
 
+  // Soft delete — archive instead of hard-deleting. The row is kept so
+  // relationship history and referral name references survive; it just
+  // drops out of the rolodex list (which filters archived_at IS NULL).
   delete: async (entryId) => {
     const { error } = await supabase
       .from('rolodex')
-      .delete()
+      .update({ archived_at: new Date().toISOString() })
       .eq('id', entryId);
     return { error };
   }
