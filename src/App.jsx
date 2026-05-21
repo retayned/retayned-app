@@ -4172,6 +4172,8 @@ export default function App({ user }) {
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
   const [selectedRolodex, setSelectedRolodex] = useState(null);
   const [rolodexRemoveConfirm, setRolodexRemoveConfirm] = useState(false);
+  const [rolodexMenuOpen, setRolodexMenuOpen] = useState(false);
+  const [rolodexMoveConfirm, setRolodexMoveConfirm] = useState(false);
   const [rolodexEditing, setRolodexEditing] = useState(false);
   const [rolodexEditData, setRolodexEditData] = useState({});
   const [rolodexSearch, setRolodexSearch] = useState("");
@@ -4183,6 +4185,47 @@ export default function App({ user }) {
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [reminderDate, setReminderDate] = useState("");
   const [clients, setClients] = useState([]);
+  // Move a rolodex contact back into active clients. Creates a fresh
+  // client row from the contact's data (name, contact, tenure) at a
+  // neutral baseline score, archives the rolodex entry (soft delete),
+  // and closes the slide-over. Referrals that referenced the contact by
+  // name are left intact — the name still resolves.
+  const moveRolodexToClients = async (sr) => {
+    if (!sr || !user) return;
+    const months = sr.months > 0 ? sr.months : 0;
+    const engagementStartedAt = new Date(Date.now() - months * 30 * 24 * 3600 * 1000).toISOString();
+    const { data: created, error } = await clientsDb.create(user.id, {
+      name: sr.client,
+      contact: sr.contact || "",
+      role: "",
+      tag: "",
+      revenue: 0,
+      months,
+      engagement_started_at: engagementStartedAt,
+      lifetime_revenue_at_entry: 0,
+      retention_score: 50,
+      profile_scores: {},
+      qualifying_flags: {},
+    });
+    if (error) { console.error("Move to clients failed:", error); return; }
+    const client = {
+      id: created?.id || Date.now(),
+      name: sr.client,
+      contact: sr.contact || "",
+      role: "", tag: "",
+      revenue: 0, months,
+      lifetime_revenue_at_entry: 0, ltv: 0,
+      velocity: "normal", lastHC: null, lastContact: "today",
+      referrals: 0, ret: 50, profileScores: {}, qualifyingFlags: {}, daysOld: 0,
+    };
+    setClients(prev => [...prev, client].sort((a, b) => (b.ret || 0) - (a.ret || 0)));
+    // Archive the rolodex entry (soft delete) and drop it from the list.
+    setRolodex(prev => prev.filter(x => x.id !== sr.id));
+    rolodexDb.delete(sr.id);
+    setSelectedRolodex(null);
+    setRolodexMoveConfirm(false);
+    setRolodexMenuOpen(false);
+  };
   const [showAddClient, setShowAddClient] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [clientsSort, setClientsSort] = useState("retention");
@@ -17154,17 +17197,100 @@ export default function App({ user }) {
         ];
         return (
           <>
-            <div onClick={() => setSelectedRolodex(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.32)", zIndex: 90 }} />
-            <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "100%", maxWidth: 420, background: C.card, boxShadow: "-4px 0 24px rgba(0,0,0,0.08)", zIndex: 100, overflowY: "scroll" }}>
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid " + C.borderLight, display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
-                <h2 style={{ fontSize: 20, fontWeight: 800 }}>{sr.client}</h2>
-                <button onClick={() => setSelectedRolodex(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted }}>×</button>
+            {/* Backdrop — matches the client modal: dim + 2px blur. */}
+            <div onClick={() => setSelectedRolodex(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.38)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)", zIndex: 90 }} />
+            <div className="r-client-modal" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "100%", maxWidth: 520, maxHeight: "90vh", background: C.card, boxShadow: "0 1px 3px rgba(20,30,22,0.10), 0 8px 20px rgba(20,30,22,0.14), 0 25px 50px rgba(20,30,22,0.22), inset 0 1px 0 rgba(255,255,255,0.9)", zIndex: 100, overflowY: "auto", borderRadius: 16 }}>
+              {/* Top bar — neighbor nav (↑↓) + breadcrumb + ⋯ actions + ×,
+                  matching the client modal chrome exactly. */}
+              {(() => {
+                const navList = (rolodex || []).filter(r => r && r.id);
+                const currentIdx = navList.findIndex(r => r.id === sr.id);
+                const total = navList.length;
+                const hasNav = total > 1 && currentIdx >= 0;
+                const goPrev = () => { if (!hasNav) return; const n = navList[currentIdx === 0 ? total - 1 : currentIdx - 1]; if (n) setSelectedRolodex(n); };
+                const goNext = () => { if (!hasNav) return; const n = navList[currentIdx === total - 1 ? 0 : currentIdx + 1]; if (n) setSelectedRolodex(n); };
+                const prevC = hasNav ? navList[currentIdx === 0 ? total - 1 : currentIdx - 1] : null;
+                const nextC = hasNav ? navList[currentIdx === total - 1 ? 0 : currentIdx + 1] : null;
+                return (
+                  <div style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, position: "sticky", top: 0, background: C.card, zIndex: 2, borderBottom: "1px solid " + C.borderLight }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                      <button onClick={goPrev} disabled={!hasNav} title={prevC ? `Previous · ${prevC.client}` : "Previous"} aria-label="Previous" className="rt-so-nav" style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: hasNav ? C.textSec : C.textMuted, cursor: hasNav ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 16, lineHeight: 1, padding: 0 }}>↑</button>
+                      <button onClick={goNext} disabled={!hasNav} title={nextC ? `Next · ${nextC.client}` : "Next"} aria-label="Next" className="rt-so-nav" style={{ width: 28, height: 28, borderRadius: 6, border: "none", background: "transparent", color: hasNav ? C.textSec : C.textMuted, cursor: hasNav ? "pointer" : "default", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 16, lineHeight: 1, padding: 0 }}>↓</button>
+                    </div>
+                    {hasNav && (
+                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, textTransform: "uppercase", color: C.textMuted, fontVariantNumeric: "tabular-nums", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <span>Rolodex</span>
+                        <span style={{ opacity: 0.5 }}>·</span>
+                        <span>{currentIdx + 1} of {total}</span>
+                      </div>
+                    )}
+                    <div style={{ marginLeft: "auto", position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setRolodexMenuOpen(v => !v); }}
+                        aria-label="Contact actions"
+                        style={{ background: rolodexMenuOpen ? C.surfaceWarm : "none", border: "none", fontSize: 20, cursor: "pointer", color: rolodexMenuOpen ? C.text : C.textSec, lineHeight: 1, padding: 0, width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, transition: "background 120ms ease" }}
+                      >⋯</button>
+                      {rolodexMenuOpen && (
+                        <>
+                          <div onClick={() => setRolodexMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 4 }} />
+                          <div style={{ position: "absolute", top: 36, right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", minWidth: 180, padding: 6, zIndex: 5 }}>
+                            <div
+                              onClick={() => { setRolodexMenuOpen(false); setRolodexEditing(true); setRolodexEditData({ contact: sr.contact, months: sr.months, priority: sr.priority || "", notes: sr.notes || "", what: answers.what || "", work: answers.work || "", terms: answers.terms || "", comeback: answers.comeback || "", refer: answers.refer || "" }); }}
+                              style={{ padding: "10px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >Edit details</div>
+                            <div
+                              onClick={() => { setRolodexMenuOpen(false); setRolodexMoveConfirm(true); setRolodexRemoveConfirm(false); }}
+                              style={{ padding: "10px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >Move to Clients</div>
+                            <div style={{ borderTop: "1px solid " + C.borderLight, margin: "4px 0" }} />
+                            <div
+                              onClick={() => { setRolodexMenuOpen(false); setRolodexRemoveConfirm(true); setRolodexMoveConfirm(false); }}
+                              style={{ padding: "10px 12px", fontSize: 13, color: C.danger, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                              onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >Delete</div>
+                          </div>
+                        </>
+                      )}
+                      <button onClick={() => setSelectedRolodex(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1, padding: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Hero — gradient band: type · name, matching client modal hero. */}
+              <div style={{ padding: "20px 20px 14px", background: "linear-gradient(180deg, " + C.surfaceWarm + " 0%, " + C.card + " 100%)" }}>
+                <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, marginBottom: 6 }}>
+                  {sr.type === "oneoff" ? "One-off" : "Former Client"}{sr.months > 0 ? " · " + (sr.months >= 12 ? (sr.months / 12).toFixed(1) + " years" : sr.months + " months") : ""}
+                </div>
+                <h2 style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, color: C.text, margin: 0, lineHeight: 1.15 }}>{sr.client}</h2>
               </div>
-              <div style={{ textAlign: "center", padding: "16px 20px 0" }}>
-                <div style={{ fontSize: 32, marginBottom: 4 }}>📇</div>
-                <span style={{ fontSize: 14, padding: "4px 12px", borderRadius: 4, background: sr.type === "oneoff" ? C.surface : C.primarySoft, color: sr.type === "oneoff" ? C.textSec : C.primary, fontWeight: 600 }}>{sr.type === "oneoff" ? "One-off" : "Former Client"}</span>
-              </div>
-              <div style={{ padding: "16px 20px" }}>
+
+              {/* Move-to-Clients confirm */}
+              {rolodexMoveConfirm && (
+                <div style={{ margin: "0 20px 12px", padding: 14, background: C.primaryGhost, borderRadius: 10, border: "1px solid " + C.borderLight }}>
+                  <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>Move {sr.client} into your active clients? They'll start fresh at a neutral score and this rolodex entry will be archived.</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => moveRolodexToClients(sr)} className="r-btn" data-tone="purple" style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Move to Clients</button>
+                    <button onClick={() => setRolodexMoveConfirm(false)} style={{ padding: "10px 14px", background: C.surface, color: C.text, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {/* Delete confirm */}
+              {rolodexRemoveConfirm && (
+                <div style={{ margin: "0 20px 12px", padding: 14, background: "#FBEAE3", borderRadius: 10, border: "1px solid " + C.borderLight }}>
+                  <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>Delete {sr.client} from your rolodex? They'll be archived — kept on file but no longer shown. Referral history stays intact.</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { setRolodex(prev => prev.filter(x => x.id !== sr.id)); rolodexDb.delete(sr.id); setSelectedRolodex(null); setRolodexRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.danger, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                    <button onClick={() => setRolodexRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.surface, color: C.text, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ padding: "4px 20px 16px" }}>
                 {!rolodexEditing ? (
                   <>
                     {[
@@ -17283,20 +17409,6 @@ export default function App({ user }) {
                         </div>
                       </div>
                     )}
-                    <button onClick={() => { setRolodexEditing(true); setRolodexEditData({ contact: sr.contact, months: sr.months, priority: sr.priority || "", notes: sr.notes || "", what: answers.what || "", work: answers.work || "", terms: answers.terms || "", comeback: answers.comeback || "", refer: answers.refer || "" }); }} style={{ width: "100%", padding: "10px", background: "transparent", color: C.primary, border: "1px solid " + C.primary + "44", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 10 }}>Edit Details</button>
-                    <div style={{ marginTop: 10 }}>
-                      {!rolodexRemoveConfirm ? (
-                        <button onClick={() => setRolodexRemoveConfirm(true)} style={{ width: "100%", padding: "10px", background: "transparent", color: C.danger, border: "1px solid " + C.danger + "44", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove from Rolodex</button>
-                      ) : (
-                        <div style={{ background: C.bg, borderRadius: 12, padding: "16px" }}>
-                          <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This will remove {sr.client} from your Rolodex. No more check-in reminders, no more tracking. You can always add them back later.</p>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => { setRolodex(prev => prev.filter(x => x.id !== sr.id)); rolodexDb.delete(sr.id); setSelectedRolodex(null); setRolodexRemoveConfirm(false); }} style={{ flex: 1, padding: "10px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Remove</button>
-                            <button className="r-btn" data-tone="purple" onClick={() => setRolodexRemoveConfirm(false)} style={{ padding: "10px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </>
                 ) : (
                   <>
