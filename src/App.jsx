@@ -10647,7 +10647,7 @@ export default function App({ user }) {
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
                           <BucketHeader name="Tomorrow" dimmed={true} count={_tomorrowBucket.length} />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76, position: "relative", zIndex: 3 }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                           </div>
                         </>)}
@@ -10655,7 +10655,7 @@ export default function App({ user }) {
                         {/* LATER bucket */}
                         {_laterBucket.length > 0 && (<>
                           <BucketHeader name="Later" dimmed={true} count={_laterBucket.length} />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76, position: "relative", zIndex: 2 }}>
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
                         </>)}
