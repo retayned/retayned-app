@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { supabase } from './lib/supabase';
 
+// Design tokens reconciled to the main app's real palette (App.jsx).
+// Literal hexes here rather than the app's CSS vars (var(--rt-*)), since
+// this standalone pre-auth page doesn't load the root themed stylesheet.
 const C = {
-  primary: "#33543E", primarySoft: "#E6EFE9",
-  bg: "#F7F7F4", card: "#FFFFFF", surface: "#EEEFEB",
-  text: "#1E261F", textSec: "#5A6E5E", textMuted: "#92A596",
+  primary: "#33543E", primaryDeep: "#1C3224", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
+  bg: "#FAFAF7", card: "#FFFFFF", surfaceWarm: "#F2EEE8",
+  text: "#1E261F", textSec: "#4A4F4A", textMuted: "#8A8F8A",
   border: "#D8DFD8", borderLight: "#E8ECE6",
-  btn: "#5B21B6",
-  raiGrad: "linear-gradient(145deg, #1E261F 0%, #33543E 55%, #558B68 100%)",
+  btn: "#5B21B6", btnHover: "#4C1D95",
+  danger: "#C4432B",
 };
 
 export default function AuthPage() {
@@ -44,42 +47,81 @@ export default function AuthPage() {
     setLoading(false);
   };
 
+  const inputStyle = {
+    width: "100%",
+    padding: "12px 14px",
+    border: "1px solid " + C.border,
+    borderRadius: 10,
+    fontSize: 14,
+    fontFamily: "inherit",
+    color: C.text,
+    outline: "none",
+    background: C.card,
+    transition: "border-color 120ms ease, box-shadow 120ms ease",
+  };
+  const onInputFocus = (e) => {
+    e.target.style.borderColor = C.primary;
+    e.target.style.boxShadow = "0 0 0 3px " + C.primarySoft;
+  };
+  const onInputBlur = (e) => {
+    e.target.style.borderColor = C.border;
+    e.target.style.boxShadow = "none";
+  };
+
   return (
-    <div style={{ minHeight: "100vh", fontFamily: "'Outfit', system-ui, sans-serif", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap'); * { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+    <div style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        input::placeholder { color: ${C.textMuted}; }
+      `}</style>
       <div style={{ width: "100%", maxWidth: 400 }}>
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ background: C.raiGrad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontSize: 36, fontWeight: 900, letterSpacing: "-0.04em" }}>Retayned.</div>
-          <p style={{ fontSize: 14, color: C.textMuted, marginTop: 8 }}>
+        {/* Logo — matches the app sidebar wordmark exactly: solid primary
+            green, system-ui, weight 900, tight tracking. No gradient. */}
+        <div style={{ textAlign: "center", marginBottom: 30 }}>
+          <div style={{
+            fontFamily: "system-ui, -apple-system, sans-serif",
+            fontWeight: 900,
+            fontSize: 38,
+            color: C.primary,
+            letterSpacing: "-0.04em",
+            lineHeight: 1.1,
+          }}>Retayned.</div>
+          <p style={{ fontSize: 14, color: C.textSec, marginTop: 10 }}>
             {mode === 'signin' ? 'Welcome back.' : 'Start retaining your clients.'}
           </p>
         </div>
 
-        {/* Form */}
-        <div style={{ background: C.card, borderRadius: 14, padding: "28px 24px", border: "1px solid " + C.border }}>
+        {/* Form card — app card surface + the app's layered card shadow,
+            no hard border (the app uses shadow surfaces, not borders). */}
+        <div style={{
+          background: C.card,
+          borderRadius: 16,
+          padding: "28px 26px",
+          boxShadow: "0 1px 3px rgba(20,30,22,0.06), 0 8px 24px rgba(20,30,22,0.08), inset 0 1px 0 rgba(255,255,255,0.9)",
+        }}>
           {mode === 'signup' && (
             <>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Full name</label>
-                <input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Adam Lawrence" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Full name</label>
+                <input value={fullName} onChange={e => setFullName(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="Adam Lawrence" style={inputStyle} />
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Company</label>
-                <input value={company} onChange={e => setCompany(e.target.value)} placeholder="TopMercury" style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+                <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Company</label>
+                <input value={company} onChange={e => setCompany(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="TopMercury" style={inputStyle} />
               </div>
             </>
           )}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" onKeyDown={e => e.key === 'Enter' && handleSubmit()} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+            <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="you@company.com" onKeyDown={e => e.key === 'Enter' && handleSubmit()} style={inputStyle} />
           </div>
           <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && handleSubmit()} style={{ width: "100%", padding: "12px 16px", border: "1.5px solid " + C.border, borderRadius: 8, fontSize: 14, fontFamily: "inherit", outline: "none", background: C.bg }} />
+            <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="••••••••" onKeyDown={e => e.key === 'Enter' && handleSubmit()} style={inputStyle} />
           </div>
 
-          {error && <p style={{ fontSize: 13, color: "#C4432B", marginBottom: 14 }}>{error}</p>}
+          {error && <p style={{ fontSize: 13, color: C.danger, marginBottom: 14 }}>{error}</p>}
 
           {mode === 'signup' && (
             <p style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.5, marginBottom: 14, textAlign: "center" }}>
@@ -87,13 +129,19 @@ export default function AuthPage() {
             </p>
           )}
 
-          <button onClick={handleSubmit} disabled={loading} style={{ width: "100%", padding: "14px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1 }}>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = C.btnHover; }}
+            onMouseLeave={e => { e.currentTarget.style.background = C.btn; }}
+            style={{ width: "100%", padding: "13px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1, transition: "background 120ms ease, opacity 120ms ease" }}
+          >
             {loading ? '...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
           </button>
 
           <p style={{ textAlign: "center", fontSize: 13, color: C.textMuted, marginTop: 16 }}>
             {mode === 'signin' ? "Don't have an account? " : "Already have an account? "}
-            <span onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); }} style={{ color: C.primary, fontWeight: 600, cursor: "pointer" }}>
+            <span onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); }} style={{ color: C.primary, fontWeight: 700, cursor: "pointer" }}>
               {mode === 'signin' ? 'Sign up' : 'Sign in'}
             </span>
           </p>
