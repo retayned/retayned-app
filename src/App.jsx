@@ -4155,7 +4155,21 @@ export default function App({ user }) {
   const [rolodexStepText, setRolodexStepText] = useState(null);
   const [rolodexFiledFilter, setRolodexFiledFilter] = useState("all");
   const [showReminderPicker, setShowReminderPicker] = useState(false);
+  const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(false);
   const [reminderDate, setReminderDate] = useState("");
+  // Reset per-contact modal state whenever the selected rolodex contact
+  // changes (or closes). Without this, the edit form + reminder date from
+  // the previously-opened contact carry into the next one — e.g. Magic
+  // Scoop's contact name showing on Love Strategies.
+  useEffect(() => {
+    setRolodexEditing(false);
+    setRolodexEditData({});
+    setReminderDate("");
+    setShowReminderPicker(false);
+    setRolodexMenuOpen(false);
+    setRolodexMoveConfirm(false);
+    setRolodexRemoveConfirm(false);
+  }, [selectedRolodex?.id]);
   const [clients, setClients] = useState([]);
   // Move a rolodex contact back into active clients. Creates a fresh
   // client row from the contact's data (name, contact, tenure) at a
@@ -6367,7 +6381,7 @@ export default function App({ user }) {
   };
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
-  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } setPage(id); };
+  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } if (id === "retros") setRolodexRemindersSeen(true); setPage(id); };
   const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
@@ -6376,7 +6390,16 @@ export default function App({ user }) {
 
   const todayDot = tasksDone < tasksTotal;
   const healthDot = overdueChecks > 0;
-  const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot);
+  // Rolodex check-in dot: lit when any contact has a reminder due (today or
+  // earlier) and the user hasn't opened Rolodex since. Clears on visiting the
+  // page (see goTo). Contained entirely in Rolodex — no client/Rai coupling.
+  const _rolodexReminderToday = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+  const rolodexHasDueReminder = (rolodex || []).some(r => r.reminder && String(r.reminder).slice(0, 10) <= _rolodexReminderToday);
+  const rolodexDot = rolodexHasDueReminder && !rolodexRemindersSeen && page !== "retros";
+  const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot) || (id === "retros" && rolodexDot);
 
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: "transparent" }}>
@@ -14585,6 +14608,14 @@ export default function App({ user }) {
 
           // ─── Data slices ────────────────────────────────────────────────
           const queued = rolodex.filter(r => !r.priority);
+          // Check-in reminders that have come due (date is today or earlier).
+          // Model 1: they persist until the user acts — no auto-expiry. Lives
+          // entirely in Rolodex; never touches the client/task/Rai system.
+          const _reminderToday = (() => {
+            const n = new Date();
+            return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+          })();
+          const dueReminders = rolodex.filter(r => r.reminder && String(r.reminder).slice(0, 10) <= _reminderToday);
           const searchFilter = (r) => !rolodexSearch || (r.client_name || r.client || "").toLowerCase().includes(rolodexSearch.toLowerCase()) || (r.contact_name || r.contact || "").toLowerCase().includes(rolodexSearch.toLowerCase());
           const saved = rolodex.filter(r => r.priority && searchFilter(r));
           const byPrio = {
@@ -14717,6 +14748,34 @@ export default function App({ user }) {
                   <span style={{ whiteSpace: "nowrap" }}>New Contact</span>
                 </button>
               </div>
+
+              {/* CHECK-IN REMINDER BANNER (Option B). Fires when a rolodex
+                  reminder has come due. Single → name + company. Multiple →
+                  count + names. "View" opens the contact. Entirely contained
+                  in Rolodex — no task, no Rai, no client system, by design. */}
+              {dueReminders.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, borderRadius: 12, padding: "13px 16px", boxShadow: "0 1px 3px rgba(20,30,22,0.06), 0 6px 16px rgba(20,30,22,0.07)", marginBottom: 20 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {dueReminders.length === 1 ? (
+                      <>
+                        <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {dueReminders[0].contact || dueReminders[0].client}</div>
+                        <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 1 }}>{dueReminders[0].client ? dueReminders[0].client + " · " : ""}reminder due</div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
+                        <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 1 }}>
+                          {dueReminders.slice(0, 2).map(r => r.contact || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSelectedRolodex(dueReminders[0])}
+                    style={{ background: C.primaryGhost, color: C.primary, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                  >{dueReminders.length === 1 ? "View" : "Review"}</button>
+                </div>
+              )}
 
               {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
               <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
@@ -14972,8 +15031,8 @@ export default function App({ user }) {
               </div>
 
               {/* Add contact modal */}
-              {showAddRolodex && (
-                <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {showAddRolodex && createPortal(
+                <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>New rolodex contact</div>
                     <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>{newRolodexEntry.type === "oneoff" ? "Add a lead to your deck and set where it sits." : "Add someone to your deck. You'll run a quick retro to file them."}</div>
@@ -15023,7 +15082,8 @@ export default function App({ user }) {
                       <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); }} style={{ padding: "10px 18px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
               </>)}
             </div>
@@ -17359,13 +17419,18 @@ export default function App({ user }) {
                       </div>
                     )}
                     {!showReminderPicker ? (
-                      <button onClick={() => { setShowReminderPicker(true); setReminderDate(sr.reminder || ""); }} className="r-btn" data-tone="purple" style={{ width: "100%", padding: sr.reminder ? "12px" : "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 16, textAlign: sr.reminder ? "left" : "center" }}>
+                      <button onClick={() => { setShowReminderPicker(true); setReminderDate(sr.reminder || ""); }} style={{ width: "100%", padding: "12px 14px", background: sr.reminder ? C.primaryGhost : C.surfaceWarm, color: sr.reminder ? C.primary : C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 16, textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         {sr.reminder ? (
-                          <div>
-                            <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginBottom: 2 }}>⏰ Reminder set</div>
-                            <div>{new Date(sr.reminder).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
-                          </div>
-                        ) : "⏰ Set Check-in Reminder"}
+                          <>
+                            <span>Check-in reminder</span>
+                            <span style={{ fontWeight: 600, color: C.primary }}>{new Date(sr.reminder + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ color: C.textSec }}>Set a check-in reminder</span>
+                            <Icon name="chevron-right" size={15} color={C.textMuted} />
+                          </>
+                        )}
                       </button>
                     ) : (
                       <div style={{ marginTop: 16 }}>
@@ -17390,7 +17455,7 @@ export default function App({ user }) {
                         </div>
                         {reminderDate && <div style={{ fontSize: 14, color: C.primary, fontWeight: 600, marginBottom: 12 }}>Monday, {new Date(reminderDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>}
                         <div style={{ display: "flex", gap: 8 }}>
-                          <button className="r-btn" data-tone="purple" onClick={async () => {
+                          <button onClick={async () => {
                             // Persist the reminder date to DB. Before this fix
                             // the reminder was only kept in local state and
                             // would disappear on refresh — silent data loss.
@@ -17410,7 +17475,7 @@ export default function App({ user }) {
                               }
                             }
                             setShowReminderPicker(false);
-                          }} style={{ flex: 1, padding: "10px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
+                          }} style={{ flex: 1, padding: "11px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Save</button>
                           {sr.reminder && <button onClick={async () => {
                             // Persist the reminder removal to DB. Same data-
                             // loss pattern as the save path — was previously
