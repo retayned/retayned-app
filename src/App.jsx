@@ -2603,7 +2603,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             marginBottom: -visibleHeight, // collapse layout box so timeline renders at top: 0
             pointerEvents: "none",
             zIndex: 0,
-            background: "linear-gradient(180deg, rgba(245,232,210,0) 0%, rgba(245,232,210,0) 12%, rgba(245,232,210,0.10) 32%, rgba(245,232,210,0.10) 68%, rgba(245,232,210,0) 88%, rgba(245,232,210,0) 100%)",
+            background: "linear-gradient(180deg, rgba(245,232,210,0) 0%, rgba(245,232,210,0) 12%, rgba(245,232,210,0.12) 32%, rgba(245,232,210,0.12) 68%, rgba(245,232,210,0) 88%, rgba(245,232,210,0) 100%)",
           }}
         />
         <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight, zIndex: 1 }}>
@@ -3144,7 +3144,7 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
           <textarea
             value={entry}
             onChange={(e) => onChange(e.target.value)}
-            placeholder="What's on your mind today?"
+            placeholder="Jot anything down — it'll be here."
             style={{
               width: "100%",
               minHeight: 140,
@@ -6916,7 +6916,8 @@ export default function App({ user }) {
           box-shadow: var(--rt-sh-row-hover) !important;
           transform: translateY(-1px);
         }
-        .rt-row:hover .rt-dismiss { opacity: 1 !important; }
+        .rt-row:hover .rt-dismiss,
+        .rt-row:hover .rt-push { opacity: 1 !important; }
 
         /* ── COMPOSER ────────────────────────────────────── */
         .rt-composer {
@@ -9745,6 +9746,9 @@ export default function App({ user }) {
                               : {}),
                           }}
                         >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, transition: "opacity 120ms" }} aria-hidden="true">
+                            <path d="M12 2.5l2.1 5.6 5.6 2.1-5.6 2.1L12 17.9l-2.1-5.6L4.3 10.2l5.6-2.1L12 2.5z" fill={rankMode === "rai" ? C.btn : C.textMuted} opacity={rankMode === "rai" ? 1 : 0.55} />
+                          </svg>
                           <span style={{}}>Ranked by Rai</span>
                         </button>
                         <button
@@ -10518,7 +10522,7 @@ export default function App({ user }) {
                                 style={{
                                   width: 28, height: 28, borderRadius: 6,
                                   display: "flex", alignItems: "center", justifyContent: "center",
-                                  color: C.textMuted, opacity: 0.4,
+                                  color: C.textMuted, opacity: 0,
                                   background: "none", border: "none", cursor: "pointer",
                                   flexShrink: 0,
                                   transition: "opacity 120ms ease, background 120ms ease, color 120ms ease",
@@ -10529,7 +10533,7 @@ export default function App({ user }) {
                                   e.currentTarget.style.color = C.btn;
                                 }}
                                 onMouseLeave={e => {
-                                  e.currentTarget.style.opacity = "0.4";
+                                  e.currentTarget.style.opacity = "";
                                   e.currentTarget.style.background = "none";
                                   e.currentTarget.style.color = C.textMuted;
                                 }}
@@ -10544,7 +10548,7 @@ export default function App({ user }) {
 
                             <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
-                              style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0.4, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}
+                              style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0, background: "none", border: "none", cursor: "pointer", flexShrink: 0, transition: "opacity 120ms ease" }}
                               aria-label="dismiss">
                               <Icon name="x" size={12} />
                             </button>
