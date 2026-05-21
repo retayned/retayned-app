@@ -10529,12 +10529,12 @@ export default function App({ user }) {
                                   cursor: isDone ? "default" : "pointer",
                                   // When the task is done, the Today/Overdue pill
                                   // collapses to the muted "future" treatment.
-                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : C.surfaceWarm),
-                                  color: isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted),
+                                  background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : C.surfaceWarm),
+                                  color: isDone ? C.textMuted : (isOverdue ? C.danger : C.textMuted),
                                   border: "none",
                                   boxShadow: isDone ? "none" : "var(--rt-sh-xs)",
                                 }}>
-                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted)} />
+                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textMuted)} />
                                   <span className="rt-row-text">{label}</span>
                                   {!isDone && (
                                     <svg className="rt-due-chevron" width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
@@ -10550,12 +10550,10 @@ export default function App({ user }) {
                                         { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
                                         { label: "Later", on: () => pushToLater(t.id) },
                                       ].map(opt => (
-                                        <div key={opt.label}
+                                        <button key={opt.label}
+                                          className="rt-picker-item"
                                           onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); }}
-                                          style={{ padding: "8px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
-                                          onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
-                                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                                        >{opt.label}</div>
+                                        >{opt.label}</button>
                                       ))}
                                     </div>
                                   </>
