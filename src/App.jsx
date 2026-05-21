@@ -4674,6 +4674,8 @@ export default function App({ user }) {
   };
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
+  // Which task row's inline due-picker popover is open (desktop). Null = none.
+  const [rowDuePickerId, setRowDuePickerId] = useState(null);
   // Mobile: the month calendar inside the Due picker is collapsed by
   // default and revealed when the user taps "Later" — keeps the picker
   // compact (4 short rows) instead of a tall sheet. Desktop always
@@ -9740,13 +9742,13 @@ export default function App({ user }) {
                             cursor: "pointer",
                             display: "inline-flex",
                             alignItems: "center",
-                            gap: 5,
+                            gap: 4,
                             ...(rankMode === "rai"
                               ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                               : {}),
                           }}
                         >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, transition: "opacity 120ms" }} aria-hidden="true">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginRight: -1, transition: "opacity 120ms" }} aria-hidden="true">
                             <path d="M12 2.5l2.1 5.6 5.6 2.1-5.6 2.1L12 17.9l-2.1-5.6L4.3 10.2l5.6-2.1L12 2.5z" fill={rankMode === "rai" ? C.btn : C.textMuted} opacity={rankMode === "rai" ? 1 : 0.55} />
                           </svg>
                           <span style={{}}>Ranked by Rai</span>
@@ -10482,18 +10484,20 @@ export default function App({ user }) {
                                 : isTomorrow ? "Tomorrow"
                                 : new Date(String(t.due_date).slice(0,10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
                               return (
-                                <span className={"rt-row-due " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
+                                <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); if (isDone) return; setRowDuePickerId(rowDuePickerId === t.id ? null : t.id); }}
+                                  className={"rt-row-due " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
                                   display: "inline-flex", alignItems: "center", gap: 4,
-                                  padding: "3px 9px",
+                                  padding: "3px 8px 3px 9px",
                                   borderRadius: 999,
                                   fontSize: 11,
                                   fontWeight: 600,
                                   flexShrink: 0,
+                                  fontFamily: "inherit",
+                                  cursor: isDone ? "default" : "pointer",
                                   // When the task is done, the Today/Overdue pill
-                                  // collapses to the muted "future" treatment
-                                  // (transparent bg, hairline border, muted text)
-                                  // so it visually matches the rest of the dimmed
-                                  // task row instead of staying full-color.,
+                                  // collapses to the muted "future" treatment.
                                   background: isDone ? "transparent" : (isOverdue ? "rgba(196,67,43,0.10)" : isToday ? C.surfaceWarm : C.surfaceWarm),
                                   color: isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted),
                                   border: "none",
@@ -10501,51 +10505,35 @@ export default function App({ user }) {
                                 }}>
                                   <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted)} />
                                   <span className="rt-row-text">{label}</span>
+                                  {!isDone && (
+                                    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
+                                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  )}
+                                </button>
+                                {rowDuePickerId === t.id && (
+                                  <>
+                                    <div onClick={(e) => { e.stopPropagation(); setRowDuePickerId(null); }} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+                                    <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 61, minWidth: 130 }}>
+                                      {[
+                                        { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
+                                        { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
+                                        { label: "Later", on: () => pushToLater(t.id) },
+                                      ].map(opt => (
+                                        <div key={opt.label}
+                                          onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); }}
+                                          style={{ padding: "8px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
+                                          onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
+                                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                        >{opt.label}</div>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
                                 </span>
                               );
                             })() : null}
   
-                            {/* Push button — direction depends on bucket.
-                                Today/Tomorrow → push forward to next bucket.
-                                Later → pull back to Today.
-                                Hidden on done tasks (no point pushing a completed item).
-                                Hidden on recurring (they have no due_date by design). */}
-                            {!isDone && !t.recurring && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (bucketKey === "today") pushToTomorrow(t.id);
-                                  else if (bucketKey === "tomorrow") pushToLater(t.id);
-                                  else if (bucketKey === "later") pullToToday(t.id);
-                                }}
-                                className="rt-push"
-                                style={{
-                                  width: 28, height: 28, borderRadius: 6,
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  color: C.textMuted, opacity: 0,
-                                  background: "none", border: "none", cursor: "pointer",
-                                  flexShrink: 0,
-                                  transition: "opacity 120ms ease, background 120ms ease, color 120ms ease",
-                                }}
-                                onMouseEnter={e => {
-                                  e.currentTarget.style.opacity = "1";
-                                  e.currentTarget.style.background = C.btnLight;
-                                  e.currentTarget.style.color = C.btn;
-                                }}
-                                onMouseLeave={e => {
-                                  e.currentTarget.style.opacity = "";
-                                  e.currentTarget.style.background = "none";
-                                  e.currentTarget.style.color = C.textMuted;
-                                }}
-                                aria-label={bucketKey === "later" ? "pull to today" : bucketKey === "tomorrow" ? "push to later" : "push to tomorrow"}
-                                title={bucketKey === "later" ? "Pull to Today" : bucketKey === "tomorrow" ? "Push to Later" : "Push to Tomorrow"}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ transform: bucketKey === "later" ? "rotate(180deg)" : "none" }}>
-                                  <path d="M3 8h9M9 5l3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </button>
-                            )}
-
                             <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
                               style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0, background: "none", border: "none", cursor: "pointer", flexShrink: 0, transition: "opacity 120ms ease" }}
