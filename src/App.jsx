@@ -7721,15 +7721,26 @@ export default function App({ user }) {
           }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
-          /* Task right-side indicators on mobile:
-             - Recurring: keep ∞ icon only, hide "Recurring" label
-             - Today / Overdue date pill: keep calendar icon only, hide date text
-             - Tomorrow / Later (rt-due-future): hide the whole pill — irrelevant here */
+          /* Task right-side indicators on mobile — ALL pills render as one
+             standardized circle: same width/height, icon centered, no text,
+             no chevron. Applies to recurring (∞), Today, Tomorrow/Later, and
+             overdue alike so the right edge is visually uniform. */
           .rt-row-text { display: none !important; }
-          .rt-row-recur { padding: 3px 5px !important; }
+          .rt-due-chevron { display: none !important; }
+          .rt-row-recur,
           .rt-row-due.rt-due-today,
-          .rt-row-due.rt-due-overdue { padding: 3px 5px !important; }
-          .rt-row-due.rt-due-future { display: none !important; }
+          .rt-row-due.rt-due-overdue,
+          .rt-row-due.rt-due-future {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 26px !important;
+            height: 26px !important;
+            padding: 0 !important;
+            gap: 0 !important;
+            border-radius: 999px !important;
+            box-sizing: border-box !important;
+          }
         }
         /* Clients table responsive — progressively hide optional columns
            as horizontal space shrinks. Order is by signal density: cadence
@@ -10506,15 +10517,15 @@ export default function App({ user }) {
                                   <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : isToday ? C.text : C.textMuted)} />
                                   <span className="rt-row-text">{label}</span>
                                   {!isDone && (
-                                    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
+                                    <svg className="rt-due-chevron" width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
                                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
                                   )}
                                 </button>
                                 {rowDuePickerId === t.id && (
                                   <>
-                                    <div onClick={(e) => { e.stopPropagation(); setRowDuePickerId(null); }} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
-                                    <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 61, minWidth: 130 }}>
+                                    <div onClick={(e) => { e.stopPropagation(); setRowDuePickerId(null); }} style={{ position: "fixed", inset: 0, zIndex: 1000 }} />
+                                    <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 1001, minWidth: 130 }}>
                                       {[
                                         { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
                                         { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
