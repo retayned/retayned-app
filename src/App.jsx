@@ -4676,6 +4676,26 @@ export default function App({ user }) {
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   // Which task row's inline due-picker popover is open (desktop). Null = none.
   const [rowDuePickerId, setRowDuePickerId] = useState(null);
+  // Close the row due-picker on any click outside the popover/pill, or on
+  // Escape. Document-level listener instead of a backdrop element — a fixed
+  // backdrop nested inside the row gets trapped in the row's stacking
+  // context (z-index 70 when open), which caused flicker and swallowed the
+  // close click. Listening on document sidesteps stacking entirely.
+  useEffect(() => {
+    if (rowDuePickerId == null) return;
+    const onDown = (e) => {
+      if (e.target.closest && e.target.closest(".rt-row-due-pop")) return; // click inside menu
+      if (e.target.closest && e.target.closest(".rt-row-due")) return;     // click on the pill itself (toggles)
+      setRowDuePickerId(null);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setRowDuePickerId(null); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [rowDuePickerId]);
   // Mobile: the month calendar inside the Due picker is collapsed by
   // default and revealed when the user taps "Later" — keeps the picker
   // compact (4 short rows) instead of a tall sheet. Desktop always
@@ -9740,7 +9760,7 @@ export default function App({ user }) {
                           className={"rt-rank-opt" + (rankMode === "rai" ? " is-active" : "")}
                           onClick={() => setRankMode("rai")}
                           style={{
-                            padding: "6px 14px 6px 11px",
+                            padding: "6px 14px 6px 10px",
                             // Option B "perfectly nested" geometry: inner radius
                             // = (outer height ÷ 2) − container padding. Locked
                             // to current button dimensions (padding 6/14, fontSize 12,
@@ -9759,8 +9779,8 @@ export default function App({ user }) {
                               : {}),
                           }}
                         >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginRight: -1, transition: "opacity 120ms" }} aria-hidden="true">
-                            <path d="M12 2.5l2.1 5.6 5.6 2.1-5.6 2.1L12 17.9l-2.1-5.6L4.3 10.2l5.6-2.1L12 2.5z" fill={rankMode === "rai" ? C.btn : C.textMuted} opacity={rankMode === "rai" ? 1 : 0.55} />
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block", transition: "opacity 120ms" }} aria-hidden="true">
+                            <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={rankMode === "rai" ? C.btn : C.textMuted} opacity={rankMode === "rai" ? 1 : 0.55} />
                           </svg>
                           <span style={{}}>Ranked by Rai</span>
                         </button>
@@ -10524,7 +10544,6 @@ export default function App({ user }) {
                                 </button>
                                 {rowDuePickerId === t.id && (
                                   <>
-                                    <div onClick={(e) => { e.stopPropagation(); setRowDuePickerId(null); }} style={{ position: "fixed", inset: 0, zIndex: 1000 }} />
                                     <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 1001, minWidth: 130 }}>
                                       {[
                                         { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
