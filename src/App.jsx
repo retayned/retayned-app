@@ -4676,12 +4676,6 @@ export default function App({ user }) {
   const [duePickerOpen, setDuePickerOpen] = useState(false);
   // Which task row's inline due-picker popover is open (desktop). Null = none.
   const [rowDuePickerId, setRowDuePickerId] = useState(null);
-  // Screen position for the row due-picker popover. It renders fixed (portal-
-  // style) anchored to the pill's measured rect — this is the only way to
-  // escape the task list's nested stacking contexts (row wraps with
-  // transitions/transforms), which kept letting rows below paint over a
-  // normally-positioned popover regardless of z-index.
-  const [rowDuePickerPos, setRowDuePickerPos] = useState(null);
   // Close the row due-picker on any click outside the popover/pill, or on
   // Escape. Document-level listener instead of a backdrop element — a fixed
   // backdrop nested inside the row gets trapped in the row's stacking
@@ -4692,10 +4686,10 @@ export default function App({ user }) {
     const onDown = (e) => {
       if (e.target.closest && e.target.closest(".rt-row-due-pop")) return; // click inside menu
       if (e.target.closest && e.target.closest(".rt-row-due")) return;     // click on the pill itself (toggles)
-      setRowDuePickerId(null); setRowDuePickerPos(null);
+      setRowDuePickerId(null);
     };
-    const onKey = (e) => { if (e.key === "Escape") { setRowDuePickerId(null); setRowDuePickerPos(null); } };
-    const onScroll = () => { setRowDuePickerId(null); setRowDuePickerPos(null); };
+    const onKey = (e) => { if (e.key === "Escape") setRowDuePickerId(null); };
+    const onScroll = () => setRowDuePickerId(null);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
@@ -10173,7 +10167,7 @@ export default function App({ user }) {
                         const isExiting = !!exitingDoneIds[t.id];
 
                         return (
-                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible" }}>
+                          <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible", zIndex: rowDuePickerId === t.id ? 500 : undefined }}>
                             {/* Swipe action background. Two directions:
                                 - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
                                 - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
@@ -10526,16 +10520,8 @@ export default function App({ user }) {
                               return (
                                 <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isDone) return;
-                                    if (rowDuePickerId === t.id) { setRowDuePickerId(null); setRowDuePickerPos(null); return; }
-                                    const r = e.currentTarget.getBoundingClientRect();
-                                    // Right-align the menu to the pill's right edge, open below.
-                                    setRowDuePickerPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
-                                    setRowDuePickerId(t.id);
-                                  }}
-                                  className={"rt-row-due " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
+                                  onClick={(e) => { e.stopPropagation(); if (isDone) return; setRowDuePickerId(rowDuePickerId === t.id ? null : t.id); }}
+                                  className={"rt-row-due rt-composer-pill " + (isToday ? "rt-due-today" : isOverdue ? "rt-due-overdue" : "rt-due-future")} style={{
                                   display: "inline-flex", alignItems: "center", gap: 4,
                                   padding: "3px 8px 3px 9px",
                                   borderRadius: 999,
@@ -10559,8 +10545,8 @@ export default function App({ user }) {
                                     </svg>
                                   )}
                                 </button>
-                                {rowDuePickerId === t.id && rowDuePickerPos && (
-                                  <div className="rt-row-due-pop" style={{ position: "fixed", top: rowDuePickerPos.top, right: rowDuePickerPos.right, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 4000, minWidth: 130 }}>
+                                {rowDuePickerId === t.id && (
+                                  <div className="rt-row-due-pop" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: C.card, border: "1px solid " + C.borderLight, borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.06)", padding: 5, zIndex: 1001, minWidth: 130 }}>
                                     {[
                                       { label: "Today", on: () => setTaskDueDate(t.id, _todayStr) },
                                       { label: "Tomorrow", on: () => setTaskDueDate(t.id, _tomorrowStr) },
@@ -10568,7 +10554,7 @@ export default function App({ user }) {
                                     ].map(opt => (
                                       <button key={opt.label}
                                         className="rt-picker-item"
-                                        onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); setRowDuePickerPos(null); }}
+                                        onClick={(e) => { e.stopPropagation(); opt.on(); setRowDuePickerId(null); }}
                                       >{opt.label}</button>
                                     ))}
                                   </div>
