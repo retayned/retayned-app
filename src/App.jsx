@@ -4676,10 +4676,21 @@ export default function App({ user }) {
   // broke every left/right anchor attempt).
   useEffect(() => {
     if (!duePickerOpen || !isMobile) { setDuePickerPos(null); return; }
-    const el = dueChipRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setDuePickerPos({ top: r.bottom + 10 });
+    const measure = () => {
+      const el = dueChipRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setDuePickerPos({ top: r.bottom + 10 });
+    };
+    measure();
+    // Track the composer as the page scrolls/resizes so the fixed
+    // picker stays glued beneath it instead of detaching on scroll.
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
   }, [duePickerOpen, isMobile, dueShowCalendar]);
   // Renewal date picker popover state — used by the client profile edit
   // form (replaces the native <input type="date"> which renders poorly
@@ -9060,7 +9071,7 @@ export default function App({ user }) {
                 <div style={{ height: 1, background: C.borderLight, margin: "0 14px" }} />
 
                 {/* Row 2: chips + Add Task button */}
-                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 10px", flexWrap: "wrap" }}>
+                <div className="rt-composer-row2" style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px 10px", flexWrap: "wrap", position: "relative" }}>
                   <div className="rt-composer-controls" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap", flex: 1, minWidth: 0 }}>
                     {(() => {
                       const selectedClientObj = composerClient ? clients.find(c => c.name === composerClient) : null;
