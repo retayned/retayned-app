@@ -2585,56 +2585,6 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           paddingRight: 2,
         }}
       >
-        {/* Golden-hour wash — pinned to the visible viewport, not the
-            inner scrollable timeline. Lives in its own non-scrolling
-            overlay so the colored "workday" band sits where the user
-            is looking, not at the vertical middle of the full
-            17-hour day (which is what happens if you put the
-            gradient on the scroll container itself).
-            ──────────────────────────────────────────────────────
-            Computed from current hour:
-              pre-dawn (<6)   — cool blue
-              morning (<10)   — soft cool cream
-              midday (<14)    — warm neutral cream
-              afternoon (<17) — warming amber
-              golden (<19)    — deep amber peak
-              dusk (<22)      — warm amber
-              night           — muted warmth
-            Six-stop band: transparent 0-12%, ramp to peak by 32%,
-            hold through 68%, ramp back to transparent by 88%. Peak
-            alpha multiplied by 0.75 so the wash sits behind events
-            without overpowering them. */}
-        <div
-          aria-hidden
-          style={{
-            position: "sticky",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: visibleHeight,
-            marginBottom: -visibleHeight, // collapse the layout box so the next sibling renders at top: 0
-            pointerEvents: "none",
-            zIndex: 0,
-            background: (() => {
-              const h = new Date().getHours();
-              let tint, alpha;
-              // Curve halved May 2026 — the prior values (0.18–0.32)
-              // were tuned blind and rendered far too hot once the
-              // overlay was actually visible. These keep the same
-              // time-of-day arc (cool dawn → warm golden hour) at
-              // roughly half intensity, so events stay legible on top.
-              if (h < 6)        { tint = "180,190,205"; alpha = 0.11; }  // pre-dawn — cool blue
-              else if (h < 10)  { tint = "220,225,225"; alpha = 0.09; }  // morning — soft cool cream
-              else if (h < 14)  { tint = "248,236,212"; alpha = 0.10; }  // midday — warm neutral cream
-              else if (h < 17)  { tint = "250,230,195"; alpha = 0.13; }  // afternoon — warming amber
-              else if (h < 19)  { tint = "245,205,150"; alpha = 0.16; }  // golden hour — deep amber
-              else if (h < 22)  { tint = "235,190,145"; alpha = 0.14; }  // dusk — warm amber
-              else              { tint = "200,180,165"; alpha = 0.12; }  // night — muted warmth
-              const a = alpha.toFixed(3);
-              return `linear-gradient(180deg, rgba(${tint},0) 0%, rgba(${tint},0) 12%, rgba(${tint},${a}) 32%, rgba(${tint},${a}) 68%, rgba(${tint},0) 88%, rgba(${tint},0) 100%)`;
-            })(),
-          }}
-        />
         <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight, zIndex: 1 }}>
           {/* Hour grid */}
           {hourLabels.map(h => (
