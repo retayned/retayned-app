@@ -1377,7 +1377,7 @@ function parseComposer(rawText, clients, workers) {
       );
       const fullM = lower.match(fullRe);
       if (fullM && fullM.index !== undefined) {
-        allCandidates.push({ client: c, score: 100, start: fullM.index, end: fullM.index + fullM[0].length });
+        allCandidates.push({ client: c, score: 100, matchType: "company", start: fullM.index, end: fullM.index + fullM[0].length });
         continue; // best possible — skip lower-priority candidates for this client
       }
 
@@ -1393,7 +1393,7 @@ function parseComposer(rawText, clients, workers) {
         );
         const cm = lower.match(contactRe);
         if (cm && cm.index !== undefined) {
-          allCandidates.push({ client: c, score: 95, start: cm.index, end: cm.index + cm[0].length });
+          allCandidates.push({ client: c, score: 95, matchType: "contact", start: cm.index, end: cm.index + cm[0].length });
           continue;
         }
       }
@@ -1410,7 +1410,7 @@ function parseComposer(rawText, clients, workers) {
         );
         const fm = lower.match(firstRe);
         if (fm && fm.index !== undefined) {
-          allCandidates.push({ client: c, score: 70, start: fm.index, end: fm.index + fm[0].length });
+          allCandidates.push({ client: c, score: 70, matchType: "contact", start: fm.index, end: fm.index + fm[0].length });
           continue;
         }
       }
@@ -1531,7 +1531,7 @@ function parseComposer(rawText, clients, workers) {
       allCandidates.sort((a, b) => b.score - a.score || a.start - b.start);
       const winner = allCandidates[0];
       matchedClient = winner.client;
-      clientMatchSpan = { start: winner.start, end: winner.end, kind: "client" };
+      clientMatchSpan = { start: winner.start, end: winner.end, kind: "client", matchType: winner.matchType || "company" };
       matches.push(clientMatchSpan);
 
       // Secondary sweep: now that we know which client wins, scan the input
@@ -1775,6 +1775,27 @@ function parseComposer(rawText, clients, workers) {
   let title = text;
   const sortedMatches = [...matches].sort((a, b) => b.start - a.start);
   for (const m of sortedMatches) {
+    // Contact-name matches stay in the title — "Call David" should read
+    // "Call David." (the person's name is part of the action). Company-name
+    // matches are stripped because the client chip carries them ("Call
+    // Bushel" → "Call." + Bushel chip). Date/worker spans strip as before.
+    if (m.kind === "client" && m.matchType === "contact") {
+      // Keep it, but restore the contact's stored casing over whatever the
+      // user typed ("call david" → "Call David"). Use the matched portion's
+      // length from the contact name so partial (first-name) matches get
+      // their proper case too.
+      const properName = (matchedClient && matchedClient.contact) ? matchedClient.contact.trim() : null;
+      if (properName) {
+        const matchedLen = m.end - m.start;
+        // First-name match → take the leading word of the contact name;
+        // full match → use the whole contact name.
+        const replacement = matchedLen < properName.length
+          ? properName.split(/\s+/)[0]
+          : properName;
+        title = title.slice(0, m.start) + replacement + title.slice(m.end);
+      }
+      continue;
+    }
     let endIdx = m.end;
     if (m.kind === "client" && lower.slice(endIdx, endIdx + 2) === "'s") {
       endIdx += 2;
@@ -2545,7 +2566,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 cursor: "pointer",
                 fontFamily: "inherit",
                 fontSize: 12,
-                fontWeight: 500,
+                fontWeight: 600,
                 ...(selectedDay === "today"
                   ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                   : {}),
@@ -2564,7 +2585,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 cursor: "pointer",
                 fontFamily: "inherit",
                 fontSize: 12,
-                fontWeight: 500,
+                fontWeight: 600,
                 ...(selectedDay === "tomorrow"
                   ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
                   : {}),
@@ -17899,57 +17920,70 @@ export default function App({ user }) {
                   const matchedClient = parsed.matchedClient || null;
                   const cleanedText = parsed.title || rawText;
 
-                  // ─── Tense detection — past = touchpoint, future/neutral = task.
-                  // Word-boundary match on the raw lowercased input. Past verbs
-                  // beat future verbs if both appear ("called and need to
-                  // follow up" → touchpoint, because the action that already
-                  // happened is what's being logged).
+                  // ─── Intent detection — QuickLog DEFAULTS TO TOUCHPOINT.
+                  // This is the "quick log" box: logging things that happened
+                  // is the primary action, so touchpoint is the fallback. Only
+                  // explicit future/imperative phrasing routes to a task. The
+                  // confirmation toast (with cancel) is the safety net for the
+                  // rare wrong guess. (The main top composer is the opposite —
+                  // it defaults to task. This inversion is QuickLog-only.)
                   const lower = rawText.toLowerCase();
-                  // Past verbs → touchpoint. Apostrophe in "dm'd" allowed to
-                  // be a curly or straight apostrophe so paste from iOS works.
-                  const PAST_VERBS = [
-                    // Communication
-                    "talked", "called", "met", "emailed", "texted", "spoke",
-                    "chatted", "wrote", "messaged", "dm'd", "dmed", "responded",
-                    "replied", "heard from", "got off", "had a call",
-                    "had a meeting", "spoke with", "caught up", "sent", "pinged",
-                    "followed up", "checked in", "reached out", "rang",
-                    // Work done (explicit past tense only — bare imperatives
-                    // like "create"/"make" intentionally fall through to a task)
-                    "created", "made", "built", "designed", "shipped", "launched",
-                    "finished", "completed", "drafted", "set up", "wrapped",
-                    "delivered", "updated", "fixed", "uploaded", "posted",
-                    "published", "submitted", "prepared", "reviewed", "edited",
+                  // Future / imperative signals → TASK. Bare imperative verbs
+                  // ("schedule", "create", "make") are tasks; their past-tense
+                  // forms ("created", "made") are NOT here, so they fall
+                  // through to the touchpoint default — matching the rule
+                  // "create = task, created = touchpoint".
+                  const TASK_VERBS = [
+                    "schedule", "set up", "book", "plan", "arrange",
+                    "need to", "needs to", "have to", "has to", "gotta",
+                    "remember to", "don't forget", "dont forget", "remind me",
+                    "follow up", "follow-up", "create", "make", "build",
+                    "draft", "prep", "prepare", "todo", "to-do", "to do",
                   ];
-                  let detectedChannel = null;
-                  let isPast = false;
-                  for (const v of PAST_VERBS) {
-                    // Normalize the apostrophe forms (straight or curly).
+                  let isTask = false;
+                  for (const v of TASK_VERBS) {
                     const vPattern = v.replace(/'/g, "['\u2019]?");
-                    if (new RegExp(`\\b${vPattern}\\b`, "i").test(lower)) {
-                      isPast = true;
-                      if (/call|spoke|got off|chat|rang/i.test(v)) detectedChannel = "call";
-                      else if (/email/i.test(v)) detectedChannel = "email";
-                      else if (/text|message|dm|pinged/i.test(v)) detectedChannel = "text";
-                      else if (/met|meeting|caught up/i.test(v)) detectedChannel = "meeting";
-                      else detectedChannel = "note";
-                      break;
-                    }
+                    const isLeading = new RegExp(`^\\s*${vPattern}\\b`, "i").test(lower);
+                    const isPhrase = v.includes(" ") && new RegExp(`\\b${vPattern}\\b`, "i").test(lower);
+                    if (isLeading || isPhrase) { isTask = true; break; }
+                  }
+                  // Bare comm verbs (call/email/text/ping) leading the entry are
+                  // tasks — UNLESS immediately followed by "with", which makes
+                  // them a noun ("call with David" = a call, a touchpoint; vs
+                  // "call David" = an action, a task).
+                  if (!isTask && /^\s*(call|email|text|ping|message)\b/i.test(lower) && !/^\s*\w+\s+with\b/i.test(lower)) {
+                    isTask = true;
                   }
 
-                  // ─── ROUTE A: TOUCHPOINT (past tense)
-                  if (isPast && matchedClient) {
+                  // Channel detection (for nice touchpoint display) — derived
+                  // from the words present regardless of routing.
+                  let detectedChannel = "note";
+                  if (/\bcall|\bspoke|got off|\bchat|\brang|phone/i.test(lower)) detectedChannel = "call";
+                  else if (/\bemail/i.test(lower)) detectedChannel = "email";
+                  else if (/\btext|\bmessage|\bdm\b|pinged/i.test(lower)) detectedChannel = "text";
+                  else if (/\bmet\b|\bmeeting|\blunch|\bcoffee|caught up|\bsync\b|\bdemo\b/i.test(lower)) detectedChannel = "meeting";
+
+                  // ─── ROUTE A: TOUCHPOINT (the default — anything not flagged
+                  // as a task). Requires a matched client; a touchpoint can't
+                  // exist without one, so a no-client entry falls through to a
+                  // task even under the touchpoint-default model.
+                  if (!isTask && matchedClient) {
                     const optimisticId = "qltp" + Date.now();
                     setTpLogged(prev => [
-                      { id: optimisticId, client: matchedClient.name, channel: detectedChannel || "note" },
+                      { id: optimisticId, client: matchedClient.name, channel: detectedChannel },
                       ...prev,
                     ]);
                     try {
                       const { data: created } = await touchpointsDb.create(user.id, {
                         client_id: matchedClient.id,
                         client_name: matchedClient.name,
-                        channel: detectedChannel || "note",
-                        notes: cleanedText,
+                        channel: detectedChannel,
+                        // Use the raw text for the note — a touchpoint should
+                        // read naturally and keep the client's name in it
+                        // ("Call with David for melio payments"). cleanedText
+                        // is the task-title strip, which removes the client
+                        // span and leaves mangled fragments like "Call .".
+                        notes: rawText,
                       });
                       if (created?.id) {
                         setTpLogged(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
@@ -17964,10 +17998,8 @@ export default function App({ user }) {
                     return;
                   }
 
-                  // ─── ROUTE B: TASK (future / neutral / no client match for past)
-                  // If past tense fired but no client matched, fall through to
-                  // task — we can't make a touchpoint without a client_id.
-                  //
+                  // ─── ROUTE B: TASK (explicit future/imperative, OR no client
+                  // matched so a touchpoint isn't possible).
                   // Use the user's stored timezone for the due_date string so
                   // it matches what the rest of the app's bucketing logic uses
                   // (otherwise the task could land in a different bucket near
