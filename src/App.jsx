@@ -65,7 +65,7 @@ const C = {
   // "Now" marker on the timeline — amber from the existing tag-accent family
   // (not the warning token; "now" isn't an alert). Gives the live-time line
   // its own semantic lane, distinct from action-purple and completion-green.
-  now: "#8B6A1B",
+  now: "#B88B15",
   dangerSoft: "#FBE6DE",
   retCrit: "#B4341F", retWarn: "#D17A1B", retOk: "#A8A420", retGood: "#1F7A5C", retElite: "#0C3A2E",
   btn: "#5B21B6", btnHover: "#4C1D95", btnLight: "var(--rt-btn-light)",
@@ -2723,7 +2723,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 borderLeft: `3px solid ${C.now}`,
                 borderRadius: "0 8px 8px 0",
                 paddingLeft: 10,
-                boxShadow: "0 1px 3px rgba(139,106,27,0.12), 0 4px 12px rgba(139,106,27,0.16)",
+                boxShadow: "0 1px 3px rgba(184,139,21,0.12), 0 4px 12px rgba(184,139,21,0.16)",
               };
               titleColor = C.text;
               timeColor = C.textSec;
@@ -2904,7 +2904,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 right: 0,
                 top: 0,
                 height: 1.5,
-                background: "linear-gradient(90deg, #8B6A1B 0%, rgba(139,106,27,0.55) 35%, rgba(139,106,27,0) 100%)",
+                background: "linear-gradient(90deg, #B88B15 0%, rgba(184,139,21,0.55) 35%, rgba(184,139,21,0) 100%)",
               }} />
             </div>
           )}
@@ -7148,8 +7148,8 @@ export default function App({ user }) {
           to { transform: scale(1) rotate(0); opacity: 1; }
         }
         @keyframes rtNowPulse {
-          0%, 100% { box-shadow: 0 0 0 1px rgba(139,106,27,0.18), 0 2px 8px rgba(139,106,27,0.28); }
-          50%      { box-shadow: 0 0 0 1px rgba(139,106,27,0.24), 0 2px 14px rgba(139,106,27,0.42); }
+          0%, 100% { box-shadow: 0 0 0 1px rgba(184,139,21,0.18), 0 2px 8px rgba(184,139,21,0.28); }
+          50%      { box-shadow: 0 0 0 1px rgba(184,139,21,0.24), 0 2px 14px rgba(184,139,21,0.42); }
         }
         .rt-now-pulse { animation: rtNowPulse 2.4s ease-in-out infinite; }
         @keyframes rtSavePulse {
