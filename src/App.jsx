@@ -4153,6 +4153,7 @@ export default function App({ user }) {
   const [rolodexStep, setRolodexStep] = useState(null);
   const [rolodexStepOwner, setRolodexStepOwner] = useState(null);
   const [rolodexStepText, setRolodexStepText] = useState(null);
+  const [retroDeleteConfirm, setRetroDeleteConfirm] = useState(false);
   const [rolodexFiledFilter, setRolodexFiledFilter] = useState("all");
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(false);
@@ -14663,6 +14664,7 @@ export default function App({ user }) {
             setRolodexStep(null);
             setRolodexStepOwner(null);
             setRolodexStepText(null);
+            setRetroDeleteConfirm(false);
           };
 
           const onNext = () => {
@@ -14900,7 +14902,7 @@ export default function App({ user }) {
                               onBlur={() => { if (localText != null) saveAnswer(currentStepDef, localText); }}
                               placeholder={currentStepDef.placeholder}
                               rows={3}
-                              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }}
+                              style={{ width: "100%", padding: "13px 15px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, outline: "none", resize: "vertical", lineHeight: 1.55, color: C.text, boxSizing: "border-box" }}
                             />
                           )}
                           {currentStepDef.kind === "pick" && (
@@ -14938,13 +14940,26 @@ export default function App({ user }) {
                         </div>
                         {/* Footer nav — hidden on priority step (buttons ARE the actions) */}
                         {currentStepDef.kind !== "priority" && (
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px 14px", borderTop: "1px solid " + C.borderLight, background: C.bg }}>
-                            <button onClick={advanceAfterRetro} style={{ fontSize: 11.5, color: C.textMuted, padding: "6px 10px", borderRadius: 6, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}>Skip for now</button>
+                          retroDeleteConfirm ? (
+                            <div style={{ padding: "16px 18px 18px", borderTop: "1px solid " + C.borderLight, background: C.card }}>
+                              <div style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>Delete <b>{active.client_name || active.client}</b> from your rolodex? This is permanent — you won't be able to get this contact back.</div>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <button onClick={() => { setRolodex(prev => prev.filter(x => x.id !== active.id)); rolodexDb.delete(active.id); setRetroDeleteConfirm(false); advanceAfterRetro(); }} style={{ flex: 1, padding: "11px", background: C.danger, color: "#fff", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                                <button onClick={() => setRetroDeleteConfirm(false)} style={{ padding: "11px 18px", background: C.surface, color: C.text, border: "none", borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px 15px", borderTop: "1px solid " + C.borderLight }}>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button onClick={advanceAfterRetro} style={{ fontSize: 12.5, color: C.textMuted, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Skip for now</button>
+                              <button onClick={() => setRetroDeleteConfirm(true)} style={{ fontSize: 12.5, color: C.danger, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Delete</button>
+                            </div>
                             <div style={{ display: "flex", gap: 8 }}>
-                              <button onClick={onPrev} disabled={effectiveStep === 0} style={{ padding: "8px 14px", background: C.borderLight, color: C.textSec, borderRadius: 8, fontSize: 12.5, fontWeight: 500, border: "none", cursor: effectiveStep === 0 ? "default" : "pointer", opacity: effectiveStep === 0 ? 0.5 : 1, fontFamily: "inherit" }}>Back</button>
-                              <button onClick={onNext} style={{ padding: "8px 18px", background: C.retGood, color: "#fff", borderRadius: 8, fontSize: 12.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-card)" }}>Next →</button>
+                              <button onClick={onPrev} disabled={effectiveStep === 0} style={{ padding: "9px 16px", background: C.card, color: C.textSec, borderRadius: 9, fontSize: 13, fontWeight: 600, border: "none", boxShadow: "inset 0 0 0 1px " + C.border, cursor: effectiveStep === 0 ? "default" : "pointer", opacity: effectiveStep === 0 ? 0.5 : 1, fontFamily: "inherit" }}>Back</button>
+                              <button onClick={onNext} style={{ padding: "9px 20px", background: C.btn, color: "#fff", borderRadius: 9, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>Next</button>
                             </div>
                           </div>
+                          )
                         )}
                       </div>
                     </div>
@@ -14970,7 +14985,7 @@ export default function App({ user }) {
                           </button>
                         )}
                       </div>
-                      <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 180, padding: "6px 10px", borderRadius: 8, fontSize: 12, fontFamily: "inherit", background: C.card, outline: "none" }} />
+                      <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 200, padding: "9px 13px", borderRadius: 9, fontSize: 13, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, outline: "none", color: C.text }} />
                     </div>
 
                     {filteredFiled.length === 0 ? (
