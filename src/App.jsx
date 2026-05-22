@@ -10347,7 +10347,7 @@ export default function App({ user }) {
                               aria-label={isDone ? "mark incomplete" : "mark complete"}
                               className="rt-check"
                               style={{
-                                width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.ink300,
+                                width: 22, height: 22, borderRadius: 6, border: "2px solid #88AE96",
                                 background: C.card, display: "flex", alignItems: "center", justifyContent: "center",
                                 flexShrink: 0, cursor: "pointer", padding: 0,
                               }}>
@@ -15032,7 +15032,7 @@ export default function App({ user }) {
 
               {/* Add contact modal */}
               {showAddRolodex && createPortal(
-                <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope', system-ui, sans-serif" }}>
                   <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>New rolodex contact</div>
                     <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>{newRolodexEntry.type === "oneoff" ? "Add a lead to your deck and set where it sits." : "Add someone to your deck. You'll run a quick retro to file them."}</div>
@@ -17256,6 +17256,7 @@ export default function App({ user }) {
             padding: 5,
             zIndex: 5000,
             width: 140,
+            fontFamily: "'Manrope', system-ui, sans-serif",
           }}
         >
           {[
