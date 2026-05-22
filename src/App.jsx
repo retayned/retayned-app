@@ -15081,23 +15081,23 @@ export default function App({ user }) {
               {/* Add contact modal */}
               {showAddRolodex && createPortal(
                 <div onClick={() => setShowAddRolodex(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope', system-ui, sans-serif" }}>
-                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 14, padding: 24, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 26, width: "100%", maxWidth: 480, boxShadow: "0 1px 3px rgba(20,30,22,0.08), 0 20px 60px rgba(20,30,22,0.18), inset 0 1px 0 rgba(255,255,255,0.9)" }}>
                     <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>New rolodex contact</div>
                     <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>{newRolodexEntry.type === "oneoff" ? "Add a lead to your deck and set where it sits." : "Add someone to your deck. You'll run a quick retro to file them."}</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Company / client name</label>
-                        <input value={newRolodexEntry.client} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, client: e.target.value })} placeholder="Northbeam Studios" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={newRolodexEntry.client} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, client: e.target.value })} onFocus={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.primary; }} onBlur={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.borderLight; }} placeholder="Northbeam Studios" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box", transition: "box-shadow 120ms ease" }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Contact person</label>
-                        <input value={newRolodexEntry.contact} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, contact: e.target.value })} placeholder="Jordan Reeve" style={{ width: "100%", padding: "10px 14px", borderRadius: 8, fontSize: 14, fontFamily: "inherit", background: C.bg, outline: "none", boxSizing: "border-box" }} />
+                        <input value={newRolodexEntry.contact} onChange={e => setNewRolodexEntry({ ...newRolodexEntry, contact: e.target.value })} onFocus={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.primary; }} onBlur={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.borderLight; }} placeholder="Jordan Reeve" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box", transition: "box-shadow 120ms ease" }} />
                       </div>
                       <div>
                         <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Type</label>
                         <div style={{ display: "flex", gap: 8 }}>
                           {[{ v: "former", label: "Former client" }, { v: "oneoff", label: "New lead" }].map(t => (
-                            <button key={t.v} onClick={() => setNewRolodexEntry({ ...newRolodexEntry, type: t.v })} style={{ flex: 1, padding: "8px 12px", background: newRolodexEntry.type === t.v ? C.primarySoft : C.card, border: "1px solid " + (newRolodexEntry.type === t.v ? C.primary : C.border), borderRadius: 8, fontSize: 13, fontWeight: 500, color: newRolodexEntry.type === t.v ? C.primary : C.textSec, cursor: "pointer", fontFamily: "inherit" }}>{t.label}</button>
+                            <button key={t.v} onClick={() => setNewRolodexEntry({ ...newRolodexEntry, type: t.v })} style={{ flex: 1, padding: "10px 12px", background: newRolodexEntry.type === t.v ? C.primarySoft : C.card, border: "none", boxShadow: "inset 0 0 0 1px " + (newRolodexEntry.type === t.v ? C.primary : C.borderLight), borderRadius: 10, fontSize: 13, fontWeight: 600, color: newRolodexEntry.type === t.v ? C.primary : C.textSec, cursor: "pointer", fontFamily: "inherit", transition: "all 120ms ease" }}>{t.label}</button>
                           ))}
                         </div>
                       </div>
@@ -15124,10 +15124,10 @@ export default function App({ user }) {
                             }
                             setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" });
                             setShowAddRolodex(false);
-                          }} style={{ flex: 1, padding: "10px", background: ready ? C.btn : C.surface, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit" }}>{newRolodexEntry.type === "oneoff" ? "Add lead" : "Add & start retro"}</button>
+                          }} onMouseEnter={e => { if (ready) e.currentTarget.style.background = C.btnHover; }} onMouseLeave={e => { if (ready) e.currentTarget.style.background = C.btn; }} style={{ flex: 1, padding: "12px", background: ready ? C.btn : C.surfaceWarm, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit", transition: "background 120ms ease" }}>{newRolodexEntry.type === "oneoff" ? "Add lead" : "Add & start retro"}</button>
                         );
                       })()}
-                      <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); }} style={{ padding: "10px 18px", background: C.surface, color: C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); }} style={{ padding: "12px 18px", background: C.surface, color: C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   </div>
                 </div>,
