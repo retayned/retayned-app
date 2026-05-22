@@ -7732,8 +7732,10 @@ export default function App({ user }) {
         /* Wide desktop (>=1500px): 3 cols — notes (daybook) joins only
            when there's genuine room. Below this, tasks + calendar share
            the width and notes stays hidden so it never crowds out what
-           matters. Raised from 1440 (tasks were getting ~440px there). */
-        @media (min-width: 1500px) {
+           matters. Raised to 1700 (at 1500 the timeline + notes together
+           pinched the task column; notes is lowest-priority so it waits for
+           genuinely comfortable width). */
+        @media (min-width: 1700px) {
           .rt-today-v4 {
             grid-template-columns: minmax(0, 1fr) 360px 360px;
             grid-template-rows: auto auto 1fr;
@@ -14688,11 +14690,18 @@ export default function App({ user }) {
           const onPick = (v) => {
             if (!currentStepDef) return;
             saveAnswer(currentStepDef, v);
-            // Auto-advance on pick for non-priority picks
+            // Beat before advancing so the selected state (green fill + tint)
+            // actually paints — without this the pick was saved and the step
+            // changed in the same tick, so the option never visibly registered
+            // and it felt like nothing happened.
             if (effectiveStep < activeSteps.length - 1) {
-              setRolodexStep(effectiveStep + 1);
-              setRolodexStepOwner(active.id);
-              setRolodexStepText(null);
+              const stepNow = effectiveStep;
+              const ownerNow = active.id;
+              setTimeout(() => {
+                setRolodexStep(stepNow + 1);
+                setRolodexStepOwner(ownerNow);
+                setRolodexStepText(null);
+              }, 200);
             }
           };
           const onPickPriority = async (priority) => {
@@ -14910,7 +14919,10 @@ export default function App({ user }) {
                               {currentStepDef.options.map(o => {
                                 const picked = currentAnswers[currentStepDef.id] === o.v;
                                 return (
-                                  <button key={o.v} onClick={() => onPick(o.v)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: picked ? "#E8F3EC" : C.card, border: "1px solid " + (picked ? o.tone : C.border), borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 120ms" }}>
+                                  <button key={o.v} onClick={() => onPick(o.v)}
+                                    onMouseEnter={e => { if (!picked) { e.currentTarget.style.boxShadow = "inset 0 0 0 1px " + C.primaryLight; } }}
+                                    onMouseLeave={e => { if (!picked) { e.currentTarget.style.boxShadow = "none"; } }}
+                                    style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", background: picked ? C.primarySoft : C.card, border: "1px solid " + (picked ? o.tone : C.border), borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 140ms ease" }}>
                                     <span style={{ width: 16, height: 16, borderRadius: 8, border: "2px solid " + (picked ? o.tone : C.border), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                       {picked && <span style={{ width: 8, height: 8, borderRadius: 4, background: o.tone }} />}
                                     </span>
@@ -17896,11 +17908,18 @@ export default function App({ user }) {
                   // Past verbs → touchpoint. Apostrophe in "dm'd" allowed to
                   // be a curly or straight apostrophe so paste from iOS works.
                   const PAST_VERBS = [
+                    // Communication
                     "talked", "called", "met", "emailed", "texted", "spoke",
                     "chatted", "wrote", "messaged", "dm'd", "dmed", "responded",
                     "replied", "heard from", "got off", "had a call",
                     "had a meeting", "spoke with", "caught up", "sent", "pinged",
                     "followed up", "checked in", "reached out", "rang",
+                    // Work done (explicit past tense only — bare imperatives
+                    // like "create"/"make" intentionally fall through to a task)
+                    "created", "made", "built", "designed", "shipped", "launched",
+                    "finished", "completed", "drafted", "set up", "wrapped",
+                    "delivered", "updated", "fixed", "uploaded", "posted",
+                    "published", "submitted", "prepared", "reviewed", "edited",
                   ];
                   let detectedChannel = null;
                   let isPast = false;
@@ -18012,7 +18031,7 @@ export default function App({ user }) {
                   }
                 }
               }}
-              placeholder="Add a task or log a touchpoint."
+              placeholder="Add a task, log activity, or note a touchpoint."
               rows={3}
               style={{ width: "100%", padding: "8px 0", border: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, minHeight: 60, boxSizing: "border-box" }}
             />
