@@ -95,8 +95,8 @@ const THEME_CSS = `
     --rt-grad-btn-hover: linear-gradient(135deg, #7B3AE0 0%, #6028C2 55%, #5421A8 100%);
     --rt-grad-green-deep: linear-gradient(135deg, #33543E 0%, #1C3224 100%);
     --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
-    --rt-sh-row: 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
-    --rt-sh-row-hover: 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
+    --rt-sh-row: 0 1px 3px rgba(20,30,22,0.06), 0 7px 18px rgba(20,30,22,0.06);
+    --rt-sh-row-hover: 0 2px 5px rgba(20,30,22,0.07), 0 12px 28px rgba(20,30,22,0.10);
     --rt-sh-card: 0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03);
     --rt-sh-card-hover: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
     --rt-sh-purple: 0 0 0 1px rgba(91,33,182,0.10), 0 2px 8px rgba(91,33,182,0.20), 0 1px 2px rgba(91,33,182,0.10);
