@@ -11075,6 +11075,32 @@ export default function App({ user }) {
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
+          // Pearl score pill — the polished tint→white→tint gradient chip used
+          // in the composer's client picker (ScoreChip). Brought to the Clients
+          // list so health scores read as pearls here too. Same 5-tier ramp.
+          const ScorePearl = ({ score, size = "sm" }) => {
+            if (score == null) return null;
+            const color = retColor(score);
+            const tints = score >= 80 ? { tint: "#E6EFE9", border: "rgba(12,58,46,0.14)" }
+                        : score >= 65 ? { tint: "#E8F3ED", border: "rgba(31,122,92,0.14)" }
+                        : score >= 45 ? { tint: "#F3F0D8", border: "rgba(168,164,32,0.16)" }
+                        : score >= 30 ? { tint: "#FDF4DC", border: "rgba(209,122,27,0.16)" }
+                        :              { tint: "#FBE6DE", border: "rgba(180,52,31,0.16)" };
+            const sizes = size === "sm" ? { fs: 12, pad: "3px 9px" } : { fs: 13, pad: "4px 11px" };
+            return (
+              <span style={{
+                display: "inline-flex", alignItems: "center",
+                background: `linear-gradient(135deg, ${tints.tint} 0%, #FFFFFF 45%, ${tints.tint} 100%)`,
+                color,
+                fontSize: sizes.fs, fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+                padding: sizes.pad,
+                borderRadius: 999,
+                border: "1px solid " + tints.border,
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 " + tints.border + ", 0 1px 2px rgba(20,30,22,0.05)",
+              }}>{score}</span>
+            );
+          };
           const ScoreRing2 = ({ client, size = 38 }) => {
             const r = (size - 4) / 2;
             const circ = 2 * Math.PI * r;
@@ -11635,8 +11661,8 @@ export default function App({ user }) {
                                 </div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · last {c.lastContact || "—"}</div>
                               </div>
-                              <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 3 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums" }}>{c.ret || 0}</span>
+                              <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                                <ScorePearl score={c.ret || 0} size="sm" />
                               </div>
                               <div style={{ width: 78 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0) / 1000).toFixed(1)}k</div>
@@ -11673,21 +11699,7 @@ export default function App({ user }) {
                                 <CadencePips target={ct} actual={ca} showLabel />
                               </div>
                               <div className="rt-tcol-renews" style={{ width: 64, textAlign: "right" }}>
-                                {c.renewal_date ? (
-                                  <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: renewUrgent ? C.retWarn : C.textSec, fontWeight: renewUrgent ? 700 : 500 }}>{renewStr}</span>
-                                ) : (
-                                  <span
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedClient(c);
-                                      setClientTab("overview");
-                                      setEditingOverview(true);
-                                      setOverviewEditData({ contact: c.contact, role: c.role, tag: c.tag, months: c.months, revenue: c.revenue, lifetime_revenue_at_entry: c.lifetime_revenue_at_entry || 0, renewal_date: c.renewal_date || "" });
-                                      setRenewalPickerOpen(true);
-                                    }}
-                                    style={{ fontSize: 12, color: C.textMuted, fontWeight: 500, cursor: "pointer" }}
-                                  >Set</span>
-                                )}
+                                <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: renewUrgent ? C.retWarn : C.textSec, fontWeight: renewUrgent ? 700 : 500 }}>{renewStr}</span>
                               </div>
                             </div>
                           );
