@@ -64,7 +64,7 @@ const C = {
   danger: "#C4432B", warning: "#B88B15", success: "#2D8659",
   dangerSoft: "#FBE6DE",
   retCrit: "#B4341F", retWarn: "#D17A1B", retOk: "#A8A420", retGood: "#1F7A5C", retElite: "#0C3A2E",
-  btn: "#5B21B6", btnHover: "#4C1D95", btnLight: "var(--rt-btn-light)",
+  btn: "#7c5cf3", btnHover: "#6a4ce8", btnLight: "var(--rt-btn-light)",
 
 };
 
@@ -86,29 +86,29 @@ const THEME_CSS = `
     --rt-border: #D8DFD8;
     --rt-border-light: #EFEFEA;
     --rt-border-soft: #EFEFEA;
-    --rt-btn-light: #EDE4FA;
+    --rt-btn-light: #d6cbfb;
     /* ────────────── POLISH LAYER ──────────────
        Same palette, just enhanced with gradients, layered shadows for
        hover-lift, and a uniform motion curve. Applied across the Today
        page interactive surfaces. */
-    --rt-grad-btn: linear-gradient(135deg, #6D2BD9 0%, #5B21B6 55%, #4C1D95 100%);
-    --rt-grad-btn-hover: linear-gradient(135deg, #7B3AE0 0%, #6028C2 55%, #5421A8 100%);
+    --rt-grad-btn: linear-gradient(135deg, #8f72f5 0%, #7c5cf3 55%, #6a4ce8 100%);
+    --rt-grad-btn-hover: linear-gradient(135deg, #7c5cf3 0%, #6a4ce8 55%, #5a3dd6 100%);
     --rt-grad-green-deep: linear-gradient(135deg, #33543E 0%, #1C3224 100%);
     --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
     --rt-sh-row: 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
     --rt-sh-row-hover: 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
     --rt-sh-card: 0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03);
     --rt-sh-card-hover: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
-    --rt-sh-purple: 0 0 0 1px rgba(91,33,182,0.10), 0 2px 8px rgba(91,33,182,0.20), 0 1px 2px rgba(91,33,182,0.10);
-    --rt-sh-purple-hover: 0 0 0 1px rgba(91,33,182,0.22), 0 8px 22px rgba(91,33,182,0.34), 0 2px 4px rgba(91,33,182,0.16);
+    --rt-sh-purple: 0 0 0 1px rgba(124,92,243,0.10), 0 2px 8px rgba(124,92,243,0.20), 0 1px 2px rgba(124,92,243,0.10);
+    --rt-sh-purple-hover: 0 0 0 1px rgba(124,92,243,0.22), 0 8px 22px rgba(124,92,243,0.34), 0 2px 4px rgba(124,92,243,0.16);
     --rt-sh-green-glow: 0 0 0 1px rgba(51,84,62,0.10), 0 2px 6px rgba(51,84,62,0.16);
-    --rt-sh-chip-purple: 0 1px 2px rgba(91,33,182,0.12), 0 2px 6px rgba(91,33,182,0.08);
+    --rt-sh-chip-purple: 0 1px 2px rgba(124,92,243,0.12), 0 2px 6px rgba(124,92,243,0.08);
     /* Rai-territory gradient-halo shadow. Used on the armed Add Task
        button and the New Rai Chat button so they read as the inspiration's
        Ask AI pill: tight ambient + glowing purple bleed underneath. Halo
        reserved — applied sparingly so it stays meaningful. */
-    --rt-sh-rai-pop: 0 1px 2px rgba(91,33,182,0.22), 0 6px 14px rgba(91,33,182,0.18), 0 14px 32px rgba(123,58,224,0.32);
-    --rt-sh-rai-pop-hover: 0 2px 4px rgba(91,33,182,0.28), 0 8px 18px rgba(91,33,182,0.22), 0 18px 40px rgba(123,58,224,0.38);
+    --rt-sh-rai-pop: 0 1px 2px rgba(124,92,243,0.22), 0 6px 14px rgba(124,92,243,0.18), 0 14px 32px rgba(143,114,245,0.32);
+    --rt-sh-rai-pop-hover: 0 2px 4px rgba(124,92,243,0.28), 0 8px 18px rgba(124,92,243,0.22), 0 18px 40px rgba(143,114,245,0.38);
     /* Card-lift shadow — the active sidebar nav rises above the substrate
        with a multi-stop drop, matching the inspiration's lifted-white-chip
        toolbar pattern. */
@@ -957,7 +957,7 @@ function EmptyState({ icon, headline, body, cta, secondaryCta }) {
               className="r-btn" data-tone="purple"
               onClick={cta.onClick}
               style={{
-                padding: "9px 16px", background: "#5B21B6", color: "#fff",
+                padding: "9px 16px", background: "#7c5cf3", color: "#fff",
                 border: "none", borderRadius: 8,
                 fontSize: 13, fontWeight: 600,
                 cursor: "pointer", fontFamily: "inherit",
@@ -2756,7 +2756,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             if (isDraggingThis) {
               containerStyle = {
                 ...containerStyle,
-                boxShadow: "0 6px 18px rgba(91,33,182,0.22), 0 2px 6px rgba(0,0,0,0.10)",
+                boxShadow: "0 6px 18px rgba(124,92,243,0.22), 0 2px 6px rgba(0,0,0,0.10)",
                 zIndex: 5,
               };
             }
@@ -3568,12 +3568,12 @@ function ReferralNetworkD3({
             <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#1E261F" floodOpacity="0.15" />
           </filter>
           <filter id="purpleHaloD3" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="1" stdDeviation="3" floodColor="#5B21B6" floodOpacity="0.30" />
+            <feDropShadow dx="0" dy="1" stdDeviation="3" floodColor="#7c5cf3" floodOpacity="0.30" />
           </filter>
           <linearGradient id="ghostGradD3" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#6D2BD9" />
-            <stop offset="55%" stopColor="#5B21B6" />
-            <stop offset="100%" stopColor="#4C1D95" />
+            <stop offset="0%" stopColor="#8f72f5" />
+            <stop offset="55%" stopColor="#7c5cf3" />
+            <stop offset="100%" stopColor="#6a4ce8" />
           </linearGradient>
         </defs>
 
@@ -7039,7 +7039,7 @@ export default function App({ user }) {
           transition: box-shadow 200ms var(--rt-ease-out);
         }
         .rt-composer:focus-within {
-          box-shadow: var(--rt-sh-card-hover), 0 0 0 3px rgba(91,33,182,0.10) !important;
+          box-shadow: var(--rt-sh-card-hover), 0 0 0 3px rgba(124,92,243,0.10) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
@@ -7070,11 +7070,11 @@ export default function App({ user }) {
            today's Rai pick. Purple inset bar on the left + ✦ medallion
            just outside the left edge. Quiet but unmistakable. */
         .rt-rai-boost {
-          box-shadow: var(--rt-sh-row), inset 2px 0 0 0 #5B21B6 !important;
+          box-shadow: var(--rt-sh-row), inset 2px 0 0 0 #7c5cf3 !important;
           position: relative;
         }
         .rt-rai-boost:hover:not(.is-done) {
-          box-shadow: var(--rt-sh-row-hover), inset 2px 0 0 0 #5B21B6 !important;
+          box-shadow: var(--rt-sh-row-hover), inset 2px 0 0 0 #7c5cf3 !important;
         }
         /* When the Rai-marked task is checked off, drop both the purple
            inset bar AND the ✦ medallion. Completed tasks should read as
@@ -7219,9 +7219,9 @@ export default function App({ user }) {
           display: inline-block;
         }
         @keyframes chipPulse {
-          0%   { box-shadow: 0 0 0 0 rgba(91,33,182,0.55); }
-          40%  { box-shadow: 0 0 0 6px rgba(91,33,182,0.18); }
-          100% { box-shadow: 0 0 0 10px rgba(91,33,182,0); }
+          0%   { box-shadow: 0 0 0 0 rgba(124,92,243,0.55); }
+          40%  { box-shadow: 0 0 0 6px rgba(124,92,243,0.18); }
+          100% { box-shadow: 0 0 0 10px rgba(124,92,243,0); }
         }
         .chip-pulse {
           animation: chipPulse 500ms ease-out;
@@ -7349,13 +7349,13 @@ export default function App({ user }) {
         /* Rai purple gradient — stronger on intro empty-state, lighter once chat starts */
         .r-rai-intro {
           background:
-            radial-gradient(ellipse 75% 45% at 50% 8%, rgba(91,33,182,0.22), transparent 70%),
-            radial-gradient(ellipse 60% 35% at 50% 0%, rgba(91,33,182,0.35), transparent 60%),
+            radial-gradient(ellipse 75% 45% at 50% 8%, rgba(124,92,243,0.22), transparent 70%),
+            radial-gradient(ellipse 60% 35% at 50% 0%, rgba(124,92,243,0.35), transparent 60%),
             ${C.bg};
         }
         .r-rai-chat {
           background:
-            radial-gradient(ellipse 70% 35% at 50% 0%, rgba(91,33,182,0.10), transparent 75%),
+            radial-gradient(ellipse 70% 35% at 50% 0%, rgba(124,92,243,0.10), transparent 75%),
             ${C.bg};
         }
         /* Make the inputbar inherit the gradient background so it doesn't show a seam */
@@ -7546,7 +7546,7 @@ export default function App({ user }) {
         }
         .rc-queue-item:hover:not([data-active="true"]) { background: #EAEDE9 !important; }
         /* Rai sidebar — reveal star/delete on row hover */
-        .r-convo-row:hover:not([style*="rgba(91,33,182"]) { background: var(--rt-deep-cream) !important; color: var(--rt-text) !important; }
+        .r-convo-row:hover:not([style*="rgba(124,92,243"]) { background: var(--rt-deep-cream) !important; color: var(--rt-text) !important; }
         .r-convo-row:hover .r-convo-action { opacity: 1 !important; }
         /* Direct-hover on the revealed icons. Star brightens to gold
            (previews the on-state). Trash goes danger red (the universal
@@ -7593,8 +7593,8 @@ export default function App({ user }) {
         .rt-focus-on .rt-row.rt-focus-top {
           transform: scale(1.015);
           box-shadow:
-            0 0 0 1px rgba(91,33,182,0.35),
-            0 8px 28px rgba(91,33,182,0.18),
+            0 0 0 1px rgba(124,92,243,0.35),
+            0 8px 28px rgba(124,92,243,0.18),
             0 24px 64px rgba(0,0,0,0.10) !important;
           transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
         }
@@ -7602,8 +7602,8 @@ export default function App({ user }) {
         .rt-focus-on .rt-focus-top-wrap {
           transform: scale(1.015);
           box-shadow:
-            0 0 0 1px rgba(91,33,182,0.35),
-            0 8px 28px rgba(91,33,182,0.18),
+            0 0 0 1px rgba(124,92,243,0.35),
+            0 8px 28px rgba(124,92,243,0.18),
             0 24px 64px rgba(0,0,0,0.10);
           transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
         }
@@ -7917,7 +7917,7 @@ export default function App({ user }) {
         <div style={{ position: "fixed", inset: 0, zIndex: 200, pointerEvents: "none", overflow: "hidden" }}>
           {/* Multiple burst origins */}
           {[
-            { x: 30, y: 35, delay: 0, color: "#5B21B6" },
+            { x: 30, y: 35, delay: 0, color: "#7c5cf3" },
             { x: 70, y: 30, delay: 0.4, color: "#2D8659" },
             { x: 50, y: 25, delay: 0.8, color: "#B88B15" },
             { x: 20, y: 40, delay: 1.2, color: "#33543E" },
@@ -8081,7 +8081,7 @@ export default function App({ user }) {
                           display: "flex", alignItems: "center", gap: 6,
                           padding: "8px 10px 8px 12px",
                           borderRadius: 7, cursor: "pointer",
-                          background: isActive ? "rgba(91,33,182,0.10)" : "transparent",
+                          background: isActive ? "rgba(124,92,243,0.10)" : "transparent",
                           color: isActive ? C.btn : C.textSec,
                           fontSize: 12.5,
                           fontWeight: isActive ? 600 : 500,
@@ -11054,12 +11054,19 @@ export default function App({ user }) {
             return pts;
           };
           const stubStage = (score) => score >= 80 ? "thriving" : score >= 65 ? "healthy" : score >= 45 ? "watch" : score >= 30 ? "at-risk" : "critical";
-          const stubRenewal = (c) => {
-            const h = hashStr(c.name);
-            const days = (h % 180) + 5; // 5-184 days
-            return days < 30 ? `${days}d` : `${Math.round(days / 30)}mo`;
+          // Real renewal info from the client's renewal_date field (set in the
+          // client profile). Returns { str, days, urgent }. days=Infinity when
+          // unset so unset clients sort last. Replaces the old name-hash stub.
+          const renewalInfo = (c) => {
+            if (!c.renewal_date) return { str: "—", days: Infinity, urgent: false };
+            const rd = new Date(String(c.renewal_date).split("T")[0] + "T00:00:00");
+            const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+            const days = Math.round((rd.getTime() - today0.getTime()) / 86400000);
+            if (days < 0) return { str: "Overdue", days, urgent: true };
+            if (days === 0) return { str: "Today", days, urgent: true };
+            const str = days < 30 ? `${days}d` : `${Math.round(days / 30)}mo`;
+            return { str, days, urgent: days <= 14 };
           };
-          const stubRenewalDays = (c) => (hashStr(c.name) % 180) + 5;
           const cadenceHealth = (target, actual) => {
             const drift = Math.abs(actual - target) / target;
             if (drift <= 0.2) return "on-track";
@@ -11209,19 +11216,6 @@ export default function App({ user }) {
             Declining: activeClients.filter(c => (c.drift_status || "Stable") === "Declining").length,
             "At risk": activeClients.filter(c => (c.drift_status || "Stable") === "At risk").length,
           };
-          const portfolioTrend = activeClients.reduce((a, c) => {
-            const t = stubTrend(c);
-            return a + (t[t.length - 1] - t[0]);
-          }, 0);
-          const trendPct = totalMRR > 0 ? (portfolioTrend / Math.max(1, totalMRR - portfolioTrend)) * 100 : 0;
-          const climbing = [...activeClients]
-            .map(c => ({ c, d: stubDelta(c.name) }))
-            .filter(x => x.d >= 2)
-            .sort((a, b) => b.d - a.d).slice(0, 3);
-          const slipping = [...activeClients]
-            .map(c => ({ c, d: stubDelta(c.name) }))
-            .filter(x => x.d <= -2)
-            .sort((a, b) => a.d - b.d).slice(0, 3);
           const longestClient = [...activeClients].sort((a, b) => (b.months || 0) - (a.months || 0))[0];
 
           // ─── Sort + filter ─────────────────────────────────────────────────
@@ -11269,7 +11263,7 @@ export default function App({ user }) {
               const drift = c => Math.abs(stubCadenceActual(c) - stubCadenceTarget(c)) / stubCadenceTarget(c);
               copy.sort((a, b) => drift(b) - drift(a));
             }
-            else if (sortId === "renewal") copy.sort((a, b) => stubRenewalDays(a) - stubRenewalDays(b));
+            else if (sortId === "renewal") copy.sort((a, b) => renewalInfo(a).days - renewalInfo(b).days);
             else if (sortId === "alpha") copy.sort((a, b) => a.name.localeCompare(b.name));
             return copy;
           })();
@@ -11305,7 +11299,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <button className="r-btn" data-tone="purple" onClick={() => { setShowAddClient(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(91,33,182,0.15), 0 2px 6px rgba(91,33,182,0.22)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="purple" onClick={() => { setShowAddClient(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(124,92,243,0.15), 0 2px 6px rgba(124,92,243,0.22)", whiteSpace: "nowrap" }}>
                     Add Client
                   </button>
                 </div>
@@ -11395,43 +11389,13 @@ export default function App({ user }) {
                     )}
                   </div>
 
-                  {/* Card 3: Recent movement */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Recent movement</span>
-                      <span style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.2 }}>7d</span>
-                    </div>
-                    {climbing.length > 0 && (
-                      <>
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6, color: C.retElite }}>Climbing</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: climbing.length && slipping.length ? 10 : 0 }}>
-                          {climbing.map(({ c, d }) => (
-                            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                              <ScoreRing2 client={c} size={22} />
-                              <span style={{ fontSize: 12, color: C.text, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                              <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0, color: C.retGood }}>+{d}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {slipping.length > 0 && (
-                      <>
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6, color: C.retWarn }}>Slipping</div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                          {slipping.map(({ c, d }) => (
-                            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                              <ScoreRing2 client={c} size={22} />
-                              <span style={{ fontSize: 12, color: C.text, fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
-                              <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0, color: C.retWarn }}>{d}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {climbing.length === 0 && slipping.length === 0 && (
-                      <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>No significant movement this week.</div>
-                    )}
+                  {/* Card 3: Recent movement — REMOVED May 2026. Was driven by
+                      stubDelta (a name-hash fake), not real score movement.
+                      Visible shell left in place as a reminder; to be rebuilt as
+                      a real cadence/movement surface in a later pass. */}
+                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px", opacity: 0.6 }}>
+                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 }}>Recent movement</div>
+                    <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", lineHeight: 1.5 }}>Coming with cadence.</div>
                   </div>
                 </div>
 
@@ -11606,7 +11570,6 @@ export default function App({ user }) {
                   {dataLoaded && (
                   <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     {filteredClients.map((c, i, arr) => {
-                      const delta = stubDelta(c.name);
                       const scoreColor = retColor(c.ret || 0);
                       const months = c.months || 0;
                       const tenureDisplay = months < 12 ? `${months}mo` : `${(months / 12).toFixed(1)}yr`;
@@ -11627,19 +11590,6 @@ export default function App({ user }) {
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 2 }}>
                               <div style={{ fontSize: 16, fontWeight: 700, color: scoreColor, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{c.ret || 0}</div>
-                              {/* Score delta — Treatment B. Threshold-gated: only |Δ| ≥ 3 renders.
-                                  Down moves get a loud red pill (catches the scan); up moves get
-                                  quiet green text (good news shouldn't compete with bad news). */}
-                              {Math.abs(delta) >= 3 && delta < 0 && (
-                                <span style={{ background: "#FBE6DE", color: C.retWarn, fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 999, fontVariantNumeric: "tabular-nums" }}>
-                                  ↓ {Math.abs(delta)}
-                                </span>
-                              )}
-                              {Math.abs(delta) >= 3 && delta > 0 && (
-                                <span style={{ color: C.retGood, fontSize: 10.5, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                                  ↑ {delta}
-                                </span>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -11668,10 +11618,9 @@ export default function App({ user }) {
                           const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
                           const ct = stubCadenceTarget(c);
                           const ca = stubCadenceActual(c);
-                          const renewStr = stubRenewal(c);
-                          const renewDays = stubRenewalDays(c);
-                          const renewUrgent = renewDays <= 14;
-                          const delta = stubDelta(c.name);
+                          const renew = renewalInfo(c);
+                          const renewStr = renew.str;
+                          const renewUrgent = renew.urgent;
                           return (
                             <div key={c.id} className="row-hover-neutral" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
                               <div style={{ width: 32, display: "flex", alignItems: "center" }}>
@@ -11688,17 +11637,6 @@ export default function App({ user }) {
                               </div>
                               <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "baseline", gap: 3 }}>
                                 <span style={{ fontSize: 13, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums" }}>{c.ret || 0}</span>
-                                {/* Treatment B — threshold-gated, asymmetric. */}
-                                {Math.abs(delta) >= 3 && delta < 0 && (
-                                  <span style={{ background: "#FBE6DE", color: C.retWarn, fontSize: 9.5, fontWeight: 700, padding: "1px 5px", borderRadius: 999, fontVariantNumeric: "tabular-nums" }}>
-                                    ↓{Math.abs(delta)}
-                                  </span>
-                                )}
-                                {Math.abs(delta) >= 3 && delta > 0 && (
-                                  <span style={{ color: C.retGood, fontSize: 10, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                                    +{delta}
-                                  </span>
-                                )}
                               </div>
                               <div style={{ width: 78 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0) / 1000).toFixed(1)}k</div>
@@ -11735,7 +11673,21 @@ export default function App({ user }) {
                                 <CadencePips target={ct} actual={ca} showLabel />
                               </div>
                               <div className="rt-tcol-renews" style={{ width: 64, textAlign: "right" }}>
-                                <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: renewUrgent ? C.retWarn : C.textSec, fontWeight: renewUrgent ? 700 : 500 }}>{renewStr}</span>
+                                {c.renewal_date ? (
+                                  <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: renewUrgent ? C.retWarn : C.textSec, fontWeight: renewUrgent ? 700 : 500 }}>{renewStr}</span>
+                                ) : (
+                                  <span
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedClient(c);
+                                      setClientTab("overview");
+                                      setEditingOverview(true);
+                                      setOverviewEditData({ contact: c.contact, role: c.role, tag: c.tag, months: c.months, revenue: c.revenue, lifetime_revenue_at_entry: c.lifetime_revenue_at_entry || 0, renewal_date: c.renewal_date || "" });
+                                      setRenewalPickerOpen(true);
+                                    }}
+                                    style={{ fontSize: 12, color: C.textMuted, fontWeight: 500, cursor: "pointer" }}
+                                  >Set</span>
+                                )}
                               </div>
                             </div>
                           );
@@ -11782,18 +11734,17 @@ export default function App({ user }) {
                                   const owner = stubOwner(c.name);
                                   const ct = stubCadenceTarget(c);
                                   const ca = stubCadenceActual(c);
-                                  const delta = stubDelta(c.name);
                                   return (
                                     <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                         <ScoreRing2 client={c} size={32} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                           <div style={{ fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
-                                          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · renews {stubRenewal(c)}</div>
+                                          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"}{c.renewal_date ? ` · renews ${renewalInfo(c).str}` : ""}</div>
                                         </div>
                                         <div style={{ textAlign: "right", flexShrink: 0 }}>
                                           <div style={{ fontSize: 12.5, fontWeight: 700, color: retColor(c.ret || 0), fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                                            {c.ret || 0}{delta !== 0 && <span style={{ fontSize: 9.5, marginLeft: 3, color: delta > 0 ? C.retGood : C.retWarn }}>{delta > 0 ? "+" : ""}{delta}</span>}
+                                            {c.ret || 0}
                                           </div>
                                         </div>
                                       </div>
@@ -11829,12 +11780,11 @@ export default function App({ user }) {
                         const trendStart = trend[0], trendEnd = trend[trend.length - 1];
                         const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
                         const scoreColor = retColor(c.ret || 0);
-                        const renewDays = stubRenewalDays(c);
-                        const renewUrgent = renewDays <= 14;
+                        const renew = renewalInfo(c);
+                        const renewUrgent = renew.urgent;
                         const owner = stubOwner(c.name);
                         const ct = stubCadenceTarget(c);
                         const ca = stubCadenceActual(c);
-                        const delta = stubDelta(c.name);
                         return (
                           <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
                             <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
@@ -11846,9 +11796,6 @@ export default function App({ user }) {
                               </div>
                               <div style={{ textAlign: "right" }}>
                                 <div style={{ fontSize: 15, fontWeight: 700, color: scoreColor, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{c.ret || 0}</div>
-                                {delta !== 0 && (
-                                  <div style={{ fontSize: 10, fontWeight: 500, color: delta > 0 ? C.retGood : C.retWarn, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{delta > 0 ? "+" : ""}{delta} pts</div>
-                                )}
                               </div>
                             </div>
                             <div style={{ position: "relative", background: C.primaryGhost, borderRadius: 6, padding: "4px 6px", marginBottom: 10, overflow: "hidden" }}>
@@ -11868,7 +11815,7 @@ export default function App({ user }) {
                               </div>
                               <div style={{ display: "flex", alignItems: "center", minWidth: 0, justifyContent: "flex-end" }}>
                                 <Icon name="clock" size={10} color={renewUrgent ? C.retWarn : C.textMuted} />
-                                <span style={{ fontSize: 11, color: renewUrgent ? C.retWarn : C.textMuted, fontWeight: renewUrgent ? 700 : 500, marginLeft: 4, fontVariantNumeric: "tabular-nums" }}>{stubRenewal(c)}</span>
+                                <span style={{ fontSize: 11, color: renewUrgent ? C.retWarn : C.textMuted, fontWeight: renewUrgent ? 700 : 500, marginLeft: 4, fontVariantNumeric: "tabular-nums" }}>{renew.str}</span>
                               </div>
                             </div>
                           </div>
@@ -14272,7 +14219,7 @@ export default function App({ user }) {
                           <span style={{ width: 8, height: 8, borderRadius: 4, background: C.textMuted }} />Lost
                         </span>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 10, height: 10, borderRadius: 5, background: "var(--rt-grad-btn)", boxShadow: "0 0 0 2px rgba(91,33,182,0.16)" }} />Likely
+                          <span style={{ width: 10, height: 10, borderRadius: 5, background: "var(--rt-grad-btn)", boxShadow: "0 0 0 2px rgba(124,92,243,0.16)" }} />Likely
                         </span>
                       </div>
                     </div>
