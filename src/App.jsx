@@ -8753,6 +8753,18 @@ export default function App({ user }) {
           const todayBucketTasks = visibleTasks.filter(t => bucketOf(t) === "today");
           const todayCount = todayBucketTasks.length;                       // total today (open + done) — for "X tasks" subhead
           const todayDoneCount = todayBucketTasks.filter(t => t.done).length;
+          // Today's calendar event count — pulled from the SAME personalEvents
+          // source the timeline panel uses, filtered to events whose local
+          // start date is today. Previously this header was hardcoded to "3",
+          // which disagreed with the panel's actual count.
+          const _evNow = new Date();
+          const _evTodayYmd = `${_evNow.getFullYear()}-${String(_evNow.getMonth() + 1).padStart(2, "0")}-${String(_evNow.getDate()).padStart(2, "0")}`;
+          const todayEventCount = (personalEvents || []).filter(e => {
+            if (!e.starts_at) return false;
+            const d = new Date(e.starts_at);
+            const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            return ymd === _evTodayYmd;
+          }).length;
           const doneCount = completedTasks.length;
           const remaining = totalVisible - doneCount;
           // Percent complete is today-only — Tomorrow/Later don't count toward today's %.
@@ -9006,7 +9018,7 @@ export default function App({ user }) {
                         fontFamily: "inherit",
                       }}
                     >
-                      <b style={{ color: C.text, fontWeight: 700 }}>3</b> events
+                      <b style={{ color: C.text, fontWeight: 700 }}>{todayEventCount}</b> {todayEventCount === 1 ? "event" : "events"}
                       <span className="rt-band-sub-events-chev" style={{ display: "inline-flex" }}>
                         <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textMuted} />
                       </span>
@@ -10682,7 +10694,7 @@ export default function App({ user }) {
                           </div>
                         )}
                         {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (
-                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 14, boxShadow: "var(--rt-sh-card)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
                               <Icon name="check" size={14} color="#fff" />
                             </div>
