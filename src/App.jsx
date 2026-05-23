@@ -4630,6 +4630,11 @@ export default function App({ user }) {
 
   // Today — task manager
   const [tasks, setTasks] = useState([]);
+  // Task IDs whose done-state is mid-write to the DB. loadData (which fires on
+  // tab focus / visibilitychange) must NOT overwrite these with stale DB rows,
+  // or an optimistic check gets silently reverted — the intermittent
+  // "I checked it and it didn't take" bug.
+  const inFlightToggles = useRef(new Set());
 
   // 30s priority hold tick: when a new task is added in Rai mode, it floats
   // to top for 30 seconds (see raiCompare). Once that window expires we need
@@ -5144,7 +5149,20 @@ export default function App({ user }) {
           created_at: t.created_at ? new Date(t.created_at).getTime() : 0,
         };
       });
-      setTasks(loadedTasks);
+      // Preserve the optimistic done-state of any task whose toggle is still
+      // writing to the DB — otherwise this hydration clobbers it with a stale
+      // row and the user's check silently disappears.
+      setTasks(prev => {
+        if (inFlightToggles.current.size === 0) return loadedTasks;
+        const prevById = new Map(prev.map(t => [t.id, t]));
+        return loadedTasks.map(t => {
+          if (inFlightToggles.current.has(t.id)) {
+            const p = prevById.get(t.id);
+            if (p) return { ...t, done: p.done, completed_at: p.completed_at };
+          }
+          return t;
+        });
+      });
       // Tasks that were already completed before this page load skip the
       // 5-second satisfaction window and go straight into the collapsed log.
       // (User wasn't here to see the celebration — no point preserving it.)
@@ -5888,8 +5906,28 @@ export default function App({ user }) {
       setConfetti(true);
       setTimeout(() => setConfetti(false), 3000);
     }
-    // Persist
-    await tasksDb.toggle(id, newDone);
+    // Persist. On failure, revert the optimistic state so the UI doesn't
+    // show a phantom (un)check that a later hydration would silently undo —
+    // the intermittent "I checked it and it stayed" bug. We snapshot the
+    // pre-toggle task and restore it on error.
+    inFlightToggles.current.add(id);
+    const { error: toggleErr } = await tasksDb.toggle(id, newDone);
+    inFlightToggles.current.delete(id);
+    if (toggleErr) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, done: task.done, completed_at: task.completed_at } : t));
+      // Undo the optimistic count bump (mirror of the increment above).
+      if (newDone) {
+        setTaskCompletedCounts(c => {
+          const wh = [...(c.weekHistory || Array(12).fill(0))];
+          const mh = [...(c.monthHistory || Array(12).fill(0))];
+          wh[11] = Math.max(0, (wh[11] || 0) - 1);
+          mh[11] = Math.max(0, (mh[11] || 0) - 1);
+          return { ...c, today: Math.max(0, (c.today || 0) - 1), week: Math.max(0, c.week - 1), month: Math.max(0, c.month - 1), year: Math.max(0, c.year - 1), weekHistory: wh, monthHistory: mh };
+        });
+      }
+      setJustCompletedIds(prev => { const n = { ...prev }; delete n[id]; return n; });
+      setQuickLogToast({ id: Date.now(), error: true });
+    }
   };
 
   const recurringTasks = tasks.filter(t => t.recurring);
