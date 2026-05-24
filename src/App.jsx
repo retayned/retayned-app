@@ -11054,24 +11054,114 @@ export default function App({ user }) {
             return pts;
           };
           const stubStage = (score) => score >= 80 ? "thriving" : score >= 65 ? "healthy" : score >= 45 ? "watch" : score >= 30 ? "at-risk" : "critical";
-          // Real renewal info from the client's renewal_date field (set in the
-          // client profile). Returns { str, days, urgent }. days=Infinity when
-          // unset so unset clients sort last. Replaces the old name-hash stub.
+          // Real renewal info from renewal_date (+ optional renewal_recurrence).
+          // One-time ("none"): shows the date as-is, can go "Overdue".
+          // Recurring (monthly/quarterly/annual): the stored date is an ANCHOR;
+          // we roll it forward to the next future occurrence, so it never reads
+          // as overdue — it just shows the next cycle. Returns { str, days, urgent, recurring }.
           const renewalInfo = (c) => {
-            if (!c.renewal_date) return { str: "—", days: Infinity, urgent: false };
-            const rd = new Date(String(c.renewal_date).split("T")[0] + "T00:00:00");
+            if (!c.renewal_date) return { str: "—", days: Infinity, urgent: false, recurring: false };
             const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+            let rd = new Date(String(c.renewal_date).split("T")[0] + "T00:00:00");
+            const rec = c.renewal_recurrence || "none";
+            const recurring = rec !== "none";
+            if (recurring) {
+              // Advance the anchor forward by its period until it's today or later.
+              let guard = 0;
+              while (rd.getTime() < today0.getTime() && guard < 600) {
+                if (rec === "monthly") rd.setMonth(rd.getMonth() + 1);
+                else if (rec === "quarterly") rd.setMonth(rd.getMonth() + 3);
+                else if (rec === "annual") rd.setFullYear(rd.getFullYear() + 1);
+                else break;
+                guard++;
+              }
+            }
             const days = Math.round((rd.getTime() - today0.getTime()) / 86400000);
-            if (days < 0) return { str: "Overdue", days, urgent: true };
-            if (days === 0) return { str: "Today", days, urgent: true };
+            if (days < 0) return { str: "Overdue", days, urgent: true, recurring };
+            if (days === 0) return { str: "Today", days, urgent: true, recurring };
             const str = days < 30 ? `${days}d` : `${Math.round(days / 30)}mo`;
-            return { str, days, urgent: days <= 14 };
+            return { str, days, urgent: days <= 14, recurring };
           };
           const cadenceHealth = (target, actual) => {
             const drift = Math.abs(actual - target) / target;
             if (drift <= 0.2) return "on-track";
             if (drift <= 0.5) return "slipping";
             return "broken";
+          };
+
+          // ─── Unified cadence (real) ─────────────────────────────────────────
+          // Rhythm of ANY activity with a client — touchpoints, tasks, and
+          // calendar events, merged. We compare days-since-last-activity against
+          // the client's OWN average interval (relative to their normal, not an
+          // absolute clock — a daily client going quiet 5 days matters; a monthly
+          // one doesn't). Needs 3+ events (2+ intervals) before a rhythm exists;
+          // below that → "Calibrating". Verdict sharpens automatically as more
+          // activity accumulates. Returns { state, label, color }.
+          // Most-recent activity across all types — for the row subline.
+          // "Last touch: today / yesterday / 3d ago / —" (— = no activity yet).
+          const lastTouch = (c) => {
+            let latest = 0;
+            for (const t of (allTouchpoints || [])) {
+              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
+                if (t.occurred_at) latest = Math.max(latest, new Date(t.occurred_at).getTime());
+              }
+            }
+            for (const t of (tasks || [])) {
+              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
+                if (t.created_at) latest = Math.max(latest, typeof t.created_at === "number" ? t.created_at : new Date(t.created_at).getTime());
+                if (t.completed_at) latest = Math.max(latest, new Date(t.completed_at).getTime());
+              }
+            }
+            for (const e of (personalEvents || [])) {
+              if (e.client_id && e.client_id === c.id && e.starts_at) {
+                const ms = new Date(e.starts_at).getTime();
+                if (ms <= Date.now()) latest = Math.max(latest, ms);
+              }
+            }
+            if (!latest) return "—";
+            const days = Math.floor((Date.now() - latest) / 86400000);
+            if (days <= 0) return "today";
+            if (days === 1) return "yesterday";
+            if (days < 7) return `${days}d ago`;
+            if (days < 30) return `${Math.floor(days / 7)}w ago`;
+            if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+            return `${Math.floor(days / 365)}y ago`;
+          };
+
+          const clientCadence = (c) => {
+            const stamps = [];
+            for (const t of (allTouchpoints || [])) {
+              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
+                if (t.occurred_at) stamps.push(new Date(t.occurred_at).getTime());
+              }
+            }
+            for (const t of (tasks || [])) {
+              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
+                if (t.created_at) stamps.push(typeof t.created_at === "number" ? t.created_at : new Date(t.created_at).getTime());
+                if (t.completed_at) stamps.push(new Date(t.completed_at).getTime());
+              }
+            }
+            for (const e of (personalEvents || [])) {
+              if (e.client_id && e.client_id === c.id && e.starts_at) {
+                const ms = new Date(e.starts_at).getTime();
+                if (ms <= Date.now()) stamps.push(ms); // only events that have happened
+              }
+            }
+            // newest → oldest
+            stamps.sort((a, b) => b - a);
+            if (stamps.length < 3) return { state: "calibrating", label: "Calibrating", color: C.textMuted };
+            const recent = stamps.slice(0, 10);
+            const intervals = [];
+            for (let i = 0; i < recent.length - 1; i++) {
+              intervals.push((recent[i] - recent[i + 1]) / 86400000);
+            }
+            const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+            const daysSince = (Date.now() - recent[0]) / 86400000;
+            const sinceStr = daysSince < 1 ? "today" : `${Math.round(daysSince)}d`;
+            if (avg <= 0) return { state: "on", label: "On rhythm", color: C.retGood };
+            if (daysSince > avg * 1.5)  return { state: "overdue",  label: `Overdue · ${sinceStr}`,  color: C.retWarn };
+            if (daysSince > avg * 1.15) return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retOk };
+            return { state: "on", label: "On rhythm", color: C.retGood };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
@@ -11286,8 +11376,10 @@ export default function App({ user }) {
               copy.sort((a, b) => pct(b) - pct(a)); // flipped — green top → red bottom
             }
             else if (sortId === "cadence") {
-              const drift = c => Math.abs(stubCadenceActual(c) - stubCadenceTarget(c)) / stubCadenceTarget(c);
-              copy.sort((a, b) => drift(b) - drift(a));
+              // Real cadence severity: overdue first, then slipping, on rhythm,
+              // calibrating last (no rhythm yet to judge).
+              const rank = { overdue: 0, slipping: 1, on: 2, calibrating: 3 };
+              copy.sort((a, b) => (rank[clientCadence(a).state] ?? 3) - (rank[clientCadence(b).state] ?? 3));
             }
             else if (sortId === "renewal") copy.sort((a, b) => renewalInfo(a).days - renewalInfo(b).days);
             else if (sortId === "alpha") copy.sort((a, b) => a.name.localeCompare(b.name));
@@ -11627,9 +11719,8 @@ export default function App({ user }) {
                   {dataLoaded && variant === "table" && (
                     <div className="rc-desktop-view" style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.bg }}>
-                        <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
+                        <div style={{ width: 44, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
                         <div style={{ flex: 2, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
-                        <div style={{ width: 56, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
                         <div style={{ width: 78, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Revenue</div>
                         <div style={{ width: 64, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Tenure</div>
                         <div className="rt-tcol-lcv" style={{ width: 74, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>LCV</div>
@@ -11642,15 +11733,13 @@ export default function App({ user }) {
                           const trend = stubTrend(c);
                           const trendStart = trend[0], trendEnd = trend[trend.length - 1];
                           const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
-                          const ct = stubCadenceTarget(c);
-                          const ca = stubCadenceActual(c);
                           const renew = renewalInfo(c);
                           const renewStr = renew.str;
                           const renewUrgent = renew.urgent;
                           return (
                             <div key={c.id} className="row-hover-neutral" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
-                              <div style={{ width: 32, display: "flex", alignItems: "center" }}>
-                                <ScoreRing2 client={c} size={28} />
+                              <div style={{ width: 44, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                                <ScorePearl score={c.ret || 0} size="sm" />
                               </div>
                               <div style={{ flex: 2, minWidth: 0 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -11659,10 +11748,7 @@ export default function App({ user }) {
                                     <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, color: C.textMuted, background: C.surfaceWarm, letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 }}>Paused</span>
                                   )}
                                 </div>
-                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · last {c.lastContact || "—"}</div>
-                              </div>
-                              <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "center" }}>
-                                <ScorePearl score={c.ret || 0} size="sm" />
+                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · last touch {lastTouch(c)}</div>
                               </div>
                               <div style={{ width: 78 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0) / 1000).toFixed(1)}k</div>
@@ -11696,7 +11782,15 @@ export default function App({ user }) {
                                 </span>
                               </div>
                               <div className="rt-tcol-cadence" style={{ width: 92 }}>
-                                <CadencePips target={ct} actual={ca} showLabel />
+                                {(() => {
+                                  const cad = clientCadence(c);
+                                  return (
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: cad.color, flexShrink: 0 }} />
+                                      <span style={{ fontSize: 11.5, fontWeight: 600, color: cad.color === C.textMuted ? C.textMuted : C.textSec, whiteSpace: "nowrap", fontStyle: cad.state === "calibrating" ? "italic" : "normal" }}>{cad.label}</span>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               <div className="rt-tcol-renews" style={{ width: 64, textAlign: "right" }}>
                                 <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: renewUrgent ? C.retWarn : C.textSec, fontWeight: renewUrgent ? 700 : 500 }}>{renewStr}</span>
@@ -11744,8 +11838,6 @@ export default function App({ user }) {
                                   const trendStart = trend[0], trendEnd = trend[trend.length - 1];
                                   const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
                                   const owner = stubOwner(c.name);
-                                  const ct = stubCadenceTarget(c);
-                                  const ca = stubCadenceActual(c);
                                   return (
                                     <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -11762,7 +11854,12 @@ export default function App({ user }) {
                                       </div>
                                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
                                         <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
-                                        <CadencePips target={ct} actual={ca} />
+                                        {(() => { const cad = clientCadence(c); return (
+                                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: cad.color, flexShrink: 0 }} />
+                                            <span style={{ fontSize: 10.5, fontWeight: 600, color: C.textSec, whiteSpace: "nowrap", fontStyle: cad.state === "calibrating" ? "italic" : "normal" }}>{cad.label}</span>
+                                          </div>
+                                        ); })()}
                                       </div>
                                       <div style={{ position: "relative", background: C.bg, borderRadius: 6, padding: "4px 6px", minWidth: 0, overflow: "hidden" }}>
                                         <V2Sparkline points={trend} width={156} height={28} fill responsive />
@@ -11795,8 +11892,6 @@ export default function App({ user }) {
                         const renew = renewalInfo(c);
                         const renewUrgent = renew.urgent;
                         const owner = stubOwner(c.name);
-                        const ct = stubCadenceTarget(c);
-                        const ca = stubCadenceActual(c);
                         return (
                           <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
                             <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
@@ -11822,8 +11917,12 @@ export default function App({ user }) {
                                 <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
                               </div>
                               <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
-                                <CadencePips target={ct} actual={ca} />
-                                <span style={{ fontSize: 10.5, color: C.textMuted, marginLeft: 5 }}>{ca}d</span>
+                                {(() => { const cad = clientCadence(c); return (
+                                  <>
+                                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: cad.color, flexShrink: 0 }} />
+                                    <span style={{ fontSize: 10.5, fontWeight: 600, color: C.textSec, marginLeft: 5, whiteSpace: "nowrap", fontStyle: cad.state === "calibrating" ? "italic" : "normal" }}>{cad.label}</span>
+                                  </>
+                                ); })()}
                               </div>
                               <div style={{ display: "flex", alignItems: "center", minWidth: 0, justifyContent: "flex-end" }}>
                                 <Icon name="clock" size={10} color={renewUrgent ? C.retWarn : C.textMuted} />
@@ -15686,7 +15785,7 @@ export default function App({ user }) {
                                 setClientMenuOpen(false);
                                 setClientTab("overview");
                                 setEditingOverview(true);
-                                setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "" });
+                                setOverviewEditData({ contact: sc.contact, role: sc.role, tag: sc.tag, months: sc.months, revenue: sc.revenue, lifetime_revenue_at_entry: sc.lifetime_revenue_at_entry || 0, renewal_date: sc.renewal_date || "", renewal_recurrence: sc.renewal_recurrence || "none" });
                               }}
                               style={{ padding: "10px 12px", fontSize: 13, color: C.text, cursor: "pointer", borderRadius: 6, fontWeight: 500 }}
                               onMouseEnter={e => e.currentTarget.style.background = C.surfaceWarm}
@@ -15884,7 +15983,7 @@ export default function App({ user }) {
                               </div>
                               {[
                                 { l: "Referrals",    v: sc.referrals || 0 },
-                                { l: "Renewal",      v: sc.renewal_date ? new Date(sc.renewal_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Not set", muted: !sc.renewal_date },
+                                { l: "Renewal",      v: sc.renewal_date ? (new Date(sc.renewal_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + (sc.renewal_recurrence && sc.renewal_recurrence !== "none" ? " · " + ({ monthly: "Monthly", quarterly: "Quarterly", annual: "Annual" }[sc.renewal_recurrence] || "") : "")) : "Not set", muted: !sc.renewal_date },
                               ].map((d, i) => (
                                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight }}>
                                   <span style={{ fontSize: 14, color: C.textSec }}>{d.l}</span>
@@ -16220,6 +16319,22 @@ export default function App({ user }) {
                                 </>
                               )}
                             </div>
+                            {/* Recurrence — only meaningful once a date is set.
+                                The date acts as the anchor; recurrence rolls it
+                                forward each cycle so it never reads "overdue". */}
+                            {overviewEditData.renewal_date && (
+                              <div style={{ marginTop: 10 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 6 }}>Repeats</label>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  {[{ v: "none", l: "One-time" }, { v: "monthly", l: "Monthly" }, { v: "quarterly", l: "Quarterly" }, { v: "annual", l: "Annual" }].map(opt => {
+                                    const active = (overviewEditData.renewal_recurrence || "none") === opt.v;
+                                    return (
+                                      <button key={opt.v} type="button" onClick={() => setOverviewEditData({ ...overviewEditData, renewal_recurrence: opt.v })} style={{ padding: "7px 12px", background: active ? C.primarySoft : C.card, border: "none", boxShadow: "inset 0 0 0 1px " + (active ? C.primary : C.borderLight), borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: active ? C.primary : C.textSec, cursor: "pointer", fontFamily: "inherit", transition: "all 120ms ease" }}>{opt.l}</button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -16244,6 +16359,7 @@ export default function App({ user }) {
                               tag: overviewEditData.tag,
                               months: overviewEditData.months,
                               renewal_date: overviewEditData.renewal_date || null,
+                              renewal_recurrence: overviewEditData.renewal_recurrence || "none",
                               lifetime_revenue_at_entry: newBaseline,
                             };
                             if (nameChanged) baseUpdates.name = newName;
