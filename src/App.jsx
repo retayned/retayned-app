@@ -11039,18 +11039,6 @@ export default function App({ user }) {
             { name: "Sam L.",    color: "#1F7A5C" },
           ];
           const stubOwner = (name) => OWNERS[hashStr(name) % OWNERS.length];
-          const stubCadenceTarget = (c) => {
-            const h = hashStr(c.name);
-            return (h % 3 === 0) ? 14 : 7; // weekly or biweekly target
-          };
-          const stubCadenceActual = (c) => {
-            // derive from lastContact if available, else pseudo
-            const lc = (c.lastContact || "").toLowerCase();
-            if (lc.includes("today")) return 1;
-            const m = lc.match(/(\d+)\s*d/);
-            if (m) return parseInt(m[1], 10);
-            return (hashStr(c.name) % 20) + 5;
-          };
           const stubTrend = (c) => {
             // 12-week synthetic revenue trend keyed to current score direction
             const base = c.revenue || 5000;
@@ -11095,13 +11083,6 @@ export default function App({ user }) {
             const str = days < 30 ? `${days}d` : `${Math.round(days / 30)}mo`;
             return { str, days, urgent: days <= 14, recurring };
           };
-          const cadenceHealth = (target, actual) => {
-            const drift = Math.abs(actual - target) / target;
-            if (drift <= 0.2) return "on-track";
-            if (drift <= 0.5) return "slipping";
-            return "broken";
-          };
-
           // ─── Unified cadence (real) ─────────────────────────────────────────
           // Rhythm of ANY activity with a client — touchpoints, tasks, and
           // calendar events, merged. We compare days-since-last-activity against
@@ -11140,37 +11121,20 @@ export default function App({ user }) {
             return `${Math.floor(days / 365)}y ago`;
           };
 
-          // Weekday count between two timestamps (excludes Sat/Sun). Used so a
-          // Friday→Monday gap reads as 1 working day, not 3 — nobody's slipping
-          // because they didn't email a client over the weekend. Mirrors the Rai
-          // sweep's weekend handling.
-          const businessDaysBetween = (earlierMs, laterMs) => {
-            if (laterMs <= earlierMs) return 0;
-            let count = 0;
-            // Walk day-by-day from earlier to later, counting weekdays.
-            const cur = new Date(earlierMs);
-            cur.setHours(0, 0, 0, 0);
-            const end = new Date(laterMs);
-            end.setHours(0, 0, 0, 0);
-            while (cur < end) {
-              cur.setDate(cur.getDate() + 1);
-              const dow = cur.getDay();
-              if (dow !== 0 && dow !== 6) count++;
-            }
-            return count;
-          };
-
           const clientCadence = (c) => {
-            // Cadence = attention TREND. We count every activity (recurring +
-            // non-recurring tasks, touchpoints, past calendar events) over a
-            // rolling 90-day window, work out this client's OWN normal weekly
-            // volume from that window, then compare the last 7 days to it.
-            //   last 7d > 1.25x their normal week → Warming
-            //   last 7d < 0.75x their normal week → Cooling
-            //   else                               → Steady
-            // Each client judged against their own baseline, never each other.
-            // The 90d window self-establishes the baseline, so it reads from
-            // ~day 2-3 onward; Calibrating is only the no-data fallback.
+            // Cadence = is this client getting MORE or LESS attention than usual?
+            // We compare recent PACE (per day) to normal PACE (per day) so a short
+            // recent window compares fairly to a long history.
+            //   recent pace vs normal pace:  >1.25x → Ahead, <0.75x → Slipping, else On rhythm
+            // "Normal pace" = all activity over the rolling window (up to 90 days)
+            // divided by the days elapsed in that window — so quiet days correctly
+            // drag the pace down. Recent pace = last 7 days / 7 (or the available
+            // span if under 7 days old). Every activity counts: recurring +
+            // non-recurring tasks, touchpoints, past calendar events.
+            //
+            // Calibrating only for the first 7 days (genuinely too early to judge).
+            // After that, NO activity → Slipping (a client gone quiet is a real
+            // signal, not "unknown" — we surface neglect, never hide it).
             const NOW = Date.now();
             const DAY = 86400000;
             const WINDOW = 90 * DAY;
@@ -11191,19 +11155,32 @@ export default function App({ user }) {
                 if (ms <= NOW && NOW - ms <= WINDOW) stamps.push(ms);
               }
             }
-            if (stamps.length < 2) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-            stamps.sort((a, b) => b - a); // newest → oldest
-            const thisWeek = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
-            // Window the baseline is measured over: from first activity to now,
-            // capped at 90 days, floored at 7 (so we always have a per-week rate).
-            const oldest = stamps[stamps.length - 1];
-            const spanDays = Math.min(90, Math.max(7, (NOW - oldest) / DAY));
-            const perWeekBaseline = (stamps.length / spanDays) * 7;
-            const momentum = perWeekBaseline > 0 ? thisWeek / perWeekBaseline : 1;
-            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: total=${stamps.length} thisWeek=${thisWeek} baseline/wk=${perWeekBaseline.toFixed(1)} momentum=${momentum.toFixed(2)}`);
-            if (momentum >= 1.25) return { state: "warming", label: "Warming", color: C.retGood, momentum };
-            if (momentum < 0.75)  return { state: "cooling", label: "Cooling", color: C.retWarn, momentum };
-            return { state: "steady", label: "Steady", color: C.warning, momentum };
+
+            // How long we've been able to observe this client (data age). Use the
+            // oldest activity if present, else the engagement start, capped at 90d.
+            const engMs = c.engagement_started_at ? new Date(c.engagement_started_at).getTime() : null;
+            const oldestActivity = stamps.length ? Math.min(...stamps) : null;
+            const firstObservable = oldestActivity || engMs || NOW;
+            const observedDays = Math.min(90, (NOW - firstObservable) / DAY);
+
+            // 7-day grace: too early to judge a rhythm.
+            if (observedDays < 7) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+
+            // Past grace with no activity at all → genuinely neglected → Slipping.
+            if (stamps.length === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
+
+            // Recent pace: last 7 days / 7.
+            const recentCount = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
+            const recentPace = recentCount / 7;
+            // Normal pace: all activity / days observed (quiet days count as zero).
+            const normalPace = stamps.length / observedDays;
+            const momentum = normalPace > 0 ? recentPace / normalPace : 0;
+
+            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: total=${stamps.length} obsDays=${observedDays.toFixed(0)} recent7=${recentCount} recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} momentum=${momentum.toFixed(2)}`);
+
+            if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
+            if (momentum < 0.75)  return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
+            return { state: "steady", label: "On rhythm", color: C.warning, momentum };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
@@ -11310,31 +11287,6 @@ export default function App({ user }) {
                 <path d={path} fill="none" stroke={`url(#${uid}-g)`} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" filter={`url(#${uid}-glow)`} />
                 {showEnd && <circle cx={last[0]} cy={last[1]} r={2} fill={sColor} />}
               </svg>
-            );
-          };
-
-          const CadencePips = ({ target, actual, showLabel = false }) => {
-            const health = cadenceHealth(target, actual);
-            const color = health === "on-track" ? C.retGood : health === "slipping" ? C.retOk : C.retWarn;
-            const dots = [
-              { filled: true, color: C.borderLight },
-              { filled: true, color: health === "on-track" ? color : C.borderLight },
-              { filled: health !== "broken", color },
-            ];
-            const label = health === "on-track" ? "On rhythm" : health === "slipping" ? `${actual}d cadence` : `${actual}d silent`;
-            return (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <div style={{ display: "inline-flex", gap: 2 }}>
-                  {dots.map((d, i) => (
-                    <span key={i} style={{
-                      width: 5, height: 5, borderRadius: 3,
-                      background: d.filled ? d.color : "transparent",
-                      border: d.filled ? "none" : `1px solid ${d.color}`,
-                    }} />
-                  ))}
-                </div>
-                {showLabel && <span style={{ fontSize: 11, color, fontWeight: 500 }}>{label}</span>}
-              </div>
             );
           };
 
