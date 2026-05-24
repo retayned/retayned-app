@@ -11122,19 +11122,19 @@ export default function App({ user }) {
           };
 
           const clientCadence = (c) => {
-            // Cadence = is this client getting MORE or LESS attention than usual?
-            // We compare recent PACE (per day) to normal PACE (per day) so a short
-            // recent window compares fairly to a long history.
-            //   recent pace vs normal pace:  >1.25x → Ahead, <0.75x → Slipping, else On rhythm
-            // "Normal pace" = all activity over the rolling window (up to 90 days)
-            // divided by the days elapsed in that window — so quiet days correctly
-            // drag the pace down. Recent pace = last 7 days / 7 (or the available
-            // span if under 7 days old). Every activity counts: recurring +
-            // non-recurring tasks, touchpoints, past calendar events.
+            // Cadence = is this client getting MORE or LESS attention than their
+            // own normal? Compare recent PACE (per day) to normal PACE (per day).
+            // Normal pace is built ONLY from real observed history (first activity
+            // onward, capped 90d) — NOT empty pre-app calendar days — so a busy
+            // recent week isn't flattered by an empty past. It grows toward a true
+            // 90-day norm as real history accumulates.
             //
-            // Calibrating only for the first 7 days (genuinely too early to judge).
-            // After that, NO activity → Slipping (a client gone quiet is a real
-            // signal, not "unknown" — we surface neglect, never hide it).
+            // Gears (window grows as data matures):
+            //   < 7 days observed   → Calibrating (too little to judge)
+            //   7–14 days           → recent 3 days vs normal/day (days unit)
+            //   14+ days            → recent 7 days vs normal/day (weekly unit)
+            // After grace, no activity at all → Slipping (neglect, surfaced not hidden).
+            //   recent pace ≥ 1.25x normal → Ahead, < 0.75x → Slipping, else On rhythm.
             const NOW = Date.now();
             const DAY = 86400000;
             const WINDOW = 90 * DAY;
@@ -11156,27 +11156,27 @@ export default function App({ user }) {
               }
             }
 
-            // How long we've been able to observe this client (data age). Use the
-            // oldest activity if present, else the engagement start, capped at 90d.
-            const engMs = c.engagement_started_at ? new Date(c.engagement_started_at).getTime() : null;
+            // Observed window = from first REAL activity to now (capped 90). This
+            // is the fix for the "everyone Ahead" bug: we only ever divide by days
+            // that could actually have data, never empty pre-app history.
             const oldestActivity = stamps.length ? Math.min(...stamps) : null;
-            const firstObservable = oldestActivity || engMs || NOW;
-            const observedDays = Math.min(90, (NOW - firstObservable) / DAY);
+            const observedDays = oldestActivity ? Math.min(90, (NOW - oldestActivity) / DAY) : 0;
 
-            // 7-day grace: too early to judge a rhythm.
+            // 7-day grace.
             if (observedDays < 7) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-
-            // Past grace with no activity at all → genuinely neglected → Slipping.
+            // Past grace, nothing logged → genuinely neglected.
             if (stamps.length === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
 
-            // Recent pace: last 7 days / 7.
-            const recentCount = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
-            const recentPace = recentCount / 7;
-            // Normal pace: all activity / days observed (quiet days count as zero).
+            // Recent window grows: 3 days in the 7–14d phase, 7 days from 14d on.
+            const recentDays = observedDays < 14 ? 3 : 7;
+            const recentCount = stamps.filter(ms => NOW - ms <= recentDays * DAY).length;
+            const recentPace = recentCount / recentDays;
+            // Normal pace over REAL observed history (quiet days within it count
+            // as zero and correctly lower the norm; empty pre-app days don't exist here).
             const normalPace = stamps.length / observedDays;
             const momentum = normalPace > 0 ? recentPace / normalPace : 0;
 
-            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: total=${stamps.length} obsDays=${observedDays.toFixed(0)} recent7=${recentCount} recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} momentum=${momentum.toFixed(2)}`);
+            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: total=${stamps.length} obsDays=${observedDays.toFixed(0)} recent${recentDays}=${recentCount} recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} momentum=${momentum.toFixed(2)}`);
 
             if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
             if (momentum < 0.75)  return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
