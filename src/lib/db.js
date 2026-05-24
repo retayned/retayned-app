@@ -603,6 +603,21 @@ export const tasks = {
     return { data: { today, week, month, year, weekHistory, monthHistory, dayStreak }, error: null };
   },
 
+  // Per-client completion timestamps over a window (default 90d). Feeds the
+  // Clients-page cadence + last-touch calcs, which need real historical task
+  // activity — the `tasks` array client-side is today-only (listToday), so
+  // hundreds of past completions live only here in task_completions.
+  listCompletionsForCadence: async (userId, days = 90) => {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    const { data, error } = await supabase
+      .from('task_completions')
+      .select('client_id, client_name, completed_at')
+      .eq('user_id', userId)
+      .gte('completed_at', since.toISOString());
+    return { data: data || [], error };
+  },
+
   // Assign a task to a worker (or unassign by passing null).
   // shareClientContext defaults true — controls whether the Worker
   // sees the task's client_name on their magic-link dashboard.
