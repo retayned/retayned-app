@@ -6086,6 +6086,10 @@ export default function App({ user }) {
   // Coach
   const [aiInput, setAiInput] = useState("");
   const [aiMessages, setAiMessages] = useState([]);
+  // When the user unpacks an observation into the chat, we stash the observation's
+  // full context here so Rai's API calls include what "this" refers to (archetype,
+  // clients, metrics). Cleared when a fresh conversation starts.
+  const [observationContext, setObservationContext] = useState(null);
   const [aiTyping, setAiTyping] = useState(false);
   // Attachments staged for next send. Shape: { id, name, type (image|document), media_type, data (base64), size }
   const [aiAttachments, setAiAttachments] = useState([]);
@@ -6176,6 +6180,11 @@ export default function App({ user }) {
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text
       }));
+      // If this conversation began from an unpacked observation, prepend its
+      // context so "how should I proceed?" resolves against the real finding.
+      if (observationContext) {
+        history.unshift({ role: "assistant", content: observationContext });
+      }
 
       // Get the caller's JWT for the Edge Function to verify identity
       const { data: { session } } = await supabase.auth.getSession();
@@ -6355,6 +6364,7 @@ export default function App({ user }) {
     setAiInput("");
     setAiAttachments([]);
     setAiConvoId(null);
+    setObservationContext(null);
   };
 
   // Load a past conversation into the chat pane. Fetches the full row (list
@@ -6374,6 +6384,7 @@ export default function App({ user }) {
     setAiConvoId(convoId);
     setAiInput("");
     setAiAttachments([]);
+    setObservationContext(null);
   };
 
   // Toggle star. Optimistic update — flip local state first, then persist.
@@ -6428,6 +6439,7 @@ export default function App({ user }) {
     if (aiConvoId === convoId) {
       setAiMessages([]);
       setAiConvoId(null);
+      setObservationContext(null);
     }
     if (convoDb.delete) {
       await convoDb.delete(convoId);
@@ -7355,6 +7367,14 @@ export default function App({ user }) {
            the chip) makes the relationship clear and matches Worker. */
         .r-main { padding: 16px 16px 96px; scrollbar-gutter: stable; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
+        /* Rai page must fill the mobile viewport (minus the ~60px bottom nav) so
+           the flex column lets the scroll area grow and the input bar pins to the
+           true bottom. Without an explicit height, height:100% resolves against a
+           content-sized parent and the input floats mid-screen. dvh handles the
+           mobile URL bar. Scoped to mobile so desktop's sidebar layout is untouched. */
+        @media (max-width: 767px) {
+          .r-rai-page { height: calc(100dvh - 60px) !important; }
+        }
         .r-today-panel { display: none !important; }
         .r-client-modal { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; transform: none !important; max-width: 100% !important; max-height: 100% !important; border-radius: 0 !important; }
         /* Mobile: chat user-message clearance from sticky top bar when scrolled */
@@ -11982,6 +12002,12 @@ export default function App({ user }) {
                     const handleUnpack = async () => {
                       try { await observationsDb.updateStatus(obs.id, "unpacked"); } catch (e) { /* non-blocking */ }
                       const seededMessage = `You pulled ${archetype}. ${obs.front_headline}\n\nWhere do you want to start?`;
+                      // Stash the observation context so follow-up turns ("how should
+                      // I proceed?") are answered against the actual finding, not blind.
+                      let payloadStr = "";
+                      try { payloadStr = obs.data_payload ? JSON.stringify(obs.data_payload) : ""; } catch (e) { payloadStr = ""; }
+                      const ctx = `The user just opened this observation from their dashboard and wants to discuss it. Observation: "${archetype}". Headline: ${obs.front_headline || ""}. ${obs.front_body ? "Detail: " + obs.front_body + "." : ""} ${payloadStr ? "Supporting data: " + payloadStr : ""} Treat the user's next messages (e.g. "how should I proceed?") as referring to THIS observation. Use the specific clients and numbers above; do not ask them to re-explain what it is.`;
+                      setObservationContext(ctx);
                       setAiMessages([{ role: "ai", text: seededMessage }]);
                       setPage("coach");
                     };
