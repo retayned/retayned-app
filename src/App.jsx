@@ -11161,53 +11161,49 @@ export default function App({ user }) {
           };
 
           const clientCadence = (c) => {
+            // Cadence = attention TREND. We count every activity (recurring +
+            // non-recurring tasks, touchpoints, past calendar events) over a
+            // rolling 90-day window, work out this client's OWN normal weekly
+            // volume from that window, then compare the last 7 days to it.
+            //   last 7d > 1.25x their normal week → Warming
+            //   last 7d < 0.75x their normal week → Cooling
+            //   else                               → Steady
+            // Each client judged against their own baseline, never each other.
+            // The 90d window self-establishes the baseline, so it reads from
+            // ~day 2-3 onward; Calibrating is only the no-data fallback.
+            const NOW = Date.now();
+            const DAY = 86400000;
+            const WINDOW = 90 * DAY;
             const stamps = [];
             for (const t of (allTouchpoints || [])) {
               if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
-                if (t.occurred_at) stamps.push(new Date(t.occurred_at).getTime());
+                if (t.occurred_at) { const ms = new Date(t.occurred_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
               }
             }
             for (const cp of (allCompletions || [])) {
               if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
-                if (cp.completed_at) stamps.push(new Date(cp.completed_at).getTime());
+                if (cp.completed_at) { const ms = new Date(cp.completed_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
               }
             }
             for (const e of (personalEvents || [])) {
               if (e.client_id && e.client_id === c.id && e.starts_at) {
                 const ms = new Date(e.starts_at).getTime();
-                if (ms <= Date.now()) stamps.push(ms); // only events that have happened
+                if (ms <= NOW && NOW - ms <= WINDOW) stamps.push(ms);
               }
             }
-            // newest → oldest
-            stamps.sort((a, b) => b - a);
-            if (stamps.length < 3) return { state: "calibrating", label: "Calibrating", color: C.textMuted };
-            const recent = stamps.slice(0, 10);
-            const intervals = [];
-            for (let i = 0; i < recent.length - 1; i++) {
-              // business-day gap between consecutive activities
-              intervals.push(businessDaysBetween(recent[i + 1], recent[i]));
-            }
-            const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-            const daysSince = businessDaysBetween(recent[0], Date.now());
-            const sinceStr = daysSince < 1 ? "today" : `${Math.round(daysSince)}d`;
-            // Measure each client against THEIR OWN normal gap, in business days.
-            //   ratio = daysSince / avg
-            //   ≥ 1.25 → Slipping  (past their normal pace)
-            //   < 0.75 → Ahead     (reached out earlier than their normal)
-            //   else   → On rhythm
-            // BUT "Ahead" only means something when there's a real gap to be
-            // ahead OF. A client you touch ~daily (small avg) who's current isn't
-            // "ahead" — that IS their rhythm, just a high-frequency one. So Ahead
-            // requires a normal gap of at least a few business days; below that,
-            // staying current is simply On rhythm (a high-achiever on rhythm).
-            // No "overdue" tier — we don't claim a deadline we can't know.
-            if (avg <= 0) return { state: "on", label: "On rhythm", color: C.warning, ratio: 1, daysSince };
-            const ratio = daysSince / avg;
-            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: stamps=${stamps.length} daysSince=${daysSince} avg=${avg.toFixed(1)} ratio=${ratio.toFixed(2)} → ${ratio >= 1.25 ? "slipping" : (ratio < 0.75 && avg >= 3) ? "ahead" : "on"}`);
-            if (ratio >= 1.25) return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn, ratio, daysSince };
-            // Ahead only if there's a meaningful gap (≥3 business days) to beat.
-            if (ratio < 0.75 && avg >= 3) return { state: "ahead", label: "Ahead", color: C.retGood, ratio, daysSince };
-            return { state: "on", label: "On rhythm", color: C.warning, ratio, daysSince };
+            if (stamps.length < 2) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+            stamps.sort((a, b) => b - a); // newest → oldest
+            const thisWeek = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
+            // Window the baseline is measured over: from first activity to now,
+            // capped at 90 days, floored at 7 (so we always have a per-week rate).
+            const oldest = stamps[stamps.length - 1];
+            const spanDays = Math.min(90, Math.max(7, (NOW - oldest) / DAY));
+            const perWeekBaseline = (stamps.length / spanDays) * 7;
+            const momentum = perWeekBaseline > 0 ? thisWeek / perWeekBaseline : 1;
+            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: total=${stamps.length} thisWeek=${thisWeek} baseline/wk=${perWeekBaseline.toFixed(1)} momentum=${momentum.toFixed(2)}`);
+            if (momentum >= 1.25) return { state: "warming", label: "Warming", color: C.retGood, momentum };
+            if (momentum < 0.75)  return { state: "cooling", label: "Cooling", color: C.retWarn, momentum };
+            return { state: "steady", label: "Steady", color: C.warning, momentum };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
@@ -11424,7 +11420,7 @@ export default function App({ user }) {
             else if (sortId === "cadence") {
               // Real cadence severity: slipping first (needs attention), then
               // on rhythm, ahead, calibrating last (no rhythm yet to judge).
-              const rank = { slipping: 0, on: 1, ahead: 2, calibrating: 3 };
+              const rank = { cooling: 0, steady: 1, warming: 2, calibrating: 3 };
               copy.sort((a, b) => (rank[clientCadence(a).state] ?? 3) - (rank[clientCadence(b).state] ?? 3));
             }
             else if (sortId === "renewal") copy.sort((a, b) => renewalInfo(a).days - renewalInfo(b).days);
@@ -11563,10 +11559,13 @@ export default function App({ user }) {
                     // ratio = more recently active. Always show top/bottom 3 — these
                     // are comparative ("most/least active lately"), not alarms, so
                     // we don't gate on the slipping threshold.
+                    // Warmest/Coolest are just the extremes of the cadence
+                    // momentum (this-week vs the client's own baseline). Higher
+                    // momentum = getting more attention than usual = warmest.
                     const ranked = (activeClients || [])
                       .map(c => ({ c, cad: clientCadence(c) }))
                       .filter(x => x.cad.state !== "calibrating")
-                      .sort((a, b) => a.cad.ratio - b.cad.ratio);
+                      .sort((a, b) => b.cad.momentum - a.cad.momentum);
                     const mostActive = ranked.slice(0, 3);
                     const leastActive = ranked.slice(-3).reverse().filter(x => !mostActive.includes(x));
                     return (
@@ -11873,7 +11872,7 @@ export default function App({ user }) {
                                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                       <span style={{ width: 7, height: 7, borderRadius: "50%", background: cad.color, flexShrink: 0 }} />
                                       <span style={{ fontSize: 11.5, fontWeight: 600, color: cad.color === C.textMuted ? C.textMuted : C.textSec, whiteSpace: "nowrap", fontStyle: cad.state === "calibrating" ? "italic" : "normal" }}>{cad.label}</span>
-                                      {debugScores && <span style={{ fontSize: 9, color: C.btn, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>d{cad.daysSince}/r{(cad.ratio ?? 0).toFixed(2)}</span>}
+                                      {debugScores && <span style={{ fontSize: 9, color: C.btn, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>m{(cad.momentum ?? 1).toFixed(2)}</span>}
                                     </div>
                                   );
                                 })()}
