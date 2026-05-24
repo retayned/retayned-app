@@ -4822,6 +4822,7 @@ export default function App({ user }) {
   // for rhythm calc and history) — only the manual Log UI was removed.
   const [tpLogged, setTpLogged] = useState([]);
   const [allTouchpoints, setAllTouchpoints] = useState([]);
+  const [allCompletions, setAllCompletions] = useState([]);
   // Engagement pauses, keyed by client_id. Each value is an array of
   // { id, paused_at, resumed_at, reason, note }. Loaded once at
   // hydration, mutated optimistically when user clicks pause/resume.
@@ -4868,7 +4869,7 @@ export default function App({ user }) {
     if (!userTimezone) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -4915,6 +4916,12 @@ export default function App({ user }) {
       // Cadence — 90-day touchpoint history for client cards.
       (typeof touchpointsDb.list === "function")
         ? touchpointsDb.list(uid, 90).catch(e => { console.warn("Cadence data failed to load:", e); return { data: null, error: e }; })
+        : Promise.resolve({ data: null, error: null }),
+      // Cadence — 90-day task-completion history (per-client) for the
+      // Clients-page cadence + last-touch. tasks[] is today-only, so past
+      // completions must come from task_completions.
+      (typeof tasksDb.listCompletionsForCadence === "function")
+        ? tasksDb.listCompletionsForCadence(uid, 90).catch(e => { console.warn("Completion history failed to load:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
       // Observer card — weekly observation, may not exist.
       (typeof observationsDb?.getCurrent === "function")
@@ -4979,6 +4986,7 @@ export default function App({ user }) {
     // added ~600-800ms to the critical path. Now they ride along with the
     // main batch and are processed here synchronously.
     if (cadenceRes?.data) setAllTouchpoints(cadenceRes.data);
+    if (completionHistRes?.data) setAllCompletions(completionHistRes.data);
     if (observerRes?.data) {
       setObservation(observerRes.data);
       setObsMobileExpanded(false);
@@ -11106,10 +11114,9 @@ export default function App({ user }) {
                 if (t.occurred_at) latest = Math.max(latest, new Date(t.occurred_at).getTime());
               }
             }
-            for (const t of (tasks || [])) {
-              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
-                if (t.created_at) latest = Math.max(latest, typeof t.created_at === "number" ? t.created_at : new Date(t.created_at).getTime());
-                if (t.completed_at) latest = Math.max(latest, new Date(t.completed_at).getTime());
+            for (const cp of (allCompletions || [])) {
+              if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
+                if (cp.completed_at) latest = Math.max(latest, new Date(cp.completed_at).getTime());
               }
             }
             for (const e of (personalEvents || [])) {
@@ -11135,10 +11142,9 @@ export default function App({ user }) {
                 if (t.occurred_at) stamps.push(new Date(t.occurred_at).getTime());
               }
             }
-            for (const t of (tasks || [])) {
-              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
-                if (t.created_at) stamps.push(typeof t.created_at === "number" ? t.created_at : new Date(t.created_at).getTime());
-                if (t.completed_at) stamps.push(new Date(t.completed_at).getTime());
+            for (const cp of (allCompletions || [])) {
+              if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
+                if (cp.completed_at) stamps.push(new Date(cp.completed_at).getTime());
               }
             }
             for (const e of (personalEvents || [])) {
