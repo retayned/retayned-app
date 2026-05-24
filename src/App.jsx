@@ -11171,18 +11171,29 @@ export default function App({ user }) {
             const recentDays = observedDays < 14 ? 3 : 7;
             const recentCount = stamps.filter(ms => NOW - ms <= recentDays * DAY).length;
             const recentPace = recentCount / recentDays;
-            // Normal pace over REAL observed history (quiet days within it count
-            // as zero and correctly lower the norm; empty pre-app days don't exist here).
-            const normalPace = stamps.length / observedDays;
-            const momentum = normalPace > 0 ? recentPace / normalPace : 0;
+            // BASELINE = the PRIOR period right before the recent window, NOT the
+            // full 90-day history. The 90d backfill is mostly empty (heavy logging
+            // only started recently), so a lifetime average makes every recent week
+            // look like a spike. Instead we compare the recent window to the
+            // populated period just before it: days (recentDays … recentDays+priorSpan).
+            // priorSpan grows with available history (up to ~30d) so a single fluke
+            // week can't swing it — a bad week reads bad vs the trailing month, not
+            // vs one overworked week.
+            const priorSpan = Math.min(30, Math.max(7, observedDays - recentDays));
+            const priorStart = recentDays;            // days ago where prior period begins
+            const priorEnd = recentDays + priorSpan;  // days ago where it ends
+            const priorCount = stamps.filter(ms => {
+              const ageDays = (NOW - ms) / DAY;
+              return ageDays > priorStart && ageDays <= priorEnd;
+            }).length;
+            const normalPace = priorCount / priorSpan;
+            const momentum = normalPace > 0 ? recentPace / normalPace : (recentPace > 0 ? 1 : 0);
 
             if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) {
               const n7 = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
               const n14 = stamps.filter(ms => NOW - ms <= 14 * DAY).length;
               const n30 = stamps.filter(ms => NOW - ms <= 30 * DAY).length;
-              const newest = stamps.length ? Math.round((NOW - Math.max(...stamps)) / DAY) : "-";
-              const oldest = stamps.length ? Math.round((NOW - Math.min(...stamps)) / DAY) : "-";
-              console.log(`[cadence] ${c.name}: total=${stamps.length} oldest=${oldest}d newest=${newest}d obs=${observedDays.toFixed(0)} | last7=${n7} last14=${n14} last30=${n30} | recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} m=${momentum.toFixed(2)}`);
+              console.log(`[cadence] ${c.name}: total=${stamps.length} obs=${observedDays.toFixed(0)} | recent${recentDays}=${recentCount} prior(${priorStart}-${priorEnd}d)=${priorCount} | recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} m=${momentum.toFixed(2)} | n7=${n7} n14=${n14} n30=${n30}`);
             }
 
             if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
@@ -11762,8 +11773,9 @@ export default function App({ user }) {
                   {dataLoaded && variant === "table" && (
                     <div className="rc-desktop-view" style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.bg }}>
-                        <div style={{ width: 44, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
+                        <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
                         <div style={{ flex: 2, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
+                        <div style={{ width: 56, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
                         <div style={{ width: 78, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Revenue</div>
                         <div style={{ width: 64, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Tenure</div>
                         <div className="rt-tcol-lcv" style={{ width: 74, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>LCV</div>
@@ -11781,8 +11793,8 @@ export default function App({ user }) {
                           const renewUrgent = renew.urgent;
                           return (
                             <div key={c.id} className="row-hover-neutral" onClick={() => { setSelectedClient(c); setRolodexConfirm(false); setRemoveConfirm(false); setPauseConfirm(false); setResumeConfirm(false); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", cursor: "pointer" }}>
-                              <div style={{ width: 44, display: "flex", alignItems: "center", flexShrink: 0 }}>
-                                <ScorePearl score={c.ret || 0} size="sm" />
+                              <div style={{ width: 32, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                                <ScoreRing2 client={c} size={28} />
                               </div>
                               <div style={{ flex: 2, minWidth: 0 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -11792,6 +11804,9 @@ export default function App({ user }) {
                                   )}
                                 </div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"} · last touch {lastTouch(c)}</div>
+                              </div>
+                              <div style={{ width: 56, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                                <ScorePearl score={c.ret || 0} size="sm" />
                               </div>
                               <div style={{ width: 78 }}>
                                 <div style={{ fontSize: 13, fontWeight: 600, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0) / 1000).toFixed(1)}k</div>
