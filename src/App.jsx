@@ -11190,19 +11190,24 @@ export default function App({ user }) {
             const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
             const daysSince = businessDaysBetween(recent[0], Date.now());
             const sinceStr = daysSince < 1 ? "today" : `${Math.round(daysSince)}d`;
-            // Ratio of time-since-last-touch to this client's own normal gap,
-            // both in BUSINESS days (weekends excluded). Bands around 1x:
-            //   < 0.75      → Ahead     (touched sooner than their normal)
-            //   0.75–1.25   → On rhythm (normal range)
-            //   ≥ 1.25      → Slipping  (past their normal pace)
+            // Measure each client against THEIR OWN normal gap, in business days.
+            //   ratio = daysSince / avg
+            //   ≥ 1.25 → Slipping  (past their normal pace)
+            //   < 0.75 → Ahead     (reached out earlier than their normal)
+            //   else   → On rhythm
+            // BUT "Ahead" only means something when there's a real gap to be
+            // ahead OF. A client you touch ~daily (small avg) who's current isn't
+            // "ahead" — that IS their rhythm, just a high-frequency one. So Ahead
+            // requires a normal gap of at least a few business days; below that,
+            // staying current is simply On rhythm (a high-achiever on rhythm).
             // No "overdue" tier — we don't claim a deadline we can't know.
-            // avg≈0 (bursty/same-day activity) defaults to On rhythm, NOT Ahead,
-            // so heavy task-completion doesn't flip every client to Ahead.
             if (avg <= 0) return { state: "on", label: "On rhythm", color: C.warning, ratio: 1, daysSince };
             const ratio = daysSince / avg;
+            if (typeof window !== "undefined" && window.__cadenceDebug) console.log(`[cadence] ${c.name}: stamps=${stamps.length} daysSince=${daysSince} avg=${avg.toFixed(1)} ratio=${ratio.toFixed(2)}`);
             if (ratio >= 1.25) return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn, ratio, daysSince };
-            if (ratio >= 0.75) return { state: "on",       label: "On rhythm",            color: C.warning, ratio, daysSince };
-            return { state: "ahead", label: "Ahead", color: C.retGood, ratio, daysSince };
+            // Ahead only if there's a meaningful gap (≥3 business days) to beat.
+            if (ratio < 0.75 && avg >= 3) return { state: "ahead", label: "Ahead", color: C.retGood, ratio, daysSince };
+            return { state: "on", label: "On rhythm", color: C.warning, ratio, daysSince };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
