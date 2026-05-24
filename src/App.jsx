@@ -11122,22 +11122,26 @@ export default function App({ user }) {
           };
 
           const clientCadence = (c) => {
-            // Cadence = is this client getting MORE or LESS attention than their
-            // own normal? Compare recent PACE (per day) to normal PACE (per day).
-            // Normal pace is built ONLY from real observed history (first activity
-            // onward, capped 90d) — NOT empty pre-app calendar days — so a busy
-            // recent week isn't flattered by an empty past. It grows toward a true
-            // 90-day norm as real history accumulates.
-            //
-            // Gears (window grows as data matures):
-            //   < 7 days observed   → Calibrating (too little to judge)
-            //   7–14 days           → recent 3 days vs normal/day (days unit)
-            //   14+ days            → recent 7 days vs normal/day (weekly unit)
-            // After grace, no activity at all → Slipping (neglect, surfaced not hidden).
-            //   recent pace ≥ 1.25x normal → Ahead, < 0.75x → Slipping, else On rhythm.
+            // CADENCE — is this client getting more or less attention than their
+            // own normal active week?
+            //  • Calibration: first 7 days after the client was ADDED (created_at).
+            //  • Day 8+: compare the rolling last 7 days to the AVERAGE of prior
+            //    7-day windows that actually had activity (empty weeks ignored, so
+            //    a sparse early history doesn't make everything look like a spike),
+            //    going back up to 90 days.
+            //  • No prior ACTIVE week yet → still Calibrating (no baseline to judge).
+            //  • momentum = thisWeek / avg(prior active weeks):
+            //      ≥ 1.25 → Ahead,  < 0.75 → Slipping,  else On rhythm.
+            // Counts every activity: recurring + non-recurring tasks, touchpoints,
+            // past calendar events.
             const NOW = Date.now();
             const DAY = 86400000;
             const WINDOW = 90 * DAY;
+
+            // 7-day calibration gate, measured from when the client was added.
+            const addedMs = c.created_at ? new Date(c.created_at).getTime() : null;
+            if (addedMs && (NOW - addedMs) < 7 * DAY) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+
             const stamps = [];
             for (const t of (allTouchpoints || [])) {
               if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
@@ -11156,44 +11160,26 @@ export default function App({ user }) {
               }
             }
 
-            // Observed window = from first REAL activity to now (capped 90). This
-            // is the fix for the "everyone Ahead" bug: we only ever divide by days
-            // that could actually have data, never empty pre-app history.
-            const oldestActivity = stamps.length ? Math.min(...stamps) : null;
-            const observedDays = oldestActivity ? Math.min(90, (NOW - oldestActivity) / DAY) : 0;
+            // Bucket activity into 7-day windows by age. Window 0 = last 7 days
+            // (the "this week" we're judging). Windows 1..12 = prior weeks back to 90d.
+            const counts = {};
+            for (const ms of stamps) {
+              const w = Math.floor((NOW - ms) / (7 * DAY));
+              if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
+            }
+            const thisWeek = counts[0] || 0;
+            // Prior windows that ACTUALLY had activity (empty weeks ignored).
+            const priorActive = [];
+            for (let w = 1; w < 13; w++) if (counts[w] > 0) priorActive.push(counts[w]);
 
-            // 7-day grace.
-            if (observedDays < 7) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-            // Past grace, nothing logged → genuinely neglected.
-            if (stamps.length === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
+            // No prior active week → no baseline yet → keep calibrating.
+            if (priorActive.length === 0) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
 
-            // Recent window grows: 3 days in the 7–14d phase, 7 days from 14d on.
-            const recentDays = observedDays < 14 ? 3 : 7;
-            const recentCount = stamps.filter(ms => NOW - ms <= recentDays * DAY).length;
-            const recentPace = recentCount / recentDays;
-            // BASELINE = the PRIOR period right before the recent window, NOT the
-            // full 90-day history. The 90d backfill is mostly empty (heavy logging
-            // only started recently), so a lifetime average makes every recent week
-            // look like a spike. Instead we compare the recent window to the
-            // populated period just before it: days (recentDays … recentDays+priorSpan).
-            // priorSpan grows with available history (up to ~30d) so a single fluke
-            // week can't swing it — a bad week reads bad vs the trailing month, not
-            // vs one overworked week.
-            const priorSpan = Math.min(30, Math.max(7, observedDays - recentDays));
-            const priorStart = recentDays;            // days ago where prior period begins
-            const priorEnd = recentDays + priorSpan;  // days ago where it ends
-            const priorCount = stamps.filter(ms => {
-              const ageDays = (NOW - ms) / DAY;
-              return ageDays > priorStart && ageDays <= priorEnd;
-            }).length;
-            const normalPace = priorCount / priorSpan;
-            const momentum = normalPace > 0 ? recentPace / normalPace : (recentPace > 0 ? 1 : 0);
+            const baseline = priorActive.reduce((a, b) => a + b, 0) / priorActive.length;
+            const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
 
             if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) {
-              const n7 = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
-              const n14 = stamps.filter(ms => NOW - ms <= 14 * DAY).length;
-              const n30 = stamps.filter(ms => NOW - ms <= 30 * DAY).length;
-              console.log(`[cadence] ${c.name}: total=${stamps.length} obs=${observedDays.toFixed(0)} | recent${recentDays}=${recentCount} prior(${priorStart}-${priorEnd}d)=${priorCount} | recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} m=${momentum.toFixed(2)} | n7=${n7} n14=${n14} n30=${n30}`);
+              console.log(`[cadence] ${c.name}: thisWeek=${thisWeek} priorActiveWeeks=[${priorActive.join(",")}] baseline=${baseline.toFixed(1)} m=${momentum.toFixed(2)}`);
             }
 
             if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
