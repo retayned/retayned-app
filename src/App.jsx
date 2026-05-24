@@ -11330,9 +11330,9 @@ export default function App({ user }) {
             else if (sortId === "attention") copy.sort((a, b) => (a.ret || 0) - (b.ret || 0));
             else if (sortId === "revenue") copy.sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
             else if (sortId === "cadence") {
-              // Real cadence severity: slipping first (needs attention), then
-              // on rhythm, ahead, calibrating last (no rhythm yet to judge).
-              const rank = { cooling: 0, steady: 1, warming: 2, calibrating: 3 };
+              // Good → bad: Ahead first, then On rhythm, then Slipping.
+              // Calibrating last (no rhythm yet to judge).
+              const rank = { warming: 0, steady: 1, cooling: 2, calibrating: 3 };
               copy.sort((a, b) => (rank[clientCadence(a).state] ?? 3) - (rank[clientCadence(b).state] ?? 3));
             }
             else if (sortId === "renewal") copy.sort((a, b) => renewalInfo(a).days - renewalInfo(b).days);
@@ -11697,8 +11697,9 @@ export default function App({ user }) {
                                   <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, color: C.textMuted, background: C.surfaceWarm, letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 }}>Paused</span>
                                 )}
                               </div>
-                              <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {(c.tag || "Client")} · ${((c.revenue || 0) / 1000).toFixed(1)}k/mo · {tenureDisplay}
+                              <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                                {(() => { const cad = clientCadence(c); return <span style={{ width: 8, height: 8, borderRadius: "50%", background: cad.color, flexShrink: 0 }} title={cad.label} />; })()}
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(c.tag || "Client")} · ${((c.revenue || 0) / 1000).toFixed(1)}k/mo · {tenureDisplay}</span>
                               </div>
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0, gap: 2 }}>
