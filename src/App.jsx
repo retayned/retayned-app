@@ -4179,6 +4179,8 @@ export default function App({ user }) {
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(false);
   const [reminderDate, setReminderDate] = useState("");
+  const [reminderRecur, setReminderRecur] = useState("1m"); // last-picked interval code
+  const [reminderRepeatOn, setReminderRepeatOn] = useState(false);
   // Reset per-contact modal state whenever the selected rolodex contact
   // changes (or closes). Without this, the edit form + reminder date from
   // the previously-opened contact carry into the next one — e.g. Magic
@@ -5207,6 +5209,7 @@ export default function App({ user }) {
       tags: r.tags || [],
       priority: r.priority,
       reminder: r.reminder_date,
+      reminderRecurrence: r.reminder_recurrence || "none",
       work: r.notes,
     })));
 
@@ -15601,8 +15604,6 @@ export default function App({ user }) {
         const dimLabels = { trust: ["Trust", "Heavy oversight", "Full delegation"], loyalty: ["Loyalty", "Actively shopping", "Locked in, not looking"], expectations: ["Expectations", "Highly ambitious", "Reasonable, aligned"], grace: ["Grace", "Zero tolerance", "Gives benefit of the doubt"], commFrequency: ["Communication Frequency", "Radio silence", "Nonstop"], stressResponse: ["Stress Response", "Goes quiet internally", "Immediately escalates"], budgetCommitment: ["Budget Commitment", "Always under pressure", "Non-issue"], relationshipDepth: ["Relationship Depth", "Strictly transactional", "Genuine connection"], reportingNeed: ["Reporting Need", "Hands-off, minimal updates", "Wants every detail"], replaceability: ["Replaceability", "Plug and play", "Deeply embedded"], commTone: ["Communication Tone", "Reserved, guarded", "Warm, direct"], decisionMaking: ["Decision Making", "No authority, just a relay", "Full authority"] };
 
         // Hero+ helpers
-        const _hash = (s) => (s || "").split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
-        const _delta = sc.name ? ((_hash(sc.name) % 11) - 5) : 0;
         const _driftRaw = clientDrift[sc.name] || (sc.ret ? (sc.ret >= 80 ? "Thriving" : sc.ret >= 65 ? "Stable" : sc.ret >= 45 ? "Shifted" : "Declining") : "Stable");
         const _driftLabel = _driftRaw === "Something shifted" ? "Shifted" : _driftRaw;
         const _driftMeta = {
@@ -15616,23 +15617,6 @@ export default function App({ user }) {
           Critical:  { fg: C.retCrit,  bg: "#FBEAE3" },
         }[_driftLabel] || { fg: C.textSec, bg: C.bg };
         const _bucket = sc.ret ? (sc.ret >= 80 ? "Thriving" : sc.ret >= 65 ? "Healthy" : sc.ret >= 45 ? "Watch" : sc.ret >= 30 ? "At Risk" : "Critical") : "New";
-
-        // 12-week retention trend (stubbed) — synthesizes trajectory ending at current score
-        const _trend = (() => {
-          const score = sc.ret || 50;
-          const base = Math.max(10, score - _delta * 2.4);
-          const pts = [];
-          for (let i = 0; i < 12; i++) {
-            const progress = i / 11;
-            const target = base + (score - base) * progress;
-            const wobble = Math.sin((i + _hash(sc.name || "")) * 1.1) * 2;
-            pts.push(Math.max(1, Math.min(99, Math.round(target + wobble))));
-          }
-          pts[pts.length - 1] = score;
-          return pts;
-        })();
-        const _trendUp = _trend[_trend.length - 1] > _trend[0];
-        const _trendColor = _trendUp ? C.retGood : C.retWarn;
 
         return (
           <>
@@ -15820,7 +15804,7 @@ export default function App({ user }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
                       {sc.ret ? (
                         <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, color: _driftMeta.fg, background: _driftMeta.bg, fontVariantNumeric: "tabular-nums" }}>
-                          {_delta >= 0 ? "↑" : "↓"} {Math.abs(_delta)} · {_driftLabel}
+                          {_driftLabel}
                         </span>
                       ) : (
                         <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, color: C.textSec, background: C.bg }}>First check pending</span>
@@ -15839,33 +15823,6 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-                {/* 12-week trend — lives inside the gradient hero */}
-                {sc.ret && (() => {
-                  const w = 480, h = 56, pad = 2;
-                  const min = Math.min(..._trend);
-                  const max = Math.max(..._trend);
-                  const range = Math.max(1, max - min);
-                  const innerW = w - pad * 2;
-                  const innerH = h - pad * 2;
-                  const coords = _trend.map((v, i) => [
-                    pad + (i / (_trend.length - 1)) * innerW,
-                    pad + innerH - ((v - min) / range) * innerH,
-                  ]);
-                  const linePath = coords.map((c, i) => (i === 0 ? "M" : "L") + c[0].toFixed(1) + "," + c[1].toFixed(1)).join(" ");
-                  const areaPath = `${linePath} L${coords[coords.length - 1][0].toFixed(1)},${pad + innerH} L${coords[0][0].toFixed(1)},${pad + innerH} Z`;
-                  return (
-                    <div style={{ marginTop: 16 }}>
-                      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block" }}>
-                        <path d={areaPath} fill={_trendColor} fillOpacity="0.12" />
-                        <path d={linePath} fill="none" stroke={_trendColor} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-                      </svg>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 10, color: C.textMuted, letterSpacing: 0.1 }}>
-                        <span>12 weeks ago</span>
-                        <span>this week</span>
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
 
               {/* Stat strip — MRR · LTV · Tenure */}
@@ -16150,7 +16107,11 @@ export default function App({ user }) {
                                   rhythm and could overflow the page. */}
                               <button
                                 type="button"
-                                onClick={() => setRenewalPickerOpen(!renewalPickerOpen)}
+                                onClick={() => {
+                                  const cur = overviewEditData.renewal_date ? String(overviewEditData.renewal_date).slice(0, 10) : "";
+                                  setRenewalModalMonth(cur ? cur.slice(0, 7) : (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })());
+                                  setRenewalModal({ client: sc, date: cur, recurrence: overviewEditData.renewal_recurrence || "none", fromEdit: true });
+                                }}
                                 style={{
                                   width: "100%",
                                   padding: "12px 16px",
@@ -16187,98 +16148,6 @@ export default function App({ user }) {
                                   <Icon name="due" size={14} simple color={C.textMuted} />
                                 </span>
                               </button>
-                              {renewalPickerOpen && (
-                                <>
-                                  <div onClick={() => setRenewalPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }} />
-                                  <div className="rt-picker-panel" style={{
-                                    position: "absolute",
-                                    top: "calc(100% + 6px)",
-                                    left: 0,
-                                    right: 0,
-                                    zIndex: 50,
-                                    maxHeight: "min(420px, calc(100vh - 140px))",
-                                    overflowY: "auto",
-                                  }}>
-                                    {(() => {
-                                      // TODAY · M/D/YY reference line — uses stored TZ for consistency.
-                                      const _now = new Date();
-                                      const _todayParts = userTimezone
-                                        ? new Intl.DateTimeFormat("en-US", { timeZone: userTimezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(_now).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {})
-                                        : { year: String(_now.getFullYear()), month: String(_now.getMonth() + 1).padStart(2, "0"), day: String(_now.getDate()).padStart(2, "0") };
-                                      const _tStr = `${parseInt(_todayParts.month, 10)}/${parseInt(_todayParts.day, 10)}/${_todayParts.year.slice(-2)}`;
-                                      const _todayISO = `${_todayParts.year}-${_todayParts.month}-${_todayParts.day}`;
-                                      const [yr, mo] = renewalCalendarMonth.split("-").map(Number);
-                                      const firstOfMonth = new Date(yr, mo - 1, 1);
-                                      const startDow = firstOfMonth.getDay();
-                                      const daysInMonth = new Date(yr, mo, 0).getDate();
-                                      const monthLabel = firstOfMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-                                      const cells = [];
-                                      for (let i = 0; i < startDow; i++) cells.push(null);
-                                      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-                                      while (cells.length % 7 !== 0) cells.push(null);
-                                      const goPrev = () => {
-                                        let nyr = yr, nmo = mo - 1;
-                                        if (nmo < 1) { nmo = 12; nyr--; }
-                                        setRenewalCalendarMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
-                                      };
-                                      const goNext = () => {
-                                        let nyr = yr, nmo = mo + 1;
-                                        if (nmo > 12) { nmo = 1; nyr++; }
-                                        setRenewalCalendarMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
-                                      };
-                                      const selectedISO = overviewEditData.renewal_date ? String(overviewEditData.renewal_date).split("T")[0] : null;
-                                      return (
-                                        <div style={{ padding: "6px 4px 4px" }}>
-                                          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 6px 8px", fontSize: 10.5, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
-                                            <span style={{ color: C.text }}>TODAY</span>
-                                            <span style={{ opacity: 0.5 }}>·</span>
-                                            <span style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: 0 }}>{_tStr}</span>
-                                          </div>
-                                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, padding: "0 6px" }}>
-                                            <button type="button" onClick={goPrev} style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textSec, cursor: "pointer", borderRadius: 4, fontSize: 14, lineHeight: 1, padding: 0 }}>‹</button>
-                                            <span style={{ fontSize: 11.5, color: C.text, fontWeight: 600, letterSpacing: 0.2 }}>{monthLabel}</span>
-                                            <button type="button" onClick={goNext} style={{ width: 22, height: 22, border: "none", background: "transparent", color: C.textSec, cursor: "pointer", borderRadius: 4, fontSize: 14, lineHeight: 1, padding: 0 }}>›</button>
-                                          </div>
-                                          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, padding: "0 4px 4px" }}>
-                                            {["S","M","T","W","T","F","S"].map((d,i) => (
-                                              <div key={i} style={{ fontSize: 9, color: C.textMuted, textAlign: "center", fontWeight: 600, padding: "2px 0" }}>{d}</div>
-                                            ))}
-                                            {cells.map((d, i) => {
-                                              if (d === null) return <div key={i} />;
-                                              const dateStr = `${yr}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                                              const isSel = selectedISO === dateStr;
-                                              const isToday = dateStr === _todayISO;
-                                              return (
-                                                <button
-                                                  type="button"
-                                                  key={i}
-                                                  onClick={() => { setOverviewEditData({ ...overviewEditData, renewal_date: dateStr }); setRenewalPickerOpen(false); }}
-                                                  style={{
-                                                    width: "100%", height: 24,
-                                                    border: "none",
-                                                    background: isSel ? "var(--rt-grad-btn)" : "transparent",
-                                                    color: isSel ? "#fff" : (isToday ? C.btn : C.text),
-                                                    borderRadius: 6,
-                                                    fontSize: 11,
-                                                    fontWeight: isToday || isSel ? 700 : 500,
-                                                    cursor: "pointer",
-                                                    fontFamily: "inherit",
-                                                    padding: 0,
-                                                    boxShadow: isSel ? "var(--rt-sh-purple)" : "none",
-                                                    transition: "all 160ms var(--rt-ease-out)",
-                                                  }}
-                                                  onMouseEnter={e => { if (!isSel) e.currentTarget.style.background = "rgba(0,0,0,0.06)"; }}
-                                                  onMouseLeave={e => { if (!isSel) e.currentTarget.style.background = "transparent"; }}
-                                                >{d}</button>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                </>
-                              )}
                             </div>
                             {/* Recurrence — only meaningful once a date is set.
                                 The date acts as the anchor; recurrence rolls it
@@ -16370,7 +16239,7 @@ export default function App({ user }) {
                 <div style={{ marginTop: 18 }}>
                   {!rolodexConfirm && !removeConfirm && !pauseConfirm && !resumeConfirm ? null : pauseConfirm ? (
                     <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px" }}>
-                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>This client will be paused but will still count as a client in your roster. Their tasks stay visible but Rai stops surfacing them, and tenure clock freezes until you resume.</p>
+                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>Pausing will not remove a client from billing — tasks stay visible but Rai stops surfacing them, and the tenure clock freezes until you resume. To stop billing, move them to your Rolodex instead.</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={async () => {
                           // Optimistic: flip is_paused, drop ret -4
@@ -17425,6 +17294,8 @@ export default function App({ user }) {
             const updates = { renewal_date: rm.date || null, renewal_recurrence: rm.recurrence || "none" };
             setClients(prev => prev.map(c => c.id === rm.client.id ? { ...c, ...updates } : c));
             if (selectedClient && selectedClient.id === rm.client.id) setSelectedClient({ ...selectedClient, ...updates });
+            // If opened from the edit form, keep its in-memory copy in sync too.
+            if (rm.fromEdit) setOverviewEditData(prev => ({ ...prev, renewal_date: rm.date || null, renewal_recurrence: rm.recurrence || "none" }));
             setRenewalModal(null);
             try { await clientsDb.update(rm.client.id, updates); } catch (e) { console.warn("renewal save failed:", e); }
           };
@@ -17596,7 +17467,7 @@ export default function App({ user }) {
                       { l: "Together", v: sr.months > 0 ? sr.months + " months" : "One-time" },
                       { l: "Added", v: sr.date },
                       { l: "Priority", v: sr.priority ? (sr.priority === "high" ? "High" : sr.priority === "medium" ? "Medium" : "Low") : "Not set" },
-                      { l: "Reminder", v: sr.reminder ? new Date(sr.reminder).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "None set" },
+                      { l: "Reminder", v: sr.reminder ? (new Date(sr.reminder).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + (sr.reminderRecurrence && sr.reminderRecurrence !== "none" ? " · repeats " + ({ "2w": "2wk", "1m": "monthly", "3m": "3mo", "6m": "6mo" }[sr.reminderRecurrence] || "") : "")) : "None set" },
                     ].map((d, i) => (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid " + C.borderLight }}>
                         <span style={{ fontSize: 14, color: C.textMuted }}>{d.l}</span>
@@ -17632,10 +17503,10 @@ export default function App({ user }) {
                       </div>
                     )}
                     {!showReminderPicker ? (
-                      <button onClick={() => { setShowReminderPicker(true); setReminderDate(sr.reminder || ""); }} style={{ width: "100%", padding: "12px 14px", background: sr.reminder ? C.primaryGhost : C.surfaceWarm, color: sr.reminder ? C.primary : C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 16, textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                      <button onClick={() => { setShowReminderPicker(true); setReminderDate(sr.reminder || ""); const rc = sr.reminderRecurrence || "none"; setReminderRepeatOn(rc !== "none"); setReminderRecur(rc !== "none" ? rc : "1m"); }} style={{ width: "100%", padding: "12px 14px", background: sr.reminder ? C.primaryGhost : C.surfaceWarm, color: sr.reminder ? C.primary : C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginTop: 16, textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         {sr.reminder ? (
                           <>
-                            <span>Check-in reminder</span>
+                            <span>Check-in reminder{sr.reminderRecurrence && sr.reminderRecurrence !== "none" ? " · repeats" : ""}</span>
                             <span style={{ fontWeight: 600, color: C.primary }}>{new Date(sr.reminder + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                           </>
                         ) : (
@@ -17645,15 +17516,47 @@ export default function App({ user }) {
                           </>
                         )}
                       </button>
-                    ) : (
+                    ) : null}
+                    {!showReminderPicker && sr.reminder && String(sr.reminder).slice(0, 10) <= localYmd() && (() => {
+                      const recurring = sr.reminderRecurrence && sr.reminderRecurrence !== "none";
+                      return (
+                        <button onClick={async () => {
+                          // Acting on a due check-in. Recurring → advance to the next
+                          // occurrence (now + interval, snapped to Monday). One-off → clear.
+                          let nextDate = null, nextRecur = "none";
+                          if (recurring) {
+                            const days = { "2w": 14, "1m": 30, "3m": 90, "6m": 180 }[sr.reminderRecurrence] || 30;
+                            const t = new Date(Date.now() + days * 86400000);
+                            const dow = t.getDay();
+                            const diff = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
+                            nextDate = localYmd(new Date(t.getTime() + diff * 86400000));
+                            nextRecur = sr.reminderRecurrence;
+                          }
+                          const prev = rolodex;
+                          setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: nextDate, reminderRecurrence: nextRecur } : x));
+                          setSelectedRolodex({ ...sr, reminder: nextDate, reminderRecurrence: nextRecur });
+                          try {
+                            const { error } = await rolodexDb.update(sr.id, { reminder_date: nextDate, reminder_recurrence: nextRecur });
+                            if (error) throw error;
+                          } catch (e) {
+                            console.error("Check-in advance failed:", e);
+                            setRolodex(prev); setSelectedRolodex(sr);
+                            alert("Could not update reminder. Please try again.");
+                          }
+                        }} style={{ width: "100%", padding: "10px 14px", marginTop: 8, background: C.primary, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                          Mark checked in{recurring ? " · schedule next" : ""}
+                        </button>
+                      );
+                    })()}
+                    {showReminderPicker && (
                       <div style={{ marginTop: 16 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>When should Rai remind you?</div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                           {[
-                            { label: "2 weeks", days: 14 },
-                            { label: "1 month", days: 30 },
-                            { label: "3 months", days: 90 },
-                            { label: "6 months", days: 180 },
+                            { label: "2 weeks", days: 14, recur: "2w" },
+                            { label: "1 month", days: 30, recur: "1m" },
+                            { label: "3 months", days: 90, recur: "3m" },
+                            { label: "6 months", days: 180, recur: "6m" },
                           ].map(q => {
                             const target = new Date(Date.now() + q.days * 24 * 60 * 60 * 1000);
                             const dow = target.getDay();
@@ -17662,22 +17565,34 @@ export default function App({ user }) {
                             const d = localYmd(monday);
                             const sel = reminderDate === d;
                             return (
-                              <button key={q.label} onClick={() => setReminderDate(d)} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1.5px solid " + (sel ? C.primary : C.border), background: sel ? C.primarySoft : C.bg, color: sel ? C.primary : C.text, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{q.label}</button>
+                              <button key={q.label} onClick={() => { setReminderDate(d); setReminderRecur(q.recur); }} style={{ flex: 1, padding: "10px 8px", borderRadius: 8, border: "1.5px solid " + (sel ? C.primary : C.border), background: sel ? C.primarySoft : C.bg, color: sel ? C.primary : C.text, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{q.label}</button>
                             );
                           })}
                         </div>
                         {reminderDate && <div style={{ fontSize: 14, color: C.primary, fontWeight: 600, marginBottom: 12 }}>Monday, {new Date(reminderDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>}
+                        {reminderDate && (() => {
+                          const label = { "2w": "every 2 weeks", "1m": "monthly", "3m": "every 3 months", "6m": "every 6 months" }[reminderRecur] || "on a repeat";
+                          return (
+                            <button onClick={() => setReminderRepeatOn(v => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "10px 12px", marginBottom: 12, background: reminderRepeatOn ? C.primaryGhost : C.bg, border: "1.5px solid " + (reminderRepeatOn ? C.primary : C.border), borderRadius: 8, cursor: "pointer", fontFamily: "inherit" }}>
+                              <span style={{ fontSize: 13.5, fontWeight: 600, color: reminderRepeatOn ? C.primary : C.textSec }}>Repeat {reminderRepeatOn ? label : ""}</span>
+                              <span style={{ width: 36, height: 20, borderRadius: 999, background: reminderRepeatOn ? C.primary : C.border, position: "relative", flexShrink: 0, transition: "background 150ms" }}>
+                                <span style={{ position: "absolute", top: 2, left: reminderRepeatOn ? 18 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 150ms" }} />
+                              </span>
+                            </button>
+                          );
+                        })()}
                         <div style={{ display: "flex", gap: 8 }}>
                           <button onClick={async () => {
                             // Persist the reminder date to DB. Before this fix
                             // the reminder was only kept in local state and
                             // would disappear on refresh — silent data loss.
                             if (reminderDate) {
+                              const recurVal = reminderRepeatOn ? reminderRecur : "none";
                               const prev = rolodex;
-                              setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: reminderDate } : x));
-                              setSelectedRolodex({ ...sr, reminder: reminderDate });
+                              setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: reminderDate, reminderRecurrence: recurVal } : x));
+                              setSelectedRolodex({ ...sr, reminder: reminderDate, reminderRecurrence: recurVal });
                               try {
-                                const { error } = await rolodexDb.update(sr.id, { reminder_date: reminderDate });
+                                const { error } = await rolodexDb.update(sr.id, { reminder_date: reminderDate, reminder_recurrence: recurVal });
                                 if (error) throw error;
                               } catch (e) {
                                 console.error("Reminder save failed:", e);
@@ -17694,12 +17609,13 @@ export default function App({ user }) {
                             // loss pattern as the save path — was previously
                             // local-only.
                             const prev = rolodex;
-                            setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: null } : x));
-                            setSelectedRolodex({ ...sr, reminder: null });
+                            setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: null, reminderRecurrence: "none" } : x));
+                            setSelectedRolodex({ ...sr, reminder: null, reminderRecurrence: "none" });
                             setReminderDate("");
+                            setReminderRepeatOn(false);
                             setShowReminderPicker(false);
                             try {
-                              const { error } = await rolodexDb.update(sr.id, { reminder_date: null });
+                              const { error } = await rolodexDb.update(sr.id, { reminder_date: null, reminder_recurrence: "none" });
                               if (error) throw error;
                             } catch (e) {
                               console.error("Reminder remove failed:", e);
