@@ -11168,12 +11168,20 @@ export default function App({ user }) {
               if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
             }
             const thisWeek = counts[0] || 0;
-            // Prior windows that ACTUALLY had activity (empty weeks ignored).
+            // Prior weeks count toward the baseline only if they had REAL volume
+            // (>=3 events). A week with 1-2 events is noise, not a representative
+            // "active week" — counting it drags the baseline down and makes this
+            // week look like a false spike. We want this week vs a typical REAL week.
             const priorActive = [];
-            for (let w = 1; w < 13; w++) if (counts[w] > 0) priorActive.push(counts[w]);
+            for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 3) priorActive.push(counts[w]);
 
-            // No prior active week → no baseline yet → keep calibrating.
-            if (priorActive.length === 0) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+            // No real prior week to compare against.
+            if (priorActive.length === 0) {
+              // Nothing this week either → genuinely quiet → Slipping.
+              if (thisWeek === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
+              // Active now but no baseline yet → still building history.
+              return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+            }
 
             const baseline = priorActive.reduce((a, b) => a + b, 0) / priorActive.length;
             const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
