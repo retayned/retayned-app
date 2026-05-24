@@ -11176,7 +11176,14 @@ export default function App({ user }) {
             const normalPace = stamps.length / observedDays;
             const momentum = normalPace > 0 ? recentPace / normalPace : 0;
 
-            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: total=${stamps.length} obsDays=${observedDays.toFixed(0)} recent${recentDays}=${recentCount} recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} momentum=${momentum.toFixed(2)}`);
+            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) {
+              const n7 = stamps.filter(ms => NOW - ms <= 7 * DAY).length;
+              const n14 = stamps.filter(ms => NOW - ms <= 14 * DAY).length;
+              const n30 = stamps.filter(ms => NOW - ms <= 30 * DAY).length;
+              const newest = stamps.length ? Math.round((NOW - Math.max(...stamps)) / DAY) : "-";
+              const oldest = stamps.length ? Math.round((NOW - Math.min(...stamps)) / DAY) : "-";
+              console.log(`[cadence] ${c.name}: total=${stamps.length} oldest=${oldest}d newest=${newest}d obs=${observedDays.toFixed(0)} | last7=${n7} last14=${n14} last30=${n30} | recentPace=${recentPace.toFixed(2)} normalPace=${normalPace.toFixed(2)} m=${momentum.toFixed(2)}`);
+            }
 
             if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
             if (momentum < 0.75)  return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
