@@ -7839,7 +7839,6 @@ export default function App({ user }) {
           .rc-desktop-view { display: none !important; }
           .rc-mobile-list { display: block !important; }
           .rt-mob-strip { display: block !important; }
-          .rc-sort-cadence { display: none !important; }
           .rc-sort-renewal { display: none !important; }
           .rt-mob-cal-trigger { display: none !important; }
           .rt-mob-cal-sheet { display: none !important; }
@@ -7881,7 +7880,6 @@ export default function App({ user }) {
           .rt-tcol-renews { display: none !important; }
         }
         @media (max-width: 1024px) {
-          .rt-tcol-trend { display: none !important; }
         }
         @media (max-width: 900px) {
           .rt-tcol-lcv { display: none !important; }
@@ -11026,34 +11024,6 @@ export default function App({ user }) {
         {dataLoaded && page === "clients" && (() => {
           // ─── Stubs for v2-specific per-client fields ──────────────────────
           // Real data lives in clients[]: name, ret, contact, role, months, revenue, velocity, lastHC, lastContact, tag
-          // Stubs provide: owner + ownerColor, cadence target/actual, 12-week trend array, score delta, stage bucket, renewal days
-          const hashStr = (s) => (s || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-          const stubDelta = (clientName) => {
-            if (!clientName) return 0;
-            return (hashStr(clientName) % 11) - 5;
-          };
-          const OWNERS = [
-            { name: "Ana K.",    color: "#2C9A76" },
-            { name: "Dev R.",    color: "#D17A1B" },
-            { name: "Jordan P.", color: "#6D2BD9" },
-            { name: "Sam L.",    color: "#1F7A5C" },
-          ];
-          const stubOwner = (name) => OWNERS[hashStr(name) % OWNERS.length];
-          const stubTrend = (c) => {
-            // 12-week synthetic revenue trend keyed to current score direction
-            const base = c.revenue || 5000;
-            const delta = stubDelta(c.name);
-            const direction = delta > 1 ? 1 : delta < -1 ? -1 : 0;
-            const pts = [];
-            for (let i = 0; i < 12; i++) {
-              const progress = i / 11;
-              const shift = direction * base * 0.08 * progress;
-              const wobble = Math.sin((i + hashStr(c.name)) * 1.1) * base * 0.01;
-              pts.push(Math.round(base - direction * base * 0.08 + shift + wobble));
-            }
-            pts[pts.length - 1] = base;
-            return pts;
-          };
           const stubStage = (score) => score >= 80 ? "thriving" : score >= 65 ? "healthy" : score >= 45 ? "watch" : score >= 30 ? "at-risk" : "critical";
           // Real renewal info from renewal_date (+ optional renewal_recurrence).
           // One-time ("none"): shows the date as-is, can go "Overdue".
@@ -11302,23 +11272,6 @@ export default function App({ user }) {
             );
           };
 
-          const OwnerChip = ({ owner, color, size = "md", showLabel = true, firstOnly = false }) => {
-            const dim = size === "sm" ? 18 : 22;
-            const initials = owner.split(" ").map(s => s[0]).join("").slice(0, 2);
-            const display = firstOnly ? owner.split(" ")[0] : owner;
-            return (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                <div style={{
-                  width: dim, height: dim, borderRadius: dim / 2, flexShrink: 0,
-                  background: color, color: "#fff",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: size === "sm" ? 9 : 10, fontWeight: 700, letterSpacing: 0.2,
-                }}>{initials}</div>
-                {showLabel && <span style={{ fontSize: 11.5, color: C.textSec, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{display}</span>}
-              </div>
-            );
-          };
-
           // ─── Aggregates ────────────────────────────────────────────────────
           const activeClients = clients || [];
           const avgScore = activeClients.length ? Math.round(activeClients.reduce((a, c) => a + (c.ret || 0), 0) / activeClients.length) : 0;
@@ -11349,8 +11302,7 @@ export default function App({ user }) {
               xs = xs.filter(c =>
                 c.name.toLowerCase().includes(q) ||
                 (c.contact || "").toLowerCase().includes(q) ||
-                (c.tag || "").toLowerCase().includes(q) ||
-                stubOwner(c.name).name.toLowerCase().includes(q)
+                (c.tag || "").toLowerCase().includes(q)
               );
             }
             // Drift filter — exact match against c.drift_status. "all" passes everything.
@@ -11374,13 +11326,6 @@ export default function App({ user }) {
             if (sortId === "retention") copy.sort((a, b) => (b.ret || 0) - (a.ret || 0));
             else if (sortId === "attention") copy.sort((a, b) => (a.ret || 0) - (b.ret || 0));
             else if (sortId === "revenue") copy.sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
-            else if (sortId === "trend") {
-              const pct = c => {
-                const t = stubTrend(c);
-                return ((t[t.length - 1] - t[0]) / Math.max(1, t[0])) * 100;
-              };
-              copy.sort((a, b) => pct(b) - pct(a)); // flipped — green top → red bottom
-            }
             else if (sortId === "cadence") {
               // Real cadence severity: slipping first (needs attention), then
               // on rhythm, ahead, calibrating last (no rhythm yet to judge).
@@ -11396,7 +11341,6 @@ export default function App({ user }) {
           const sortOptions = [
             { id: "retention",  label: "Retention" },
             { id: "revenue",    label: "Revenue" },
-            { id: "trend",      label: "Trend" },
             { id: "cadence",    label: "Cadence" },
             { id: "renewal",    label: "Renewal" },
             { id: "alpha",      label: "A–Z" },
@@ -11773,15 +11717,11 @@ export default function App({ user }) {
                         <div style={{ width: 78, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Revenue</div>
                         <div style={{ width: 64, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Tenure</div>
                         <div className="rt-tcol-lcv" style={{ width: 74, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>LCV</div>
-                        <div className="rt-tcol-trend" style={{ width: 88, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>12-wk trend</div>
-                        <div className="rt-tcol-cadence" style={{ width: 92, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Cadence</div>
+                        <div className="rt-tcol-cadence" style={{ width: 80, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Cadence</div>
                         <div className="rt-tcol-renews" style={{ width: 64, textAlign: "right", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Renews</div>
                       </div>
                       <div>
                         {filteredClients.map((c, i, arr) => {
-                          const trend = stubTrend(c);
-                          const trendStart = trend[0], trendEnd = trend[trend.length - 1];
-                          const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
                           const renew = renewalInfo(c);
                           const renewStr = renew.str;
                           const renewUrgent = renew.urgent;
@@ -11827,13 +11767,7 @@ export default function App({ user }) {
                                   return <div style={{ fontSize: 13, fontWeight: 500, color: C.text, fontVariantNumeric: "tabular-nums" }}>{display}</div>;
                                 })()}
                               </div>
-                              <div className="rt-tcol-trend" style={{ width: 88, display: "flex", alignItems: "center", gap: 6 }}>
-                                <V2Sparkline points={trend} width={50} height={20} />
-                                <span style={{ fontSize: 11, fontWeight: 700, color: pct >= 1 ? C.retGood : pct <= -1 ? C.retWarn : C.textMuted, fontVariantNumeric: "tabular-nums" }}>
-                                  {pct >= 0 ? "+" : ""}{pct.toFixed(0)}%
-                                </span>
-                              </div>
-                              <div className="rt-tcol-cadence" style={{ width: 92 }}>
+                              <div className="rt-tcol-cadence" style={{ width: 80 }}>
                                 {(() => {
                                   const cad = clientCadence(c);
                                   return (
@@ -11887,10 +11821,6 @@ export default function App({ user }) {
                               </div>
                               <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                                 {col.map(c => {
-                                  const trend = stubTrend(c);
-                                  const trendStart = trend[0], trendEnd = trend[trend.length - 1];
-                                  const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
-                                  const owner = stubOwner(c.name);
                                   return (
                                     <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -11905,8 +11835,7 @@ export default function App({ user }) {
                                           </div>
                                         </div>
                                       </div>
-                                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
-                                        <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
+                                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                                         {(() => { const cad = clientCadence(c); return (
                                           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                                             <span style={{ width: 6, height: 6, borderRadius: "50%", background: cad.color, flexShrink: 0 }} />
@@ -11914,12 +11843,9 @@ export default function App({ user }) {
                                           </div>
                                         ); })()}
                                       </div>
-                                      <div style={{ position: "relative", background: C.bg, borderRadius: 6, padding: "4px 6px", minWidth: 0, overflow: "hidden" }}>
-                                        <V2Sparkline points={trend} width={156} height={28} fill responsive />
-                                        <div style={{ position: "absolute", top: 4, left: 0, right: 6, display: "flex", justifyContent: "space-between", padding: "0 6px", pointerEvents: "none" }}>
-                                          <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0)/1000).toFixed(1)}k</span>
-                                          <span style={{ fontSize: 10.5, fontWeight: 700, color: pct >= 1 ? C.retGood : pct <= -1 ? C.retWarn : C.textMuted, fontVariantNumeric: "tabular-nums" }}>{pct >= 0 ? "+" : ""}{pct.toFixed(0)}%</span>
-                                        </div>
+                                      <div style={{ background: C.bg, borderRadius: 6, padding: "5px 8px", minWidth: 0 }}>
+                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0)/1000).toFixed(1)}k</span>
+                                        <span style={{ fontSize: 10.5, color: C.textMuted, marginLeft: 3 }}>/mo</span>
                                       </div>
                                     </div>
                                   );
@@ -11938,13 +11864,9 @@ export default function App({ user }) {
                   {dataLoaded && variant === "heatmap" && (
                     <div className="rc-desktop-view" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
                       {filteredClients.map(c => {
-                        const trend = stubTrend(c);
-                        const trendStart = trend[0], trendEnd = trend[trend.length - 1];
-                        const pct = ((trendEnd - trendStart) / Math.max(1, trendStart)) * 100;
                         const scoreColor = retColor(c.ret || 0);
                         const renew = renewalInfo(c);
                         const renewUrgent = renew.urgent;
-                        const owner = stubOwner(c.name);
                         return (
                           <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
                             <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
@@ -11958,17 +11880,10 @@ export default function App({ user }) {
                                 <div style={{ fontSize: 15, fontWeight: 700, color: scoreColor, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{c.ret || 0}</div>
                               </div>
                             </div>
-                            <div style={{ position: "relative", background: C.primaryGhost, borderRadius: 6, padding: "4px 6px", marginBottom: 10, overflow: "hidden" }}>
-                              <V2Sparkline points={trend} width={200} height={32} fill showEnd />
-                              <div style={{ position: "absolute", top: 4, left: 6, right: 6, display: "flex", justifyContent: "space-between", alignItems: "center", pointerEvents: "none" }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums", background: "rgba(255,255,255,0.9)", padding: "1px 4px", borderRadius: 3 }}>${((c.revenue || 0)/1000).toFixed(1)}k<span style={{ fontWeight: 400, fontSize: 10.5, color: C.textMuted }}>/mo</span></span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: pct >= 1 ? C.retGood : pct <= -1 ? C.retWarn : C.textMuted, fontVariantNumeric: "tabular-nums", background: "rgba(255,255,255,0.9)", padding: "1px 4px", borderRadius: 3 }}>{pct >= 0 ? "+" : ""}{pct.toFixed(0)}% 12w</span>
-                              </div>
+                            <div style={{ background: C.primaryGhost, borderRadius: 6, padding: "6px 8px", marginBottom: 10 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${((c.revenue || 0)/1000).toFixed(1)}k<span style={{ fontWeight: 400, fontSize: 10.5, color: C.textMuted }}>/mo</span></span>
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto) minmax(0, auto)", gap: 10, alignItems: "center" }}>
-                              <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
-                                <OwnerChip owner={owner.name} color={owner.color} size="sm" showLabel firstOnly />
-                              </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, auto)", gap: 10, alignItems: "center" }}>
                               <div style={{ display: "flex", alignItems: "center", minWidth: 0 }}>
                                 {(() => { const cad = clientCadence(c); return (
                                   <>
@@ -15688,13 +15603,6 @@ export default function App({ user }) {
         // Hero+ helpers
         const _hash = (s) => (s || "").split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
         const _delta = sc.name ? ((_hash(sc.name) % 11) - 5) : 0;
-        const _OWNERS = [
-          { name: "Ana K.",    color: "#2C9A76" },
-          { name: "Dev R.",    color: "#D17A1B" },
-          { name: "Jordan P.", color: "#6D2BD9" },
-          { name: "Sam L.",    color: "#1F7A5C" },
-        ];
-        const _owner = _OWNERS[_hash(sc.name || "") % _OWNERS.length];
         const _driftRaw = clientDrift[sc.name] || (sc.ret ? (sc.ret >= 80 ? "Thriving" : sc.ret >= 65 ? "Stable" : sc.ret >= 45 ? "Shifted" : "Declining") : "Stable");
         const _driftLabel = _driftRaw === "Something shifted" ? "Shifted" : _driftRaw;
         const _driftMeta = {
