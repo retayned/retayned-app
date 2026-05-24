@@ -11164,10 +11164,16 @@ export default function App({ user }) {
             const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
             const daysSince = (Date.now() - recent[0]) / 86400000;
             const sinceStr = daysSince < 1 ? "today" : `${Math.round(daysSince)}d`;
-            if (avg <= 0) return { state: "on", label: "On rhythm", color: C.retGood };
-            if (daysSince > avg * 1.5)  return { state: "overdue",  label: `Overdue · ${sinceStr}`,  color: C.retWarn };
-            if (daysSince > avg * 1.15) return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retOk };
-            return { state: "on", label: "On rhythm", color: C.retGood };
+            // Ratio of time-since-last-touch to this client's own normal gap.
+            // Gentle: must go 2x their normal before "slipping" — bursty work
+            // shouldn't trip it. Touched sooner than usual (<0.8x) = "ahead".
+            // No "overdue" tier — we don't know the client's true expectations,
+            // so we never claim they're late, only that contact is below normal.
+            if (avg <= 0) return { state: "ahead", label: "Ahead", color: C.retGood };
+            const ratio = daysSince / avg;
+            if (ratio > 2)    return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn };
+            if (ratio >= 0.8) return { state: "on",       label: "On rhythm",            color: C.warning };
+            return { state: "ahead", label: "Ahead", color: C.retGood };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
@@ -11382,9 +11388,9 @@ export default function App({ user }) {
               copy.sort((a, b) => pct(b) - pct(a)); // flipped — green top → red bottom
             }
             else if (sortId === "cadence") {
-              // Real cadence severity: overdue first, then slipping, on rhythm,
-              // calibrating last (no rhythm yet to judge).
-              const rank = { overdue: 0, slipping: 1, on: 2, calibrating: 3 };
+              // Real cadence severity: slipping first (needs attention), then
+              // on rhythm, ahead, calibrating last (no rhythm yet to judge).
+              const rank = { slipping: 0, on: 1, ahead: 2, calibrating: 3 };
               copy.sort((a, b) => (rank[clientCadence(a).state] ?? 3) - (rank[clientCadence(b).state] ?? 3));
             }
             else if (sortId === "renewal") copy.sort((a, b) => renewalInfo(a).days - renewalInfo(b).days);
@@ -11513,14 +11519,52 @@ export default function App({ user }) {
                     )}
                   </div>
 
-                  {/* Card 3: Recent movement — REMOVED May 2026. Was driven by
-                      stubDelta (a name-hash fake), not real score movement.
-                      Visible shell left in place as a reminder; to be rebuilt as
-                      a real cadence/movement surface in a later pass. */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px", opacity: 0.6 }}>
-                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 }}>Recent movement</div>
-                    <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", lineHeight: 1.5 }}>Coming with cadence.</div>
-                  </div>
+                  {/* Card 3: Recent movement — real cadence. Top = clients you're
+                      most ahead of pace with; bottom = those slipping most vs
+                      their own rhythm. Driven by clientCadence (real activity),
+                      not the old name-hash stub. */}
+                  {(() => {
+                    const scored = (activeClients || []).map(c => ({ c, cad: clientCadence(c) }));
+                    const ahead = scored.filter(x => x.cad.state === "ahead").slice(0, 3);
+                    const slipping = scored.filter(x => x.cad.state === "slipping")
+                      .sort((a, b) => {
+                        // most-slipping first: larger days-since wins
+                        const dA = parseInt((a.cad.label.match(/(\d+)d/) || [])[1] || "0", 10);
+                        const dB = parseInt((b.cad.label.match(/(\d+)d/) || [])[1] || "0", 10);
+                        return dB - dA;
+                      })
+                      .slice(0, 3);
+                    return (
+                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                        <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Recent movement</div>
+                        {ahead.length > 0 && (
+                          <div style={{ marginBottom: slipping.length > 0 ? 10 : 0 }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retGood, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Ahead</div>
+                            {ahead.map(({ c }) => (
+                              <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
+                                <ScorePearl score={c.ret || 0} size="sm" />
+                                <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {slipping.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retWarn, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Slipping</div>
+                            {slipping.map(({ c }) => (
+                              <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
+                                <ScorePearl score={c.ret || 0} size="sm" />
+                                <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {ahead.length === 0 && slipping.length === 0 && (
+                          <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "4px 0" }}>Everyone&rsquo;s on rhythm.</div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* MAIN COLUMN */}
