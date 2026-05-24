@@ -11191,15 +11191,17 @@ export default function App({ user }) {
             const daysSince = businessDaysBetween(recent[0], Date.now());
             const sinceStr = daysSince < 1 ? "today" : `${Math.round(daysSince)}d`;
             // Ratio of time-since-last-touch to this client's own normal gap,
-            // both measured in BUSINESS days (weekends excluded). 1.5x their
-            // normal before "slipping" — catches real drift without tripping on
-            // bursty work. Touched sooner than usual (<0.8x) = "ahead". No
-            // "overdue" tier — we don't know the client's true expectations,
-            // so we never claim they're late, only that contact is below normal.
-            if (avg <= 0) return { state: "ahead", label: "Ahead", color: C.retGood, ratio: 0, daysSince: 0 };
+            // both in BUSINESS days (weekends excluded). Bands around 1x:
+            //   < 0.75      → Ahead     (touched sooner than their normal)
+            //   0.75–1.25   → On rhythm (normal range)
+            //   ≥ 1.25      → Slipping  (past their normal pace)
+            // No "overdue" tier — we don't claim a deadline we can't know.
+            // avg≈0 (bursty/same-day activity) defaults to On rhythm, NOT Ahead,
+            // so heavy task-completion doesn't flip every client to Ahead.
+            if (avg <= 0) return { state: "on", label: "On rhythm", color: C.warning, ratio: 1, daysSince };
             const ratio = daysSince / avg;
-            if (ratio > 1.5)  return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn, ratio, daysSince };
-            if (ratio >= 0.8) return { state: "on",       label: "On rhythm",            color: C.warning, ratio, daysSince };
+            if (ratio >= 1.25) return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn, ratio, daysSince };
+            if (ratio >= 0.75) return { state: "on",       label: "On rhythm",            color: C.warning, ratio, daysSince };
             return { state: "ahead", label: "Ahead", color: C.retGood, ratio, daysSince };
           };
 
@@ -11567,10 +11569,10 @@ export default function App({ user }) {
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Recent movement</div>
                         {mostActive.length > 0 && (
                           <div style={{ marginBottom: leastActive.length > 0 ? 10 : 0 }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retGood, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Most active</div>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retGood, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Warmest</div>
                             {mostActive.map(({ c }) => (
-                              <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
-                                <ScorePearl score={c.ret || 0} size="sm" />
+                              <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "3px 0", cursor: "pointer" }}>
+                                <ScoreRing2 client={c} size={22} />
                                 <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                               </div>
                             ))}
@@ -11578,10 +11580,10 @@ export default function App({ user }) {
                         )}
                         {leastActive.length > 0 && (
                           <div>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retWarn, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Least active</div>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retWarn, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Coolest</div>
                             {leastActive.map(({ c }) => (
-                              <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
-                                <ScorePearl score={c.ret || 0} size="sm" />
+                              <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "3px 0", cursor: "pointer" }}>
+                                <ScoreRing2 client={c} size={22} />
                                 <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
                               </div>
                             ))}
