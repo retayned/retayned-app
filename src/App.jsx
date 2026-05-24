@@ -4787,6 +4787,11 @@ export default function App({ user }) {
   // options — a renewal date is a specific future calendar date, not a
   // bucket like a task due date.
   const [renewalPickerOpen, setRenewalPickerOpen] = useState(false);
+  // Standalone "set renewal" modal — a focused one-field editor so users don't
+  // have to enter the full client edit form just to set a renewal date.
+  // Holds { client, date, recurrence } while open; null = closed.
+  const [renewalModal, setRenewalModal] = useState(null);
+  const [renewalModalMonth, setRenewalModalMonth] = useState("");
   const [renewalCalendarMonth, setRenewalCalendarMonth] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -11135,6 +11140,26 @@ export default function App({ user }) {
             return `${Math.floor(days / 365)}y ago`;
           };
 
+          // Weekday count between two timestamps (excludes Sat/Sun). Used so a
+          // Friday→Monday gap reads as 1 working day, not 3 — nobody's slipping
+          // because they didn't email a client over the weekend. Mirrors the Rai
+          // sweep's weekend handling.
+          const businessDaysBetween = (earlierMs, laterMs) => {
+            if (laterMs <= earlierMs) return 0;
+            let count = 0;
+            // Walk day-by-day from earlier to later, counting weekdays.
+            const cur = new Date(earlierMs);
+            cur.setHours(0, 0, 0, 0);
+            const end = new Date(laterMs);
+            end.setHours(0, 0, 0, 0);
+            while (cur < end) {
+              cur.setDate(cur.getDate() + 1);
+              const dow = cur.getDay();
+              if (dow !== 0 && dow !== 6) count++;
+            }
+            return count;
+          };
+
           const clientCadence = (c) => {
             const stamps = [];
             for (const t of (allTouchpoints || [])) {
@@ -11159,21 +11184,23 @@ export default function App({ user }) {
             const recent = stamps.slice(0, 10);
             const intervals = [];
             for (let i = 0; i < recent.length - 1; i++) {
-              intervals.push((recent[i] - recent[i + 1]) / 86400000);
+              // business-day gap between consecutive activities
+              intervals.push(businessDaysBetween(recent[i + 1], recent[i]));
             }
             const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-            const daysSince = (Date.now() - recent[0]) / 86400000;
+            const daysSince = businessDaysBetween(recent[0], Date.now());
             const sinceStr = daysSince < 1 ? "today" : `${Math.round(daysSince)}d`;
-            // Ratio of time-since-last-touch to this client's own normal gap.
-            // Gentle: must go 2x their normal before "slipping" — bursty work
-            // shouldn't trip it. Touched sooner than usual (<0.8x) = "ahead".
-            // No "overdue" tier — we don't know the client's true expectations,
+            // Ratio of time-since-last-touch to this client's own normal gap,
+            // both measured in BUSINESS days (weekends excluded). 1.5x their
+            // normal before "slipping" — catches real drift without tripping on
+            // bursty work. Touched sooner than usual (<0.8x) = "ahead". No
+            // "overdue" tier — we don't know the client's true expectations,
             // so we never claim they're late, only that contact is below normal.
-            if (avg <= 0) return { state: "ahead", label: "Ahead", color: C.retGood };
+            if (avg <= 0) return { state: "ahead", label: "Ahead", color: C.retGood, ratio: 0, daysSince: 0 };
             const ratio = daysSince / avg;
-            if (ratio > 2)    return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn };
-            if (ratio >= 0.8) return { state: "on",       label: "On rhythm",            color: C.warning };
-            return { state: "ahead", label: "Ahead", color: C.retGood };
+            if (ratio > 1.5)  return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn, ratio, daysSince };
+            if (ratio >= 0.8) return { state: "on",       label: "On rhythm",            color: C.warning, ratio, daysSince };
+            return { state: "ahead", label: "Ahead", color: C.retGood, ratio, daysSince };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
@@ -11524,23 +11551,24 @@ export default function App({ user }) {
                       their own rhythm. Driven by clientCadence (real activity),
                       not the old name-hash stub. */}
                   {(() => {
-                    const scored = (activeClients || []).map(c => ({ c, cad: clientCadence(c) }));
-                    const ahead = scored.filter(x => x.cad.state === "ahead").slice(0, 3);
-                    const slipping = scored.filter(x => x.cad.state === "slipping")
-                      .sort((a, b) => {
-                        // most-slipping first: larger days-since wins
-                        const dA = parseInt((a.cad.label.match(/(\d+)d/) || [])[1] || "0", 10);
-                        const dB = parseInt((b.cad.label.match(/(\d+)d/) || [])[1] || "0", 10);
-                        return dB - dA;
-                      })
-                      .slice(0, 3);
+                    // Rank clients with a real rhythm by how recently they've been
+                    // touched relative to their own normal (cadence ratio). Lower
+                    // ratio = more recently active. Always show top/bottom 3 — these
+                    // are comparative ("most/least active lately"), not alarms, so
+                    // we don't gate on the slipping threshold.
+                    const ranked = (activeClients || [])
+                      .map(c => ({ c, cad: clientCadence(c) }))
+                      .filter(x => x.cad.state !== "calibrating")
+                      .sort((a, b) => a.cad.ratio - b.cad.ratio);
+                    const mostActive = ranked.slice(0, 3);
+                    const leastActive = ranked.slice(-3).reverse().filter(x => !mostActive.includes(x));
                     return (
                       <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Recent movement</div>
-                        {ahead.length > 0 && (
-                          <div style={{ marginBottom: slipping.length > 0 ? 10 : 0 }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retGood, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Ahead</div>
-                            {ahead.map(({ c }) => (
+                        {mostActive.length > 0 && (
+                          <div style={{ marginBottom: leastActive.length > 0 ? 10 : 0 }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retGood, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Most active</div>
+                            {mostActive.map(({ c }) => (
                               <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
                                 <ScorePearl score={c.ret || 0} size="sm" />
                                 <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
@@ -11548,10 +11576,10 @@ export default function App({ user }) {
                             ))}
                           </div>
                         )}
-                        {slipping.length > 0 && (
+                        {leastActive.length > 0 && (
                           <div>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retWarn, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Slipping</div>
-                            {slipping.map(({ c }) => (
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.retWarn, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 6 }}>Least active</div>
+                            {leastActive.map(({ c }) => (
                               <div key={c.id} onClick={() => setSelectedClient(c)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
                                 <ScorePearl score={c.ret || 0} size="sm" />
                                 <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
@@ -11559,8 +11587,8 @@ export default function App({ user }) {
                             ))}
                           </div>
                         )}
-                        {ahead.length === 0 && slipping.length === 0 && (
-                          <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "4px 0" }}>Everyone&rsquo;s on rhythm.</div>
+                        {ranked.length === 0 && (
+                          <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", padding: "4px 0" }}>Not enough activity yet.</div>
                         )}
                       </div>
                     );
@@ -16033,11 +16061,11 @@ export default function App({ user }) {
                               </div>
                               {[
                                 { l: "Referrals",    v: sc.referrals || 0 },
-                                { l: "Renewal",      v: sc.renewal_date ? (new Date(sc.renewal_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + (sc.renewal_recurrence && sc.renewal_recurrence !== "none" ? " · " + ({ monthly: "Monthly", quarterly: "Quarterly", annual: "Annual" }[sc.renewal_recurrence] || "") : "")) : "Not set", muted: !sc.renewal_date },
+                                { l: "Renewal",      v: sc.renewal_date ? (new Date(sc.renewal_date).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) + (sc.renewal_recurrence && sc.renewal_recurrence !== "none" ? " · " + ({ monthly: "Monthly", quarterly: "Quarterly", annual: "Annual" }[sc.renewal_recurrence] || "") : "")) : "Set renewal", muted: !sc.renewal_date, onClick: () => { setRenewalModalMonth(sc.renewal_date ? sc.renewal_date.slice(0, 7) : (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })()); setRenewalModal({ client: sc, date: sc.renewal_date ? sc.renewal_date.slice(0, 10) : "", recurrence: sc.renewal_recurrence || "none" }); } },
                               ].map((d, i) => (
-                                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight }}>
+                                <div key={i} onClick={d.onClick} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight, cursor: d.onClick ? "pointer" : "default" }}>
                                   <span style={{ fontSize: 14, color: C.textSec }}>{d.l}</span>
-                                  <span style={{ fontSize: 14, fontWeight: 600, color: d.muted ? C.textMuted : C.text }}>{d.v}</span>
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: d.muted ? C.btn : C.text }}>{d.v}{d.onClick && <span style={{ marginLeft: 6, fontSize: 11, color: C.textMuted }}>›</span>}</span>
                                 </div>
                               ))}
                             </>
@@ -17493,6 +17521,84 @@ export default function App({ user }) {
             >{opt.label}</button>
           ))}
         </div>,
+        document.body
+      )}
+      {renewalModal && createPortal(
+        (() => {
+          const rm = renewalModal;
+          const [yr, mo] = (renewalModalMonth || "").split("-").map(Number);
+          const monthDate = new Date(yr, mo - 1, 1);
+          const monthName = monthDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+          const firstDow = monthDate.getDay();
+          const daysInMonth = new Date(yr, mo, 0).getDate();
+          const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+          const shiftMonth = (delta) => {
+            let nmo = mo + delta, nyr = yr;
+            if (nmo < 1) { nmo = 12; nyr--; } else if (nmo > 12) { nmo = 1; nyr++; }
+            setRenewalModalMonth(`${nyr}-${String(nmo).padStart(2, "0")}`);
+          };
+          const fmtDate = rm.date ? new Date(rm.date + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Not set";
+          const saveRenewal = async () => {
+            const updates = { renewal_date: rm.date || null, renewal_recurrence: rm.recurrence || "none" };
+            setClients(prev => prev.map(c => c.id === rm.client.id ? { ...c, ...updates } : c));
+            if (selectedClient && selectedClient.id === rm.client.id) setSelectedClient({ ...selectedClient, ...updates });
+            setRenewalModal(null);
+            try { await clientsDb.update(rm.client.id, updates); } catch (e) { console.warn("renewal save failed:", e); }
+          };
+          return (
+            <div onClick={() => setRenewalModal(null)} style={{ position: "fixed", inset: 0, zIndex: 6000, background: "rgba(20,30,22,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "8vh 20px", fontFamily: "'Manrope', system-ui, sans-serif" }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 18, padding: 24, width: "100%", maxWidth: 380, boxShadow: "0 1px 3px rgba(20,30,22,0.1), 0 30px 70px rgba(20,30,22,0.3)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>Renewal date</h2>
+                  <button onClick={() => setRenewalModal(null)} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: C.surfaceWarm, color: C.textSec, fontSize: 15, cursor: "pointer" }}>✕</button>
+                </div>
+                <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>When does {rm.client.name} renew?</div>
+
+                <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 6 }}>Date <span style={{ fontWeight: 500, color: C.textSec }}>· {fmtDate}</span></label>
+                <div style={{ background: C.bg, borderRadius: 12, padding: 12, boxShadow: "inset 0 1px 2px rgba(20,30,22,0.06)", marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <button onClick={() => shiftMonth(-1)} style={{ border: "none", background: "none", fontSize: 16, color: C.textMuted, cursor: "pointer", padding: "2px 8px" }}>‹</button>
+                    <b style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{monthName}</b>
+                    <button onClick={() => shiftMonth(1)} style={{ border: "none", background: "none", fontSize: 16, color: C.textMuted, cursor: "pointer", padding: "2px 8px" }}>›</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
+                    {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={i} style={{ fontSize: 9, color: C.textMuted, textAlign: "center", fontWeight: 600 }}>{d}</span>)}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+                    {Array.from({ length: firstDow }).map((_, i) => <span key={"e" + i} />)}
+                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                      const day = i + 1;
+                      const ds = `${yr}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                      const sel = rm.date === ds;
+                      const isToday = todayStr === ds;
+                      return (
+                        <div key={day} onClick={() => setRenewalModal({ ...rm, date: ds })} style={{ aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, borderRadius: 7, cursor: "pointer", color: sel ? "#fff" : C.text, fontWeight: sel ? 700 : 500, background: sel ? C.primary : "transparent", boxShadow: isToday && !sel ? "inset 0 0 0 1.5px #B0903A" : "none" }}>{day}</div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {rm.date && (
+                  <>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 6 }}>Repeats</label>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
+                      {[{ v: "none", l: "One-time" }, { v: "monthly", l: "Monthly" }, { v: "quarterly", l: "Quarterly" }, { v: "annual", l: "Annual" }].map(opt => {
+                        const active = (rm.recurrence || "none") === opt.v;
+                        return <button key={opt.v} onClick={() => setRenewalModal({ ...rm, recurrence: opt.v })} style={{ padding: "8px 13px", border: "none", borderRadius: 9, fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", background: active ? C.primarySoft : C.card, boxShadow: "inset 0 0 0 1px " + (active ? C.primary : C.borderLight), color: active ? C.primary : C.textSec }}>{opt.l}</button>;
+                      })}
+                    </div>
+                  </>
+                )}
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={saveRenewal} style={{ flex: 1, padding: 12, border: "none", borderRadius: 10, background: C.btn, color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Save renewal</button>
+                  {rm.date && <button onClick={() => setRenewalModal({ ...rm, date: "", recurrence: "none" })} style={{ padding: "12px 16px", border: "none", borderRadius: 10, background: C.surfaceWarm, color: C.textSec, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Clear</button>}
+                  <button onClick={() => setRenewalModal(null)} style={{ padding: "12px 16px", border: "none", borderRadius: 10, background: C.surface, color: C.text, fontSize: 14, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          );
+        })(),
         document.body
       )}
       {selectedRolodex && (() => {
