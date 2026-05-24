@@ -11203,7 +11203,7 @@ export default function App({ user }) {
             // No "overdue" tier — we don't claim a deadline we can't know.
             if (avg <= 0) return { state: "on", label: "On rhythm", color: C.warning, ratio: 1, daysSince };
             const ratio = daysSince / avg;
-            if (typeof window !== "undefined" && window.__cadenceDebug) console.log(`[cadence] ${c.name}: stamps=${stamps.length} daysSince=${daysSince} avg=${avg.toFixed(1)} ratio=${ratio.toFixed(2)}`);
+            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) console.log(`[cadence] ${c.name}: stamps=${stamps.length} daysSince=${daysSince} avg=${avg.toFixed(1)} ratio=${ratio.toFixed(2)} → ${ratio >= 1.25 ? "slipping" : (ratio < 0.75 && avg >= 3) ? "ahead" : "on"}`);
             if (ratio >= 1.25) return { state: "slipping", label: `Slipping · ${sinceStr}`, color: C.retWarn, ratio, daysSince };
             // Ahead only if there's a meaningful gap (≥3 business days) to beat.
             if (ratio < 0.75 && avg >= 3) return { state: "ahead", label: "Ahead", color: C.retGood, ratio, daysSince };
@@ -11873,6 +11873,7 @@ export default function App({ user }) {
                                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                       <span style={{ width: 7, height: 7, borderRadius: "50%", background: cad.color, flexShrink: 0 }} />
                                       <span style={{ fontSize: 11.5, fontWeight: 600, color: cad.color === C.textMuted ? C.textMuted : C.textSec, whiteSpace: "nowrap", fontStyle: cad.state === "calibrating" ? "italic" : "normal" }}>{cad.label}</span>
+                                      {debugScores && <span style={{ fontSize: 9, color: C.btn, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>d{cad.daysSince}/r{(cad.ratio ?? 0).toFixed(2)}</span>}
                                     </div>
                                   );
                                 })()}
