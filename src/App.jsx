@@ -7321,25 +7321,33 @@ export default function App({ user }) {
         @media (max-width: 768px) {
           .rt-refs-money-mobile { display: block; margin-bottom: 14px; }
         }
-        /* QuickLog FAB — mobile-first positioning so the floating "+"
-           button doesn't cover the bottom navigation strip (which lives
-           ~82px above the viewport bottom). At ≥768px the bottom nav is
-           hidden, so we drop the FAB back down to a normal 24px offset. */
-        .rt-quicklog-fab { bottom: 100px; }
-        @media (min-width: 768px) {
-          .rt-quicklog-fab { bottom: 24px; }
+        /* QuickLog FAB — Today page only.
+           Mobile (base): slim 44px, anchored TOP-right (clear of content + nav).
+           Desktop (≥768px): full 52px, bottom-right (unchanged). */
+        .rt-quicklog-fab {
+          top: 16px; bottom: auto;
+          width: 44px; height: 44px;
+          border-radius: 50%;
+          font-size: 24px;
         }
-        /* QuickLog popover — anchored above the FAB. Same mobile/desktop
-           pair so the popover follows the button. */
-        .rt-quicklog-popover { bottom: 168px; }
         @media (min-width: 768px) {
-          .rt-quicklog-popover { bottom: 90px; }
+          .rt-quicklog-fab {
+            top: auto; bottom: 24px;
+            width: 52px; height: 52px;
+            font-size: 28px;
+          }
         }
-        /* QuickLog toast — sits just above the FAB on mobile, just above
-           the FAB on desktop too (same offset relationship). */
-        .rt-quicklog-toast { bottom: 168px; }
+        /* QuickLog popover — follows the FAB.
+           Mobile: FAB is top-right, so popover drops BELOW it.
+           Desktop: FAB is bottom-right, popover sits above it. */
+        .rt-quicklog-popover { top: 68px; bottom: auto; }
         @media (min-width: 768px) {
-          .rt-quicklog-toast { bottom: 90px; }
+          .rt-quicklog-popover { top: auto; bottom: 90px; }
+        }
+        /* QuickLog toast — mirrors the popover anchoring. */
+        .rt-quicklog-toast { top: 68px; bottom: auto; }
+        @media (min-width: 768px) {
+          .rt-quicklog-toast { top: auto; bottom: 90px; }
         }
         /* Timeline scroll container hides its scrollbar — the partial-day
            visible window plus the NOW marker make scroll affordance clear
@@ -17945,12 +17953,11 @@ export default function App({ user }) {
         })}
       </div>
 
-      {/* ─── QUICKLOG — global FAB composer ─────────────────────────
-          Floating purple "+" anchored bottom-right on every page.
-          Click (or Cmd+K) opens a small popover with a textarea.
-          v1 shell: free-form text → creates a personal task (no client,
-          due today). v2 will add a parser that detects client name and
-          past/future tense (past → touchpoint, future → task). */}
+      {/* ─── QUICKLOG — Today-only FAB composer ─────────────────────────
+          Floating purple "+" on the Today page only (removed from all other
+          pages). Desktop: bottom-right, unchanged. Mobile: top-right + slimmer
+          (size/position handled in .rt-quicklog-fab CSS). */}
+      {page === "today" && (
       <button
         onClick={() => setQuickLogOpen(v => !v)}
         aria-label="Quick log"
@@ -17959,13 +17966,9 @@ export default function App({ user }) {
         style={{
           position: "fixed",
           right: 24,
-          width: 52,
-          height: 52,
-          borderRadius: "50%",
           border: "none",
           background: "var(--rt-grad-btn)",
           color: "#fff",
-          fontSize: 28,
           fontWeight: 300,
           lineHeight: 1,
           cursor: "pointer",
@@ -17981,6 +17984,7 @@ export default function App({ user }) {
         onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple-hover)"; e.currentTarget.style.background = "var(--rt-grad-btn-hover)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple)"; e.currentTarget.style.background = "var(--rt-grad-btn)"; }}
       >+</button>
+      )}
 
       {quickLogOpen && (
         <>
