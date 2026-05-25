@@ -7047,23 +7047,29 @@ export default function App({ user }) {
 
         /* ── TODAY EMPHASIS (restrained blend) ─────────────
            Canvas = soft warm stage behind today. Rail = visual
-           spine + node dots (NO time meaning). Focal = first row
-           reads larger. Condensed = tomorrow/later rows tighten. */
+           spine + node dots (NO time meaning). Condensed =
+           tomorrow/later rows tighten. */
         .rt-today-canvas {
           background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           border-radius: 20px;
           padding: 6px 14px 16px;
           margin: 0 -8px;
         }
+        /* Rail geometry — line + node dots + the TODAY header dot all
+           share center x = 7px (measured from the rail/canvas content
+           edge), so the spine runs straight down through every dot:
+           header dot: margin-left 4 + half-dot 3 = 7
+           line:  left 6 + half-width 1 = 7
+           node:  left -23.5 + half-dot 4.5, inside padding-left 26 → 26 - 23.5 + 4.5 = 7 */
         .rt-today-rail { position: relative; padding-left: 26px; }
         .rt-today-rail::before {
-          content: ""; position: absolute; left: 8px; top: 14px; bottom: 18px; width: 2px;
+          content: ""; position: absolute; left: 6px; top: 22px; bottom: 22px; width: 2px;
           background: linear-gradient(180deg, rgba(85,139,104,0.45), rgba(196,196,189,0.5));
           border-radius: 2px;
         }
         .rt-rail-node { position: relative; }
         .rt-rail-node::before {
-          content: ""; position: absolute; left: -22px; top: 50%; transform: translateY(-50%);
+          content: ""; position: absolute; left: -23.5px; top: 50%; transform: translateY(-50%);
           width: 9px; height: 9px; border-radius: 50%; background: #fff;
           box-shadow: 0 0 0 2px var(--rt-ink-300); z-index: 3;
         }
@@ -7071,10 +7077,6 @@ export default function App({ user }) {
           background: var(--rt-primary-light, #558B68);
           box-shadow: 0 0 0 3px var(--rt-primary-soft, #E6EFE9);
         }
-        /* Focal first today row — larger type/check, normal elevation */
-        .rt-today-focal .rt-row { padding: 16px 18px; }
-        .rt-today-focal .rt-row .rt-task-title { font-size: 16.5px; font-weight: 700; }
-        .rt-today-focal .rt-row .rt-check { width: 24px; height: 24px; }
         /* Condensed future rows (tomorrow/later) */
         .rt-row-condensed .rt-row { padding: 9px 14px; }
         .rt-row-condensed .rt-row .rt-task-title { font-size: 13.5px; }
@@ -10767,7 +10769,7 @@ export default function App({ user }) {
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
                         <div className="rt-today-rail" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {_todayBucket.map((t, i) => (
-                            <div key={t.id} className={"rt-rail-node" + (i === 0 ? " is-first rt-today-focal" : "")}>
+                            <div key={t.id} className={"rt-rail-node" + (i === 0 ? " is-first" : "")}>
                               {renderRow(t, "today")}
                             </div>
                           ))}
