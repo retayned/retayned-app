@@ -612,7 +612,7 @@ export const tasks = {
     since.setDate(since.getDate() - days);
     const { data, error } = await supabase
       .from('task_completions')
-      .select('client_id, client_name, completed_at')
+      .select('client_id, client_name, completed_at, is_recurring')
       .eq('user_id', userId)
       .gte('completed_at', since.toISOString());
     return { data: data || [], error };
@@ -870,8 +870,10 @@ export const healthChecks = {
     return { data, error };
   },
 
-  // Schedule next HC after completing one (default 30 days)
-  scheduleNext: async (userId, clientId, daysOut = 30) => {
+  // Schedule next portfolio review after completing/dismissing one.
+  // Default 90 days (quarterly cadence). (Table is named health_checks for
+  // legacy reasons; it now backs the quarterly portfolio-update schedule.)
+  scheduleNext: async (userId, clientId, daysOut = 90) => {
     const due = new Date();
     due.setDate(due.getDate() + daysOut);
     return healthChecks.schedule(userId, clientId, localYmd(due));
