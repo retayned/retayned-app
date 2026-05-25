@@ -4556,12 +4556,13 @@ export default function App({ user }) {
     };
     setClients([...clients, client].sort((a, b) => (b.ret || 0) - (a.ret || 0)));
 
-    // ─── Auto-create initial Health Check with random 10-40 day offset ────
-    // Random uniform distribution across 31 days (10 through 40 inclusive).
-    // Prevents pileups when users bulk-add clients and maximizes Start Early
-    // value during the trial period.
+    // ─── Schedule the client's first quarterly portfolio review ──────────
+    // Random 80-110 day offset (31-day spread) so first reviews don't pile up
+    // when clients are bulk-added, and land ~a quarter after entry. Recurs
+    // every 90 days from there (scheduleNext). Backed by the health_checks
+    // table (legacy name) which now stores review due-dates.
     try {
-      const offsetDays = 10 + Math.floor(Math.random() * 31); // 10..40 inclusive
+      const offsetDays = 80 + Math.floor(Math.random() * 31); // 80..110 inclusive
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + offsetDays);
       const dueDateStr = localYmd(dueDate);
@@ -12455,42 +12456,6 @@ export default function App({ user }) {
                     );
           };
 
-          const hcQuestions = [
-            { q: "Has anything changed with this relationship?", weight: 0.40, options: [{ text: "Nothing — same as always", mod: 2 }, { text: "Something minor, could be nothing", mod: 0 }, { text: "Noticeably different from before", mod: -3 }, { text: "Something has clearly changed", mod: -5 }] },
-            { q: "Is this relationship better or worse than last month?", weight: 0.20, options: [{ text: "Better — things are trending up", mod: 3 }, { text: "About the same", mod: 0 }, { text: "Slightly worse", mod: -3 }, { text: "Noticeably worse", mod: -5 }] },
-            { q: "Has the way this client communicates with you changed?", weight: 0.20, options: [{ text: "No — same rhythm, same tone", mod: 2 }, { text: "Slightly different but nothing alarming", mod: 0 }, { text: "Noticeably different", mod: -3 }, { text: "Yes — clearly different from before", mod: -5 }] },
-            { q: "If they cancelled tomorrow, would you be surprised?", weight: 0.10, options: [{ text: "Very surprised — not on my radar at all", mod: 2 }, { text: "Somewhat surprised but I could see it", mod: 0 }, { text: "Not really surprised", mod: -3 }, { text: "I’ve had the thought myself", mod: -5 }] },
-            { q: "Is this client getting more or less value from your work than last quarter?", weight: 0.10, options: [{ text: "More — results are improving", mod: 3 }, { text: "About the same", mod: 0 }, { text: "Less — results are slipping", mod: -3 }, { text: "Significantly less", mod: -5 }] },
-          ];
-
-          const selectAnswer = (client, qIdx, mod) => {
-            const key = client;
-            const prev = hcAnswers[key] || [];
-            const alreadyAnswered = prev[qIdx] !== undefined;
-            const updated = [...prev];
-            updated[qIdx] = mod;
-            setHcAnswers({ ...hcAnswers, [key]: updated });
-            if (!alreadyAnswered) {
-              setTimeout(() => {
-                setHcStep(prev => ({ ...prev, [key]: qIdx + 1 }));
-              }, 300);
-            }
-          };
-
-          const calcDrift = (answers) => {
-            if (!answers || answers.length < 5) return null;
-            let delta = 0;
-            hcQuestions.forEach((q, i) => {
-              if (answers[i] != null) delta += answers[i] * q.weight;
-            });
-            delta = Math.round(delta);
-            if (delta >= 2) return "Improving";
-            if (delta >= 0) return "Stable";
-            if (delta >= -2) return "Something shifted";
-            if (delta >= -4) return "Declining";
-            return "At risk";
-          };
-
           // Drift wall uses a 4-tier label set (Thriving / Stable / Shifted / Declining).
           // calcDrift() returns 5 states; merge "At risk" into "Declining" and "Improving"
           // into "Thriving" for plot + pill purposes.
@@ -12505,34 +12470,6 @@ export default function App({ user }) {
           const driftTierColor = (t) => t === "Thriving" ? C.retElite : t === "Stable" ? C.retGood : t === "Shifted" ? C.retWarn : C.retCrit;
           // Stubbed one-liner per drift tier (wired to real note field post-launch)
           const driftStub = (t) => t === "Thriving" ? "Relationship trending up." : t === "Stable" ? "Steady. Nothing to flag." : t === "Shifted" ? "Something worth watching." : "Signals are declining.";
-
-          const submitHc = async (client) => {
-            const answers = hcAnswers[client] || [];
-            const drift = calcDrift(answers);
-            
-            // Update local state
-            setClientDrift(prev => ({ ...prev, [client]: drift }));
-            setClients(prev => prev.map(x => x.name === client ? { ...x, lastHC: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) } : x));
-            setHcDone(prev => ({ ...prev, [client]: true }));
-            setHcOpen(null);
-            
-            // Persist to Supabase
-            const clientObj = clients.find(c => c.name === client);
-            if (clientObj) {
-              // Find the HC record for this client
-              const hcRecord = hcQueue.find(h => h.client === client);
-              if (hcRecord?.id) {
-                // Complete the health check
-                const answersObj = {};
-                answers.forEach((a, i) => { answersObj["q" + (i + 1)] = a; });
-                await hcDb.complete(hcRecord.id, answersObj, null, drift);
-                // Schedule next HC (30 days)
-                await hcDb.scheduleNext(user.id, hcRecord.client_id || clientObj.id);
-              }
-              // Update client drift
-              await clientsDb.updateDrift(clientObj.id, drift, localYmd());
-            }
-          };
 
           // Active = runnable NOW: overdue, due today, OR a first HC (Start Early-eligible)
           const activeQueue = hcQueue.filter(h => h.runnable && !hcDone[h.client]).sort((a, b) => {
@@ -12874,7 +12811,7 @@ export default function App({ user }) {
                           const isOpen = hcOpen === h.client;
                           const overdueDays = h.overdue;
                           const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
-                          const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Start early · in ${h.daysUntil}d`;
+                          const subLabel = overdueDays > 0 ? `${overdueDays}d overdue` : h.due === "Today" ? "Due today" : `Upcoming · in ${h.daysUntil}d`;
                           const subColor = overdueDays > 0 ? C.retWarn : isStartEarly ? C.textSec : C.retOk;
                           return (
                             <button
@@ -12931,11 +12868,17 @@ export default function App({ user }) {
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {activeQueue.map((h, i) => {
                       const isOpen = hcOpen === h.client;
-                      const step = hcStep[h.client] || 0;
-                      const answers = hcAnswers[h.client] || [];
-                      const allAnswered = answers.length === 5 && answers.every(a => a !== undefined);
                       const client = clients.find(c => c.name === h.client);
-
+                      // Dismiss / mark-reviewed: reschedules the next review ~a
+                      // quarter out (no penalty) and clears it from the queue.
+                      const finishReview = async () => {
+                        setHcDone(prev => ({ ...prev, [h.client]: true }));
+                        setHcOpen(null);
+                        try {
+                          if (h.id && hcDb.complete) await hcDb.complete(h.id, {}, null, null);
+                          await hcDb.scheduleNext(user.id, h.client_id || client?.id);
+                        } catch (e) { console.warn("Review reschedule failed:", e); }
+                      };
                       return (
                         <div key={i} style={{ background: C.card, borderRadius: 12, border: "1px solid " + (isOpen ? C.primary + "55" : C.border), boxShadow: "var(--rt-sh-card)", transition: "border-color 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
@@ -12949,62 +12892,37 @@ export default function App({ user }) {
                                 {client?.tag && <span style={{ fontSize: 11, color: C.textMuted }}>· {client.tag}</span>}
                               </div>
                               <div style={{ fontSize: 12, color: h.overdue > 0 ? C.retWarn : (h.isFirstHC && h.due !== "Today") ? C.btn : C.retOk, marginTop: 2, fontWeight: 500 }}>
-                                {h.overdue > 0 ? `Overdue by ${h.overdue}d` : h.due === "Today" ? "Due today" : `Start early · due in ${h.daysUntil}d`}
+                                {h.overdue > 0 ? `Review due ${h.overdue}d ago` : h.due === "Today" ? "Review due today" : `Coming up · in ${h.daysUntil}d`}
                               </div>
                             </div>
                             {!isOpen && (
-                              <button className="r-btn" data-tone="purple" style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{h.isFirstHC && h.due !== "Today" && h.overdue === 0 ? "Start early" : "Start"}</button>
+                              <button className="r-btn" data-tone="purple" style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Review</button>
                             )}
                           </div>
 
-                          {/* Expanded HC flow */}
+                          {/* Expanded — quarterly portfolio review actions */}
                           {isOpen && (
-                            <div style={{ padding: "0 18px 18px", borderTop: "1px solid " + C.borderLight, marginTop: 4 }}>
-                              {/* Progress */}
-                              <div style={{ display: "flex", gap: 4, margin: "16px 0" }}>
-                                {Array.from({ length: hcQuestions.length }).map((_, qi) => (
-                                  <div key={qi} style={{ flex: 1, height: 3, borderRadius: 2, background: qi < step || answers[qi] !== undefined ? C.primary : C.borderLight, transition: "background 200ms" }} />
-                                ))}
+                            <div style={{ padding: "4px 18px 18px", borderTop: "1px solid " + C.borderLight }}>
+                              <p style={{ fontSize: 13.5, lineHeight: 1.5, color: C.textSec, margin: "14px 0 16px" }}>
+                                Time for a quarterly check on <b style={{ color: C.text }}>{h.client}</b>. Has anything changed — scope, contacts, pace, your read on the relationship? Update their profile so Rai's scoring stays sharp, talk it through with Rai, or dismiss if all's well.
+                              </p>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                <button
+                                  onClick={() => { if (client) { setSelectedClient(client); } setHcOpen(null); }}
+                                  style={{ padding: "9px 18px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                >Update profile</button>
+                                <button
+                                  onClick={() => { if (client) { setAiMessages([]); setObservationContext(`The user opened a quarterly portfolio review for ${h.client} and wants to talk through whether anything has changed with this relationship — scope, contacts, communication pace, results, their gut read. Help them reflect and decide what (if anything) to update in the client's profile.`); } setHcOpen(null); setPage("coach"); }}
+                                  style={{ padding: "9px 18px", background: "transparent", color: C.btn, border: "1px solid " + C.btnLight, borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                >Chat with Rai</button>
+                                <div style={{ flex: 1 }} />
+                                <button
+                                  onClick={finishReview}
+                                  style={{ padding: "9px 14px", background: "transparent", color: C.textMuted, border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
+                                  onMouseEnter={e => e.currentTarget.style.color = C.text}
+                                  onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+                                >All good — dismiss</button>
                               </div>
-
-                              {step < hcQuestions.length && (
-                                <div style={{ marginBottom: 12 }}>
-                                  <p style={{ fontSize: 16, fontWeight: 600, margin: "0 0 14px", lineHeight: 1.4, color: C.text, letterSpacing: -0.2 }}>{hcQuestions[step].q}</p>
-                                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                    {hcQuestions[step].options.map((opt, oi) => {
-                                      const isSelected = answers[step] === opt.mod;
-                                      return (
-                                        <div key={oi} onClick={() => selectAnswer(h.client, step, opt.mod)} style={{
-                                          padding: "12px 14px", borderRadius: 8, cursor: "pointer",
-                                          background: isSelected ? C.primaryGhost : C.bg,
-                                          border: "1px solid " + (isSelected ? C.primary : C.borderLight),
-                                          fontSize: 14, color: isSelected ? C.primary : C.textSec,
-                                          fontWeight: isSelected ? 600 : 400,
-                                          transition: "all 150ms",
-                                        }}>{opt.text}</div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-
-                              {step < hcQuestions.length && (
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14 }}>
-                                  <button onClick={() => step > 0 && setHcStep({ ...hcStep, [h.client]: step - 1 })} style={{ padding: "8px 14px", background: step > 0 ? C.surface : "transparent", color: step > 0 ? C.textSec : "transparent", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: step > 0 ? "pointer" : "default", fontFamily: "inherit" }}>Back</button>
-                                  <span style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{step + 1} of {hcQuestions.length}</span>
-                                  {(() => {
-                                    const answered = answers[step] !== undefined;
-                                    return <button onClick={() => answered && setHcStep({ ...hcStep, [h.client]: step + 1 })} style={{ padding: "8px 18px", background: answered ? C.primary : C.surface, color: answered ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: answered ? "pointer" : "default", fontFamily: "inherit" }}>Next</button>;
-                                  })()}
-                                </div>
-                              )}
-
-                              {step >= hcQuestions.length && allAnswered && (() => {
-                                if (!hcDone[h.client]) {
-                                  setTimeout(() => submitHc(h.client), 0);
-                                }
-                                return null;
-                              })()}
                             </div>
                           )}
                         </div>
