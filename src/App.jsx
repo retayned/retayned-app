@@ -72,7 +72,7 @@ const C = {
 // style block so they're authoritative at the document root.
 const THEME_CSS = `
   :root {
-    --rt-bg: #FAFAF7;
+    --rt-bg: #F2EEE8;
     --rt-card: #FFFFFF;
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
@@ -7751,7 +7751,7 @@ export default function App({ user }) {
           bottom: 0;
           width: 120px;
           height: 1.5em;
-          background: linear-gradient(90deg, rgba(250,250,247,0) 0%, var(--rt-bg) 65%, var(--rt-bg) 100%);
+          background: linear-gradient(90deg, rgba(242,238,232,0) 0%, var(--rt-bg) 65%, var(--rt-bg) 100%);
           pointer-events: none;
         }
         /* ── COMPOSER CHIPS — Client / Worker / Due ──
