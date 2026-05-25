@@ -10700,9 +10700,8 @@ export default function App({ user }) {
                       // out on either side of the label (vs a solid line below).
                       // Editorial typography move — section is centered between
                       // two fades, calmer than a hard line.
-                      const isToday = name === "Today";
-                      const dotColor = isToday ? C.primaryLight : C.ink300;
-                      const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
+                      const dotColor = C.ink300;
+                      const dotHalo = C.surfaceWarm;
                       return (
                         <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 4px 10px" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
