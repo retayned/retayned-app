@@ -2568,7 +2568,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 600,
                 ...(selectedDay === "today"
-                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
                   : {}),
               }}
             >Today</button>
@@ -2587,7 +2587,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 fontSize: 12,
                 fontWeight: 600,
                 ...(selectedDay === "tomorrow"
-                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
                   : {}),
               }}
             >Tomorrow</button>
@@ -2717,7 +2717,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
               containerStyle = {
                 background: C.deepCream,
                 borderLeft: `3px solid #8B6A1B`,
-                borderRadius: "0 8px 8px 0",
+                borderRadius: 8,
                 paddingLeft: 10,
                 boxShadow: "0 1px 3px rgba(139,106,27,0.12), 0 4px 12px rgba(139,106,27,0.16)",
               };
@@ -3100,7 +3100,7 @@ const coachOpeners = {
 };
 const coachDemos = {
   "Which clients should I ask for referrals?": "Sarah at Northvane (91%) already referred 2. James at Oakline (82%) hasn't been asked. Everyone below 70%: deepen first.",
-  "Who needs attention this week?": "This week: Ridgeline (1-year approaching), Copper & Sage (health check overdue), Foxglove (decision time).",
+  "Who needs attention this week?": "This week: Ridgeline (1-year approaching), Copper & Sage (review due), Foxglove (decision time).",
   "What patterns do my best clients share?": "Your top clients share three traits: they give honest feedback early, they trust your judgment on strategy, and they've been with you long enough to see results compound. Northvane and Oakline both check all three.",
 };
 
@@ -6009,11 +6009,11 @@ export default function App({ user }) {
   };
 
 
-  // Health Checks
+  // Quarterly portfolio reviews (legacy "health check" plumbing)
   const [hcOpen, setHcOpen] = useState(null);
-  const [hcAnswers, setHcAnswers] = useState({});
-  const [hcStep, setHcStep] = useState({});
   const [hcDone, setHcDone] = useState({});
+  // Whether the "more reviews" overflow list (beyond the top 3) is expanded.
+  const [reviewQueueMoreOpen, setReviewQueueMoreOpen] = useState(false);
   const [clientDrift, setClientDrift] = useState({});
   const [showUpcoming, setShowUpcoming] = useState(false);
 
@@ -7049,7 +7049,11 @@ export default function App({ user }) {
           transition: box-shadow 200ms var(--rt-ease-out);
         }
         .rt-composer:focus-within {
-          box-shadow: var(--rt-sh-card-hover), 0 0 0 3px rgba(124,92,243,0.10) !important;
+          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45), 0 0 0 4px rgba(124,92,243,0.12) !important;
+        }
+        .rt-rai-inputbox { transition: box-shadow 200ms var(--rt-ease-out); }
+        .rt-rai-inputbox:focus-within {
+          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45), 0 0 0 4px rgba(124,92,243,0.12) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
@@ -7080,11 +7084,11 @@ export default function App({ user }) {
            today's Rai pick. Purple inset bar on the left + ✦ medallion
            just outside the left edge. Quiet but unmistakable. */
         .rt-rai-boost {
-          box-shadow: var(--rt-sh-row), inset 2px 0 0 0 #7c5cf3 !important;
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025) !important;
           position: relative;
         }
         .rt-rai-boost:hover:not(.is-done) {
-          box-shadow: var(--rt-sh-row-hover), inset 2px 0 0 0 #7c5cf3 !important;
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06) !important;
         }
         /* When the Rai-marked task is checked off, drop both the purple
            inset bar AND the ✦ medallion. Completed tasks should read as
@@ -8001,7 +8005,7 @@ export default function App({ user }) {
       {/* SIDEBAR — dark green primary-deep frame. Provides architectural
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
-      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
+      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -9893,7 +9897,7 @@ export default function App({ user }) {
                             alignItems: "center",
                             gap: 4,
                             ...(rankMode === "rai"
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
                               : {}),
                           }}
                         >
@@ -9914,7 +9918,7 @@ export default function App({ user }) {
                             fontWeight: 600,
                             cursor: "pointer",
                             ...(rankMode === "manual"
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card)" }
+                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
                               : {}),
                           }}
                         >
@@ -10432,7 +10436,7 @@ export default function App({ user }) {
                               aria-label={isDone ? "mark incomplete" : "mark complete"}
                               className="rt-check"
                               style={{
-                                width: 22, height: 22, borderRadius: 6, border: "2px solid #88AE96",
+                                width: 22, height: 22, borderRadius: 6, border: "2px solid " + C.border,
                                 background: C.card, display: "flex", alignItems: "center", justifyContent: "center",
                                 flexShrink: 0, cursor: "pointer", padding: 0,
                               }}>
@@ -12560,9 +12564,9 @@ export default function App({ user }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 20px", letterSpacing: -0.4, color: C.text, padding: "0 4px" }}>Health</h1>
                   <EmptyState
                     icon="health"
-                    headline="No health checks yet."
-                    body="A health check is five quick questions — trust, expectations, communication. Scores update from your answers, so the model gets sharper the more you do."
-                    cta={{ label: "Start First Check", onClick: () => goTo("clients") }}
+                    headline="No reviews scheduled yet."
+                    body="Add a client and Rai schedules a quarterly check-in — a nudge to refresh their profile so your scores stay sharp. Dismiss anytime, no penalty."
+                    cta={{ label: "Add a client", onClick: () => goTo("clients") }}
                   />
                 </div>
               )}
@@ -12807,7 +12811,7 @@ export default function App({ user }) {
                       </div>
                     ) : (
                       <div style={{ display: "flex", flexDirection: "column" }}>
-                        {activeQueue.map((h, i) => {
+                        {activeQueue.slice(0, 3).map((h, i) => {
                           const isOpen = hcOpen === h.client;
                           const overdueDays = h.overdue;
                           const isStartEarly = h.isFirstHC && overdueDays === 0 && h.due !== "Today";
@@ -12864,9 +12868,11 @@ export default function App({ user }) {
                     </div>
                   )}
 
-                  {/* Active HC cards */}
+                  {/* Active review tiles — top 3 shown; rest behind a dropdown
+                      that matches the Today "completed today" log exactly. */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {activeQueue.map((h, i) => {
+                    {(() => {
+                    const renderReviewTile = (h, i) => {
                       const isOpen = hcOpen === h.client;
                       const client = clients.find(c => c.name === h.client);
                       // Dismiss / mark-reviewed: reschedules the next review ~a
@@ -12880,7 +12886,7 @@ export default function App({ user }) {
                         } catch (e) { console.warn("Review reschedule failed:", e); }
                       };
                       return (
-                        <div key={i} style={{ background: C.card, borderRadius: 12, border: "1px solid " + (isOpen ? C.primary + "55" : C.border), boxShadow: "var(--rt-sh-card)", transition: "border-color 150ms" }}>
+                        <div key={i} style={{ background: C.card, borderRadius: 12, boxShadow: isOpen ? "0 0 0 1px " + C.primary + "55, var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "box-shadow 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 18, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
                               {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
@@ -12927,10 +12933,75 @@ export default function App({ user }) {
                           )}
                         </div>
                       );
-                    })}
+                    };
+                    const topReviews = activeQueue.slice(0, 3);
+                    const moreReviews = activeQueue.slice(3);
+                    return (
+                      <>
+                        {topReviews.map((h, i) => renderReviewTile(h, i))}
+                        {moreReviews.length > 0 && (
+                          <div className="rt-review-more" style={{ marginTop: 4 }}>
+                            <button
+                              onClick={() => setReviewQueueMoreOpen(!reviewQueueMoreOpen)}
+                              style={{
+                                width: "100%",
+                                display: "flex", alignItems: "center", justifyContent: "space-between",
+                                padding: "12px 14px",
+                                background: reviewQueueMoreOpen ? C.primarySoft : "transparent",
+                                border: "1px dashed " + (reviewQueueMoreOpen ? C.primaryLight : C.border),
+                                borderRadius: 10,
+                                color: reviewQueueMoreOpen ? C.primary : C.textSec,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                transition: "background 160ms var(--rt-ease-out), border-color 160ms var(--rt-ease-out), color 160ms var(--rt-ease-out)",
+                              }}
+                              onMouseEnter={e => {
+                                if (reviewQueueMoreOpen) return;
+                                e.currentTarget.style.background = C.primarySoft;
+                                e.currentTarget.style.borderColor = C.primaryLight;
+                                e.currentTarget.style.color = C.primary;
+                              }}
+                              onMouseLeave={e => {
+                                if (reviewQueueMoreOpen) return;
+                                e.currentTarget.style.background = "transparent";
+                                e.currentTarget.style.borderColor = C.border;
+                                e.currentTarget.style.color = C.textSec;
+                              }}
+                            >
+                              <span>
+                                <span style={{ color: C.textMuted, marginRight: 4 }}>{moreReviews.length}</span>
+                                more {moreReviews.length === 1 ? "review" : "reviews"}
+                              </span>
+                              <svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                style={{ transform: reviewQueueMoreOpen ? "rotate(90deg)" : "rotate(0)", transition: "transform 220ms var(--rt-ease-out)" }}
+                              >
+                                <path d="M9 6l6 6-6 6" />
+                              </svg>
+                            </button>
+                            <div
+                              style={{
+                                display: "grid",
+                                gridTemplateRows: reviewQueueMoreOpen ? "1fr" : "0fr",
+                                marginTop: reviewQueueMoreOpen ? 10 : 0,
+                                opacity: reviewQueueMoreOpen ? 1 : 0,
+                                transition: "grid-template-rows 280ms var(--rt-ease-out), margin-top 240ms var(--rt-ease-out), opacity 220ms var(--rt-ease-out)",
+                              }}
+                            >
+                              <div style={{ overflow: "hidden", minHeight: 0 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                  {moreReviews.map((h, i) => renderReviewTile(h, i + 3))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                    })()}
                   </div>
-
-                  {/* ─── Drift Wall — 2D quadrant ─── */}
                   {totalPlotted > 0 && (
                     <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
@@ -15296,7 +15367,7 @@ export default function App({ user }) {
             {aiMessages.length > 0 && (
               <div className="r-rai-inputbar" style={{ background: C.bg, padding: "12px 24px 16px" }}>
                 <div style={{ maxWidth: 720, margin: "0 auto" }}>
-                  <div style={{ background: C.card, border: "none", boxShadow: "var(--rt-sh-card)", borderRadius: 14, padding: "14px 16px 10px" }}>
+                  <div className="rt-rai-inputbox" style={{ background: C.card, border: "none", boxShadow: "var(--rt-sh-card)", borderRadius: 14, padding: "14px 16px 10px" }}>
                     {aiAttachments.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                         {aiAttachments.map(a => (
