@@ -4319,27 +4319,6 @@ export default function App({ user }) {
     return triggered;
   };
 
-  // ─── HEALTH CHECK SCORING ───
-  const HC_QUESTIONS_SCORED = [
-    { key: "bigMovers", weight: 0.40 },
-    { key: "holisticDrift", weight: 0.20 },
-    { key: "commChange", weight: 0.20 },
-    { key: "gutCheck", weight: 0.10 },
-    { key: "performanceDrift", weight: 0.10 },
-  ];
-
-  const calcHealthCheckScore = (hcAnswersArr) => {
-    if (!hcAnswersArr || hcAnswersArr.length < 5) return null;
-    let ws = 0, tw = 0;
-    HC_QUESTIONS_SCORED.forEach((q, i) => {
-      const v = hcAnswersArr[i];
-      if (v == null) return;
-      ws += (v / 10) * q.weight;
-      tw += q.weight;
-    });
-    if (tw === 0) return null;
-    return Math.round((ws / tw) * 100);
-  };
 
   // ─── RETENTION SCORE (dimensions + combos + HC blend) ───
   const calcRetentionScore = (scores, hcAnswersArr, qualFlags = null, months = 0) => {
@@ -4369,9 +4348,11 @@ export default function App({ user }) {
     const comboTotal = Math.round((pt + nt) * 100) / 100;
     const baselineScore = dimensionScore + Math.round(comboTotal);
 
-    // HC blend: 80% baseline + 20% HC
-    const hcScore = calcHealthCheckScore(hcAnswersArr);
-    let finalScore = hcScore != null ? Math.round(baselineScore * 0.80 + hcScore * 0.20) : baselineScore;
+    // Score is 100% baseline (dimensions + combos). Health-check blend removed
+    // May 2026 — the profile dimensions assess relationship health directly, so
+    // we drive the user to keep profiles current rather than collect a weaker
+    // separate health-check signal. Qual flags + tenure still adjust below.
+    let finalScore = baselineScore;
 
     // Qualifying question adjustments
     if (qualFlags) {
@@ -12571,26 +12552,69 @@ export default function App({ user }) {
           const now = new Date();
           const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
 
-          // ─── Drift Wall stubs ────────────────────────────────────────────
-          const _hash = (s) => (s || "").split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
-          const _dwDelta = (name) => ((_hash(name) % 11) - 5); // -5..+5
-          const _dwCadenceTarget = (name) => (_hash(name) % 3 === 0) ? 14 : 7;
-          const _dwCadenceActual = (c) => {
-            const lc = (c.lastContact || "").toLowerCase();
-            if (lc.includes("today")) return 1;
-            const m = lc.match(/(\d+)\s*d/);
-            if (m) return parseInt(m[1], 10);
-            return (_hash(c.name) % 20) + 5;
+          // ─── Drift Wall — real cadence ───────────────────────────────────
+          // Same cadence model as the Clients page: recent 7-day activity vs the
+          // average of prior ACTIVE 7-day windows (>=3 events), back to 90 days.
+          // Reads touchpoints + task completions + past calendar events.
+          //   momentum >= 1.25 → Ahead · < 0.75 → Slipping · else On rhythm.
+          //   <7 days since added, or no real prior week → Calibrating.
+          const healthCadence = (c) => {
+            const NOW = Date.now();
+            const DAY = 86400000;
+            const WINDOW = 90 * DAY;
+            const addedMs = c.created_at ? new Date(c.created_at).getTime() : null;
+            if (addedMs && (NOW - addedMs) < 7 * DAY) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+            const stamps = [];
+            for (const t of (allTouchpoints || [])) {
+              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
+                if (t.occurred_at) { const ms = new Date(t.occurred_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
+              }
+            }
+            for (const cp of (allCompletions || [])) {
+              if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
+                if (cp.completed_at) { const ms = new Date(cp.completed_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
+              }
+            }
+            for (const e of (personalEvents || [])) {
+              if (e.client_id && e.client_id === c.id && e.starts_at) {
+                const ms = new Date(e.starts_at).getTime();
+                if (ms <= NOW && NOW - ms <= WINDOW) stamps.push(ms);
+              }
+            }
+            const counts = {};
+            for (const ms of stamps) {
+              const w = Math.floor((NOW - ms) / (7 * DAY));
+              if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
+            }
+            const thisWeek = counts[0] || 0;
+            const priorActive = [];
+            for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 3) priorActive.push(counts[w]);
+            if (priorActive.length === 0) {
+              if (thisWeek === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
+              return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+            }
+            const baseline = priorActive.reduce((a, b) => a + b, 0) / priorActive.length;
+            const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
+            if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
+            if (momentum < 0.75)  return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
+            return { state: "steady", label: "On rhythm", color: C.warning, momentum };
           };
-          // Cadence drift days: negative = on or ahead, positive = slower than target
-          const _dwCadenceDrift = (c) => _dwCadenceActual(c) - _dwCadenceTarget(c.name);
 
-          // Plot: X = cadence drift days (clamped -10..+20), Y = score delta (-5..+5)
-          const driftPoints = clients.map(c => {
-            const delta = _dwDelta(c.name);
-            const drift = _dwCadenceDrift(c);
-            return { c, delta, drift };
-          });
+          // Group every client by cadence state for the wall. Order = most-
+          // urgent first (Slipping), then On rhythm, Ahead, Calibrating last.
+          const cadenceBuckets = [
+            { key: "cooling",     label: "Slipping",    sub: "getting less attention than their normal", color: C.retWarn },
+            { key: "steady",      label: "On rhythm",   sub: "holding their usual pace",                  color: C.warning },
+            { key: "warming",     label: "Ahead",       sub: "getting more attention than their normal",  color: C.retGood },
+            { key: "calibrating", label: "Calibrating", sub: "still building a baseline",                 color: C.textMuted },
+          ].map(b => ({
+            ...b,
+            clients: clients
+              .map(c => ({ c, cad: healthCadence(c) }))
+              .filter(x => x.cad.state === b.key)
+              .sort((a, z) => a.c.name.localeCompare(z.c.name)),
+          }));
+          const totalPlotted = cadenceBuckets.reduce((s, b) => s + b.clients.length, 0);
 
           return (
             <div style={{ width: "100%" }}>
@@ -12989,68 +13013,48 @@ export default function App({ user }) {
                   </div>
 
                   {/* ─── Drift Wall — 2D quadrant ─── */}
-                  {driftPoints.length > 0 && (() => {
-                    const W = 640, H = 380;
-                    const padL = 46, padR = 22, padT = 40, padB = 50;
-                    const innerW = W - padL - padR;
-                    const innerH = H - padT - padB;
-                    const xMin = -10, xMax = 20;
-                    const yMin = -8, yMax = 6;
-                    const xToPx = (x) => padL + ((Math.max(xMin, Math.min(xMax, x)) - xMin) / (xMax - xMin)) * innerW;
-                    const yToPx = (y) => padT + innerH - ((Math.max(yMin, Math.min(yMax, y)) - yMin) / (yMax - yMin)) * innerH;
-                    const zeroX = xToPx(0);
-                    const zeroY = yToPx(0);
-                    return (
-                      <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 16, flexWrap: "wrap" }}>
-                          <div>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall — this month</div>
-                            <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client, plotted by how they moved.</div>
-                          </div>
-                          <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retElite }} />Thriving</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Stable</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Shifted</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retCrit }} />Declining</span>
-                          </div>
+                  {totalPlotted > 0 && (
+                    <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall</div>
+                          <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client, read by their own rhythm — who's cooling, who's holding, who you're ahead on.</div>
                         </div>
-                        <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
-                          {/* Subtle quadrant tints */}
-                          <rect x={padL}   y={padT}   width={zeroX - padL}      height={zeroY - padT}      fill={C.retGood + "10"} />
-                          <rect x={zeroX}  y={padT}   width={W - padR - zeroX}  height={zeroY - padT}      fill={C.retWarn + "0A"} />
-                          <rect x={padL}   y={zeroY}  width={zeroX - padL}      height={H - padB - zeroY}  fill={C.retWarn + "0A"} />
-                          <rect x={zeroX}  y={zeroY}  width={W - padR - zeroX}  height={H - padB - zeroY}  fill={C.retCrit + "10"} />
-                          {/* Zero-axis dividers — subtle */}
-                          <line x1={zeroX} y1={padT} x2={zeroX} y2={padT + innerH} stroke={C.borderLight} strokeWidth="1" />
-                          <line x1={padL} y1={zeroY} x2={padL + innerW} y2={zeroY} stroke={C.borderLight} strokeWidth="1" />
-                          {/* Quadrant labels — positioned in the 4 corners, muted */}
-                          <text x={padL + 10}          y={padT + 18}          fontSize="10" fontWeight="700" fill={C.retElite} letterSpacing="0.5" opacity="0.75">SCORE ↑ · CADENCE HELD</text>
-                          <text x={W - padR - 10}      y={padT + 18}          fontSize="10" fontWeight="700" fill={C.retWarn}  letterSpacing="0.5" opacity="0.75" textAnchor="end">SCORE ↑ · CADENCE SLIP</text>
-                          <text x={padL + 10}          y={padT + innerH - 10} fontSize="10" fontWeight="700" fill={C.retWarn}  letterSpacing="0.5" opacity="0.75">SCORE ↓ · CADENCE HELD</text>
-                          <text x={W - padR - 10}      y={padT + innerH - 10} fontSize="10" fontWeight="700" fill={C.retCrit}  letterSpacing="0.5" opacity="0.75" textAnchor="end">SCORE ↓ · CADENCE SLIP</text>
-                          {/* Axis tick labels */}
-                          <text x={padL - 10} y={padT + 6}          fontSize="10" fill={C.textMuted} textAnchor="end">+{yMax}</text>
-                          <text x={padL - 10} y={padT + innerH + 4} fontSize="10" fill={C.textMuted} textAnchor="end">{yMin}</text>
-                          <text x={padL}            y={H - 14}       fontSize="10.5" fill={C.textMuted}>on-target cadence</text>
-                          <text x={padL + innerW}   y={H - 14}       fontSize="10.5" fill={C.textMuted} textAnchor="end">+{xMax} days slower</text>
-                          {/* Client dots — colored by drift tier */}
-                          {driftPoints.map(({ c, delta, drift }) => {
-                            const cx = xToPx(drift);
-                            const cy = yToPx(delta);
-                            const tier = toDriftTier(clientDrift[c.name]);
-                            const color = driftTierColor(tier);
-                            const initials = c.name.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase();
-                            return (
-                              <g key={c.id}>
-                                <circle cx={cx} cy={cy} r={16} fill={color} opacity="0.95" />
-                                <text x={cx} y={cy + 3.8} fontSize="9.5" fontWeight="700" fill="#fff" textAnchor="middle" style={{ pointerEvents: "none", fontFamily: "inherit" }}>{initials}</text>
-                              </g>
-                            );
-                          })}
-                        </svg>
+                        <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Slipping</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.warning }} />On rhythm</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Ahead</span>
+                        </div>
                       </div>
-                    );
-                  })()}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                        {cadenceBuckets.filter(b => b.clients.length > 0).map(b => (
+                          <div key={b.key}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                              <span style={{ width: 9, height: 9, borderRadius: 5, background: b.color, flexShrink: 0 }} />
+                              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{b.label}</span>
+                              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>{b.clients.length}</span>
+                              <span style={{ fontSize: 12, color: C.textMuted }}>· {b.sub}</span>
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                              {b.clients.map(({ c }) => {
+                                const initials = c.name.split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
+                                return (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => setSelectedClient(c)}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: 999, border: "1px solid " + C.borderLight, background: C.bg, cursor: "pointer", fontFamily: "inherit" }}
+                                  >
+                                    <span style={{ width: 24, height: 24, borderRadius: 12, background: b.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{c.name}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Done this month */}
                   {justCompleted.length > 0 && (
