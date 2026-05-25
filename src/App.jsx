@@ -10692,7 +10692,7 @@ export default function App({ user }) {
                     };
 
                     // Bucket header component (inline).
-                    const BucketHeader = ({ name, dimmed, count }) => {
+                    const BucketHeader = ({ name, dimmed, count, topGap }) => {
                       // Polish layer: each bucket gets a tiny color-coded dot
                       // with a soft halo. Green-light for today (the active surface),
                       // muted ink for tomorrow/later. Same primary palette.
@@ -10703,7 +10703,7 @@ export default function App({ user }) {
                       const dotColor = C.ink300;
                       const dotHalo = C.surfaceWarm;
                       return (
-                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 4px 10px" }}>
+                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
                             <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: "0 0 0 3px " + dotHalo }} />
                             {name}
@@ -10721,7 +10721,7 @@ export default function App({ user }) {
                     return (
                       <>
                         {/* TODAY bucket */}
-                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} />
+                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={8} />
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {_todayBucket.map(t => renderRow(t, "today"))}
                         </div>
