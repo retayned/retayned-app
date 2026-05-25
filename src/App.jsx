@@ -7050,8 +7050,6 @@ export default function App({ user }) {
            spine + node dots (NO time meaning). Condensed =
            tomorrow/later rows tighten. */
         .rt-today-canvas {
-          background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
-          border-radius: 20px;
           padding: 6px 14px 16px;
           margin: 0 -8px;
         }
