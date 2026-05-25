@@ -780,13 +780,18 @@ export const raiUserState = {
 // ============================================================
 
 export const healthChecks = {
-  // Get pending (upcoming + overdue) health checks
+  // Get pending (upcoming + overdue) reviews.
+  // IMPORTANT: only for clients that are still active. The !inner join +
+  // is_active filter drops orphaned rows left behind when a client was fired/
+  // offboarded but their pending review row was never cleaned up — otherwise
+  // a gone client keeps surfacing in the queue.
   listPending: async (userId) => {
     const { data, error } = await supabase
       .from('health_checks')
-      .select('*, client:clients(name, retention_score)')
+      .select('*, client:clients!inner(name, retention_score, is_active)')
       .eq('user_id', userId)
       .is('completed_at', null)
+      .eq('client.is_active', true)
       .order('due_date', { ascending: true });
     return { data: data || [], error };
   },
