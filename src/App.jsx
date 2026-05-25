@@ -3121,7 +3121,8 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
         background: C.card,
         borderRadius: 14,
         overflow: "hidden",
-        boxShadow: "var(--rt-sh-card)",
+        border: "1px solid rgba(20,30,22,0.12)",
+        boxShadow: "0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04)",
         display: "flex",
         flexDirection: "column",
       }}>
@@ -10747,7 +10748,7 @@ export default function App({ user }) {
                           </div>
                         )}
                         {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (
-                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 14, boxShadow: "0 0 0 1px rgba(51,84,62,0.20), 0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 14, border: "1px solid rgba(51,84,62,0.22)", boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
                               <Icon name="check" size={14} color="#fff" />
                             </div>
@@ -12120,7 +12121,8 @@ export default function App({ user }) {
                             padding: "16px 18px",
                             position: "relative",
                             overflow: "hidden",
-                            boxShadow: "0 0 0 1px rgba(51,84,62,0.20), 0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
+                            border: "1px solid rgba(51,84,62,0.22)",
+                            boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Corner ✕ dismiss — top-right notification pattern */}
                             <button
@@ -12300,7 +12302,8 @@ export default function App({ user }) {
                             padding: "24px 28px 22px",
                             position: "relative",
                             overflow: "hidden",
-                            boxShadow: "var(--rt-sh-card)",
+                            border: "1px solid rgba(51,84,62,0.22)",
+                            boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Illustration — absolute corner placement */}
                             {illoSrc && (
