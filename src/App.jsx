@@ -7045,6 +7045,41 @@ export default function App({ user }) {
         .rt-row:hover .rt-dismiss,
         .rt-row:hover .rt-push { opacity: 1 !important; }
 
+        /* ── TODAY EMPHASIS (restrained blend) ─────────────
+           Canvas = soft warm stage behind today. Rail = visual
+           spine + node dots (NO time meaning). Focal = first row
+           reads larger. Condensed = tomorrow/later rows tighten. */
+        .rt-today-canvas {
+          background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
+          border-radius: 20px;
+          padding: 6px 14px 16px;
+          margin: 0 -8px;
+        }
+        .rt-today-rail { position: relative; padding-left: 26px; }
+        .rt-today-rail::before {
+          content: ""; position: absolute; left: 8px; top: 14px; bottom: 18px; width: 2px;
+          background: linear-gradient(180deg, rgba(85,139,104,0.45), rgba(196,196,189,0.5));
+          border-radius: 2px;
+        }
+        .rt-rail-node { position: relative; }
+        .rt-rail-node::before {
+          content: ""; position: absolute; left: -22px; top: 50%; transform: translateY(-50%);
+          width: 9px; height: 9px; border-radius: 50%; background: #fff;
+          box-shadow: 0 0 0 2px var(--rt-ink-300); z-index: 3;
+        }
+        .rt-rail-node.is-first::before {
+          background: var(--rt-primary-light, #558B68);
+          box-shadow: 0 0 0 3px var(--rt-primary-soft, #E6EFE9);
+        }
+        /* Focal first today row — larger type/check, normal elevation */
+        .rt-today-focal .rt-row { padding: 16px 18px; }
+        .rt-today-focal .rt-row .rt-task-title { font-size: 16.5px; font-weight: 700; }
+        .rt-today-focal .rt-row .rt-check { width: 24px; height: 24px; }
+        /* Condensed future rows (tomorrow/later) */
+        .rt-row-condensed .rt-row { padding: 9px 14px; }
+        .rt-row-condensed .rt-row .rt-task-title { font-size: 13.5px; }
+        .rt-row-condensed .rt-row .rt-check { width: 18px; height: 18px; }
+
         /* ── COMPOSER ────────────────────────────────────── */
         .rt-composer {
           transition: box-shadow 200ms var(--rt-ease-out);
@@ -7294,6 +7329,7 @@ export default function App({ user }) {
            cascade order. */
         .r-desk { display: none !important; }
         .r-mob-bot { display: flex; }
+        .r-mob-bot-dock { display: flex; }
         /* Mobile bottom nav strip is horizontally scrollable. Hide the
            native scrollbar across all browsers — affordance is the icon
            overflow itself plus the inertia/snap behavior. */
@@ -7309,11 +7345,13 @@ export default function App({ user }) {
           .rt-refs-money-mobile { display: block; margin-bottom: 14px; }
         }
         /* QuickLog FAB — DESKTOP ONLY (power-user quick-capture, all pages).
-           Hidden on mobile. Desktop: 52px, bottom-right. */
-        .rt-quicklog-fab { display: none; }
+           Hidden on mobile. Desktop: 52px, bottom-right.
+           !important is required: the button sets display:flex inline, which
+           would otherwise beat this class rule and leak the FAB onto mobile. */
+        .rt-quicklog-fab { display: none !important; }
         @media (min-width: 768px) {
           .rt-quicklog-fab {
-            display: flex;
+            display: flex !important;
             top: auto; bottom: 24px;
             width: 52px; height: 52px;
             border-radius: 50%;
@@ -7323,6 +7361,9 @@ export default function App({ user }) {
         /* QuickLog popover + toast — anchored above the bottom-right FAB (desktop). */
         .rt-quicklog-popover { top: auto; bottom: 90px; }
         .rt-quicklog-toast { top: auto; bottom: 90px; }
+        /* Mobile pinned FAB lives in the docked nav; hide it on desktop. */
+        .rt-mob-fab { display: flex; }
+        @media (min-width: 768px) { .rt-mob-fab { display: none !important; } }
         /* Timeline scroll container hides its scrollbar — the partial-day
            visible window plus the NOW marker make scroll affordance clear
            enough without a visible track. Covers all three browser engines:
@@ -7391,6 +7432,7 @@ export default function App({ user }) {
           .app-root { background: transparent !important; }
           .r-desk { display: flex !important; }
           .r-mob-bot { display: none !important; }
+          .r-mob-bot-dock { display: none !important; }
           .r-today-panel { display: block !important; }
           /* Desktop: right-side slideover panel. Sits flush with sidebar
              top/bottom (14px gap), takes 560px width on the right. List
@@ -7584,7 +7626,7 @@ export default function App({ user }) {
 
         /* Dim sidebar contents */
         body:has(.rt-focus-on) .r-desk > *,
-        body:has(.rt-focus-on) .r-mob-bot > * {
+        body:has(.rt-focus-on) .r-mob-bot-dock > * {
           opacity: 0.06 !important;
           transition: opacity 280ms ease;
           pointer-events: none;
@@ -10720,10 +10762,16 @@ export default function App({ user }) {
 
                     return (
                       <>
-                        {/* TODAY bucket */}
-                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={12} />
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {_todayBucket.map(t => renderRow(t, "today"))}
+                        {/* TODAY bucket — canvas stage + visual rail + focal first */}
+                        <div className="rt-today-canvas">
+                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
+                        <div className="rt-today-rail" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          {_todayBucket.map((t, i) => (
+                            <div key={t.id} className={"rt-rail-node" + (i === 0 ? " is-first rt-today-focal" : "")}>
+                              {renderRow(t, "today")}
+                            </div>
+                          ))}
+                        </div>
                         </div>
 
                         {/* Today bucket empty states. Two distinct conditions
@@ -10764,7 +10812,7 @@ export default function App({ user }) {
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
                           <BucketHeader name="Tomorrow" dimmed={true} count={_tomorrowBucket.length} />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 3 }}>
+                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76, position: "relative", zIndex: 3 }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                           </div>
                         </>)}
@@ -10772,7 +10820,7 @@ export default function App({ user }) {
                         {/* LATER bucket */}
                         {_laterBucket.length > 0 && (<>
                           <BucketHeader name="Later" dimmed={true} count={_laterBucket.length} />
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 2 }}>
+                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 8, opacity: 0.76, position: "relative", zIndex: 2 }}>
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
                         </>)}
@@ -17869,19 +17917,29 @@ export default function App({ user }) {
           content scrollable beyond. Hidden when keyboard is up so inputs
           aren't covered. */}
       <div
+        className="r-mob-bot-dock"
+        style={{
+          position: "fixed",
+          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 78px)",
+          left: 0,
+          right: 0,
+          background: C.sidebar,
+          borderRadius: "18px 18px 0 0",
+          boxShadow: "0 -1px 0 0 #EAE4D6, 0 -2px 12px rgba(20,30,22,0.05)",
+          padding: "10px 10px calc(12px + env(safe-area-inset-bottom, 0px))",
+          zIndex: 40,
+          display: keyboardOpen ? "none" : "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+      <div
         ref={mobileNavRef}
         className="r-mob-bot rt-mob-nav-scroll"
         style={{
-          position: "fixed",
-          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 82px)",
-          left: 12,
-          right: 12,
-          background: C.sidebar,
-          borderRadius: 18,
-          boxShadow: "var(--rt-sh-card)",
-          padding: "10px 6px 12px",
-          zIndex: 40,
-          display: keyboardOpen ? "none" : "flex",
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
           alignItems: "center",
           gap: 4,
           overflowX: "auto",
@@ -17934,6 +17992,34 @@ export default function App({ user }) {
             </div>
           );
         })}
+      </div>
+      {/* Pinned quick-capture FAB — sits to the right of the scrolling tab
+          strip, docked nav (mobile). Opens the same QuickLog composer as the
+          desktop FAB. Does NOT scroll with the tabs. */}
+      <button
+        onClick={() => setQuickLogOpen(v => !v)}
+        aria-label="Quick log"
+        className="rt-mob-fab"
+        style={{
+          flexShrink: 0,
+          width: 40, height: 40,
+          borderRadius: "50%",
+          border: "none",
+          background: "var(--rt-grad-btn)",
+          color: "#fff",
+          fontSize: 22,
+          fontWeight: 300,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
+          transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
+          transition: "transform 180ms var(--rt-ease-out)",
+          fontFamily: "inherit",
+        }}
+      >+</button>
       </div>
 
       {/* ─── QUICKLOG — desktop power-user FAB (all pages) ──────────────
