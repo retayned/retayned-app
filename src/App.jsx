@@ -95,8 +95,8 @@ const THEME_CSS = `
     --rt-grad-btn-hover: linear-gradient(135deg, #7c5cf3 0%, #6a4ce8 55%, #5a3dd6 100%);
     --rt-grad-green-deep: linear-gradient(135deg, #33543E 0%, #1C3224 100%);
     --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
-    --rt-sh-row: 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
-    --rt-sh-row-hover: 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
+    --rt-sh-row: 0 0 0 1px #D9D9D9, 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
+    --rt-sh-row-hover: 0 0 0 1px #D9D9D9, 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
     --rt-sh-card: 0 0 0 1px #D9D9D9, 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04);
     --rt-sh-card-hover: 0 0 0 1px #D9D9D9, 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
     --rt-sh-purple: 0 0 0 1px rgba(124,92,243,0.10), 0 2px 8px rgba(124,92,243,0.20), 0 1px 2px rgba(124,92,243,0.10);
@@ -8001,7 +8001,7 @@ export default function App({ user }) {
       {/* SIDEBAR — dark green primary-deep frame. Provides architectural
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
-      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "var(--rt-sh-card)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
+      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -10743,7 +10743,7 @@ export default function App({ user }) {
                           </div>
                         )}
                         {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (
-                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 14, boxShadow: "var(--rt-sh-card)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 14, boxShadow: "0 0 0 1px rgba(51,84,62,0.20), 0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
                               <Icon name="check" size={14} color="#fff" />
                             </div>
@@ -12116,7 +12116,7 @@ export default function App({ user }) {
                             padding: "16px 18px",
                             position: "relative",
                             overflow: "hidden",
-                            boxShadow: "var(--rt-sh-card)",
+                            boxShadow: "0 0 0 1px rgba(51,84,62,0.20), 0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Corner ✕ dismiss — top-right notification pattern */}
                             <button
