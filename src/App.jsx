@@ -10721,7 +10721,7 @@ export default function App({ user }) {
                     return (
                       <>
                         {/* TODAY bucket */}
-                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={8} />
+                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={12} />
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           {_todayBucket.map(t => renderRow(t, "today"))}
                         </div>
