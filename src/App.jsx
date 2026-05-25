@@ -72,7 +72,7 @@ const C = {
 // style block so they're authoritative at the document root.
 const THEME_CSS = `
   :root {
-    --rt-bg: #F2EEE8;
+    --rt-bg: #FAFAF7;
     --rt-card: #FFFFFF;
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
@@ -97,8 +97,8 @@ const THEME_CSS = `
     --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
     --rt-sh-row: 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
     --rt-sh-row-hover: 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
-    --rt-sh-card: 0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03);
-    --rt-sh-card-hover: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
+    --rt-sh-card: 0 0 0 1px #D9D9D9, 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04);
+    --rt-sh-card-hover: 0 0 0 1px #D9D9D9, 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
     --rt-sh-purple: 0 0 0 1px rgba(124,92,243,0.10), 0 2px 8px rgba(124,92,243,0.20), 0 1px 2px rgba(124,92,243,0.10);
     --rt-sh-purple-hover: 0 0 0 1px rgba(124,92,243,0.22), 0 8px 22px rgba(124,92,243,0.34), 0 2px 4px rgba(124,92,243,0.16);
     --rt-sh-green-glow: 0 0 0 1px rgba(51,84,62,0.10), 0 2px 6px rgba(51,84,62,0.16);
@@ -7751,7 +7751,7 @@ export default function App({ user }) {
           bottom: 0;
           width: 120px;
           height: 1.5em;
-          background: linear-gradient(90deg, rgba(242,238,232,0) 0%, var(--rt-bg) 65%, var(--rt-bg) 100%);
+          background: linear-gradient(90deg, rgba(250,250,247,0) 0%, var(--rt-bg) 65%, var(--rt-bg) 100%);
           pointer-events: none;
         }
         /* ── COMPOSER CHIPS — Client / Worker / Due ──
