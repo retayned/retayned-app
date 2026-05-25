@@ -7321,34 +7321,21 @@ export default function App({ user }) {
         @media (max-width: 768px) {
           .rt-refs-money-mobile { display: block; margin-bottom: 14px; }
         }
-        /* QuickLog FAB — Today page only.
-           Mobile (base): slim 44px, anchored TOP-right (clear of content + nav).
-           Desktop (≥768px): full 52px, bottom-right (unchanged). */
-        .rt-quicklog-fab {
-          top: 16px; bottom: auto;
-          width: 44px; height: 44px;
-          border-radius: 50%;
-          font-size: 24px;
-        }
+        /* QuickLog FAB — DESKTOP ONLY (power-user quick-capture, all pages).
+           Hidden on mobile. Desktop: 52px, bottom-right. */
+        .rt-quicklog-fab { display: none; }
         @media (min-width: 768px) {
           .rt-quicklog-fab {
+            display: flex;
             top: auto; bottom: 24px;
             width: 52px; height: 52px;
+            border-radius: 50%;
             font-size: 28px;
           }
         }
-        /* QuickLog popover — follows the FAB.
-           Mobile: FAB is top-right, so popover drops BELOW it.
-           Desktop: FAB is bottom-right, popover sits above it. */
-        .rt-quicklog-popover { top: 68px; bottom: auto; }
-        @media (min-width: 768px) {
-          .rt-quicklog-popover { top: auto; bottom: 90px; }
-        }
-        /* QuickLog toast — mirrors the popover anchoring. */
-        .rt-quicklog-toast { top: 68px; bottom: auto; }
-        @media (min-width: 768px) {
-          .rt-quicklog-toast { top: auto; bottom: 90px; }
-        }
+        /* QuickLog popover + toast — anchored above the bottom-right FAB (desktop). */
+        .rt-quicklog-popover { top: auto; bottom: 90px; }
+        .rt-quicklog-toast { top: auto; bottom: 90px; }
         /* Timeline scroll container hides its scrollbar — the partial-day
            visible window plus the NOW marker make scroll affordance clear
            enough without a visible track. Covers all three browser engines:
@@ -17953,11 +17940,10 @@ export default function App({ user }) {
         })}
       </div>
 
-      {/* ─── QUICKLOG — Today-only FAB composer ─────────────────────────
-          Floating purple "+" on the Today page only (removed from all other
-          pages). Desktop: bottom-right, unchanged. Mobile: top-right + slimmer
-          (size/position handled in .rt-quicklog-fab CSS). */}
-      {page === "today" && (
+      {/* ─── QUICKLOG — desktop power-user FAB (all pages) ──────────────
+          Floating purple "+" quick-capture, bottom-right, on every page.
+          DESKTOP ONLY — hidden on mobile via .rt-quicklog-fab CSS. A
+          notes-style scratchpad: free-form text → personal task, due today. */}
       <button
         onClick={() => setQuickLogOpen(v => !v)}
         aria-label="Quick log"
@@ -17984,7 +17970,6 @@ export default function App({ user }) {
         onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple-hover)"; e.currentTarget.style.background = "var(--rt-grad-btn-hover)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple)"; e.currentTarget.style.background = "var(--rt-grad-btn)"; }}
       >+</button>
-      )}
 
       {quickLogOpen && (
         <>
