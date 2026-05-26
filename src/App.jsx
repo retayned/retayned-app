@@ -6876,6 +6876,17 @@ export default function App({ user }) {
           --icon-body: #558B68;
           --icon-accent: #2F2F31;
         }
+        /* Mobile nav sits on the deep-green bar (#1C3224), so its icons must be
+           LIGHT when inactive (the desktop defaults above are dark, for the
+           cream sidebar). Active item is a white card → dark brand icon. */
+        .nav-item-mobile {
+          --icon-body: rgba(255,255,255,0.55);
+          --icon-accent: rgba(255,255,255,0.40);
+        }
+        .nav-item-mobile.is-active {
+          --icon-body: #33543E;
+          --icon-accent: #1C3224;
+        }
         .nav-item { transition: all 180ms var(--rt-ease-out); cursor: pointer; }
         /* Hover on inactive items lifts to deepCream + darkens text/icon.
            Light-substrate sidebar (post-revert): the hover layer is a
@@ -18280,15 +18291,13 @@ export default function App({ user }) {
           top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 78px)",
           left: 0,
           right: 0,
-          // Liquid glass: the same warm beige (#F2EEE8 / C.sidebar) but
-          // translucent + backdrop-blurred so content frosts through it.
-          // Solid beige is the fallback for browsers without backdrop-filter.
-          background: "rgba(242,238,232,0.78)",
-          backdropFilter: "blur(14px) saturate(1.2)",
-          WebkitBackdropFilter: "blur(14px) saturate(1.2)",
+          // Solid deep brand green (#1C3224). Matte, no translucency/blur —
+          // consistent with the site's flat surfaces (a lone liquid-glass
+          // element looked out of place). Gives clear separation from the
+          // cream content the beige nav was blending into.
+          background: C.primaryDeep,
           borderRadius: "18px 18px 0 0",
-          // Bright top "glass lip" inner highlight + cream hairline + soft lift.
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8), 0 -1px 0 0 rgba(234,228,214,0.6), 0 -2px 14px rgba(20,30,22,0.05)",
+          boxShadow: "0 -1px 0 0 rgba(255,255,255,0.06), 0 -2px 14px rgba(20,30,22,0.12)",
           padding: "10px 10px calc(12px + env(safe-area-inset-bottom, 0px))",
           zIndex: 40,
           display: keyboardOpen ? "none" : "flex",
@@ -18343,15 +18352,15 @@ export default function App({ user }) {
                 transition: "background 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
               }}
             >
-              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
+              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : "rgba(255,255,255,0.55)"} accent={active ? C.primary : "rgba(255,255,255,0.4)"} />
               {/* Label font weight stays at 700 across active and inactive
                   states. Previously 700 active / 600 inactive — but the
                   weight change made each label's glyphs measurably wider
                   on activation, which shifted neighboring nav items in
                   the flex row when the user tapped. Active state is now
                   signaled by color (primaryDeep vs textSec) alone. */}
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 4, right: 10, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: active ? C.primaryDeep : "rgba(255,255,255,0.6)" }}>{n.label}</span>
+              {dot && <div style={{ position: "absolute", top: 4, right: 10, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.primaryDeep) }} />}
             </div>
           );
         })}
