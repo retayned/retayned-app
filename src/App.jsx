@@ -1325,6 +1325,41 @@ function normalizeComposerText(input) {
   return out;
 }
 
+// Levenshtein edit distance (classic DP). Used by parseComposer's fuzzy tier
+// to catch misspelled client names / contact first names that the prefix-typo
+// tier misses (mid-word substitutions, transpositions, deletions).
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+// Is `input` a close misspelling of `target`? Edit budget scales with target
+// length so short names aren't matched too loosely: ≤4 chars → 1 edit, 5-7
+// chars → 1 edit, 8+ chars → 2 edits. Requires the same first letter to avoid
+// matching unrelated short words. Both args should be lowercased.
+function isFuzzyMatch(input, target) {
+  if (!input || !target) return false;
+  if (input.length < 4 || target.length < 4) return false;
+  if (input[0] !== target[0]) return false;          // anchor on first letter
+  if (Math.abs(input.length - target.length) > 2) return false;
+  const budget = target.length >= 8 ? 2 : 1;
+  return levenshtein(input, target) <= budget;
+}
+
 function parseComposer(rawText, clients, workers) {
   // ─── Phase 1: Lexicon normalization ──────────────────────────────────
   // Apply typo and casing dictionaries to the raw input BEFORE matching.
@@ -1522,6 +1557,45 @@ function parseComposer(rawText, clients, workers) {
       }
       if (prefixHit) {
         allCandidates.push(prefixHit);
+        continue;
+      }
+
+      // 65 — fuzzy (edit-distance) match. Lowest-priority tier: catches
+      // misspellings the prefix-typo tier misses (mid-word substitutions,
+      // transpositions, deletions) like "Sentigrms" → "Sentigrams" or
+      // "Justna" → contact "Justina". Checks each ≥4-char user token against
+      // (a) each meaningful client name token and (b) the contact's first
+      // name (only when that first name is unique across the roster, same
+      // guard as the exact score-70 contact tier). isFuzzyMatch anchors on
+      // the first letter and uses a length-scaled edit budget, so collisions
+      // are rare. Sits below prefix/abbrev/token so exact intent always wins.
+      let fuzzyHit = null;
+      for (const ut of userTokens) {
+        if (ut.tok.length < 4) continue;
+        if (COMPOSER_STOP_WORDS.has(ut.tok)) continue;
+        if (COMPOSER_COMMON_WORDS.has(ut.tok)) continue;
+        // (a) client name tokens
+        for (const ctok of tokens) {
+          const cclean = ctok.replace(/[^\w]/g, "").toLowerCase();
+          if (cclean.length < 4) continue;
+          if (COMPOSER_STOP_WORDS.has(cclean) || COMPOSER_COMMON_WORDS.has(cclean)) continue;
+          if (isFuzzyMatch(ut.tok, cclean)) {
+            fuzzyHit = { client: c, score: 65, matchType: "company", start: ut.start, end: ut.end };
+            break;
+          }
+        }
+        if (fuzzyHit) break;
+        // (b) contact first name (uniqueness-guarded, same as score-70 tier)
+        const fnameFuzzy = (c.contact || "").trim().split(/\s+/)[0].toLowerCase();
+        if (fnameFuzzy && fnameFuzzy.length >= 4 && firstNameCounts[fnameFuzzy] === 1) {
+          if (isFuzzyMatch(ut.tok, fnameFuzzy)) {
+            fuzzyHit = { client: c, score: 65, matchType: "contact", start: ut.start, end: ut.end };
+            break;
+          }
+        }
+      }
+      if (fuzzyHit) {
+        allCandidates.push(fuzzyHit);
         continue;
       }
     }
