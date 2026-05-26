@@ -3225,6 +3225,114 @@ const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
 };
 
 // ============================================================
+// RAI BRIEF PANEL — replaces the Notes/Daybook right rail.
+// Two stacked flat-white cards (no gradient — the page already
+// carries beige on the Today canvas + band):
+//   1. Daily brief — Rai's expanded read of today's pick
+//      (pick.reason_detail, written by the same daily sweep call).
+//   2. Needs you today — the pulse: top clients by |raiNudge|,
+//      with their rationale + a retention-color status dot. Same
+//      sweep data, no extra call.
+// Both are powered entirely by the existing daily Ranker sweep.
+// ============================================================
+const RaiBriefPanel = ({ pick, clients }) => {
+  const today = new Date();
+  const dateLine = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  const pickClientName = pick && pick.client_id
+    ? ((clients || []).find(c => c.id === pick.client_id)?.name || null)
+    : null;
+
+  // Pulse: clients with a real signal today, strongest first, top 3.
+  const pulse = (clients || [])
+    .filter(c => c.raiNudge && Math.abs(c.raiNudge) >= 2 && c.raiRationale)
+    .sort((a, b) => Math.abs(b.raiNudge) - Math.abs(a.raiNudge))
+    .slice(0, 3);
+
+  const briefText = pick && pick.reason_detail ? pick.reason_detail : null;
+
+  return (
+    <div className="r-today-panel" style={{ width: "100%", flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* 1 · DAILY BRIEF — flat white, thin purple left-rule header */}
+      <div style={{
+        background: C.card,
+        borderRadius: 14,
+        overflow: "hidden",
+        border: "1px solid rgba(20,30,22,0.12)",
+        boxShadow: "0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04)",
+      }}>
+        <div style={{
+          padding: "14px 16px 12px",
+          borderBottom: "1px solid " + C.borderLight,
+          borderLeft: "3px solid " + C.btn,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: C.btn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>✦</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Rai&rsquo;s brief</span>
+          </div>
+          <span style={{ fontSize: 11, color: C.textMuted }}>{dateLine}</span>
+        </div>
+        <div style={{ padding: "14px 16px 16px" }}>
+          {briefText ? (
+            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 14, lineHeight: 1.55, color: C.text, fontStyle: "italic", fontWeight: 500 }}>
+              {pickClientName ? <><b style={{ fontStyle: "normal", fontWeight: 600, color: C.primaryDeep }}>{pickClientName}</b>{" — "}</> : null}
+              {briefText}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>
+              Rai&rsquo;s read posts with your morning sweep.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2 · NEEDS YOU TODAY — flat white pulse */}
+      {pulse.length > 0 && (
+        <div style={{
+          background: C.card,
+          borderRadius: 14,
+          overflow: "hidden",
+          border: "1px solid rgba(20,30,22,0.12)",
+          boxShadow: "0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04)",
+        }}>
+          <div style={{
+            padding: "14px 16px 12px",
+            borderBottom: "1px solid " + C.borderLight,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Needs you today</span>
+            <span style={{ fontSize: 11, color: C.textMuted }}>{pulse.length}</span>
+          </div>
+          <div style={{ padding: "4px 16px 8px" }}>
+            {pulse.map((c, i) => {
+              const dot = retColor(c.ret || 0);
+              const initials = (c.name || "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+              return (
+                <div key={c.id || i} style={{
+                  display: "flex", alignItems: "center", gap: 11,
+                  padding: "11px 0",
+                  borderTop: i === 0 ? "none" : "1px solid #F2F1EC",
+                }}>
+                  <span style={{ width: 30, height: 30, borderRadius: "50%", background: dot, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                    <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.raiRationale}</div>
+                  </div>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+// ============================================================
 // REFERRAL NETWORK · d3-force simulation
 // ============================================================
 //
@@ -11013,12 +11121,7 @@ export default function App({ user }) {
 
               {/* DAYBOOK COLUMN — wide desktop only (>=1440px). Right-rail notepad. */}
               <div className="rt-rai-col" style={{ gridArea: "rai", display: "none", flexDirection: "column", gap: 16, position: "sticky", top: 20, alignSelf: "start" }}>
-                <DaybookPanel
-                  entry={daybookEntry}
-                  yesterday={daybookYesterday}
-                  saveStatus={daybookSaveStatus}
-                  onChange={handleDaybookChange}
-                />
+                <RaiBriefPanel pick={raiPicks} clients={clients} />
               </div>
 
               {/* CONFETTI */}
@@ -13205,12 +13308,7 @@ export default function App({ user }) {
 
                 {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <DaybookPanel
-                    entry={daybookEntry}
-                    yesterday={daybookYesterday}
-                    saveStatus={daybookSaveStatus}
-                    onChange={handleDaybookChange}
-                  />
+                  <RaiBriefPanel pick={raiPicks} clients={clients} />
                 </div>
               </div>
               </>)}
@@ -13950,12 +14048,7 @@ export default function App({ user }) {
                   </div>
                   {/* DAYBOOK COLUMN — wide desktop only (>=1440px), shared global notes */}
                   <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                    <DaybookPanel
-                      entry={daybookEntry}
-                      yesterday={daybookYesterday}
-                      saveStatus={daybookSaveStatus}
-                      onChange={handleDaybookChange}
-                    />
+                    <RaiBriefPanel pick={raiPicks} clients={clients} />
                   </div>
                 </div>
               )}
@@ -14649,12 +14742,7 @@ export default function App({ user }) {
 
                 {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <DaybookPanel
-                    entry={daybookEntry}
-                    yesterday={daybookYesterday}
-                    saveStatus={daybookSaveStatus}
-                    onChange={handleDaybookChange}
-                  />
+                  <RaiBriefPanel pick={raiPicks} clients={clients} />
                 </div>
               </div>
 
@@ -15269,12 +15357,7 @@ export default function App({ user }) {
 
                 {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
                 <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <DaybookPanel
-                    entry={daybookEntry}
-                    yesterday={daybookYesterday}
-                    saveStatus={daybookSaveStatus}
-                    onChange={handleDaybookChange}
-                  />
+                  <RaiBriefPanel pick={raiPicks} clients={clients} />
                 </div>
               </div>
 
