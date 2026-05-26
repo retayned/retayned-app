@@ -3047,8 +3047,10 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       )}
 
       {/* Composer — frosted flush bar at the foot of the ambient field.
-          Sits on the field's warm-cream night end; the plus is the app's
-          purple. parseCalendarEntry (via handleSubmit) links the client. */}
+          HIDDEN: calendar entry now happens only via the task composer / +
+          button, not a separate input on the calendar. Gated behind false
+          (no deletion) so it can be restored by flipping the flag. */}
+      {false && (
       <div
         className="rt-cal-composer"
         onClick={() => inputRef.current && inputRef.current.focus()}
@@ -3095,7 +3097,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           }}
         />
       </div>
-      {composerError && (
+      )}
+      {false && composerError && (
         <div style={{ fontSize: 10.5, color: C.danger, marginTop: 4, paddingLeft: 14 }}>{composerError}</div>
       )}
     </div>
@@ -3375,7 +3378,9 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
           );
         })}
       </div>
-      {/* Frosted foot composer */}
+      {/* Frosted foot composer — HIDDEN: calendar entry happens via the + FAB
+          / task composer only. Gated behind false (no deletion). */}
+      {false && (
       <div
         onClick={() => inputRef.current && inputRef.current.focus()}
         style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", background: "rgba(255,255,255,0.55)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid rgba(20,30,22,0.05)", cursor: "text" }}
@@ -3394,7 +3399,8 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
           style={{ flex: 1, border: "none", background: "transparent", fontFamily: "inherit", fontSize: 11.5, color: C.text, outline: "none", padding: "2px 0", minWidth: 0 }}
         />
       </div>
-      {composerError && (
+      )}
+      {false && composerError && (
         <div style={{ fontSize: 10.5, color: C.danger, padding: "0 14px 8px" }}>{composerError}</div>
       )}
     </div>
@@ -8280,8 +8286,13 @@ export default function App({ user }) {
              fill this space; now it's in the strip, so the gap read as too low). */
           .rt-today-v4 { row-gap: 8px !important; }
           .rt-today-v4 {
-            grid-template-areas: "calstrip" "band" "composer" "tasks" !important;
+            grid-template-areas: "calstrip" "band" "tasks" !important;
           }
+          /* Composer hidden on mobile — the center "+" FAB in the bottom nav
+             covers quick-capture, so the inline composer is redundant and eats
+             vertical space. Hidden only (no deletion); removed from the grid
+             template above so its row collapses rather than leaving a gap. */
+          .rt-composer { display: none !important; }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
           /* Task right-side indicators on mobile — ALL pills render as one
@@ -8634,7 +8645,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.primarySoft, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.primaryGhost, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
@@ -18265,10 +18276,14 @@ export default function App({ user }) {
           No horizontal scroll: a fixed set of equal-width items. */}
       {(() => {
         const primary = tier === "enterprise" ? mobileNavEnterprisePrimary : mobileNavPrimary;
-        const more = tier === "enterprise" ? mobileNavEnterpriseMore : mobileNavMore;
-        // Insert the center FAB between items 2 and 3 (4 items → 2 | FAB | 2).
+        const moreBase = tier === "enterprise" ? mobileNavEnterpriseMore : mobileNavMore;
+        // FAB sits dead-center, so the bar needs an EVEN number of nav slots
+        // split around it: 2 | FAB | 2. Left = first two primary; right = third
+        // primary + the More button. The 4th primary is folded into the More
+        // sheet (with the rest of the overflow) to keep the layout symmetric.
         const left = primary.slice(0, 2);
-        const right = primary.slice(2, 4);
+        const rightPrimary = primary.slice(2, 3); // one item; More is the other right slot
+        const more = [...primary.slice(3), ...moreBase];
         const moreActive = more.some(m => m.id === page);
         const moreHasDot = more.some(m => hasDot(m.id));
         const navItem = (n) => {
@@ -18333,12 +18348,12 @@ export default function App({ user }) {
               className="r-mob-bot-dock"
               style={{
                 position: "fixed",
-                bottom: 0, left: 0, right: 0,
+                bottom: -2, left: 0, right: 0,
                 background: C.sidebar,
                 borderRadius: "18px 18px 0 0",
                 borderTop: "1px solid rgba(20,30,22,0.12)",
                 boxShadow: "0 -2px 14px rgba(20,30,22,0.05)",
-                padding: "8px 8px calc(10px + env(safe-area-inset-bottom, 0px))",
+                padding: "8px 8px calc(12px + env(safe-area-inset-bottom, 0px))",
                 zIndex: 50,
                 display: keyboardOpen ? "none" : "flex",
                 alignItems: "center",
@@ -18367,7 +18382,7 @@ export default function App({ user }) {
                   </svg>
                 </button>
               </div>
-              {right.map(navItem)}
+              {rightPrimary.map(navItem)}
               {/* More — opens the overflow sheet. */}
               <div
                 className={"nav-item-mobile" + (moreActive ? " is-active" : "")}
