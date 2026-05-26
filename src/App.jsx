@@ -2528,7 +2528,7 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
               the last ~14% of the radius. */}
           <radialGradient id="rt-dial-feather" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="#fff" stopOpacity="1" />
-            <stop offset="0.86" stopColor="#fff" stopOpacity="1" />
+            <stop offset="0.88" stopColor="#fff" stopOpacity="1" />
             <stop offset="1" stopColor="#fff" stopOpacity="0" />
           </radialGradient>
           <mask id="rt-dial-mask">
@@ -8589,6 +8589,7 @@ export default function App({ user }) {
              vertical space. Hidden only (no deletion); removed from the grid
              template above so its row collapses rather than leaving a gap. */
           .rt-composer { display: none !important; }
+          .rt-composer-hint { display: none !important; }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
           /* Task right-side indicators on mobile — ALL pills render as one
@@ -10637,6 +10638,10 @@ export default function App({ user }) {
                         </>
                       )}
                     </div>
+                    <div className="rt-composer-hint" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
+                      <span>Past tense → touchpoint · future → task</span>
+                      <span style={{ color: C.ink300 }}>⏎ to log · Esc</span>
+                    </div>
                     <button
                       onClick={submitComposer}
                       disabled={!newTask.trim()}
@@ -10652,7 +10657,7 @@ export default function App({ user }) {
                         fontSize: 12,
                         fontWeight: 600,
                         fontFamily: "inherit",
-                        marginLeft: "auto",
+                        marginLeft: 10,
                         flexShrink: 0,
                         cursor: newTask.trim() ? "pointer" : "default",
                         // Two-state treatment: at rest = warm-neutral box with
@@ -10669,7 +10674,7 @@ export default function App({ user }) {
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
-                      Add Task
+                      Add
                     </button>
                   </div>
                 </div>
