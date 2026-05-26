@@ -3294,7 +3294,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         )}
         {/* Refined timeline: a near-flat hairline curve. Full-bleed; the stroke
             stays uniform via non-scaling-stroke even when stretched. */}
-        <div style={{ position: "absolute", top: 10, left: 0, right: 0, height: BAND_H, zIndex: 1, pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: 21, left: 0, right: 0, height: BAND_H, zIndex: 1, pointerEvents: "none" }}>
           <svg viewBox={`0 0 288 ${BAND_H}`} width="100%" height={BAND_H} preserveAspectRatio="none" style={{ display: "block", position: "absolute", left: 0, right: 0, top: 0 }}>
             <path d={`M 0 ${BASE_Y} Q 144 ${BASE_Y - 2 * LIFT} 288 ${BASE_Y}`} fill="none" stroke="rgba(30,38,31,0.16)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
           </svg>
@@ -3306,7 +3306,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         </div>
         {/* Header row in the sky, sitting below the timeline band: date+greeting
             left, next-meeting right. */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 54 }}>
+        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 65 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
             <h1 style={{ fontSize: 26, fontWeight: 700, margin: "2px 0 0", letterSpacing: -0.4, color: C.text, lineHeight: 1.04 }}>
@@ -8634,7 +8634,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.sidebar, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.primarySoft, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
