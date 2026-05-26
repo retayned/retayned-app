@@ -2443,11 +2443,17 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
     return `rgba(${r},${g},${bl},${al})`;
   };
   // Generate gradient stops by sampling the real hour across the window.
-  const windowStartHour = new Date(windowStart).getHours() + new Date(windowStart).getMinutes() / 60;
+  // IMPORTANT: on the arc, f=0 (windowStart, earliest) is at the BOTTOM of the
+  // circle and f=1 (windowEnd, latest) is at the TOP (angleOf: sin(90°)=+1=bottom,
+  // sin(270°)=−1=top). The SVG vertical gradient's offset 0 is the TOP, so the
+  // top of the gradient corresponds to the LATEST hour and the bottom to the
+  // earliest. Map accordingly so midday reads bright and night reads dark in
+  // the right places.
+  const windowEndHour = new Date(windowEnd).getHours() + new Date(windowEnd).getMinutes() / 60;
   const gradStops = [];
   for (let i = 0; i <= 12; i++) {
-    const off = i / 12;
-    const hourHere = windowStartHour + off * 12; // 12h window, top→bottom
+    const off = i / 12;                       // 0 = top of gradient = latest time
+    const hourHere = windowEndHour - off * 12; // top→bottom = late→early
     gradStops.push({ off, color: skyColorForHour(hourHere) });
   }
 
@@ -7367,8 +7373,9 @@ export default function App({ user }) {
           border-radius: 12px;
           padding: 6px;
           box-shadow:
-            0 1px 3px rgba(20, 30, 22, 0.06),
-            0 8px 24px rgba(20, 30, 22, 0.10);
+            0 0 0 1px rgba(20, 30, 22, 0.08),
+            0 2px 6px rgba(20, 30, 22, 0.08),
+            0 12px 32px rgba(20, 30, 22, 0.16);
         }
         /* Due picker — base (desktop) positioning. Anchored absolutely
            to the chip wrapper (position:relative parent), opening
@@ -7731,9 +7738,11 @@ export default function App({ user }) {
                       box-shadow 200ms var(--rt-ease-out),
                       transform 280ms cubic-bezier(.34,1.56,.64,1);
         }
-        .rt-row:not(.is-done) .rt-check:hover {
-          border-color: #558B68 !important;
-          box-shadow: 0 0 0 4px var(--rt-primary-soft, #E6EFE9);
+        @media (hover: hover) {
+          .rt-row:not(.is-done) .rt-check:hover {
+            border-color: #558B68 !important;
+            box-shadow: 0 0 0 4px var(--rt-primary-soft, #E6EFE9);
+          }
         }
         .rt-row .rt-check svg {
           opacity: 0;
@@ -8294,6 +8303,8 @@ export default function App({ user }) {
 
         /* Focused task gets a purple ring + soft shadow + slight scale to pop */
         .rt-focus-on .rt-row.rt-focus-top {
+          position: relative;
+          z-index: 6;
           transform: scale(1.015);
           box-shadow:
             0 0 0 1px rgba(124,92,243,0.35),
@@ -8303,6 +8314,8 @@ export default function App({ user }) {
         }
         /* When focus row is wrapped in a swipe container, scale + shadow apply to wrapper */
         .rt-focus-on .rt-focus-top-wrap {
+          position: relative;
+          z-index: 6;
           transform: scale(1.015);
           box-shadow:
             0 0 0 1px rgba(124,92,243,0.35),
@@ -9749,6 +9762,19 @@ export default function App({ user }) {
                 setFocusMode(false);
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
+              {/* Focus-mode exit scrim — a full-viewport tap target behind the
+                  focused task. The dimmed rows/areas have pointer-events:none,
+                  so on mobile taps never reached the grid wrapper's onClick;
+                  this scrim guarantees a tap anywhere outside the focused task
+                  exits focus. The focused row paints above it (higher z-index in
+                  the .rt-focus-on rules). */}
+              {focusMode && (
+                <div
+                  onClick={() => setFocusMode(false)}
+                  style={{ position: "fixed", inset: 0, zIndex: 5, background: "transparent" }}
+                  aria-hidden="true"
+                />
+              )}
               {/* Mobile ambient calendar strip — pinned at the very top of the
                   mobile Today page, above the greeting/band. Collapsed by
                   default (B1 sequence-dots + next + countdown), expands in
@@ -9993,7 +10019,7 @@ export default function App({ user }) {
                         if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
                         else if (e.key === "Escape") { setComposerMenuOpen(false); }
                       }}
-                      placeholder="Add a task, log activity, or create a calendar event. Natural language = magic."
+                      placeholder="Add a task, log activity, or schedule an event. Natural language = magic."
                       style={{
                         flex: 1, minWidth: 100,
                         border: "none", outline: "none", background: "transparent",
@@ -19002,7 +19028,7 @@ export default function App({ user }) {
                   }
                 }
               }}
-              placeholder="Add a task, log activity, or create a calendar event. Natural language = magic."
+              placeholder="Add a task, log activity, or schedule an event. Natural language = magic."
               rows={3}
               style={{ width: "100%", padding: "8px 0", border: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, minHeight: 60, boxSizing: "border-box" }}
             />
