@@ -3113,7 +3113,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
 const V1_GRAD_H = "linear-gradient(90deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7";
 const V1_GRAD_V = "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7";
 
-function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today" }) {
+function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "" }) {
   const [composerText, setComposerText] = useState("");
   const [composerError, setComposerError] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -3222,41 +3222,39 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
   // ── COLLAPSED ──
   if (!open) {
-    // ── ARC / SKY collapsed state ──
-    // The day as a shallow arc sweeping end-to-end (6am left → midnight
-    // right), events plotted on the curve by time-of-day (polar math), NOW
-    // at/near the apex. The next-meeting line nests UNDER the apex, inside
-    // the arc's interior, so the framed space carries the content instead of
-    // sitting empty. Borderless — the daylight gradient is the sky behind it.
-    const W = 320, H = 96;            // viewBox; scales to container width
-    const CX = W / 2;                  // arc center x (symmetry axis)
-    const ARC_R = 190;                 // radius solved so the end-to-end arc
-    const ARC_CY = 200;                // fits within H: L(8,86) apex(160,10) R(312,86)
-    const PAD = 12;                    // horizontal inset for the 6a/12a ends
-    // Map a day-fraction (0=6am … 1=midnight) to a point on the arc, sweeping
-    // the angle from the low-left end up through the apex to the low-right end.
-    const A_START = -143.1 * Math.PI / 180; // left end (6am)
-    const A_END = -36.9 * Math.PI / 180;    // right end (midnight)
-    const ptFor = (frac) => {
-      const a = A_START + (A_END - A_START) * Math.max(0, Math.min(1, frac));
-      return { x: CX + ARC_R * Math.cos(a), y: ARC_CY + ARC_R * Math.sin(a) };
+    // ── FULL-BLEED ARC / SKY (B) ──
+    // The sky spans the entire screen width (bleeds past r-main's 16px
+    // padding via negative margin), fading down into the bg so there's no
+    // box/seam. A shallow arc crosses through the header region; events plot
+    // on the curve by time-of-day, NOW rides it. The date + greeting sit on
+    // the LEFT inside the sky; the next-meeting tucks under the right
+    // shoulder — so the header and calendar share one region (reclaiming the
+    // vertical space the old stacked bar wasted). Tap anywhere → expand.
+    const W = 360, H = 150;            // viewBox (stretched full-width)
+    // Arc that bows across the full width, dipping low enough to cross the
+    // header. Quadratic curve: ends run off both screen edges, apex up top.
+    const arcPath = `M -10 ${H} Q ${W / 2} 28 ${W + 10} ${H}`;
+    // Point on the quadratic for a day-fraction t (0=6am … 1=midnight).
+    const qPt = (t) => {
+      const x0 = -10, y0 = H, cx = W / 2, cy = 28, x1 = W + 10, y1 = H;
+      const mt = 1 - t;
+      return {
+        x: mt * mt * x0 + 2 * mt * t * cx + t * t * x1,
+        y: mt * mt * y0 + 2 * mt * t * cy + t * t * y1,
+      };
     };
-    // Arc path (the faint track) from the start point to the end point.
-    const p0 = ptFor(0), p1 = ptFor(1);
-    const arcPath = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${ARC_R} ${ARC_R} 0 0 1 ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
-
     const dotMarks = dayEvents.map((e, i) => {
       const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
       const isNext = nextEvent && e.id === nextEvent.id;
-      const { x, y } = ptFor(fracFor(e._start));
+      const { x, y } = qPt(fracFor(e._start));
       return (
         <g key={e.id || i}>
-          {isNext && <circle cx={x} cy={y} r={8} fill="none" stroke="#558B68" strokeOpacity="0.30" strokeWidth="2" />}
+          {isNext && <circle cx={x} cy={y} r={8.5} fill="none" stroke="#558B68" strokeOpacity="0.30" strokeWidth="2" />}
           <circle cx={x} cy={y} r={isNext ? 5 : isPast ? 3.5 : 4} fill={isPast ? C.ink300 : (isNext ? C.primary : C.primaryLight)} />
         </g>
       );
     });
-    const nowPt = (selectedDay === "today" && nowFrac > 0 && nowFrac < 1) ? ptFor(nowFrac) : null;
+    const nowPt = (selectedDay === "today" && nowFrac > 0 && nowFrac < 1) ? qPt(nowFrac) : null;
 
     let countdown = null, imminent = false;
     if (nextEvent) {
@@ -3270,43 +3268,48 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     return (
       <div
         onClick={onToggle}
-        style={{ position: "relative", cursor: "pointer", overflow: "hidden" }}
+        style={{ position: "relative", cursor: "pointer", margin: "0 -16px", padding: "0 16px" }}
       >
-        {/* Sky dome — daylight gradient bleeding from the top, borderless */}
+        {/* Full-bleed sky — edge to edge, fades down into the bg (no box) */}
         <div aria-hidden style={{
-          position: "absolute", left: "-12%", right: "-12%", top: -120, height: 300,
-          borderRadius: "50%", pointerEvents: "none",
-          background: "radial-gradient(ellipse 120% 80% at 50% 100%, rgba(216,180,120,0.15) 0%, rgba(150,185,150,0.11) 32%, rgba(150,170,235,0.12) 62%, rgba(124,92,243,0.13) 100%)",
+          position: "absolute", top: 0, left: 0, right: 0, height: 200, zIndex: 0, pointerEvents: "none",
+          background: "linear-gradient(180deg, rgba(124,92,243,0.14) 0%, rgba(150,170,235,0.11) 22%, rgba(150,185,150,0.09) 45%, rgba(216,180,120,0.07) 65%, rgba(250,250,247,0) 100%)",
         }} />
-        {/* Arc track + plotted dots + NOW */}
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ position: "relative", zIndex: 1, display: "block" }} preserveAspectRatio="xMidYMin meet">
-          <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.09)" strokeWidth="1.5" />
+        {/* Arc + plotted dots + NOW, stretched full-width, crossing the header */}
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "block", pointerEvents: "none" }}>
+          <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.12)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
           {dotMarks}
           {nowPt && (
             <g>
-              <circle cx={nowPt.x} cy={nowPt.y} r={9} fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" />
+              <circle cx={nowPt.x} cy={nowPt.y} r={9} fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
               <circle cx={nowPt.x} cy={nowPt.y} r={5.5} fill="#7c5cf3" />
             </g>
           )}
-          <text x={PAD} y={H - 2} fontSize="7" fill={C.ink300} fontFamily="Manrope, sans-serif">6a</text>
-          <text x={W - PAD - 12} y={H - 2} fontSize="7" fill={C.ink300} fontFamily="Manrope, sans-serif">12a</text>
         </svg>
-        {/* Next-meeting nested inside the arc, centered just below the apex */}
-        <div style={{ position: "absolute", top: 34, left: 0, right: 0, zIndex: 2, textAlign: "center", pointerEvents: "none", padding: "0 28px" }}>
-          {nextEvent ? (
-            <>
-              <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: C.primaryLight }}>
-                Next{countdown ? ` · ${countdown}` : ""}
+        {/* Header row INSIDE the sky: date+greeting left, next-meeting right */}
+        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 60, minHeight: 132 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
+            <h1 style={{ fontSize: 26, fontWeight: 700, margin: "2px 0 0", letterSpacing: -0.4, color: C.text, lineHeight: 1.04 }}>
+              {greeting}{firstName ? ", " + firstName : ""}.
+            </h1>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0, paddingBottom: 3, paddingLeft: 10 }}>
+            {nextEvent ? (
+              <>
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
+                  Next{countdown ? ` · ${countdown}` : ""}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(nextEvent._start)}</span> {nextEvent.title}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+                {allPast ? "All done." : "Tap to add"}
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                <span style={{ color: imminent ? C.primary : C.primaryDeep, fontWeight: 700 }}>{fmtTime(nextEvent._start)}</span> {nextEvent.title}
-              </div>
-            </>
-          ) : (
-            <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
-              {allPast ? "All done for today." : "Nothing scheduled — tap to add."}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -8241,6 +8244,9 @@ export default function App({ user }) {
           .rt-mob-cal-trigger { display: none !important; }
           .rt-mob-cal-sheet { display: none !important; }
           .rt-mob-cal-sheet-band { display: block !important; grid-area: calstrip !important; }
+          /* The sky strip renders date+greeting itself on mobile, so hide the
+             band's duplicate copy. */
+          .rt-band-greet { display: none !important; }
           .rt-today-v4 {
             grid-template-areas: "calstrip" "band" "composer" "tasks" !important;
           }
@@ -9392,6 +9398,9 @@ export default function App({ user }) {
                   C={C}
                   open={todayStripOpen}
                   onToggle={() => setTodayStripOpen(!todayStripOpen)}
+                  greeting={greeting}
+                  firstName={firstName}
+                  displayDate={displayDate}
                   onCreate={async (entry) => {
                     const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
                     setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
@@ -9416,12 +9425,14 @@ export default function App({ user }) {
               </div>
               {/* STATUS BAND */}
               <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
-                <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
-                  {displayDate}
+                <div className="rt-band-greet">
+                  <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
+                    {displayDate}
+                  </div>
+                  <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
+                    {greeting}{firstName ? ", " + firstName : ""}.
+                  </h1>
                 </div>
-                <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>
-                  {greeting}{firstName ? ", " + firstName : ""}.
-                </h1>
 
                 {/* Rai's Pick of the Day — its own block above the meta row.
                     maxWidth caps how wide it can get so long reasons WRAP
