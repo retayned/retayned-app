@@ -7045,35 +7045,33 @@ export default function App({ user }) {
         .rt-row:hover .rt-dismiss,
         .rt-row:hover .rt-push { opacity: 1 !important; }
 
-        /* ── TODAY EMPHASIS (restrained blend) ─────────────
-           Canvas = soft warm stage behind today. Rail = visual
-           spine + node dots (NO time meaning). Condensed =
-           tomorrow/later rows tighten. */
+        /* ── TODAY EMPHASIS (light wash, "C") ──────────────
+           Canvas = soft warm stage. A diagonal light spills from
+           the canvas top-left across the first task and fades down
+           — the top task is the most-lit object, pulling the eye
+           up with light rather than a rail. Condensed = future
+           buckets tighten. No rail, no node dots. */
         .rt-today-canvas {
+          position: relative;
+          overflow: hidden;
+          background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
+          border-radius: 20px;
           padding: 6px 14px 16px;
           margin: 0 -8px;
         }
-        /* Rail geometry — line + node dots + the TODAY header dot all
-           share center x = 7px (measured from the rail/canvas content
-           edge), so the spine runs straight down through every dot:
-           header dot: margin-left 4 + half-dot 3 = 7
-           line:  left 6 + half-width 1 = 7
-           node:  left -23.5 + half-dot 4.5, inside padding-left 26 → 26 - 23.5 + 4.5 = 7 */
-        .rt-today-rail { position: relative; padding-left: 26px; }
-        .rt-today-rail::before {
-          content: ""; position: absolute; left: 6px; top: 22px; bottom: 22px; width: 2px;
-          background: linear-gradient(180deg, rgba(85,139,104,0.45), rgba(196,196,189,0.5));
-          border-radius: 2px;
+        .rt-today-canvas::before {
+          content: "";
+          position: absolute;
+          left: -40px; top: -40px;
+          width: 320px; height: 210px;
+          pointer-events: none;
+          background: radial-gradient(ellipse at top left, rgba(140,170,140,0.42), rgba(234,228,214,0) 62%);
+          z-index: 0;
         }
-        .rt-rail-node { position: relative; }
-        .rt-rail-node::before {
-          content: ""; position: absolute; left: -23.5px; top: 50%; transform: translateY(-50%);
-          width: 9px; height: 9px; border-radius: 50%; background: #fff;
-          box-shadow: 0 0 0 2px var(--rt-ink-300); z-index: 3;
-        }
-        .rt-rail-node.is-first::before {
-          background: var(--rt-primary-light, #558B68);
-          box-shadow: 0 0 0 3px var(--rt-primary-soft, #E6EFE9);
+        .rt-today-rail { position: relative; z-index: 1; }
+        /* First today row catches the light — a gentle lift. */
+        .rt-today-rail > .rt-rail-node:first-child .rt-row {
+          box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.06), 0 10px 26px rgba(20,30,22,0.08) !important;
         }
         /* Condensed future rows (tomorrow/later) */
         .rt-row-condensed .rt-row { padding: 9px 14px; }
@@ -10762,7 +10760,7 @@ export default function App({ user }) {
 
                     return (
                       <>
-                        {/* TODAY bucket — canvas stage + visual rail + focal first */}
+                        {/* TODAY bucket — canvas stage + light wash (top task catches the light) */}
                         <div className="rt-today-canvas">
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
                         <div className="rt-today-rail" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
