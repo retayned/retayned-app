@@ -3222,26 +3222,42 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
   // ── COLLAPSED ──
   if (!open) {
-    // Sequence dots — one per event in time order: past (grey), the next
-    // upcoming (green ring), future (soft green). Not time-plotted — a
-    // sequence, so position never lies and short meetings don't vanish.
-    const seqDots = dayEvents.map((e, i) => {
+    // ── ARC / SKY collapsed state ──
+    // The day as a shallow arc sweeping end-to-end (6am left → midnight
+    // right), events plotted on the curve by time-of-day (polar math), NOW
+    // at/near the apex. The next-meeting line nests UNDER the apex, inside
+    // the arc's interior, so the framed space carries the content instead of
+    // sitting empty. Borderless — the daylight gradient is the sky behind it.
+    const W = 320, H = 96;            // viewBox; scales to container width
+    const CX = W / 2;                  // arc center x (symmetry axis)
+    const ARC_R = 190;                 // radius solved so the end-to-end arc
+    const ARC_CY = 200;                // fits within H: L(8,86) apex(160,10) R(312,86)
+    const PAD = 12;                    // horizontal inset for the 6a/12a ends
+    // Map a day-fraction (0=6am … 1=midnight) to a point on the arc, sweeping
+    // the angle from the low-left end up through the apex to the low-right end.
+    const A_START = -143.1 * Math.PI / 180; // left end (6am)
+    const A_END = -36.9 * Math.PI / 180;    // right end (midnight)
+    const ptFor = (frac) => {
+      const a = A_START + (A_END - A_START) * Math.max(0, Math.min(1, frac));
+      return { x: CX + ARC_R * Math.cos(a), y: ARC_CY + ARC_R * Math.sin(a) };
+    };
+    // Arc path (the faint track) from the start point to the end point.
+    const p0 = ptFor(0), p1 = ptFor(1);
+    const arcPath = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${ARC_R} ${ARC_R} 0 0 1 ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
+
+    const dotMarks = dayEvents.map((e, i) => {
       const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
       const isNext = nextEvent && e.id === nextEvent.id;
+      const { x, y } = ptFor(fracFor(e._start));
       return (
-        <span
-          key={e.id || i}
-          style={{
-            width: isNext ? 8 : 6, height: isNext ? 8 : 6, borderRadius: "50%",
-            background: isPast ? C.ink300 : C.primaryLight,
-            boxShadow: isNext ? "0 0 0 3px rgba(85,139,104,0.20)" : "none",
-            flexShrink: 0,
-          }}
-        />
+        <g key={e.id || i}>
+          {isNext && <circle cx={x} cy={y} r={8} fill="none" stroke="#558B68" strokeOpacity="0.30" strokeWidth="2" />}
+          <circle cx={x} cy={y} r={isNext ? 5 : isPast ? 3.5 : 4} fill={isPast ? C.ink300 : (isNext ? C.primary : C.primaryLight)} />
+        </g>
       );
     });
-    // Countdown label: minutes → "in N min", hours → "in N hr". Greens when
-    // imminent (<= 30 min) so the eye catches an about-to-start meeting.
+    const nowPt = (selectedDay === "today" && nowFrac > 0 && nowFrac < 1) ? ptFor(nowFrac) : null;
+
     let countdown = null, imminent = false;
     if (nextEvent) {
       const mins = minutesUntil(nextEvent._start);
@@ -3250,31 +3266,48 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       else { countdown = `in ${Math.round(mins / 60)} hr`; }
     }
     const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
+
     return (
       <div
         onClick={onToggle}
-        style={{ background: V1_GRAD_H, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)", cursor: "pointer", padding: "10px 13px 11px" }}
+        style={{ position: "relative", cursor: "pointer", overflow: "hidden" }}
       >
-        {/* Tier 1: label · sequence dots · count */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted, flexShrink: 0 }}>{selectedDay === "today" ? "Today" : "Tomorrow"}</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>{seqDots}</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 600, color: C.textMuted, flexShrink: 0 }}>
-            {dayEvents.length === 0 ? "No events" : `${dayEvents.length} ${dayEvents.length === 1 ? "event" : "events"}`}
-          </span>
+        {/* Sky dome — daylight gradient bleeding from the top, borderless */}
+        <div aria-hidden style={{
+          position: "absolute", left: "-12%", right: "-12%", top: -120, height: 300,
+          borderRadius: "50%", pointerEvents: "none",
+          background: "radial-gradient(ellipse 120% 80% at 50% 100%, rgba(216,180,120,0.15) 0%, rgba(150,185,150,0.11) 32%, rgba(150,170,235,0.12) 62%, rgba(124,92,243,0.13) 100%)",
+        }} />
+        {/* Arc track + plotted dots + NOW */}
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ position: "relative", zIndex: 1, display: "block" }} preserveAspectRatio="xMidYMin meet">
+          <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.09)" strokeWidth="1.5" />
+          {dotMarks}
+          {nowPt && (
+            <g>
+              <circle cx={nowPt.x} cy={nowPt.y} r={9} fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" />
+              <circle cx={nowPt.x} cy={nowPt.y} r={5.5} fill="#7c5cf3" />
+            </g>
+          )}
+          <text x={PAD} y={H - 2} fontSize="7" fill={C.ink300} fontFamily="Manrope, sans-serif">6a</text>
+          <text x={W - PAD - 12} y={H - 2} fontSize="7" fill={C.ink300} fontFamily="Manrope, sans-serif">12a</text>
+        </svg>
+        {/* Next-meeting nested inside the arc, centered just below the apex */}
+        <div style={{ position: "absolute", top: 34, left: 0, right: 0, zIndex: 2, textAlign: "center", pointerEvents: "none", padding: "0 28px" }}>
+          {nextEvent ? (
+            <>
+              <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: C.primaryLight }}>
+                Next{countdown ? ` · ${countdown}` : ""}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <span style={{ color: imminent ? C.primary : C.primaryDeep, fontWeight: 700 }}>{fmtTime(nextEvent._start)}</span> {nextEvent.title}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+              {allPast ? "All done for today." : "Nothing scheduled — tap to add."}
+            </div>
+          )}
         </div>
-        {/* Tier 2: next meeting + countdown, or a quiet state */}
-        {nextEvent ? (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.primaryLight, flexShrink: 0 }}>{fmtTime(nextEvent._start)}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nextEvent.title}</span>
-            <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 600, color: imminent ? C.primary : C.textMuted, flexShrink: 0, whiteSpace: "nowrap" }}>{countdown}</span>
-          </div>
-        ) : (
-          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
-            {allPast ? "All done for today." : "Nothing scheduled — tap to add."}
-          </div>
-        )}
       </div>
     );
   }
@@ -9484,29 +9517,6 @@ export default function App({ user }) {
                     block falls below cleanly. */}
                 <div className="rt-band-meta" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexShrink: 0 }}>
-                    <button
-                      className="rt-band-sub-events"
-                      onClick={() => setTodayStripOpen(!todayStripOpen)}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 5,
-                        background: "transparent",
-                        border: "none",
-                        padding: 0,
-                        margin: 0,
-                        cursor: "pointer",
-                        color: C.textMuted,
-                        fontSize: "inherit",
-                        fontFamily: "inherit",
-                      }}
-                    >
-                      <b style={{ color: C.text, fontWeight: 700 }}>{todayEventCount}</b> {todayEventCount === 1 ? "event" : "events"}
-                      <span className="rt-band-sub-events-chev" style={{ display: "inline-flex" }}>
-                        <Icon name={todayStripOpen ? "chevron-down" : "chevron-right"} size={11} color={C.textMuted} />
-                      </span>
-                    </button>
-                    <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
                   </div>
 
