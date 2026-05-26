@@ -2402,7 +2402,9 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
   // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
   const R = 420;
-  const VB_W = R, VB_H = 2 * R, CX = VB_W, CY = VB_H / 2;
+  const DIAL_PAD = 24; // breathing room so arc-edge dots (NOW dot, edge events,
+                       // top/bottom ticks) aren't clipped at the viewBox edges
+  const VB_W = R + DIAL_PAD, VB_H = 2 * R + 2 * DIAL_PAD, CX = VB_W, CY = VB_H / 2;
   const HUB_R = 140;
   const fracOf = (ms) => (ms - windowStart) / (windowEnd - windowStart); // 0..1
   const angleOf = (f) => (90 + f * 180) * Math.PI / 180; // radians
