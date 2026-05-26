@@ -9352,6 +9352,61 @@ export default function App({ user }) {
             const text = finalParse.title || newTask.trim();
             const clientName = composerClient || "";
             const clientObj = clients.find(c => c.name === clientName);
+            const rawComposer = newTask.trim();
+
+            // Explicit task intent: if the user toggled recurrence, assigned a
+            // worker, or hand-picked a due date, they clearly mean a TASK — skip
+            // auto-detection and create the task directly (below).
+            const explicitTask = newTaskRecurring || !!newTaskWorkerId || !!newTaskDueDate;
+
+            if (!explicitTask) {
+              // ─── ROUTE 0: CALENDAR EVENT (a time is present). ───────────
+              const calEntry = parseCalendarEntry(rawComposer, new Date(), clients);
+              if (calEntry) {
+                try {
+                  const { data: createdEv } = await personalCalendarDb.create(user.id, calEntry);
+                  const evId = createdEv?.id || "ev" + Date.now();
+                  setPersonalEvents(prev => [{ ...calEntry, id: evId, source: "manual" }, ...(prev || [])]
+                    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                } catch (e) { console.warn("Composer event create failed:", e); }
+                // reset composer + bail
+                setNewTask(""); setComposerClient(""); setNewTaskRecurring(false);
+                setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
+                setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
+                setComposerMenuOpen(false); parserSetRecurrenceRef.current = null;
+                return;
+              }
+
+              // ─── ROUTE 1: TOUCHPOINT (past-tense / "call with X" + client). ─
+              // Same intent rules as the QuickLog FAB, but the inline composer
+              // DEFAULTS TO TASK — only explicit touchpoint phrasing routes here.
+              const lowerC = rawComposer.toLowerCase();
+              const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
+              const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
+              const matchedClientC = finalParse.matchedClient || clientObj || null;
+              if ((isCommNoun || isPastTouch) && matchedClientC) {
+                let ch = "note";
+                if (/\bcall|\bspoke|got off|\brang|phone/i.test(lowerC)) ch = "call";
+                else if (/\bemail/i.test(lowerC)) ch = "email";
+                else if (/\btext|\bmessage|\bdm\b|pinged/i.test(lowerC)) ch = "text";
+                else if (/\bmet\b|\bmeeting|\blunch|\bcoffee|caught up|\bsync\b|\bdemo\b/i.test(lowerC)) ch = "meeting";
+                try {
+                  await touchpointsDb.create(user.id, {
+                    client_id: matchedClientC.id,
+                    client_name: matchedClientC.name,
+                    channel: ch,
+                    notes: rawComposer,
+                  });
+                } catch (e) { console.warn("Composer touchpoint create failed:", e); }
+                setNewTask(""); setComposerClient(""); setNewTaskRecurring(false);
+                setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
+                setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
+                setComposerMenuOpen(false); parserSetRecurrenceRef.current = null;
+                return;
+              }
+            }
+
+            // ─── ROUTE 2: TASK (default / explicit). ────────────────────────
             // Recurring tasks cannot have a due_date — they reset daily at midnight local.
             // For non-recurring tasks: if no due date was picked, default to today
             // so the task is anchored (not free-floating) and renders in the Today bucket.
@@ -9667,7 +9722,7 @@ export default function App({ user }) {
                         if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
                         else if (e.key === "Escape") { setComposerMenuOpen(false); }
                       }}
-                      placeholder="Add a task. Natural language = magic."
+                      placeholder="Add a task, log activity, or create a calendar event. Natural language = magic."
                       style={{
                         flex: 1, minWidth: 100,
                         border: "none", outline: "none", background: "transparent",
@@ -18484,6 +18539,24 @@ export default function App({ user }) {
                   const matchedClient = parsed.matchedClient || null;
                   const cleanedText = parsed.title || rawText;
 
+                  // ─── ROUTE 0: CALENDAR EVENT. If the entry contains a time
+                  // ("3pm", "9-10am", "noon"), it's a scheduled event, not a
+                  // task or touchpoint. parseCalendarEntry returns null when no
+                  // time is present, so a non-null result IS the event signal.
+                  const calEntry = parseCalendarEntry(rawText, new Date(), clients);
+                  if (calEntry) {
+                    const optimisticId = "qlev" + Date.now();
+                    try {
+                      const { data: created } = await personalCalendarDb.create(user.id, calEntry);
+                      const evId = created?.id || optimisticId;
+                      setPersonalEvents(prev => [{ ...calEntry, id: evId, source: "manual" }, ...(prev || [])]);
+                      setQuickLogToast({ id: Date.now(), kind: "event", recordId: evId, label: calEntry.client_name || calEntry.title });
+                    } catch (err) {
+                      setQuickLogToast({ id: Date.now(), error: true });
+                    }
+                    return;
+                  }
+
                   // ─── Intent detection — QuickLog DEFAULTS TO TOUCHPOINT.
                   // This is the "quick log" box: logging things that happened
                   // is the primary action, so touchpoint is the fallback. Only
@@ -18627,7 +18700,7 @@ export default function App({ user }) {
                   }
                 }
               }}
-              placeholder="Add a task, log activity, or note a touchpoint."
+              placeholder="Add a task, log activity, or create a calendar event. Natural language = magic."
               rows={3}
               style={{ width: "100%", padding: "8px 0", border: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, minHeight: 60, boxSizing: "border-box" }}
             />
@@ -18650,6 +18723,9 @@ export default function App({ user }) {
             } else if (quickLogToast.kind === "touchpoint" && quickLogToast.recordId) {
               setTpLogged(prev => prev.filter(t => t.id !== quickLogToast.recordId));
               touchpointsDb.delete(quickLogToast.recordId);
+            } else if (quickLogToast.kind === "event" && quickLogToast.recordId) {
+              setPersonalEvents(prev => (prev || []).filter(e => e.id !== quickLogToast.recordId));
+              personalCalendarDb.remove(quickLogToast.recordId);
             }
             setQuickLogToast(null);
           }}
@@ -18679,7 +18755,7 @@ function QuickLogToast({ toast, onUndo, onDismiss, C }) {
   return (
     <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
       <span style={{ color: "#5DCAA5" }}>✓</span>
-      <span>{toast.kind === "touchpoint" ? "Touchpoint logged" : "Task added"}{toast.label ? " · " + toast.label : ""}</span>
+      <span>{toast.kind === "touchpoint" ? "Touchpoint logged" : toast.kind === "event" ? "Event added" : "Task added"}{toast.label ? " · " + toast.label : ""}</span>
       <button onClick={onUndo} style={{ background: "none", border: "none", color: "#A8B0A8", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>Undo</button>
     </div>
   );
