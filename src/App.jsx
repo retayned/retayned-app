@@ -7059,23 +7059,19 @@ export default function App({ user }) {
           margin: 0 -8px;
         }
         /* Break-out top task — hangs left past the canvas padding,
-           lifted, with a larger title + checkbox. */
+           lifted, with a bigger checkbox. Title stays near base size
+           (14.5/500): emphasis comes from the offset + lift, not type. */
         .rt-today-breakout {
-          margin: 0 6px 14px -16px;
+          margin: 0 6px 14px -32px;
         }
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
           box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
         }
-        .rt-today-breakout .rt-row .rt-task-title { font-size: 16px; font-weight: 700; }
+        .rt-today-breakout .rt-row .rt-task-title { font-size: 14.5px; font-weight: 500; }
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
-        /* The rest — indented, on a faint thread that aligns under
-           the break-out's right portion (visually "the backlog"). */
-        .rt-today-rest { position: relative; padding-left: 16px; }
-        .rt-today-rest::before {
-          content: ""; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px;
-          background: var(--rt-ink-300); opacity: 0.45;
-        }
+        /* The rest — plain stack, no thread (break-out carries emphasis). */
+        .rt-today-rest { position: relative; }
         /* Condensed future rows (tomorrow/later) */
         .rt-row-condensed .rt-row { padding: 9px 14px; }
         .rt-row-condensed .rt-row .rt-task-title { font-size: 13.5px; }
