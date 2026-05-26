@@ -3106,124 +3106,6 @@ const coachDemos = {
 
 const Dot = () => <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, flexShrink: 0 }} />;
 
-// ─── Daybook (right-rail notepad) ──────────────────────────────────────
-// Defined at top level so component identity is stable across App re-renders.
-// Without this, the textarea would remount on every keystroke and lose focus.
-// All state is owned by App and passed in as props.
-const DaybookPanel = ({ entry, yesterday, saveStatus, onChange }) => {
-  const today = new Date();
-  const dayName = today.toLocaleDateString("en-US", { weekday: "long" });
-  const monthName = today.toLocaleDateString("en-US", { month: "long" });
-  const dateLine = `${dayName} · ${monthName} ${today.getDate()}`;
-  return (
-    <div className="r-today-panel" style={{ width: "100%", flexShrink: 0 }}>
-      <div style={{
-        background: C.card,
-        borderRadius: 14,
-        overflow: "hidden",
-        border: "1px solid rgba(20,30,22,0.12)",
-        boxShadow: "0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04)",
-        display: "flex",
-        flexDirection: "column",
-      }}>
-        {/* Masthead — beige (cream) gradient that auto-themes light/dark */}
-        <div style={{
-          padding: "16px 18px 14px",
-          background: `linear-gradient(180deg, ${C.deepCream} 0%, ${C.card} 100%)`,
-          borderBottom: "1px solid " + C.borderLight,
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.2 }}>
-              Notes
-            </div>
-            {saveStatus === "saved" && (
-              <div style={{
-                fontSize: 10.5, color: C.success,
-                display: "inline-flex", alignItems: "center", gap: 5,
-                fontWeight: 500,
-              }}>
-                {/* Pulsing dot signals the autosave loop is alive */}
-                <span className="rt-save-pulse" style={{
-                  width: 5, height: 5, borderRadius: 999,
-                  background: C.success,
-                  boxShadow: "0 0 0 2px " + C.primarySoft,
-                }} />
-                Saved
-              </div>
-            )}
-            {saveStatus === "saving" && (
-              <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 500 }}>
-                Saving…
-              </div>
-            )}
-          </div>
-          <div style={{ fontSize: 11.5, color: C.textMuted, fontWeight: 500 }}>
-            {dateLine}
-          </div>
-        </div>
-
-        {/* Today's entry — editable textarea */}
-        <div style={{ padding: "14px 18px 16px" }}>
-          <textarea
-            value={entry}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Jot anything down — it'll be here."
-            style={{
-              width: "100%",
-              minHeight: 140,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              fontSize: 13.5,
-              lineHeight: 1.6,
-              color: C.text,
-              fontFamily: "inherit",
-              resize: "vertical",
-              padding: 0,
-            }}
-          />
-        </div>
-
-        {/* Yesterday peek — same white bg as the rest of the notepad,
-            visually separated only by a dotted top border. */}
-        {yesterday && yesterday.body && (
-          <div style={{
-            padding: "12px 18px 14px",
-            borderTop: "1px dashed " + C.border,
-            background: C.card,
-          }}>
-            <div style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: C.textMuted,
-              letterSpacing: 0.5,
-              textTransform: "uppercase",
-              marginBottom: 6,
-            }}>
-              Yesterday
-            </div>
-            <div style={{
-              fontSize: 12,
-              color: C.textSec,
-              lineHeight: 1.5,
-              fontFamily: "'Fraunces', Georgia, serif",
-              fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0',
-              fontWeight: 500,
-              fontStyle: "italic",
-              display: "-webkit-box",
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}>
-              "{yesterday.body}"
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // ============================================================
 // RAI BRIEF PANEL — replaces the Notes/Daybook right rail.
 // Two stacked flat-white cards (no gradient — the page already
@@ -4948,12 +4830,7 @@ export default function App({ user }) {
   // content). Resets per observation (different obs.id → reset to false).
   const [obsMobileExpanded, setObsMobileExpanded] = useState(false);
 
-  // ─── Daybook state ── (right-rail notepad on Today page)
-  const [daybookEntry, setDaybookEntry] = useState("");
-  const [daybookYesterday, setDaybookYesterday] = useState(null);
-  const [daybookSaveStatus, setDaybookSaveStatus] = useState("idle"); // 'idle' | 'saving' | 'saved'
-  const daybookSaveTimerRef = useRef(null);
-  const daybookHydratedRef = useRef(false);
+  // ─── Daybook removed — replaced by RaiBriefPanel in the right rail. ──
 
   // ═══ FETCH ALL DATA ON MOUNT ═══
   const loadData = useCallback(async () => {
@@ -4968,7 +4845,7 @@ export default function App({ user }) {
     if (!userTimezone) return;
     const uid = user.id;
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
       clientsDb.list(uid),
       tasksDb.listToday(uid),
       referralsDb.list(uid),
@@ -5026,10 +4903,8 @@ export default function App({ user }) {
       (typeof observationsDb?.getCurrent === "function")
         ? observationsDb.getCurrent(uid).catch(e => { console.warn("Observer card failed to load:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
-      // Daybook — today + yesterday in one shot.
-      (typeof daybookDb?.getTodayAndYesterday === "function")
-        ? daybookDb.getTodayAndYesterday(uid).catch(e => { console.warn("Daybook failed to load:", e); return { data: null, error: e }; })
-        : Promise.resolve({ data: null, error: null }),
+      // Daybook removed — placeholder keeps Promise.all positions stable.
+      Promise.resolve({ data: null, error: null }),
       // Workers list + per-worker completion counts. Optional table — empty
       // arrays on failure so the composer worker chip just shows zero options.
       workersDb.list(uid).catch(e => { console.warn("Workers load failed:", e); return { data: null, error: e }; }),
@@ -5090,12 +4965,7 @@ export default function App({ user }) {
       setObservation(observerRes.data);
       setObsMobileExpanded(false);
     }
-    if (daybookRes?.data) {
-      setDaybookEntry(daybookRes.data.today?.body || "");
-      setDaybookYesterday(daybookRes.data.yesterday || null);
-      setDaybookSaveStatus(daybookRes.data.today ? "saved" : "idle");
-      daybookHydratedRef.current = true;
-    }
+    // Daybook hydration removed — RaiBriefPanel reads raiPicks/clients directly.
 
     if (tpRes.data) setTpLogged(tpRes.data.map(t => ({
       id: t.id,
@@ -6542,23 +6412,8 @@ export default function App({ user }) {
   // ═══ PANEL COMPONENTS ═══
   const PanelCard = ({ children, style }) => <div style={{ background: "#FAFAF8", borderRadius: 14, border: "1px solid #E8ECE6", padding: "14px", marginBottom: 24, ...style }}>{children}</div>;
   
-  // ─── Daybook save handler — debounced 800ms ───────────────────────────
-  const handleDaybookChange = (newValue) => {
-    setDaybookEntry(newValue);
-    setDaybookSaveStatus("saving");
-    if (daybookSaveTimerRef.current) clearTimeout(daybookSaveTimerRef.current);
-    daybookSaveTimerRef.current = setTimeout(async () => {
-      if (!user) return;
-      try {
-        const res = await daybookDb.save(user.id, newValue);
-        if (!res.error) setDaybookSaveStatus("saved");
-        else setDaybookSaveStatus("idle");
-      } catch (e) {
-        console.warn("Daybook save failed:", e);
-        setDaybookSaveStatus("idle");
-      }
-    }, 800);
-  };
+  // ─── Daybook save handler removed with the Daybook panel. ─────────────
+
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
   const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } if (id === "retros") setRolodexRemindersSeen(true); setPage(id); };
@@ -7220,13 +7075,17 @@ export default function App({ user }) {
         /* ── COMPOSER ────────────────────────────────────── */
         .rt-composer {
           transition: box-shadow 200ms var(--rt-ease-out);
+          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
         }
         .rt-composer:focus-within {
-          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45), 0 0 0 4px rgba(124,92,243,0.12) !important;
+          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
         }
-        .rt-rai-inputbox { transition: box-shadow 200ms var(--rt-ease-out); }
+        .rt-rai-inputbox {
+          transition: box-shadow 200ms var(--rt-ease-out);
+          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
+        }
         .rt-rai-inputbox:focus-within {
-          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45), 0 0 0 4px rgba(124,92,243,0.12) !important;
+          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
