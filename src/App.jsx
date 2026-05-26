@@ -5838,7 +5838,7 @@ export default function App({ user }) {
             });
             return prev;
           });
-        }, 360);
+        }, 460);
       }, 3500);
     } else {
       // Un-completing: if it was collapsed, bring it back out of the log
@@ -7542,16 +7542,14 @@ export default function App({ user }) {
           max-height: 200px;
           opacity: 1;
           transition:
-            max-height 360ms cubic-bezier(.4, 0, .2, 1),
-            opacity 280ms ease,
-            margin 360ms cubic-bezier(.4, 0, .2, 1),
-            transform 360ms cubic-bezier(.4, 0, .2, 1);
+            max-height 440ms cubic-bezier(.22, .61, .36, 1),
+            opacity 300ms cubic-bezier(.22, .61, .36, 1),
+            margin 440ms cubic-bezier(.22, .61, .36, 1);
         }
         .rt-row-wrap.is-exiting {
           max-height: 0 !important;
           opacity: 0;
-          margin-bottom: -8px;
-          transform: translateY(-4px);
+          margin-bottom: -10px;
           pointer-events: none;
           overflow: hidden !important;
         }
