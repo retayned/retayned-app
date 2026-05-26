@@ -2458,8 +2458,13 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 480, overflow: "hidden" }}>
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width="100%" height="100%" preserveAspectRatio="xMaxYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: VB_H, overflow: "hidden" }}>
+      {/* Fixed-size dial box pinned to the right edge, vertically centered.
+          Rendering at exact viewBox px (NOT width:100%) keeps the dial a
+          consistent size on every screen and makes the HTML card overlay's
+          %-of-box positioning line up 1:1 with the SVG coordinates. */}
+      <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
         <defs>
           {/* Time-of-day gradient mapped top(window start)→bottom(window end). */}
           <linearGradient id="rt-dial-grad" x1="0" y1="0" x2="0" y2="1">
@@ -2550,6 +2555,7 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
         ) : (
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -11578,7 +11584,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "absolute", top: -28, bottom: -96, right: -64, width: "58%", zIndex: 0, pointerEvents: "none" }}
+                style={{ position: "absolute", top: -28, bottom: -96, right: -64, width: 540, zIndex: 0, pointerEvents: "none" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
