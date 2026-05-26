@@ -3189,6 +3189,7 @@ const RaiBriefPanel = ({ pick, clients }) => {
           </div>
           <div style={{ padding: "4px 16px 8px" }}>
             {pulse.map((c, i) => {
+              const grad = retGradient(c.ret || 0);
               const dot = retColor(c.ret || 0);
               const initials = (c.name || "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
               return (
@@ -3197,7 +3198,7 @@ const RaiBriefPanel = ({ pick, clients }) => {
                   padding: "11px 0",
                   borderTop: i === 0 ? "none" : "1px solid #F2F1EC",
                 }}>
-                  <span style={{ width: 30, height: 30, borderRadius: "50%", background: dot, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
+                  <span style={{ width: 30, height: 30, borderRadius: "50%", background: grad, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>{initials}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                     <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.raiRationale}</div>
@@ -7861,6 +7862,9 @@ export default function App({ user }) {
             max-height: calc(100vh - 40px);
             overflow: hidden;
           }
+          /* The right-column Rai brief now shows the full reason_detail, so the
+             band's inline More/Less expand is redundant at this width — hide it. */
+          .rt-band-more { display: none !important; }
         }
         /* Clients v2 grid — 2 cols narrow desktop, 3 cols wide (>=1440) */
         .rc-grid { grid-template-columns: 240px minmax(0, 1fr); }
@@ -9077,7 +9081,7 @@ export default function App({ user }) {
                       </span>
                       {" "}&mdash;{" "}{cleanedReason}.
                       {raiPicks.reason_detail && (
-                        <>
+                        <span className="rt-band-more">
                           {" "}
                           <span
                             onClick={(e) => { e.stopPropagation(); setPickDetailOpen(o => !o); }}
@@ -9110,7 +9114,7 @@ export default function App({ user }) {
                               </div>
                             </div>
                           </div>
-                        </>
+                        </span>
                       )}
                     </div>
                   );
