@@ -7076,14 +7076,8 @@ export default function App({ user }) {
         .rt-composer {
           transition: box-shadow 200ms var(--rt-ease-out);
         }
-        .rt-composer:focus-within {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.55), 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04) !important;
-        }
         .rt-rai-inputbox {
           transition: box-shadow 200ms var(--rt-ease-out);
-        }
-        .rt-rai-inputbox:focus-within {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.55), 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
@@ -9093,12 +9087,12 @@ export default function App({ user }) {
                               fontFamily: "'Manrope', system-ui, sans-serif",
                               fontSize: 11.5,
                               fontWeight: 600,
-                              color: C.btn,
+                              color: C.textMuted,
                               whiteSpace: "nowrap",
                               verticalAlign: "1px",
                             }}
                           >
-                            {pickDetailOpen ? "Less" : "Why"}
+                            {pickDetailOpen ? "Less" : "More"}
                             <span style={{ display: "inline-block", transform: pickDetailOpen ? "rotate(90deg)" : "none", transition: "transform 200ms var(--rt-ease-out)", marginLeft: 2, fontSize: 9 }}>&rsaquo;</span>
                           </span>
                           <div
@@ -9111,7 +9105,7 @@ export default function App({ user }) {
                             }}
                           >
                             <div style={{ overflow: "hidden", minHeight: 0 }}>
-                              <div style={{ fontSize: 13, lineHeight: 1.55, color: C.textMuted, fontStyle: "italic", fontWeight: 500 }}>
+                              <div style={{ fontSize: 13.5, lineHeight: 1.55, color: C.textMuted, fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500 }}>
                                 {raiPicks.reason_detail}
                               </div>
                             </div>
