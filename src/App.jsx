@@ -7074,6 +7074,10 @@ export default function App({ user }) {
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
         /* The rest — plain stack, no thread (break-out carries emphasis). */
         .rt-today-rest { position: relative; }
+        /* Three type tiers: first today 14.5 / today secondary 14 (base) /
+           tomorrow, later, completed 13.5 — a subtle step down for non-today. */
+        .rt-row-condensed .rt-row .rt-task-title,
+        .rt-completed-log .rt-row .rt-task-title { font-size: 13.5px; }
         /* Tomorrow/Later/completed are dimmed (opacity on their wrappers)
            but otherwise match the today secondary rows exactly — same
            row size, title, and checkbox. No size-shrink. */
@@ -10829,7 +10833,7 @@ export default function App({ user }) {
                             completed work is reference, not action. Collapsed
                             by default; the line doubles as the toggle button. */}
                         {_collapsedDoneTasks.length > 0 && (
-                          <div className="rt-completed-log" style={{ marginTop: 24 }}>
+                          <div className="rt-completed-log" style={{ marginTop: 24, padding: "0 6px" }}>
                             <button
                               onClick={() => setCompletedLogOpen(!completedLogOpen)}
                               style={{
@@ -10890,7 +10894,7 @@ export default function App({ user }) {
                               }}
                             >
                               <div style={{ overflow: "hidden", minHeight: 0 }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.7, padding: "0 6px" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.7 }}>
                                   {_collapsedDoneTasks.map(t => renderRow(t, "today"))}
                                 </div>
                               </div>
