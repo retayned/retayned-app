@@ -2511,8 +2511,12 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
           size AND makes the HTML card overlay's %-of-box positioning line up
           1:1 with the SVG. The disc height (2*R) is kept small enough to fit
           common viewport heights without overflowing. */}
+      {/* Fixed-size dial box, exactly the viewBox dimensions, pinned right and
+          vertically centered. Matching the box to the SVG 1:1 means no
+          letterboxing/shift and the HTML card overlay (positioned by %) lines
+          up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} preserveAspectRatio="xMaxYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
         <defs>
           {/* Time-of-day gradient — stops computed from the REAL hour at each
               position across the NOW-centered window (top = now−6h, bottom =
@@ -8396,9 +8400,9 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 460px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 300px)); }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11709,7 +11713,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 520, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 500, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
