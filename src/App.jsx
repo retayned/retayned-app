@@ -7193,6 +7193,20 @@ export default function App({ user }) {
         }
         .rt-today-breakout .rt-row .rt-task-title { font-size: 14.5px; font-weight: 500; }
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
+        /* When the break-out top task is ALSO today's Rai pick, the break-out's
+           own lifted box-shadow (!important) would otherwise clobber the purple
+           ring + inset bar from .rt-rai-boost — leaving only the ✦ medallion
+           visible. This more-specific rule restores the purple annotation while
+           keeping the break-out lift. Also override the entrance animation's
+           shadow keyframes (which animate to the grey-only lift) by clearing the
+           animation so the purple ring isn't briefly stripped. */
+        .rt-today-breakout .rt-row.rt-rai-boost {
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.40), inset 2px 0 0 0 #7c5cf3, 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
+          animation: none;
+        }
+        .rt-today-breakout .rt-row.rt-rai-boost:hover:not(.is-done) {
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.40), inset 2px 0 0 0 #7c5cf3, 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(20,30,22,0.10) !important;
+        }
         /* The rest — plain stack, no thread (break-out carries emphasis). */
         .rt-today-rest { position: relative; }
         /* Three type tiers: first today 14.5 / today secondary 14 (base) /
