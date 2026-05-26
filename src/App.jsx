@@ -4020,6 +4020,7 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
+  const [pickDetailOpen, setPickDetailOpen] = useState(false);
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
@@ -9102,6 +9103,42 @@ export default function App({ user }) {
                         {pickClient.name}
                       </span>
                       {" "}&mdash;{" "}{cleanedReason}.
+                      {raiPicks.reason_detail && (
+                        <>
+                          {" "}
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setPickDetailOpen(o => !o); }}
+                            style={{
+                              cursor: "pointer",
+                              fontStyle: "normal",
+                              fontFamily: "'Manrope', system-ui, sans-serif",
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              color: C.btn,
+                              whiteSpace: "nowrap",
+                              verticalAlign: "1px",
+                            }}
+                          >
+                            {pickDetailOpen ? "Less" : "Why"}
+                            <span style={{ display: "inline-block", transform: pickDetailOpen ? "rotate(90deg)" : "none", transition: "transform 200ms var(--rt-ease-out)", marginLeft: 2, fontSize: 9 }}>&rsaquo;</span>
+                          </span>
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateRows: pickDetailOpen ? "1fr" : "0fr",
+                              opacity: pickDetailOpen ? 1 : 0,
+                              transition: "grid-template-rows 280ms var(--rt-ease-out), opacity 220ms var(--rt-ease-out), margin-top 240ms var(--rt-ease-out)",
+                              marginTop: pickDetailOpen ? 8 : 0,
+                            }}
+                          >
+                            <div style={{ overflow: "hidden", minHeight: 0 }}>
+                              <div style={{ fontSize: 13, lineHeight: 1.55, color: C.textMuted, fontStyle: "italic", fontWeight: 500 }}>
+                                {raiPicks.reason_detail}
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })()}
