@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./lib/supabase";
 import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
@@ -4615,39 +4615,6 @@ export default function App({ user }) {
 
   // Today — task manager
   const [tasks, setTasks] = useState([]);
-  // FLIP animation for the Today list: when rows reorder (e.g. the break-out
-  // lead task is completed and task 2 promotes into its slot), animate the
-  // movement instead of letting it snap. We record each tagged row's last
-  // top/left, then on the next layout invert+release the delta. Purely DOM-
-  // driven via [data-flip-id]; doesn't need the bucket data.
-  const flipPrevRef = useRef(new Map());
-  useLayoutEffect(() => {
-    const els = document.querySelectorAll("[data-flip-id]");
-    const prev = flipPrevRef.current;
-    const next = new Map();
-    els.forEach((el) => {
-      const id = el.getAttribute("data-flip-id");
-      const rect = el.getBoundingClientRect();
-      next.set(id, { top: rect.top, left: rect.left });
-      const old = prev.get(id);
-      if (old) {
-        const dx = old.left - rect.left;
-        const dy = old.top - rect.top;
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          el.style.transition = "none";
-          el.style.transform = `translate(${dx}px, ${dy}px)`;
-          // Force reflow then release to animate to the natural position.
-          requestAnimationFrame(() => {
-            el.style.transition = "transform 300ms cubic-bezier(.22,.61,.36,1)";
-            el.style.transform = "";
-            const clear = () => { el.style.transition = ""; el.removeEventListener("transitionend", clear); };
-            el.addEventListener("transitionend", clear);
-          });
-        }
-      }
-    });
-    flipPrevRef.current = next;
-  });
   // Task IDs whose done-state is mid-write to the DB. loadData (which fires on
   // tab focus / visibilitychange) must NOT overwrite these with stale DB rows,
   // or an optimistic check gets silently reverted — the intermittent
@@ -7089,13 +7056,15 @@ export default function App({ user }) {
           background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           border-radius: 20px;
           padding: 6px 14px 16px;
-          margin: 0 -8px;
+          margin: 12px -8px 0;
         }
-        /* Break-out top task — hangs left past the canvas padding,
-           lifted, with a bigger checkbox. Title stays near base size
-           (14.5/500): emphasis comes from the offset + lift, not type. */
+        /* Break-out top task — same full width as every other row, just
+           shifted left via transform so it breaks the rhythm without
+           changing length. Lifted + bigger checkbox carry the emphasis. */
         .rt-today-breakout {
-          margin: 0 6px 14px -24px;
+          transform: translateX(-24px);
+          margin-bottom: 14px;
+          transition: transform 300ms cubic-bezier(.22,.61,.36,1);
         }
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
@@ -10791,23 +10760,17 @@ export default function App({ user }) {
 
                     return (
                       <>
-                        {/* TODAY bucket — break-out top task (B). Rows tagged
-                            data-flip-id so the FLIP layout effect can smoothly
-                            animate the promote when the lead is completed. */}
+                        {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
                         {_todayBucket.length > 0 && (
-                          <div className="rt-today-breakout" data-flip-id={"t" + _todayBucket[0].id}>
+                          <div className="rt-today-breakout">
                             {renderRow(_todayBucket[0], "today")}
                           </div>
                         )}
                         {_todayBucket.length > 1 && (
                           <div className="rt-today-rest" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            {_todayBucket.slice(1).map(t => (
-                              <div key={t.id} data-flip-id={"t" + t.id}>
-                                {renderRow(t, "today")}
-                              </div>
-                            ))}
+                            {_todayBucket.slice(1).map(t => renderRow(t, "today"))}
                           </div>
                         )}
                         </div>
