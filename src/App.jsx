@@ -3255,7 +3255,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         </g>
       );
     });
-    const nowPt = (selectedDay === "today" && nowFrac > 0 && nowFrac < 1) ? qPt(nowFrac) : null;
 
     let countdown = null, imminent = false;
     if (nextEvent) {
@@ -3271,33 +3270,32 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         onClick={onToggle}
         style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px" }}
       >
-        {/* Full-bleed sky — edge to edge AND bleeding up past the top, fading
-            down into the bg. A soft warm-at-apex / cool-at-edges wash echoes
-            the day-cycle on the curve without competing with it. */}
+        {/* Full-bleed sky — the ENTIRE day painted horizontally: dawn lilac/
+            peach (left) → cool midday blue (center) → amber dusk → indigo
+            night (right). Subtle (low opacity) so it whispers against the
+            cream UI. A vertical fade dissolves it into the bg. This carries
+            the day-cycle on its own; the guide line below is near-invisible.
+            Time bands: dawn 6–10a, midday 10a–5p, dusk 5–8p, night 8p+. */}
         <div aria-hidden style={{
           position: "absolute", top: -40, left: 0, right: 0, height: 250, zIndex: 0, pointerEvents: "none",
-          background: "radial-gradient(ellipse 90% 62% at 50% 6%, rgba(216,180,120,0.16) 0%, rgba(150,170,200,0.11) 52%, rgba(250,250,247,0) 84%)",
+          background:
+            "linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(250,250,247,1) 100%), " +
+            "linear-gradient(90deg, rgba(160,150,190,0.20) 0%, rgba(220,185,160,0.17) 14%, rgba(190,215,225,0.15) 34%, rgba(185,212,218,0.14) 50%, rgba(218,170,145,0.16) 72%, rgba(130,122,165,0.19) 86%, rgba(60,70,110,0.22) 100%)",
         }} />
-        {/* Arc + plotted dots + NOW. The stroke carries the night→day→night
-            day-cycle: deep navy at the ends (dawn/dusk → night), warm gold at
-            the apex (midday). NOW is a soft sun-glow riding the curve — its
-            position IS the current time of day. */}
+        {/* NOW — a soft glow band of daylight at the current-time x-position,
+            travelling left→right across the day. The position IS the time. */}
+        {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
+          <div aria-hidden style={{
+            position: "absolute", top: -40, height: 250, width: 72, zIndex: 1, pointerEvents: "none",
+            left: `calc(${(nowFrac * 100).toFixed(1)}% - 36px)`,
+            background: "radial-gradient(ellipse 50% 55% at 50% 26%, rgba(255,250,235,0.30), transparent 70%)",
+          }} />
+        )}
+        {/* Plotted event dots + a whisper-faint guide line (the gradient now
+            carries the day-cycle, so the line recedes to almost nothing). */}
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "block", pointerEvents: "none" }}>
-          <defs>
-            <linearGradient id="rt-arc-day" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#2c3550" />
-              <stop offset="0.5" stopColor="#e8c97a" />
-              <stop offset="1" stopColor="#2c3550" />
-            </linearGradient>
-          </defs>
-          <path d={arcPath} fill="none" stroke="url(#rt-arc-day)" strokeWidth="2.5" strokeOpacity="0.55" vectorEffect="non-scaling-stroke" />
+          <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.06)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
           {dotMarks}
-          {nowPt && (
-            <g>
-              <circle cx={nowPt.x} cy={nowPt.y} r={11} fill="#e8c97a" opacity="0.35" />
-              <circle cx={nowPt.x} cy={nowPt.y} r={5} fill="#e8c97a" />
-            </g>
-          )}
         </svg>
         {/* Header row INSIDE the sky, sitting BELOW the high arc: date+greeting
             left, next-meeting right. */}
@@ -8632,12 +8630,14 @@ export default function App({ user }) {
 
           // On the dark sidebar the cream panel read as a heavy pressed
           // surface. A drops the panel — stats sit directly in the sidebar
-          // with light text. Retention bucket colors are brightened so they
-          // read on the dark ground (the standard retColor greens are tuned
-          // for the light bg and go muddy here).
+          // Warm off-white (deepCream, already used for the sidebar border /
+          // wordmark) for text — reads on the dark rail and stays on-palette,
+          // no stark white, no neon. The portfolio bar uses the real brand
+          // retention colors; the count labels stay in the cream text tone so
+          // they don't introduce off-brand bright colors.
           const segColorOnDark = {
-            "Thriving": "#6FCFA0", "Healthy": "#7FD0B0", "Watch": "#CFC97A",
-            "At risk": "#E0A05A", "Critical": "#E07A6A",
+            "Thriving": C.retGood, "Healthy": C.primaryLight, "Watch": C.retOk,
+            "At risk": C.retWarn, "Critical": C.retCrit,
           };
 
           return (
@@ -8652,22 +8652,23 @@ export default function App({ user }) {
                   right: -2,
                   fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
                   fontSize: 18,
-                  color: "#9FD8BC",
+                  color: C.deepCream,
                   transform: "rotate(-6deg)",
                   pointerEvents: "none",
                   lineHeight: 1.05,
                   fontWeight: 600,
+                  opacity: 0.85,
                 }}
               >
                 {callout.line1}
-                <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
+                <span style={{ display: "block", fontSize: 13, opacity: 0.7, marginLeft: 8, fontWeight: 500 }}>
                   {callout.line2}
                 </span>
               </div>
 
               {/* TASKS COMPLETED section */}
-              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid rgba(255,255,255,0.10)" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid rgba(234,228,214,0.14)" }}>
+                <div style={{ fontSize: 10, color: C.deepCream, opacity: 0.55, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
                 <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
                   {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
                     const active = taskCompletedPeriod === p.id;
@@ -8680,9 +8681,9 @@ export default function App({ user }) {
                           fontSize: 10.5,
                           fontWeight: 500,
                           cursor: "pointer",
-                          ...(active
-                            ? { color: "#fff", borderBottom: "1px solid rgba(255,255,255,0.55)" }
-                            : { color: "rgba(255,255,255,0.42)" }),
+                          color: C.deepCream,
+                          opacity: active ? 1 : 0.5,
+                          borderBottom: active ? "1px solid rgba(234,228,214,0.6)" : "1px solid transparent",
                         }}
                       >
                         {p.label}
@@ -8691,18 +8692,18 @@ export default function App({ user }) {
                   })}
                 </div>
                 <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.deepCream, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
                   <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
                     <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
-                          stroke="#9FD8BC" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.85" />
+                          stroke={C.primaryLight} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.8" />
                   </svg>
                 </div>
-                <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 9.5 }}>Tasks Completed</div>
+                <div style={{ color: C.deepCream, opacity: 0.55, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.55)", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 10, color: C.deepCream, opacity: 0.6, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
+                <div style={{ fontSize: 9.5, color: C.deepCream, opacity: 0.65, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -8710,12 +8711,12 @@ export default function App({ user }) {
                   <div key={i} style={{ flex: s.n, background: segColorOnDark[s.label] || s.color, borderRadius: i === 0 ? "4px 0 0 4px" : i === segs.length - 1 ? "0 4px 4px 0" : 0 }} />
                 ))}
               </div>
-              {/* Inline segment labels — count over label, stacked so 5 buckets fit without truncation. */}
+              {/* Inline segment labels — count over label */}
               <div style={{ display: "flex", gap: 6 }}>
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                    <div style={{ color: segColorOnDark[s.label] || s.color, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
-                    <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
+                    <div style={{ color: C.deepCream, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
+                    <div style={{ color: C.deepCream, opacity: 0.5, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
                   </div>
                 ))}
               </div>
