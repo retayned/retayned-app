@@ -6803,21 +6803,12 @@ export default function App({ user }) {
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: "transparent" }}>
       {/* Non-blocking font load via <link> (not @import, which is
-          render-blocking). font-display: OPTIONAL (not swap) — swap caused a
-          visible reflow on every reload: text painted in the fallback font
-          first, then swapped to Manrope, and the differing glyph widths
-          resized the flex nav dock ("small menu that grows") and the FAB
-          glyph. With optional, a cached font (the normal reload case) applies
-          before first paint with no swap; if it isn't ready in time the page
-          stays in the fallback for that load instead of reflowing. */}
-      <link
-        rel="preload"
-        as="style"
-        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=optional"
-      />
+          render-blocking). display=swap. Do NOT use display=optional — it
+          permanently keeps the fallback font if the web font isn't ready in
+          ~100ms, which broke site-wide typography. */}
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=optional"
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap"
       />
       <style>{`
         ${THEME_CSS}
@@ -18377,14 +18368,22 @@ export default function App({ user }) {
           width: 40, height: 40,
           borderRadius: "50%",
           border: "none",
-          background: "var(--rt-grad-btn)",
+          // Literal #7c5cf3 base (NOT a CSS var) + gradient layered on top.
+          // The gradient lives in --rt-grad-btn, which is defined in the
+          // JS-rendered <style> block; on first paint that stylesheet may not
+          // be parsed yet, so a var-only background resolved to transparent —
+          // leaving just the white SVG on an invisible circle (the "small,
+          // misshapen" flash) until the var landed. The literal base paints
+          // the purple circle on frame one regardless.
+          background: "#7c5cf3",
+          backgroundImage: "var(--rt-grad-btn)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
           boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
           transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
-          transition: "transform 180ms var(--rt-ease-out)",
+          transition: "transform 180ms ease-out",
           padding: 0,
         }}
       >
