@@ -8279,11 +8279,19 @@ export default function App({ user }) {
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
-          grid-template-columns: minmax(0, 1fr) 460px;
+          grid-template-columns: minmax(0, 1fr);
           grid-template-areas:
-            "band focus"
-            "composer focus"
-            "tasks focus";
+            "band"
+            "composer"
+            "tasks";
+        }
+        /* Desktop: hold tasks to the left ~half so the dial's body shows beside
+           them. Composer + band stay wider (the dial fades under their right
+           edge). */
+        .rt-tasks-col { max-width: 52%; }
+        @media (max-width: 1099px) {
+          .rt-dial-layer { display: none !important; }
+          .rt-tasks-col { max-width: none !important; }
         }
         .rt-mob-strip { display: none; }
         @media (max-width: 1099px) {
@@ -8440,12 +8448,12 @@ export default function App({ user }) {
            genuinely comfortable width). */
         @media (min-width: 1700px) {
           .rt-today-v4 {
-            grid-template-columns: minmax(0, 1fr) 560px;
+            grid-template-columns: minmax(0, 1fr);
             grid-template-rows: auto auto 1fr;
             grid-template-areas:
-              "band focus"
-              "composer focus"
-              "tasks focus";
+              "band"
+              "composer"
+              "tasks";
           }
           .rt-rai-col {
             display: flex !important;
@@ -9676,7 +9684,7 @@ export default function App({ user }) {
                 if (t && t.closest && t.closest("[data-focus-keep]")) return;
                 setFocusMode(false);
               } : undefined}
-              style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
+              style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
               {/* Mobile ambient calendar strip — pinned at the very top of the
                   mobile Today page, above the greeting/band. Collapsed by
                   default (B1 sequence-dots + next + countdown), expands in
@@ -11562,24 +11570,38 @@ export default function App({ user }) {
                   {/* Completed section removed — done tasks now render inline above with strikethrough state. */}
                 </div>
 
-              {/* CALENDAR — desktop right column. TEMPORARILY the new TimeDial
-                  (the half-circle time dial engulfing the right edge). The old
-                  TodayTimeline is preserved behind a false gate below so it can
-                  be restored. The dial IS the calendar now. */}
+              {/* CALENDAR — TimeDial as a full-height background layer anchored
+                  to the right edge, bleeding past r-main's padding. A gentle
+                  top fade (page-bg → transparent) dissolves the upper arc so it
+                  tucks delicately under the composer + progress banner. Sits
+                  BEHIND the content (z-index 0). Desktop only. The old
+                  TodayTimeline + Rai brief stay gated (false) below. */}
+              <div
+                className="rt-dial-layer"
+                style={{ position: "absolute", top: -28, bottom: -96, right: -64, width: "58%", zIndex: 0, pointerEvents: "none" }}
+              >
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
+                  <TimeDial
+                    clients={clients}
+                    events={personalEvents}
+                    C={C}
+                    onCreate={async (entry) => {
+                      const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                      setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                      const { data, error } = await personalCalendarDb.create(user.id, entry);
+                      if (error) { setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id)); return; }
+                      setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                    }}
+                  />
+                </div>
+                {/* Gentle top fade (variant) — dissolves the upper arc under the
+                    header items. Page bg solid at the very top → transparent by
+                    ~34% down. */}
+                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "34%", background: "linear-gradient(180deg, " + C.bg + " 0%, " + C.bg + " 22%, rgba(250,250,247,0) 100%)", pointerEvents: "none", zIndex: 2 }} />
+              </div>
+
+              {false && (
               <div className="rt-focus-col rt-dial-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 0, alignSelf: "stretch", minHeight: 520, marginRight: -64, marginTop: -28, marginBottom: -96 }}>
-                <TimeDial
-                  clients={clients}
-                  events={personalEvents}
-                  C={C}
-                  onCreate={async (entry) => {
-                    const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                    setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                    const { data, error } = await personalCalendarDb.create(user.id, entry);
-                    if (error) { setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id)); return; }
-                    setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                  }}
-                />
-                {false && (
                 <div style={{ padding: 0 }}>
                   <TodayTimeline
                     clients={clients}
@@ -11624,8 +11646,8 @@ export default function App({ user }) {
                     }}
                   />
                 </div>
-                )}
               </div>
+              )}
 
               {/* DAYBOOK / RAI BRIEF COLUMN — TEMPORARILY HIDDEN (gated false)
                   while the TimeDial occupies the right side. Not deleted. */}
