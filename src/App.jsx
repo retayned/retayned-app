@@ -8641,13 +8641,15 @@ export default function App({ user }) {
           };
 
           return (
-            <div style={{ padding: "4px 16px 4px", margin: "0 10px 8px", position: "relative", flexShrink: 0 }}>
-              {/* Handwritten callout — hovers over the completion number. */}
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.sidebar, borderRadius: 10, position: "relative", flexShrink: 0 }}>
+              {/* Handwritten callout — always rendered. Hovers over the
+                  big completion number in the top-right corner of the
+                  Done section. ↙ on line two points down at the number. */}
               <div
                 style={{
                   position: "absolute",
-                  top: -14,
-                  right: 6,
+                  top: -16,
+                  right: -2,
                   fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
                   fontSize: 18,
                   color: "#9FD8BC",
@@ -8658,15 +8660,15 @@ export default function App({ user }) {
                 }}
               >
                 {callout.line1}
-                <span style={{ display: "block", fontSize: 13, opacity: 0.7, marginLeft: 8, fontWeight: 500 }}>
+                <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
                   {callout.line2}
                 </span>
               </div>
 
-              {/* DONE section */}
-              <div style={{ paddingBottom: 13, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.42)", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 9 }}>Done</div>
-                <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 10 }}>
+              {/* TASKS COMPLETED section */}
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid rgba(255,255,255,0.10)" }}>
+                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
+                <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
                   {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
                     const active = taskCompletedPeriod === p.id;
                     return (
@@ -8674,13 +8676,13 @@ export default function App({ user }) {
                         key={p.id}
                         onClick={() => setTaskCompletedPeriod(p.id)}
                         style={{
-                          padding: "3px 0",
+                          padding: "5px 0",
                           fontSize: 10.5,
-                          fontWeight: active ? 700 : 500,
+                          fontWeight: 500,
                           cursor: "pointer",
-                          color: active ? "#fff" : "rgba(255,255,255,0.40)",
-                          borderBottom: active ? "1px solid rgba(255,255,255,0.55)" : "1px solid transparent",
-                          transition: "color 150ms ease",
+                          ...(active
+                            ? { color: "#fff", borderBottom: "1px solid rgba(255,255,255,0.55)" }
+                            : { color: "rgba(255,255,255,0.42)" }),
                         }}
                       >
                         {p.label}
@@ -8688,21 +8690,27 @@ export default function App({ user }) {
                     );
                   })}
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
-                <div style={{ color: "rgba(255,255,255,0.42)", fontSize: 9.5, marginTop: 3 }}>Tasks Completed</div>
+                <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#fff", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
+                    <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
+                          stroke="#9FD8BC" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.85" />
+                  </svg>
+                </div>
+                <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "13px 0 9px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                 <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
                 <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.55)", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
-              <div style={{ display: "flex", height: 7, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
+              <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: s.n, background: segColorOnDark[s.label] || s.color, borderRadius: i === 0 ? "4px 0 0 4px" : i === segs.length - 1 ? "0 4px 4px 0" : 0 }} />
                 ))}
               </div>
-              {/* Inline segment labels — count over label */}
+              {/* Inline segment labels — count over label, stacked so 5 buckets fit without truncation. */}
               <div style={{ display: "flex", gap: 6 }}>
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
@@ -18273,19 +18281,12 @@ export default function App({ user }) {
           // nav. bottom:0 needs no JS and never lags. The dock already hides
           // when the keyboard is up (keyboardOpen), so we don't need the
           // visualViewport height math here.
-          bottom: 0,
+          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 78px)",
           left: 0,
           right: 0,
           background: C.sidebar,
           borderRadius: "18px 18px 0 0",
-          // The hairline + soft top shadow, PLUS a 240px solid fill of the
-          // sidebar color extending downward (0 240px 0 0). On mobile Safari
-          // the visual viewport diverges from the layout viewport during
-          // momentum scroll and URL-bar show/hide, repositioning a bottom:0
-          // fixed element a frame behind and exposing content beneath it.
-          // The downward fill covers that divergence zone with the same dark
-          // color, so no gap is ever visible regardless of the lag.
-          boxShadow: "0 -1px 0 0 #EAE4D6, 0 -2px 12px rgba(20,30,22,0.05), 0 240px 0 0 " + C.sidebar,
+          boxShadow: "0 -1px 0 0 #EAE4D6, 0 -2px 12px rgba(20,30,22,0.05)",
           padding: "10px 10px calc(12px + env(safe-area-inset-bottom, 0px))",
           zIndex: 40,
           display: keyboardOpen ? "none" : "flex",
@@ -18356,42 +18357,31 @@ export default function App({ user }) {
       {/* Pinned quick-capture FAB — sits to the right of the scrolling tab
           strip, docked nav (mobile). Opens the same QuickLog composer as the
           desktop FAB. Does NOT scroll with the tabs. */}
-      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "5px 0", alignSelf: "center" }}>
-        <button
-          onClick={() => setQuickLogOpen(v => !v)}
-          aria-label="Quick log"
-          className="rt-mob-fab"
-          style={{
-            width: 40, height: 40, minWidth: 40, minHeight: 40,
-            flexShrink: 0,
-            borderRadius: "50%",
-            border: "none",
-            // Solid purple FIRST as a fallback, then the gradient layered on
-            // top. Before the --rt-grad-btn CSS var resolves on first paint
-            // the button was rendering with no background — just the bare "+"
-            // glyph — which looked small/misshapen until it snapped in. The
-            // solid base guarantees a correct purple circle from frame one.
-            background: "#7c5cf3",
-            backgroundImage: "var(--rt-grad-btn)",
-            color: "#fff",
-            fontSize: 22,
-            fontWeight: 300,
-            lineHeight: 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
-            transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
-            transition: "transform 180ms var(--rt-ease-out)",
-            fontFamily: "inherit",
-          }}
-        >+</button>
-        {/* Invisible label matching the nav items' label height, so the FAB's
-            icon aligns with the nav ICONS (both sit above a same-height label
-            slot) — making it read as part of the menu, not dropped on top. */}
-        <span aria-hidden style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, visibility: "hidden", height: 10 }}>+</span>
-      </div>
+      <button
+        onClick={() => setQuickLogOpen(v => !v)}
+        aria-label="Quick log"
+        className="rt-mob-fab"
+        style={{
+          flexShrink: 0,
+          width: 40, height: 40, minWidth: 40, minHeight: 40,
+          borderRadius: "50%",
+          border: "none",
+          background: "#7c5cf3",
+          backgroundImage: "var(--rt-grad-btn)",
+          color: "#fff",
+          fontSize: 22,
+          fontWeight: 300,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
+          transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
+          transition: "transform 180ms var(--rt-ease-out)",
+          fontFamily: "inherit",
+        }}
+      >+</button>
       </div>
 
       {/* ─── QUICKLOG — desktop power-user FAB (all pages) ──────────────
