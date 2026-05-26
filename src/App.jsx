@@ -2401,8 +2401,9 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   // dial center sits on the RIGHT edge (x = VB_W), radius R. The left half of
   // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
   // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
-  const VB_W = 480, VB_H = 520, CX = VB_W, CY = VB_H / 2, R = 380;
-  const HUB_R = 96;
+  const R = 400;
+  const VB_W = 420, VB_H = 2 * R, CX = VB_W, CY = VB_H / 2;
+  const HUB_R = 132;
   const fracOf = (ms) => (ms - windowStart) / (windowEnd - windowStart); // 0..1
   const angleOf = (f) => (90 + f * 180) * Math.PI / 180; // radians
   const ptAt = (f, r) => {
@@ -2464,7 +2465,7 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
           consistent size on every screen and makes the HTML card overlay's
           %-of-box positioning line up 1:1 with the SVG coordinates. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} preserveAspectRatio="xMaxYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
         <defs>
           {/* Time-of-day gradient mapped top(window start)→bottom(window end). */}
           <linearGradient id="rt-dial-grad" x1="0" y1="0" x2="0" y2="1">
@@ -8291,13 +8292,18 @@ export default function App({ user }) {
             "composer"
             "tasks";
         }
-        /* Desktop: hold tasks to the left ~half so the dial's body shows beside
-           them. Composer + band stay wider (the dial fades under their right
-           edge). */
-        .rt-tasks-col { max-width: 52%; }
+        /* Desktop: hold the left content (tasks, composer, band) to the left
+           portion so the dial's body shows to their right. Tasks get more room
+           than before (52% was too cramped); composer + band stop before the
+           dial rather than running full width under it. */
+        .rt-tasks-col { max-width: 64%; }
+        .rt-today-v4 > .rt-band,
+        .rt-today-v4 > .rt-composer { max-width: 70%; }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: none !important; }
         }
         .rt-mob-strip { display: none; }
         @media (max-width: 1099px) {
@@ -11584,7 +11590,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "absolute", top: -28, bottom: -96, right: -64, width: 540, zIndex: 0, pointerEvents: "none" }}
+                style={{ position: "absolute", top: -28, bottom: -96, right: -80, width: 560, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
