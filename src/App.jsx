@@ -2701,7 +2701,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             pointerEvents: "none",
             zIndex: 0,
             borderRadius: 16,
-            background: "linear-gradient(180deg, #F3F8F5 0%, #FAFAF7 22%, #FAF8F2 48%, #F5F0E6 74%, #EFE7D6 100%)",
+            background: "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7",
           }}
         />
         <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight, zIndex: 1 }}>
@@ -3110,8 +3110,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
 // frosted inline composer at the foot. Uses the EXACT desktop V1 gradient,
 // horizontal for the strip and vertical for the expanded body, so it reads as
 // the same ambient day, just rotated. Reuses parseCalendarEntry for create.
-const V1_GRAD_H = "linear-gradient(90deg, #F3F8F5 0%, #FAFAF7 22%, #FAF8F2 48%, #F5F0E6 74%, #EFE7D6 100%)";
-const V1_GRAD_V = "linear-gradient(180deg, #F3F8F5 0%, #FAFAF7 22%, #FAF8F2 48%, #F5F0E6 74%, #EFE7D6 100%)";
+const V1_GRAD_H = "linear-gradient(90deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7";
+const V1_GRAD_V = "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7";
 
 function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today" }) {
   const [composerText, setComposerText] = useState("");
