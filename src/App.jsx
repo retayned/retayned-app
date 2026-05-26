@@ -2540,7 +2540,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
   // 8 hours and the user scrolls to see the rest. Events outside this
   // window (rare — pre-dawn or late-night) get clamped to the edges.
   const earliestHour = 6;
-  const latestHour = 23;
+  const latestHour = 24; // ambient field runs the full day to midnight (11:59pm)
   const totalHours = latestHour - earliestHour;
 
   // Position helpers
@@ -2574,9 +2574,10 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
     if (composerError) setComposerError(null);
   };
 
-  // Hour labels — render at integer hours in the window
+  // Hour labels — render at integer hours in the window. Capped at 23 so we
+  // never print a "24:00" label even though the field spans to midnight.
   const hourLabels = [];
-  for (let h = earliestHour; h <= latestHour; h++) {
+  for (let h = earliestHour; h <= latestHour - 1; h++) {
     hourLabels.push(h);
   }
 
@@ -2679,55 +2680,49 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
           height: visibleHeight,
           overflowY: "auto",
           paddingRight: 2,
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
         }}
       >
-        {/* Fixed daylight wash — a single warm cream tint, pinned to the
-            visible viewport, with a gentle vertical fade (soft at top and
-            bottom, a touch warmer through the middle band where the user's
-            looking). One locked color at every hour — NO time-of-day hue
-            shift. The earlier version recolored by hour (cool dawn → amber
-            golden hour) which read as the calendar randomly discoloring;
-            this keeps the subtle depth without ever changing color. */}
+        {/* V1 ambient day field — a warm cream gradient spanning the FULL
+            day (6am at top → midnight at bottom), scrolling with the
+            timeline so the day reads as warmth shifting: cool ghost-green
+            dawn → neutral cream midday → deep-cream dusk. Stays entirely in
+            the Retayned palette (no foreign daylight hues). Positioned over
+            the entire timelineHeight, behind the events. */}
         <div
           aria-hidden
           style={{
-            position: "sticky",
+            position: "absolute",
             top: 0,
             left: 0,
             right: 0,
-            height: visibleHeight,
-            marginBottom: -visibleHeight, // collapse layout box so timeline renders at top: 0
+            height: timelineHeight,
             pointerEvents: "none",
             zIndex: 0,
-            background: "linear-gradient(180deg, rgba(245,232,210,0) 0%, rgba(245,232,210,0) 12%, rgba(245,232,210,0.12) 32%, rgba(245,232,210,0.12) 68%, rgba(245,232,210,0) 88%, rgba(245,232,210,0) 100%)",
+            borderRadius: 16,
+            background: "linear-gradient(180deg, #F3F8F5 0%, #FAFAF7 22%, #FAF8F2 48%, #F5F0E6 74%, #EFE7D6 100%)",
           }}
         />
         <div style={{ position: "relative", height: timelineHeight, minHeight: timelineHeight, zIndex: 1 }}>
-          {/* Hour grid */}
+          {/* Faint hour ticks — labels only, no grid lines (the ambient
+              field carries time-of-day; lines would reintroduce the boxy
+              grid we're removing). */}
           {hourLabels.map(h => (
             <div
               key={h}
               style={{
                 position: "absolute",
-                top: yForHour(h),
+                top: yForHour(h) - 6,
                 left: 0,
-                right: 0,
-                height: SLOT_HEIGHT,
-                borderTop: "1px solid " + C.borderLight,
+                fontSize: 9.5,
+                color: "rgba(30,38,31,0.28)",
+                fontVariantNumeric: "tabular-nums",
+                fontWeight: 600,
+                letterSpacing: 0.2,
               }}
             >
-              <span style={{
-                position: "absolute",
-                top: -12,
-                left: 0,
-                fontSize: 10,
-                color: C.textMuted,
-                fontVariantNumeric: "tabular-nums",
-                fontWeight: 500,
-                paddingRight: 6,
-              }}>
-                {formatHourLabel(h)}
-              </span>
+              {formatHourLabel(h)}
             </div>
           ))}
 
@@ -2769,56 +2764,44 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
             else if (startMs <= nowMs && nowMs < endMs) state = "now";
             else state = "upcoming";
 
-            // Style by state
+            // Style by state — V1 ambient: white cards with the alpha-ink
+            // hairline (matches every other card in the app), floating on the
+            // warm field. "now" gets a green ring + lift (it's happening);
+            // "upcoming" is a clean white card; "past" fades back.
             let containerStyle;
             let titleColor = C.text;
             let timeColor = C.textMuted;
             let titleWeight = 500;
             if (state === "past") {
               containerStyle = {
-                background: "transparent",
-                borderBottom: `1px solid ${C.borderLight}`,
-                borderRadius: 0,
-                paddingLeft: 0,
+                background: "rgba(255,255,255,0.55)",
+                borderRadius: 10,
+                paddingLeft: 11,
+                boxShadow: "0 0 0 1px rgba(20,30,22,0.06)",
               };
               titleColor = C.textMuted;
               timeColor = C.textMuted;
               titleWeight = 400;
             } else if (state === "now") {
-              // The currently-happening event. Cream surface with purple
-              // left-border anchor + purple-tinted shadow so it reads as
-              // a "live, active" surface.
+              // The currently-happening event — white card ringed in green
+              // with a soft green lift so it reads as live/active.
               containerStyle = {
-                background: C.deepCream,
-                borderLeft: `3px solid #8B6A1B`,
-                borderRadius: 8,
-                paddingLeft: 10,
-                boxShadow: "0 1px 3px rgba(139,106,27,0.12), 0 4px 12px rgba(139,106,27,0.16)",
+                background: C.card,
+                borderRadius: 10,
+                paddingLeft: 11,
+                boxShadow: "0 0 0 1px rgba(85,139,104,0.40), 0 3px 10px rgba(85,139,104,0.14), 0 8px 22px rgba(20,30,22,0.05)",
               };
               titleColor = C.text;
               timeColor = C.textSec;
               titleWeight = 600;
             } else { // upcoming
-              // Soft cream block with dark ink text + cream-toned shadow +
-              // bright left-edge highlight (inset). Reads as a quiet
-              // sticky-note on the timeline — calm, friendly, doesn't
-              // compete with the rest of the page. Cream sits between
-              // purple (Rai) and green (retention) without claiming
-              // hierarchy it shouldn't have.
-              // Gradient delta intentionally small (~6% darker on bottom
-              // end) so the block reads as a single warm surface, not a
-              // saturated tan. Previous values (D2C6A8) were too dark.
-              // Reverted to original tones May 2026 — the timeline wash
-              // got significantly stronger (alphas raised so it's visible
-              // at all hours), and the lightened card tones disappeared
-              // into it. Original darker cream gives events the contrast
-              // they need to read as distinct surfaces on top of the wash.
+              // Clean white card with the standard alpha-ink hairline + soft
+              // depth — a quiet card floating on the ambient field.
               containerStyle = {
-                background: "linear-gradient(135deg, #FBF7EC 0%, #F3EDDD 100%)",
-                border: "none",
-                borderRadius: 8,
+                background: C.card,
+                borderRadius: 10,
                 paddingLeft: 11,
-                boxShadow: "0 1px 2px rgba(80,60,30,0.03), 0 2px 6px rgba(120,90,40,0.05), inset 3px 0 0 0 rgba(255,255,255,0.65)",
+                boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.05)",
               };
               titleColor = C.text;
               timeColor = C.textMuted;
@@ -2950,10 +2933,11 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 top: -6,
                 fontSize: 8.5,
                 fontWeight: 700,
-                color: "#8B6A1B",
+                color: C.btn,
                 letterSpacing: 0.1,
-                background: C.card,
+                background: "rgba(250,250,247,0.85)",
                 padding: "0 4px",
+                borderRadius: 3,
                 zIndex: 2,
               }}>NOW</div>
               {/* Pulsing dot anchored to the start of the line */}
@@ -2964,7 +2948,8 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 width: 9,
                 height: 9,
                 borderRadius: "50%",
-                background: "#8B6A1B",
+                background: C.btn,
+                boxShadow: "0 0 0 4px rgba(124,92,243,0.16)",
                 zIndex: 3,
               }} />
               {/* Line itself — gradient that fades to transparent on the right */}
@@ -2974,7 +2959,7 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
                 right: 0,
                 top: 0,
                 height: 1.5,
-                background: "linear-gradient(90deg, #8B6A1B 0%, rgba(139,106,27,0.55) 35%, rgba(139,106,27,0) 100%)",
+                background: "linear-gradient(90deg, #7c5cf3 0%, rgba(124,92,243,0.50) 35%, rgba(124,92,243,0) 100%)",
               }} />
             </div>
           )}
@@ -3061,29 +3046,31 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
         </div>
       )}
 
-      {/* Composer — flush input at the foot of the calendar widget.
-          Idle: hairline divider on top, no background, no rounded panel.
-          Focused (:focus-within from rt-cal-composer class): the row
-          softens into a recessed warm-cream surface with inset shadow,
-          so the act of typing feels like using a real input. Returns to
-          the quiet idle when focus leaves. */}
+      {/* Composer — frosted flush bar at the foot of the ambient field.
+          Sits on the field's warm-cream night end; the plus is the app's
+          purple. parseCalendarEntry (via handleSubmit) links the client. */}
       <div
         className="rt-cal-composer"
         onClick={() => inputRef.current && inputRef.current.focus()}
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
-          padding: "8px 2px 0",
-          marginTop: 6,
-          borderTop: "1px solid " + C.borderLight,
+          gap: 9,
+          padding: "12px 14px",
+          marginTop: 0,
+          background: "rgba(255,255,255,0.55)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          borderTop: "1px solid rgba(20,30,22,0.05)",
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
           cursor: "text",
           pointerEvents: "auto",
           position: "relative",
           zIndex: 5,
         }}
       >
-        <span style={{ fontSize: 15, color: C.btn, fontWeight: 700, lineHeight: 1, pointerEvents: "none" }}>+</span>
+        <span style={{ width: 22, height: 22, borderRadius: 11, background: "#EDE7FB", color: C.btn, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, lineHeight: 1, flexShrink: 0, pointerEvents: "none" }}>+</span>
         <input
           ref={inputRef}
           type="text"
@@ -3110,6 +3097,221 @@ function TodayTimeline({ events = [], onCreate, onDelete, onUpdate, compact = fa
       </div>
       {composerError && (
         <div style={{ fontSize: 10.5, color: C.danger, marginTop: 4, paddingLeft: 14 }}>{composerError}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── MobileCalendarStrip ────────────────────────────────────────────────
+// Mobile-only ambient calendar. Collapsed: a slim horizontal day-strip
+// (6am→midnight) with meetings as dots + a NOW tick + the next meeting named
+// underneath. Expanded (open=true): the strip stays pinned on top and the
+// day's events list below it, next as a green-ringed white card, with the
+// frosted inline composer at the foot. Uses the EXACT desktop V1 gradient,
+// horizontal for the strip and vertical for the expanded body, so it reads as
+// the same ambient day, just rotated. Reuses parseCalendarEntry for create.
+const V1_GRAD_H = "linear-gradient(90deg, #F3F8F5 0%, #FAFAF7 22%, #FAF8F2 48%, #F5F0E6 74%, #EFE7D6 100%)";
+const V1_GRAD_V = "linear-gradient(180deg, #F3F8F5 0%, #FAFAF7 22%, #FAF8F2 48%, #F5F0E6 74%, #EFE7D6 100%)";
+
+function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today" }) {
+  const [composerText, setComposerText] = useState("");
+  const [composerError, setComposerError] = useState(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Day window: 6am → midnight (matches desktop field). Position is the
+  // fraction across that window.
+  const DAY_START = 6;   // 6am
+  const DAY_END = 24;    // midnight
+  const SPAN = DAY_END - DAY_START;
+
+  const now = new Date(nowTick);
+  const dayBase = new Date(now);
+  if (selectedDay === "tomorrow") dayBase.setDate(dayBase.getDate() + 1);
+
+  const fracFor = (d) => {
+    const h = d.getHours() + d.getMinutes() / 60;
+    return Math.max(0, Math.min(1, (h - DAY_START) / SPAN));
+  };
+
+  // Events for the selected day, sorted, with parsed start times.
+  const dayEvents = (events || [])
+    .map(e => ({ ...e, _start: new Date(e.starts_at), _end: e.ends_at ? new Date(e.ends_at) : null }))
+    .filter(e => {
+      const d = e._start;
+      return d.getFullYear() === dayBase.getFullYear() && d.getMonth() === dayBase.getMonth() && d.getDate() === dayBase.getDate();
+    })
+    .sort((a, b) => a._start - b._start);
+
+  const nowMs = now.getTime();
+  // Next upcoming event (today only)
+  const nextEvent = selectedDay === "today"
+    ? dayEvents.find(e => e._start.getTime() > nowMs)
+    : dayEvents[0];
+
+  const nowFrac = fracFor(now);
+  const showNow = selectedDay === "today" && nowFrac > 0 && nowFrac < 1;
+
+  const fmtTime = (d) => {
+    let h = d.getHours(); const m = d.getMinutes();
+    const ap = h >= 12 ? "PM" : "AM"; h = h % 12; if (h === 0) h = 12;
+    return m === 0 ? `${h}:00 ${ap}` : `${h}:${String(m).padStart(2, "0")} ${ap}`;
+  };
+  const fmtTimeShort = (d) => {
+    let h = d.getHours(); const m = d.getMinutes();
+    const ap = h >= 12 ? "p" : "a"; h = h % 12; if (h === 0) h = 12;
+    return m === 0 ? `${h}${ap}` : `${h}:${String(m).padStart(2, "0")}${ap}`;
+  };
+  const clientNameFor = (e) => {
+    if (e.client_name) return e.client_name;
+    if (e.client_id) { const c = (clients || []).find(x => x.id === e.client_id); return c ? c.name : null; }
+    return null;
+  };
+  const initialsFor = (name) => (name || "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+  const minutesUntil = (d) => Math.round((d.getTime() - nowMs) / 60000);
+
+  const submit = () => {
+    if (!composerText.trim()) return;
+    const parseAnchor = new Date(now);
+    if (selectedDay === "tomorrow") parseAnchor.setDate(parseAnchor.getDate() + 1);
+    const parsed = parseCalendarEntry(composerText, parseAnchor, clients);
+    if (!parsed) { setComposerError("Add a time (e.g. 2pm, 9:30am, noon)"); return; }
+    setComposerError(null);
+    setComposerText("");
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    onCreate && onCreate(parsed);
+  };
+
+  // Dot for a single event on the strip
+  const renderDot = (e, i) => {
+    const left = fracFor(e._start) * 100;
+    const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
+    const isNext = nextEvent && e.id === nextEvent.id;
+    return (
+      <span
+        key={e.id || i}
+        style={{
+          position: "absolute", top: 2, left: `${left}%`, transform: "translateX(-50%)",
+          width: 8, height: 8, borderRadius: "50%",
+          background: isPast ? C.ink300 : C.primaryLight,
+          boxShadow: isNext ? "0 0 0 3px rgba(85,139,104,0.20)" : "none",
+        }}
+      />
+    );
+  };
+
+  const strip = (
+    <div style={{ position: "relative", height: 12 }}>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 5, height: 2, borderRadius: 2, background: "rgba(30,38,31,0.10)" }} />
+      {dayEvents.map(renderDot)}
+      {showNow && (
+        <div style={{ position: "absolute", top: 0, left: `${nowFrac * 100}%`, transform: "translateX(-50%)", width: 2, height: 12, background: C.btn, borderRadius: 2, boxShadow: "0 0 0 2px rgba(124,92,243,0.14)" }} />
+      )}
+    </div>
+  );
+
+  const ends = (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: C.ink300, marginTop: 5, fontVariantNumeric: "tabular-nums" }}>
+      <span>6a</span><span>12p</span><span>6p</span><span>12a</span>
+    </div>
+  );
+
+  // ── COLLAPSED ──
+  if (!open) {
+    const nextName = nextEvent ? clientNameFor(nextEvent) : null;
+    return (
+      <div
+        onClick={onToggle}
+        style={{ background: V1_GRAD_H, borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)", cursor: "pointer" }}
+      >
+        <div style={{ padding: "11px 14px 12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>{selectedDay === "today" ? "Today" : "Tomorrow"}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: C.text }}>{dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}</span>
+          </div>
+          {strip}
+          {ends}
+          {nextEvent ? (
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: C.text, marginTop: 9, display: "flex", alignItems: "center", gap: 6 }}>
+              {nextName && <span style={{ width: 15, height: 15, borderRadius: "50%", background: C.primaryDeep, color: "#fff", fontSize: 6.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initialsFor(nextName)}</span>}
+              <span style={{ color: C.primaryLight, fontWeight: 700 }}>{fmtTime(nextEvent._start)}</span>
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nextEvent.title}</span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 9, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>Nothing scheduled — tap to add</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── EXPANDED ──
+  return (
+    <div style={{ background: V1_GRAD_V, borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px 4px" }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>{selectedDay === "today" ? "Today" : "Tomorrow"} · {dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}</span>
+        <button onClick={onToggle} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, color: C.textMuted, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 3 }}>
+          collapse <Icon name="chevron-down" size={11} color={C.textMuted} />
+        </button>
+      </div>
+      <div style={{ padding: "6px 14px 10px" }}>{strip}{ends}</div>
+      <div style={{ padding: "0 14px 4px" }}>
+        {dayEvents.length === 0 && (
+          <div style={{ textAlign: "center", padding: "14px 0", fontSize: 12, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No events yet — add one below.</div>
+        )}
+        {dayEvents.map((e, i) => {
+          const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
+          const isNext = nextEvent && e.id === nextEvent.id;
+          const cname = clientNameFor(e);
+          if (isNext) {
+            const mins = minutesUntil(e._start);
+            return (
+              <div key={e.id || i} style={{ padding: "6px 0" }}>
+                <div style={{ marginLeft: 56, background: C.card, borderRadius: 10, padding: "8px 12px", boxShadow: "0 0 0 1px rgba(85,139,104,0.35), 0 3px 10px rgba(85,139,104,0.12), 0 8px 22px rgba(20,30,22,0.05)" }}>
+                  <div style={{ fontSize: 10, color: C.primaryLight, fontWeight: 700 }}>{fmtTime(e._start)}{mins > 0 && mins <= 120 ? ` · in ${mins} min` : ""}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 1 }}>{e.title}</div>
+                  {cname && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>{cname}</div>}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid rgba(30,38,31,0.06)" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, width: 56, flexShrink: 0, color: isPast ? C.textMuted : C.primaryLight }}>{fmtTime(e._start)}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: isPast ? 500 : 600, color: isPast ? C.textMuted : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.title}</span>
+              {onDelete && e.source === "manual" && (
+                <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }} title="Delete">×</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* Frosted foot composer */}
+      <div
+        onClick={() => inputRef.current && inputRef.current.focus()}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", background: "rgba(255,255,255,0.55)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid rgba(20,30,22,0.05)", cursor: "text" }}
+      >
+        <span style={{ width: 22, height: 22, borderRadius: 11, background: "#EDE7FB", color: C.btn, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, flexShrink: 0, pointerEvents: "none" }}>+</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={composerText}
+          onChange={e => { setComposerText(e.target.value); if (composerError) setComposerError(null); }}
+          onKeyDown={e => { if (e.key === "Enter") submit(); }}
+          onClick={e => e.stopPropagation()}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={selectedDay === "tomorrow" ? "2pm Sarah · adds to tomorrow" : "Add an event — “call w/ Rose Babe 3pm”"}
+          style={{ flex: 1, border: "none", background: "transparent", fontFamily: "inherit", fontSize: 11.5, color: C.text, outline: "none", padding: "2px 0", minWidth: 0 }}
+        />
+      </div>
+      {composerError && (
+        <div style={{ fontSize: 10.5, color: C.danger, padding: "0 14px 8px" }}>{composerError}</div>
       )}
     </div>
   );
@@ -7253,19 +7455,11 @@ export default function App({ user }) {
            neither state feels jumpy. */
         .rt-cal-composer {
           transition: background 180ms var(--rt-ease-out),
-                      box-shadow 180ms var(--rt-ease-out),
-                      border-top-color 180ms var(--rt-ease-out),
-                      border-radius 180ms var(--rt-ease-out),
-                      padding 180ms var(--rt-ease-out),
-                      margin-top 180ms var(--rt-ease-out);
+                      box-shadow 180ms var(--rt-ease-out);
         }
         .rt-cal-composer:focus-within {
-          background: var(--rt-surface-warm);
-          box-shadow: inset 0 1px 2px rgba(20,30,22,0.08);
-          border-top-color: transparent !important;
-          border-radius: 8px;
-          padding: 9px 12px !important;
-          margin-top: 10px !important;
+          background: rgba(255,255,255,0.78) !important;
+          box-shadow: inset 0 1px 2px rgba(20,30,22,0.06);
         }
 
         /* Progress bar leading-edge highlight (D). A small radial bright
@@ -7460,6 +7654,21 @@ export default function App({ user }) {
            mobile URL bar. Scoped to mobile so desktop's sidebar layout is untouched. */
         @media (max-width: 767px) {
           .r-rai-page { height: calc(100dvh - 60px) !important; }
+          /* Break-out task on mobile: the desktop -24px shift pops into the
+             64px page padding, which mobile doesn't have — at -24px the row +
+             its purple rai ring clipped off the left edge. Scale the shift to
+             what the mobile canvas can absorb (canvas already bleeds -8px past
+             the list, r-main has 16px padding) so it still BREAKS the rhythm
+             and reads as the hero — just a mobile-native amount. Lift + larger
+             type carry the rest of the emphasis, same as desktop. */
+          .rt-today-breakout { transform: translateX(-10px) !important; }
+          @keyframes rt-breakout-in-mobile {
+            from { transform: translateX(0); }
+            to   { transform: translateX(-10px); }
+          }
+          .rt-today-breakout { animation: rt-breakout-in-mobile 380ms cubic-bezier(.22,.61,.36,1) both !important; }
+          /* Band More/Less expand is the wrong UX on mobile — hide it. */
+          .rt-band-more { display: none !important; }
         }
         .r-today-panel { display: none !important; }
         .r-client-modal { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; transform: none !important; max-width: 100% !important; max-height: 100% !important; border-radius: 0 !important; }
@@ -9241,53 +9450,38 @@ export default function App({ user }) {
                   <span className="rt-pct-lbl" style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>of today done</span>
                 </div>
 
-                {/* Mobile calendar dropdown — drops down right under the band trigger.
-                    Renders the today timeline in compact mode (caps at 6 visible
-                    hours with internal scroll). */}
-                {todayStripOpen && (
-                  <div className="rt-mob-cal-sheet rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10, background: C.card, borderRadius: 10, padding: "14px" }}>
-                    <TodayTimeline
-                      clients={clients}
-                      events={personalEvents}
-                      C={C}
-                      showHeader={true}
-                      compact={true}
-                      googleConnected={false}
-                      onConnectClick={() => setPage("settings")}
-                      promptDismissed={googleCalPromptDismissed}
-                      onDismissConnectPrompt={dismissGoogleCalPrompt}
-                      onCreate={async (entry) => {
-                        const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                        setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                        const { data, error } = await personalCalendarDb.create(user.id, entry);
-                        if (error) {
-                          console.error("Calendar create failed:", error);
-                          setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
-                          return;
-                        }
-                        setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                      }}
-                      onUpdate={async (id, patch) => {
-                        const prev = personalEvents;
-                        setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                        const { error } = await personalCalendarDb.update(id, patch);
-                        if (error) {
-                          console.error("Calendar update failed:", error);
-                          setPersonalEvents(prev);
-                        }
-                      }}
-                      onDelete={async (id) => {
-                        const prev = personalEvents;
-                        setPersonalEvents(prev.filter(e => e.id !== id));
-                        const { error } = await personalCalendarDb.remove(id);
-                        if (error) {
-                          console.error("Calendar delete failed:", error);
-                          setPersonalEvents(prev);
-                        }
-                      }}
-                    />
-                  </div>
-                )}
+                {/* Mobile ambient calendar strip — always visible on mobile,
+                    collapsed by default (slim day-strip), expands in place on
+                    tap (todayStripOpen). Same V1 gradient as desktop, rotated. */}
+                <div className="rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10 }}>
+                  <MobileCalendarStrip
+                    clients={clients}
+                    events={personalEvents}
+                    C={C}
+                    open={todayStripOpen}
+                    onToggle={() => setTodayStripOpen(!todayStripOpen)}
+                    onCreate={async (entry) => {
+                      const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                      setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                      const { data, error } = await personalCalendarDb.create(user.id, entry);
+                      if (error) {
+                        console.error("Calendar create failed:", error);
+                        setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
+                        return;
+                      }
+                      setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                    }}
+                    onDelete={async (id) => {
+                      const prev = personalEvents;
+                      setPersonalEvents(prev.filter(e => e.id !== id));
+                      const { error } = await personalCalendarDb.remove(id);
+                      if (error) {
+                        console.error("Calendar delete failed:", error);
+                        setPersonalEvents(prev);
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
               {/* COMPOSER */}
@@ -11017,7 +11211,7 @@ export default function App({ user }) {
                   events with inline composer. Google events will render alongside manual
                   ones once sync ships. */}
               <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
-                <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "14px 16px" }}>
+                <div style={{ padding: 0 }}>
                   <TodayTimeline
                     clients={clients}
                     events={personalEvents}
