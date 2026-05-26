@@ -2556,8 +2556,9 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
         <line x1={CX} y1={CY} x2={nowX.toFixed(1)} y2={nowY.toFixed(1)} stroke="#1C3224" strokeWidth="1.3" strokeDasharray="2 3" opacity="0.5" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#1C3224" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#1C3224" strokeOpacity="0.2" strokeWidth="1.5" />
-        {/* Hub disc */}
-        <circle cx={CX} cy={CY} r={HUB_R} fill="#fff" stroke="rgba(20,30,22,0.10)" />
+        {/* Hub disc — no stroke; the feathered rim is edgeless so the hub
+            stays borderless too for consistency. */}
+        <circle cx={CX} cy={CY} r={HUB_R} fill="#fff" />
       </svg>
 
       {/* Event cards INSIDE the disc — HTML overlay positioned by % of viewBox. */}
