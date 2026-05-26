@@ -10813,7 +10813,7 @@ export default function App({ user }) {
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
                           <BucketHeader name="Tomorrow" dimmed={true} count={_tomorrowBucket.length} />
-                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 3 }}>
+                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 3, padding: "0 6px" }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                           </div>
                         </>)}
@@ -10821,7 +10821,7 @@ export default function App({ user }) {
                         {/* LATER bucket */}
                         {_laterBucket.length > 0 && (<>
                           <BucketHeader name="Later" dimmed={true} count={_laterBucket.length} />
-                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 2 }}>
+                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 2, padding: "0 6px" }}>
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
                         </>)}
@@ -10892,7 +10892,7 @@ export default function App({ user }) {
                               }}
                             >
                               <div style={{ overflow: "hidden", minHeight: 0 }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.7 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.7, padding: "0 6px" }}>
                                   {_collapsedDoneTasks.map(t => renderRow(t, "today"))}
                                 </div>
                               </div>
