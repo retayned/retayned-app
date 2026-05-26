@@ -3172,7 +3172,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     if (e.client_id) { const c = (clients || []).find(x => x.id === e.client_id); return c ? c.name : null; }
     return null;
   };
-  const initialsFor = (name) => (name || "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
   const minutesUntil = (d) => Math.round((d.getTime() - nowMs) / 60000);
 
   const submit = () => {
@@ -3223,29 +3222,59 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
   // ── COLLAPSED ──
   if (!open) {
-    const nextName = nextEvent ? clientNameFor(nextEvent) : null;
+    // Sequence dots — one per event in time order: past (grey), the next
+    // upcoming (green ring), future (soft green). Not time-plotted — a
+    // sequence, so position never lies and short meetings don't vanish.
+    const seqDots = dayEvents.map((e, i) => {
+      const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
+      const isNext = nextEvent && e.id === nextEvent.id;
+      return (
+        <span
+          key={e.id || i}
+          style={{
+            width: isNext ? 8 : 6, height: isNext ? 8 : 6, borderRadius: "50%",
+            background: isPast ? C.ink300 : C.primaryLight,
+            boxShadow: isNext ? "0 0 0 3px rgba(85,139,104,0.20)" : "none",
+            flexShrink: 0,
+          }}
+        />
+      );
+    });
+    // Countdown label: minutes → "in N min", hours → "in N hr". Greens when
+    // imminent (<= 30 min) so the eye catches an about-to-start meeting.
+    let countdown = null, imminent = false;
+    if (nextEvent) {
+      const mins = minutesUntil(nextEvent._start);
+      if (mins <= 0) { countdown = "now"; imminent = true; }
+      else if (mins < 60) { countdown = `in ${mins} min`; imminent = mins <= 30; }
+      else { countdown = `in ${Math.round(mins / 60)} hr`; }
+    }
+    const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
     return (
       <div
         onClick={onToggle}
-        style={{ background: V1_GRAD_H, borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)", cursor: "pointer" }}
+        style={{ background: V1_GRAD_H, borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)", cursor: "pointer", padding: "10px 13px 11px" }}
       >
-        <div style={{ padding: "11px 14px 12px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>{selectedDay === "today" ? "Today" : "Tomorrow"}</span>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: C.text }}>{dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}</span>
-          </div>
-          {strip}
-          {ends}
-          {nextEvent ? (
-            <div style={{ fontSize: 11.5, fontWeight: 600, color: C.text, marginTop: 9, display: "flex", alignItems: "center", gap: 6 }}>
-              {nextName && <span style={{ width: 15, height: 15, borderRadius: "50%", background: C.primaryDeep, color: "#fff", fontSize: 6.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initialsFor(nextName)}</span>}
-              <span style={{ color: C.primaryLight, fontWeight: 700 }}>{fmtTime(nextEvent._start)}</span>
-              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nextEvent.title}</span>
-            </div>
-          ) : (
-            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 9, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>Nothing scheduled — tap to add</div>
-          )}
+        {/* Tier 1: label · sequence dots · count */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted, flexShrink: 0 }}>{selectedDay === "today" ? "Today" : "Tomorrow"}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}>{seqDots}</span>
+          <span style={{ marginLeft: "auto", fontSize: 10, fontWeight: 600, color: C.textMuted, flexShrink: 0 }}>
+            {dayEvents.length === 0 ? "No events" : `${dayEvents.length} ${dayEvents.length === 1 ? "event" : "events"}`}
+          </span>
         </div>
+        {/* Tier 2: next meeting + countdown, or a quiet state */}
+        {nextEvent ? (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.primaryLight, flexShrink: 0 }}>{fmtTime(nextEvent._start)}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nextEvent.title}</span>
+            <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 600, color: imminent ? C.primary : C.textMuted, flexShrink: 0, whiteSpace: "nowrap" }}>{countdown}</span>
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 8, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+            {allPast ? "All done for today." : "Nothing scheduled — tap to add."}
+          </div>
+        )}
       </div>
     );
   }
@@ -6774,6 +6803,19 @@ export default function App({ user }) {
           --icon-body: #9A9A93;
           --icon-accent: #6B6B66;
         }
+        /* Mobile nav: kill the OS tap-highlight flash. Without this, a tap
+           fires TWO visual changes — the browser's grey tap overlay, then
+           our is-active transition — which reads as a janky double color
+           change. Suppressing the native highlight leaves only the single,
+           smooth is-active background+shadow transition, matching desktop. */
+        .nav-item-mobile {
+          -webkit-tap-highlight-color: transparent;
+          -webkit-touch-callout: none;
+          user-select: none;
+          -webkit-user-select: none;
+        }
+        .nav-item-mobile:active { background: transparent; }
+        .nav-item-mobile.is-active:active { background: var(--rt-card, #fff); }
         @media (hover: hover) {
           .nav-item:hover:not(.is-active),
           .nav-item-mobile:hover:not(.is-active) {
@@ -8165,9 +8207,9 @@ export default function App({ user }) {
           .rc-sort-renewal { display: none !important; }
           .rt-mob-cal-trigger { display: none !important; }
           .rt-mob-cal-sheet { display: none !important; }
-          .rt-mob-cal-sheet-band { display: block !important; }
+          .rt-mob-cal-sheet-band { display: block !important; grid-area: calstrip !important; }
           .rt-today-v4 {
-            grid-template-areas: "band" "composer" "tasks" !important;
+            grid-template-areas: "calstrip" "band" "composer" "tasks" !important;
           }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
@@ -9306,6 +9348,39 @@ export default function App({ user }) {
                 setFocusMode(false);
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start" }}>
+              {/* Mobile ambient calendar strip — pinned at the very top of the
+                  mobile Today page, above the greeting/band. Collapsed by
+                  default (B1 sequence-dots + next + countdown), expands in
+                  place on tap. display:none on desktop via the class. */}
+              <div className="rt-mob-cal-sheet-band" style={{ display: "none" }}>
+                <MobileCalendarStrip
+                  clients={clients}
+                  events={personalEvents}
+                  C={C}
+                  open={todayStripOpen}
+                  onToggle={() => setTodayStripOpen(!todayStripOpen)}
+                  onCreate={async (entry) => {
+                    const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                    setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                    const { data, error } = await personalCalendarDb.create(user.id, entry);
+                    if (error) {
+                      console.error("Calendar create failed:", error);
+                      setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
+                      return;
+                    }
+                    setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                  }}
+                  onDelete={async (id) => {
+                    const prev = personalEvents;
+                    setPersonalEvents(prev.filter(e => e.id !== id));
+                    const { error } = await personalCalendarDb.remove(id);
+                    if (error) {
+                      console.error("Calendar delete failed:", error);
+                      setPersonalEvents(prev);
+                    }
+                  }}
+                />
+              </div>
               {/* STATUS BAND */}
               <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
                 <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
@@ -9450,38 +9525,6 @@ export default function App({ user }) {
                   <span className="rt-pct-lbl" style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", fontWeight: 600, flexShrink: 0 }}>of today done</span>
                 </div>
 
-                {/* Mobile ambient calendar strip — always visible on mobile,
-                    collapsed by default (slim day-strip), expands in place on
-                    tap (todayStripOpen). Same V1 gradient as desktop, rotated. */}
-                <div className="rt-mob-cal-sheet-band" style={{ display: "none", marginTop: 10 }}>
-                  <MobileCalendarStrip
-                    clients={clients}
-                    events={personalEvents}
-                    C={C}
-                    open={todayStripOpen}
-                    onToggle={() => setTodayStripOpen(!todayStripOpen)}
-                    onCreate={async (entry) => {
-                      const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                      setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                      const { data, error } = await personalCalendarDb.create(user.id, entry);
-                      if (error) {
-                        console.error("Calendar create failed:", error);
-                        setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
-                        return;
-                      }
-                      setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                    }}
-                    onDelete={async (id) => {
-                      const prev = personalEvents;
-                      setPersonalEvents(prev.filter(e => e.id !== id));
-                      const { error } = await personalCalendarDb.remove(id);
-                      if (error) {
-                        console.error("Calendar delete failed:", error);
-                        setPersonalEvents(prev);
-                      }
-                    }}
-                  />
-                </div>
               </div>
 
               {/* COMPOSER */}
@@ -18196,7 +18239,15 @@ export default function App({ user }) {
         className="r-mob-bot-dock"
         style={{
           position: "fixed",
-          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 78px)",
+          // Anchor the dock's BOTTOM edge to the bottom of the visible
+          // viewport. Previously this used `top: app-h - 78px` with a fixed
+          // assumed 78px dock height, which left dark space below the nav
+          // when the real height (padding + content + safe-area inset)
+          // differed. Pinning top to the exact visible-bottom line and
+          // pulling the element up by its own height (translateY -100%)
+          // makes it sit flush regardless of how tall it actually is.
+          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh))",
+          transform: "translateY(-100%)",
           left: 0,
           right: 0,
           background: C.sidebar,
@@ -18264,7 +18315,7 @@ export default function App({ user }) {
                   the flex row when the user tapped. Active state is now
                   signaled by color (primaryDeep vs textSec) alone. */}
               <span style={{ fontSize: 9.5, fontWeight: 700, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: 6, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
+              {dot && <div style={{ position: "absolute", top: 4, right: 10, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar) }} />}
             </div>
           );
         })}
@@ -18278,6 +18329,13 @@ export default function App({ user }) {
         className="rt-mob-fab"
         style={{
           flexShrink: 0,
+          alignSelf: "flex-start",
+          // The nav items are taller than the 40px FAB (icon + label stack),
+          // so centering the FAB in the dock row landed its "+" between the
+          // nav icons and their labels. Anchor it to the row top and nudge
+          // down so the FAB's center lines up with the nav ICON row (icon
+          // center sits ~17px from the item top: 5px pad + ~12px to center).
+          marginTop: -3,
           width: 40, height: 40,
           borderRadius: "50%",
           border: "none",
