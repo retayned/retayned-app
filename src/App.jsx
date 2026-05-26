@@ -7075,17 +7075,9 @@ export default function App({ user }) {
         /* ── COMPOSER ────────────────────────────────────── */
         .rt-composer {
           transition: box-shadow 200ms var(--rt-ease-out);
-          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
-        }
-        .rt-composer:focus-within {
-          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
         }
         .rt-rai-inputbox {
           transition: box-shadow 200ms var(--rt-ease-out);
-          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
-        }
-        .rt-rai-inputbox:focus-within {
-          box-shadow: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05), 0 0 0 1px rgba(124,92,243,0.45) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
