@@ -2353,10 +2353,209 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 //   - Mobile: cap visible hours at 6, scroll inside the widget
 //   - Hour rows are SLOT_HEIGHT px tall, blocks position relative to that
 //
-// Props:
-//   events      — array of { id, title, starts_at, ends_at?, source }
-//   onCreate    — async ({ title, starts_at, ends_at }) → returns created event
-//   onDelete    — async (eventId) → deletes
+// ─── TimeDial ───────────────────────────────────────────────────────────
+// Desktop calendar reimagined as a half-circle "time dial" anchored to the
+// right edge of the screen. The flat side is the screen edge; the curved bulge
+// faces left into the page. A rolling 12-hour window is centered on NOW (6h
+// before / 6h after), so NOW always sits at the arc's left-most midpoint. The
+// disc carries a time-of-day gradient (dawn→day→dusk→night) mapped top→bottom.
+// Events render as small cards INSIDE the disc body at their time-angle, with a
+// rim dot + stem; cards stagger inward when clustered. The central hub (against
+// the right edge) shows the NEXT event — same logic as the mobile header, new
+// UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
+//   events — [{ id, title, starts_at, ends_at?, source }]
+//   onSelectEvent — optional (event) => void
+function TimeDial({ events = [], C, clients = [], onCreate }) {
+  const [, force] = useState(0);
+  const [selectedId, setSelectedId] = useState(null);
+  // Re-render each minute so NOW (and the window) advance.
+  useEffect(() => {
+    const t = setInterval(() => force(n => n + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const now = new Date();
+  const nowMs = now.getTime();
+  const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
+  const windowStart = nowMs - HALF_WINDOW_MS;
+  const windowEnd = nowMs + HALF_WINDOW_MS;
+
+  // Normalize + split events into in-window vs earlier/later.
+  const all = events
+    .map(e => ({ ...e, _start: new Date(e.starts_at), _end: e.ends_at ? new Date(e.ends_at) : null }))
+    .sort((a, b) => a._start - b._start);
+  const inWindow = [];
+  let earlierCount = 0, laterCount = 0;
+  for (const e of all) {
+    const ms = e._start.getTime();
+    if (ms < windowStart) earlierCount++;
+    else if (ms > windowEnd) laterCount++;
+    else inWindow.push(e);
+  }
+  // Next upcoming event (anywhere today), for the hub.
+  const nextEvent = all.find(e => e._start.getTime() >= nowMs) || null;
+  const selectedEvent = selectedId ? all.find(e => e.id === selectedId) : null;
+  const hubEvent = selectedEvent || nextEvent;
+
+  // ── Geometry. viewBox is fixed; the SVG scales to fill the column. The
+  // dial center sits on the RIGHT edge (x = VB_W), radius R. The left half of
+  // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
+  // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
+  const VB_W = 480, VB_H = 520, CX = VB_W, CY = VB_H / 2, R = 380;
+  const HUB_R = 96;
+  const fracOf = (ms) => (ms - windowStart) / (windowEnd - windowStart); // 0..1
+  const angleOf = (f) => (90 + f * 180) * Math.PI / 180; // radians
+  const ptAt = (f, r) => {
+    const a = angleOf(f);
+    return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+  };
+
+  // Hour ticks + labels across the window (every 2 hours, plus NOW).
+  const ticks = [];
+  const tickLabels = [];
+  // Start at the first whole even hour ≥ windowStart.
+  const startHour = new Date(windowStart);
+  startHour.setMinutes(0, 0, 0);
+  if (startHour.getHours() % 2 !== 0) startHour.setHours(startHour.getHours() + 1);
+  for (let t = startHour.getTime(); t <= windowEnd; t += 2 * 60 * 60 * 1000) {
+    const f = fracOf(t);
+    if (f < 0 || f > 1) continue;
+    const [x, y] = ptAt(f, R);
+    const a = angleOf(f);
+    const [ix, iy] = [x - 14 * Math.cos(a), y - 14 * Math.sin(a)];
+    ticks.push(`M ${x.toFixed(1)} ${y.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`);
+    const [lx, ly] = ptAt(f, R - 30);
+    const d = new Date(t);
+    const lbl = formatTimeLabel(d).replace(":00", "");
+    tickLabels.push({ x: lx, y: ly, lbl });
+  }
+
+  // NOW marker (arc midpoint, f = 0.5 → straight left).
+  const [nowX, nowY] = ptAt(0.5, R);
+
+  // Event placements — rim dot at f, card pulled inward; stagger clustered.
+  const placements = [];
+  let lastF = -1, tier = 0;
+  for (const e of inWindow) {
+    const f = fracOf(e._start.getTime());
+    if (f - lastF < 0.085 && lastF >= 0) tier = (tier + 1) % 3; else tier = 0;
+    lastF = f;
+    const [rx, ry] = ptAt(f, R);                 // rim dot
+    const cardR = (R - 150) - tier * 64;          // inward radius, staggered
+    const [cx2, cy2] = ptAt(f, cardR);
+    const [ex, ey] = ptAt(f, cardR + 22);         // stem inner end
+    const isPast = e._start.getTime() < nowMs && (!e._end || e._end.getTime() < nowMs);
+    const isNext = nextEvent && e.id === nextEvent.id;
+    placements.push({ e, f, rx, ry, cx: cx2, cy: cy2, ex, ey, isPast, isNext });
+  }
+
+  let countdown = null, imminent = false;
+  if (hubEvent) {
+    const mins = Math.round((hubEvent._start.getTime() - nowMs) / 60000);
+    if (mins <= 0) { countdown = "now"; imminent = true; }
+    else if (mins < 60) { countdown = `in ${mins} min`; imminent = mins <= 30; }
+    else { countdown = `in ${Math.round(mins / 60)} hr`; }
+  }
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 480, overflow: "hidden" }}>
+      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width="100%" height="100%" preserveAspectRatio="xMaxYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
+        <defs>
+          {/* Time-of-day gradient mapped top(window start)→bottom(window end). */}
+          <linearGradient id="rt-dial-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="rgba(160,150,190,0.24)" />
+            <stop offset="0.28" stopColor="rgba(190,215,225,0.17)" />
+            <stop offset="0.5" stopColor="rgba(255,250,235,0.22)" />
+            <stop offset="0.72" stopColor="rgba(218,170,145,0.19)" />
+            <stop offset="1" stopColor="rgba(60,70,110,0.26)" />
+          </linearGradient>
+        </defs>
+        {/* Half disc */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" stroke="rgba(20,30,22,0.10)" strokeWidth="1" />
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(30,38,31,0.16)" strokeWidth="1.5" />
+        {/* Hour ticks */}
+        <g stroke="rgba(30,38,31,0.18)" strokeWidth="1.3" strokeLinecap="round">
+          {ticks.map((d, i) => <path key={i} d={d} />)}
+        </g>
+        <g fontFamily="Manrope, sans-serif" fontSize="11" fontWeight="700" fill="#9A9A93">
+          {tickLabels.map((t, i) => <text key={i} x={t.x.toFixed(1)} y={(t.y + 4).toFixed(1)} textAnchor="middle">{t.lbl}</text>)}
+        </g>
+        {/* Event rim dots + stems */}
+        {placements.map((p, i) => (
+          <g key={p.e.id || i}>
+            <line x1={p.rx.toFixed(1)} y1={p.ry.toFixed(1)} x2={p.ex.toFixed(1)} y2={p.ey.toFixed(1)} stroke="rgba(30,38,31,0.18)" strokeWidth="1" />
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.3" strokeWidth="1.4" />}
+            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
+          </g>
+        ))}
+        {/* NOW marker — dashed hand from hub to arc midpoint + dot */}
+        <line x1={CX} y1={CY} x2={nowX.toFixed(1)} y2={nowY.toFixed(1)} stroke="#1C3224" strokeWidth="1.3" strokeDasharray="2 3" opacity="0.5" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#1C3224" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#1C3224" strokeOpacity="0.2" strokeWidth="1.5" />
+        {/* Hub disc */}
+        <circle cx={CX} cy={CY} r={HUB_R} fill="#fff" stroke="rgba(20,30,22,0.10)" />
+      </svg>
+
+      {/* Event cards INSIDE the disc — HTML overlay positioned by % of viewBox. */}
+      {placements.map((p, i) => (
+        <div
+          key={p.e.id || i}
+          onClick={() => setSelectedId(p.e.id)}
+          style={{
+            position: "absolute",
+            left: `${(p.cx / VB_W * 100).toFixed(2)}%`,
+            top: `${(p.cy / VB_H * 100).toFixed(2)}%`,
+            transform: "translate(-50%, -50%)",
+            background: "rgba(255,255,255,0.92)",
+            backdropFilter: "blur(3px)",
+            WebkitBackdropFilter: "blur(3px)",
+            borderRadius: 10,
+            padding: "6px 10px",
+            boxShadow: p.isNext
+              ? "0 2px 6px rgba(20,30,22,0.12), 0 0 0 1px rgba(51,84,62,0.30)"
+              : "0 1px 3px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.05)",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+            opacity: p.isPast ? 0.6 : 1,
+            zIndex: 5,
+          }}
+        >
+          <div style={{ fontSize: 9, fontWeight: 700, color: p.isNext ? C.primary : C.textMuted }}>{formatTimeLabel(p.e._start)}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.text, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>{p.e.title}</div>
+        </div>
+      ))}
+
+      {/* Earlier / later pockets near the arc ends */}
+      {earlierCount > 0 && (
+        <div style={{ position: "absolute", right: "8%", top: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↑ {earlierCount} earlier</div>
+      )}
+      {laterCount > 0 && (
+        <div style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↓ {laterCount} later</div>
+      )}
+
+      {/* Hub content — the NEXT event (or selected), against the right edge. */}
+      <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: 150, textAlign: "right", zIndex: 6 }}>
+        {hubEvent ? (
+          <>
+            <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
+              {selectedEvent ? "Selected" : "Next"}{countdown ? ` · ${countdown}` : ""}
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: C.primaryDeep, marginTop: 1 }}>{formatTimeLabel(hubEvent._start)}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.2 }}>{hubEvent.title}</div>
+            {hubEvent.client_name && <div style={{ fontSize: 10.5, color: C.textSec }}>{hubEvent.client_name}</div>}
+            {selectedEvent && (
+              <button onClick={() => setSelectedId(null)} style={{ marginTop: 4, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}>show next</button>
+            )}
+          </>
+        ) : (
+          <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 //   compact     — bool. Currently unused. The previous behavior (cap to
 //                 6 visible hours on mobile) was removed when the timeline
 //                 unified to a fixed 17-hour range and 8-hour viewport on
@@ -8080,7 +8279,7 @@ export default function App({ user }) {
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
-          grid-template-columns: minmax(0, 1fr) 360px;
+          grid-template-columns: minmax(0, 1fr) 440px;
           grid-template-areas:
             "band band"
             "composer composer"
@@ -8241,12 +8440,12 @@ export default function App({ user }) {
            genuinely comfortable width). */
         @media (min-width: 1700px) {
           .rt-today-v4 {
-            grid-template-columns: minmax(0, 1fr) 360px 360px;
+            grid-template-columns: minmax(0, 1fr) 520px;
             grid-template-rows: auto auto 1fr;
             grid-template-areas:
-              "band band band"
-              "composer composer rai"
-              "tasks focus rai";
+              "band band"
+              "composer composer"
+              "tasks focus";
           }
           .rt-rai-col {
             display: flex !important;
@@ -11363,11 +11562,24 @@ export default function App({ user }) {
                   {/* Completed section removed — done tasks now render inline above with strikethrough state. */}
                 </div>
 
-              {/* CALENDAR — right column on desktop (>900px). Mobile gets the strip instead.
-                  Now wired to the today timeline: dynamic hour window, NOW marker, manual
-                  events with inline composer. Google events will render alongside manual
-                  ones once sync ships. */}
-              <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20 }}>
+              {/* CALENDAR — desktop right column. TEMPORARILY the new TimeDial
+                  (the half-circle time dial engulfing the right edge). The old
+                  TodayTimeline is preserved behind a false gate below so it can
+                  be restored. The dial IS the calendar now. */}
+              <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20, alignSelf: "stretch", minHeight: 520 }}>
+                <TimeDial
+                  clients={clients}
+                  events={personalEvents}
+                  C={C}
+                  onCreate={async (entry) => {
+                    const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
+                    setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                    const { data, error } = await personalCalendarDb.create(user.id, entry);
+                    if (error) { setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id)); return; }
+                    setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                  }}
+                />
+                {false && (
                 <div style={{ padding: 0 }}>
                   <TodayTimeline
                     clients={clients}
@@ -11412,12 +11624,16 @@ export default function App({ user }) {
                     }}
                   />
                 </div>
+                )}
               </div>
 
-              {/* DAYBOOK COLUMN — wide desktop only (>=1440px). Right-rail notepad. */}
+              {/* DAYBOOK / RAI BRIEF COLUMN — TEMPORARILY HIDDEN (gated false)
+                  while the TimeDial occupies the right side. Not deleted. */}
+              {false && (
               <div className="rt-rai-col" style={{ gridArea: "rai", display: "none", flexDirection: "column", gap: 16, position: "sticky", top: 20, alignSelf: "start" }}>
                 <RaiBriefPanel pick={raiPicks} clients={clients} />
               </div>
+              )}
 
               {/* CONFETTI */}
               {/* Confetti layer removed (May 2026) — celebration is fireworks
