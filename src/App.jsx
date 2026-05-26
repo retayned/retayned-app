@@ -7060,15 +7060,27 @@ export default function App({ user }) {
         }
         /* Break-out top task — same full width as every other row, just
            shifted left via transform so it breaks the rhythm without
-           changing length. Lifted + bigger checkbox carry the emphasis. */
+           changing length. Lifted + bigger checkbox carry the emphasis.
+           When a new task becomes the break-out (e.g. task 1 completed,
+           task 2 promotes), it eases in from the normal row position
+           instead of popping into the offset+lift. */
         .rt-today-breakout {
           transform: translateX(-24px);
           margin-bottom: 14px;
-          transition: transform 300ms cubic-bezier(.22,.61,.36,1);
+          animation: rt-breakout-in 380ms cubic-bezier(.22,.61,.36,1) both;
+        }
+        @keyframes rt-breakout-in {
+          from { transform: translateX(0); }
+          to   { transform: translateX(-24px); }
         }
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
           box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
+          animation: rt-breakout-row-in 380ms cubic-bezier(.22,.61,.36,1) both;
+        }
+        @keyframes rt-breakout-row-in {
+          from { box-shadow: 0 0 0 1px rgba(20,30,22,0.12), 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025); }
+          to   { box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09); }
         }
         .rt-today-breakout .rt-row .rt-task-title { font-size: 14.5px; font-weight: 500; }
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
@@ -7624,8 +7636,11 @@ export default function App({ user }) {
              - .rt-row.rt-focus-top (the highlighted top task)
         ═══════════════════════════════════════════════════════════════ */
 
-        /* Dim sidebar contents */
-        body:has(.rt-focus-on) .r-desk > *,
+        /* Dim the sidebar as a single unit — fading the shell fades its
+           content AND its deep-cream hairline box-shadow uniformly (no
+           compounding). Plus the collapse toggle on the sidebar edge. */
+        body:has(.rt-focus-on) .r-desk,
+        body:has(.rt-focus-on) .rt-sidebar-toggle,
         body:has(.rt-focus-on) .r-mob-bot-dock > * {
           opacity: 0.06 !important;
           transition: opacity 280ms ease;
@@ -7654,8 +7669,8 @@ export default function App({ user }) {
           transform: scale(1.015);
           box-shadow:
             0 0 0 1px rgba(124,92,243,0.35),
-            0 8px 28px rgba(124,92,243,0.18),
-            0 24px 64px rgba(0,0,0,0.10) !important;
+            0 4px 14px rgba(124,92,243,0.16),
+            0 8px 22px rgba(20,30,22,0.07) !important;
           transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
         }
         /* When focus row is wrapped in a swipe container, scale + shadow apply to wrapper */
@@ -7663,8 +7678,8 @@ export default function App({ user }) {
           transform: scale(1.015);
           box-shadow:
             0 0 0 1px rgba(124,92,243,0.35),
-            0 8px 28px rgba(124,92,243,0.18),
-            0 24px 64px rgba(0,0,0,0.10);
+            0 4px 14px rgba(124,92,243,0.16),
+            0 8px 22px rgba(20,30,22,0.07);
           transition: transform 320ms ease 100ms, box-shadow 320ms ease 100ms;
         }
         /* Dim siblings of focus wrapper too */
@@ -10894,7 +10909,7 @@ export default function App({ user }) {
                               }}
                             >
                               <div style={{ overflow: "hidden", minHeight: 0 }}>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.7 }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.7, padding: "4px 2px" }}>
                                   {_collapsedDoneTasks.map(t => renderRow(t, "today"))}
                                 </div>
                               </div>
