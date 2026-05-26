@@ -8388,9 +8388,9 @@ export default function App({ user }) {
            portion so the dial's body shows to their right. Tasks get more room
            than before (52% was too cramped); composer + band stop before the
            dial rather than running full width under it. */
-        .rt-tasks-col { max-width: min(70%, 920px); }
+        .rt-tasks-col { max-width: min(70%, 1080px); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(82%, 1080px); }
+        .rt-today-v4 > .rt-composer { max-width: min(82%, 1240px); }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
