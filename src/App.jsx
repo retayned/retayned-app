@@ -5286,6 +5286,11 @@ export default function App({ user }) {
   // into the slot — NOT on every page mount/navigation (which was causing a
   // spurious right-to-left swing whenever you returned to the Today tab).
   const [justPromoted, setJustPromoted] = useState(false);
+  // Tracks the id of the current top/breakout task (Today bucket index 0).
+  // Render keeps this updated; the completion handler reads it to fire the
+  // promote animation ONLY when the top task itself leaves (a real promotion),
+  // not when a lower task completes (which doesn't move the top slot).
+  const topTaskIdRef = useRef(null);
   // Whether the "Completed today" log is expanded. Defaults to collapsed.
   const [completedLogOpen, setCompletedLogOpen] = useState(false);
   const [newTask, setNewTask] = useState("");
@@ -6371,6 +6376,10 @@ export default function App({ user }) {
   const toggleTask = async (id) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
+    // Was this the top/breakout task when completion started? Only a real
+    // promotion (the top task leaving) should play the entry animation —
+    // completing a lower task must NOT tug the top row.
+    const wasTopTask = topTaskIdRef.current === id;
     const newDone = !task.done;
     const nowIso = new Date().toISOString();
     // Optimistic update
@@ -6446,8 +6455,13 @@ export default function App({ user }) {
             // The next task is about to promote into the break-out slot — flag
             // it so the entry animation plays now (and only now). Clear after
             // the animation so a later page navigation doesn't replay it.
-            setJustPromoted(true);
-            setTimeout(() => setJustPromoted(false), 260);
+            // ONLY when the TOP task left (a genuine promotion). Completing a
+            // lower task leaves the top slot untouched, so we must not animate
+            // it (that caused a janky pull on the first task).
+            if (wasTopTask) {
+              setJustPromoted(true);
+              setTimeout(() => setJustPromoted(false), 260);
+            }
             setExitingDoneIds(prevSet => {
               const next = { ...prevSet };
               delete next[id];
@@ -8745,7 +8759,7 @@ export default function App({ user }) {
       {/* SIDEBAR — dark green primary-deep frame. Provides architectural
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
-      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.04), 0 1px 8px rgba(20,30,22,0.03)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
+      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -10901,6 +10915,7 @@ export default function App({ user }) {
                       return [...unassigned, ...assigned];
                     };
                     const _todayBucket = partitionByAssignment(renderTasks.filter(t => bucketOf(t) === "today" && !collapsedDoneIds[t.id]));
+                    topTaskIdRef.current = _todayBucket[0]?.id ?? null;
                     const _tomorrowBucket = partitionByAssignment(
                       renderTasks.filter(t => bucketOf(t) === "tomorrow" && !collapsedDoneIds[t.id])
                         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
@@ -18752,7 +18767,7 @@ export default function App({ user }) {
                 background: C.sidebar,
                 borderRadius: "18px 18px 0 0",
                 borderTop: "1px solid rgba(20,30,22,0.12)",
-                boxShadow: "0 -2px 14px rgba(20,30,22,0.05)",
+                boxShadow: "0 -1px 2px rgba(20,30,22,0.04), 0 -6px 20px rgba(20,30,22,0.10)",
                 padding: "8px 8px calc(12px + env(safe-area-inset-bottom, 0px))",
                 zIndex: 50,
                 display: keyboardOpen ? "none" : "flex",
