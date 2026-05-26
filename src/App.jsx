@@ -7448,7 +7448,7 @@ export default function App({ user }) {
             animation: rt-slideover-in 320ms var(--rt-ease-out) backwards;
           }
           .r-main {
-            padding: 28px 48px;
+            padding: 28px 64px;
             position: fixed;
             top: var(--page-gap);
             right: var(--page-gap);
