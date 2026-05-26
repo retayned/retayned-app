@@ -2521,10 +2521,17 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
               <stop key={i} offset={s.off.toFixed(3)} stopColor={s.color} />
             ))}
           </linearGradient>
+          {/* Soft diffuse rim (concept B) — a blurred arc instead of a hard
+              1px stroke. The edge reads as an out-of-focus boundary rather than
+              a crisp line, fitting the dial's atmospheric feel. */}
+          <filter id="rt-dial-rim-blur" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="6" />
+          </filter>
         </defs>
-        {/* Half disc */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" stroke="rgba(20,30,22,0.10)" strokeWidth="1" />
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(30,38,31,0.16)" strokeWidth="1.5" />
+        {/* Half disc — fill only, no hard stroke. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" />
+        {/* Blurred rim */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(70,75,90,0.30)" strokeWidth="2.5" filter="url(#rt-dial-rim-blur)" />
         {/* Hour ticks */}
         <g stroke="rgba(30,38,31,0.18)" strokeWidth="1.3" strokeLinecap="round">
           {ticks.map((d, i) => <path key={i} d={d} />)}
