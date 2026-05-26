@@ -3231,12 +3231,13 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     // shoulder — so the header and calendar share one region (reclaiming the
     // vertical space the old stacked bar wasted). Tap anywhere → expand.
     const W = 360, H = 150;            // viewBox (stretched full-width)
-    // Arc that bows across the full width, dipping low enough to cross the
-    // header. Quadratic curve: ends run off both screen edges, apex up top.
-    const arcPath = `M -10 ${H} Q ${W / 2} 28 ${W + 10} ${H}`;
-    // Point on the quadratic for a day-fraction t (0=6am … 1=midnight).
+    // Arc that bows HIGH. For a quadratic, the visible peak = 0.5*endY +
+    // 0.5*ctrlY, so to put the peak near the top (~18) with ends at ~118 the
+    // control point must sit ABOVE the box (negative y). ends run off-edge.
+    const END_Y = 118, CTRL_Y = -82;   // peak ≈ 0.5*118 + 0.5*(-82) = 18
+    const arcPath = `M -10 ${END_Y} Q ${W / 2} ${CTRL_Y} ${W + 10} ${END_Y}`;
     const qPt = (t) => {
-      const x0 = -10, y0 = H, cx = W / 2, cy = 28, x1 = W + 10, y1 = H;
+      const x0 = -10, y0 = END_Y, cx = W / 2, cy = CTRL_Y, x1 = W + 10, y1 = END_Y;
       const mt = 1 - t;
       return {
         x: mt * mt * x0 + 2 * mt * t * cx + t * t * x1,
@@ -3268,14 +3269,17 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     return (
       <div
         onClick={onToggle}
-        style={{ position: "relative", cursor: "pointer", margin: "0 -16px", padding: "0 16px" }}
+        style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px" }}
       >
-        {/* Full-bleed sky — edge to edge, fades down into the bg (no box) */}
+        {/* Full-bleed sky — edge to edge AND bleeding up past the top (negative
+            top margin above pulls it over the cream gap), fading down into the
+            bg so there's no box/seam. */}
         <div aria-hidden style={{
-          position: "absolute", top: 0, left: 0, right: 0, height: 200, zIndex: 0, pointerEvents: "none",
-          background: "linear-gradient(180deg, rgba(124,92,243,0.14) 0%, rgba(150,170,235,0.11) 22%, rgba(150,185,150,0.09) 45%, rgba(216,180,120,0.07) 65%, rgba(250,250,247,0) 100%)",
+          position: "absolute", top: -40, left: 0, right: 0, height: 250, zIndex: 0, pointerEvents: "none",
+          background: "linear-gradient(180deg, rgba(124,92,243,0.15) 0%, rgba(150,170,235,0.12) 24%, rgba(150,185,150,0.09) 48%, rgba(216,180,120,0.06) 68%, rgba(250,250,247,0) 100%)",
         }} />
-        {/* Arc + plotted dots + NOW, stretched full-width, crossing the header */}
+        {/* Arc + plotted dots + NOW, full-width, bowing high near the top so it
+            arcs OVER the header below it. */}
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "block", pointerEvents: "none" }}>
           <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.12)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
           {dotMarks}
@@ -3286,8 +3290,9 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
             </g>
           )}
         </svg>
-        {/* Header row INSIDE the sky: date+greeting left, next-meeting right */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 60, minHeight: 132 }}>
+        {/* Header row INSIDE the sky, sitting BELOW the high arc: date+greeting
+            left, next-meeting right. */}
+        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 96, minHeight: 150 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
             <h1 style={{ fontSize: 26, fontWeight: 700, margin: "2px 0 0", letterSpacing: -0.4, color: C.text, lineHeight: 1.04 }}>
@@ -9528,6 +9533,8 @@ export default function App({ user }) {
                     block falls below cleanly. */}
                 <div className="rt-band-meta" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <div className="rt-band-sub" style={{ fontSize: 13.5, color: C.textMuted, display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexShrink: 0 }}>
+                    <span><b style={{ color: C.text, fontWeight: 700 }}>{todayEventCount}</b> {todayEventCount === 1 ? "event" : "events"}</span>
+                    <span className="rt-band-sub-sep" style={{ color: C.border }}>·</span>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{todayCount}</b> tasks</span>
                   </div>
 
