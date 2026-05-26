@@ -3271,22 +3271,31 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         onClick={onToggle}
         style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px" }}
       >
-        {/* Full-bleed sky — edge to edge AND bleeding up past the top (negative
-            top margin above pulls it over the cream gap), fading down into the
-            bg so there's no box/seam. */}
+        {/* Full-bleed sky — edge to edge AND bleeding up past the top, fading
+            down into the bg. A soft warm-at-apex / cool-at-edges wash echoes
+            the day-cycle on the curve without competing with it. */}
         <div aria-hidden style={{
           position: "absolute", top: -40, left: 0, right: 0, height: 250, zIndex: 0, pointerEvents: "none",
-          background: "linear-gradient(180deg, rgba(124,92,243,0.15) 0%, rgba(150,170,235,0.12) 24%, rgba(150,185,150,0.09) 48%, rgba(216,180,120,0.06) 68%, rgba(250,250,247,0) 100%)",
+          background: "radial-gradient(ellipse 90% 62% at 50% 6%, rgba(216,180,120,0.16) 0%, rgba(150,170,200,0.11) 52%, rgba(250,250,247,0) 84%)",
         }} />
-        {/* Arc + plotted dots + NOW, full-width, bowing high near the top so it
-            arcs OVER the header below it. */}
+        {/* Arc + plotted dots + NOW. The stroke carries the night→day→night
+            day-cycle: deep navy at the ends (dawn/dusk → night), warm gold at
+            the apex (midday). NOW is a soft sun-glow riding the curve — its
+            position IS the current time of day. */}
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "block", pointerEvents: "none" }}>
-          <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.12)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+          <defs>
+            <linearGradient id="rt-arc-day" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#2c3550" />
+              <stop offset="0.5" stopColor="#e8c97a" />
+              <stop offset="1" stopColor="#2c3550" />
+            </linearGradient>
+          </defs>
+          <path d={arcPath} fill="none" stroke="url(#rt-arc-day)" strokeWidth="2.5" strokeOpacity="0.55" vectorEffect="non-scaling-stroke" />
           {dotMarks}
           {nowPt && (
             <g>
-              <circle cx={nowPt.x} cy={nowPt.y} r={9} fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-              <circle cx={nowPt.x} cy={nowPt.y} r={5.5} fill="#7c5cf3" />
+              <circle cx={nowPt.x} cy={nowPt.y} r={11} fill="#e8c97a" opacity="0.35" />
+              <circle cx={nowPt.x} cy={nowPt.y} r={5} fill="#e8c97a" />
             </g>
           )}
         </svg>
@@ -6164,7 +6173,7 @@ export default function App({ user }) {
             });
             return prev;
           });
-        }, 460);
+        }, 540);
       }, 3500);
     } else {
       // Un-completing: if it was collapsed, bring it back out of the log
@@ -6229,7 +6238,7 @@ export default function App({ user }) {
       todayDoneAfter === todayTotalAfter
     ) {
       setConfetti(true);
-      setTimeout(() => setConfetti(false), 3000);
+      setTimeout(() => setConfetti(false), 2000);
     }
     // Persist. On failure, revert the optimistic state so the UI doesn't
     // show a phantom (un)check that a later hydration would silently undo —
@@ -7391,7 +7400,7 @@ export default function App({ user }) {
         .rt-today-breakout {
           transform: translateX(-24px);
           margin-bottom: 14px;
-          animation: rt-breakout-in 380ms cubic-bezier(.22,.61,.36,1) both;
+          animation: rt-breakout-in 260ms cubic-bezier(.22,.61,.36,1) both;
         }
         @keyframes rt-breakout-in {
           from { transform: translateX(0); }
@@ -7400,7 +7409,7 @@ export default function App({ user }) {
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
           box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
-          animation: rt-breakout-row-in 380ms cubic-bezier(.22,.61,.36,1) both;
+          animation: rt-breakout-row-in 260ms cubic-bezier(.22,.61,.36,1) both;
         }
         @keyframes rt-breakout-row-in {
           from { box-shadow: 0 0 0 1px rgba(20,30,22,0.12), 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025); }
@@ -7415,12 +7424,14 @@ export default function App({ user }) {
            keeping the break-out lift. Also override the entrance animation's
            shadow keyframes (which animate to the grey-only lift) by clearing the
            animation so the purple ring isn't briefly stripped. */
+        /* Rai mark hidden (May 2026): when the break-out task is also the Rai
+           pick, just keep the break-out's own lifted grey shadow — no purple.
+           (Restore by reverting these two rules + the .rt-rai-boost overrides.) */
         .rt-today-breakout .rt-row.rt-rai-boost {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.40), inset 2px 0 0 0 #7c5cf3, 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
-          animation: none;
+          box-shadow: 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
         }
         .rt-today-breakout .rt-row.rt-rai-boost:hover:not(.is-done) {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.40), inset 2px 0 0 0 #7c5cf3, 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(20,30,22,0.10) !important;
+          box-shadow: 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(20,30,22,0.10) !important;
         }
         /* The rest — plain stack, no thread (break-out carries emphasis). */
         .rt-today-rest { position: relative; }
@@ -7465,13 +7476,21 @@ export default function App({ user }) {
 
         /* ── RAI CLIENT-OF-THE-DAY RAIL ──────────────────── */
         /* Applied via class .rt-rai-boost to every task whose client is
-           today's Rai pick. Purple inset bar on the left + ✦ medallion
-           just outside the left edge. Quiet but unmistakable. */
+           today's Rai pick. HIDDEN per request (May 2026) — the purple ring,
+           inset bar, and bobbing ✦ medallion are neutralized so marked tasks
+           render as normal rows. The rules below are kept (overridden) so the
+           mark can be restored by removing these two override rules. */
         .rt-rai-boost {
+          box-shadow: var(--rt-sh-row) !important;
+          position: relative;
+        }
+        .rt-rai-boost::before { display: none !important; }
+        .rt-rai-boost:hover:not(.is-done) { box-shadow: var(--rt-sh-row-hover, var(--rt-sh-row)) !important; }
+        .rt-rai-boost-DISABLED {
           box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025) !important;
           position: relative;
         }
-        .rt-rai-boost:hover:not(.is-done) {
+        .rt-rai-boost-DISABLED:hover:not(.is-done) {
           box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06) !important;
         }
         /* When the Rai-marked task is checked off, drop both the purple
@@ -7899,9 +7918,9 @@ export default function App({ user }) {
           max-height: 200px;
           opacity: 1;
           transition:
-            max-height 440ms cubic-bezier(.22, .61, .36, 1),
-            opacity 300ms cubic-bezier(.22, .61, .36, 1),
-            margin 440ms cubic-bezier(.22, .61, .36, 1);
+            max-height 520ms cubic-bezier(.22, .61, .36, 1),
+            opacity 360ms cubic-bezier(.22, .61, .36, 1),
+            margin 520ms cubic-bezier(.22, .61, .36, 1);
         }
         .rt-row-wrap.is-exiting {
           max-height: 0 !important;
@@ -8338,11 +8357,11 @@ export default function App({ user }) {
           {/* Multiple burst origins */}
           {[
             { x: 30, y: 35, delay: 0, color: "#7c5cf3" },
-            { x: 70, y: 30, delay: 0.4, color: "#2D8659" },
-            { x: 50, y: 25, delay: 0.8, color: "#B88B15" },
-            { x: 20, y: 40, delay: 1.2, color: "#33543E" },
-            { x: 80, y: 35, delay: 1.0, color: "#C4432B" },
-            { x: 45, y: 45, delay: 1.5, color: "#558B68" },
+            { x: 70, y: 30, delay: 0.2, color: "#2D8659" },
+            { x: 50, y: 25, delay: 0.4, color: "#B88B15" },
+            { x: 20, y: 40, delay: 0.55, color: "#33543E" },
+            { x: 80, y: 35, delay: 0.45, color: "#C4432B" },
+            { x: 45, y: 45, delay: 0.7, color: "#558B68" },
           ].map((burst, bi) => (
             <div key={bi} style={{ position: "absolute", left: `${burst.x}%`, top: `${burst.y}%` }}>
               {/* Glow */}
@@ -8390,11 +8409,11 @@ export default function App({ user }) {
           {/* Rising trails */}
           {[
             { x: 30, delay: 0 },
-            { x: 70, delay: 0.3 },
-            { x: 50, delay: 0.6 },
-            { x: 20, delay: 1.0 },
-            { x: 80, delay: 0.8 },
-            { x: 45, delay: 1.3 },
+            { x: 70, delay: 0.15 },
+            { x: 50, delay: 0.3 },
+            { x: 20, delay: 0.5 },
+            { x: 80, delay: 0.4 },
+            { x: 45, delay: 0.6 },
           ].map((trail, ti) => (
             <div key={`t${ti}`} style={{
               position: "absolute", left: `${trail.x}%`, bottom: 0,
@@ -11334,27 +11353,8 @@ export default function App({ user }) {
               </div>
 
               {/* CONFETTI */}
-              {confetti && (
-                <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 200, overflow: "hidden" }}>
-                  {Array.from({ length: 18 }).map((_, i) => {
-                    const x = 40 + Math.random() * 20;
-                    const tx = (Math.random() - 0.5) * 60;
-                    const rot = Math.random() * 540;
-                    const dur = 900 + Math.random() * 600;
-                    const delay = Math.random() * 120;
-                    const colors = [C.primary, C.primaryLight, "#4FB896", C.btn, "#D17A1B", C.retElite];
-                    const c = colors[i % colors.length];
-                    return (
-                      <span key={i} style={{
-                        position: "absolute", top: "40%", left: `${x}%`,
-                        width: 8, height: 12, background: c, borderRadius: 2,
-                        animation: `confetti-fall ${dur}ms cubic-bezier(.2,.6,.3,1) ${delay}ms forwards`,
-                        "--tx": `${tx}vw`, "--rot": `${rot}deg`,
-                      }} />
-                    );
-                  })}
-                </div>
-              )}
+              {/* Confetti layer removed (May 2026) — celebration is fireworks
+                  only now. The `confetti` state still gates the fireworks. */}
             </div>
           );
         })()}
@@ -18267,15 +18267,14 @@ export default function App({ user }) {
         className="r-mob-bot-dock"
         style={{
           position: "fixed",
-          // Anchor the dock's BOTTOM edge to the bottom of the visible
-          // viewport. Previously this used `top: app-h - 78px` with a fixed
-          // assumed 78px dock height, which left dark space below the nav
-          // when the real height (padding + content + safe-area inset)
-          // differed. Pinning top to the exact visible-bottom line and
-          // pulling the element up by its own height (translateY -100%)
-          // makes it sit flush regardless of how tall it actually is.
-          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh))",
-          transform: "translateY(-100%)",
+          // Anchored directly to the layout-viewport bottom. The previous
+          // approach (top: --app-h + translateY -100%) recomputed from
+          // JS-updated visualViewport vars on every scroll frame, which lagged
+          // during fast/momentum scroll and momentarily left a gap below the
+          // nav. bottom:0 needs no JS and never lags. The dock already hides
+          // when the keyboard is up (keyboardOpen), so we don't need the
+          // visualViewport height math here.
+          bottom: 0,
           left: 0,
           right: 0,
           background: C.sidebar,
@@ -18351,37 +18350,35 @@ export default function App({ user }) {
       {/* Pinned quick-capture FAB — sits to the right of the scrolling tab
           strip, docked nav (mobile). Opens the same QuickLog composer as the
           desktop FAB. Does NOT scroll with the tabs. */}
-      <button
-        onClick={() => setQuickLogOpen(v => !v)}
-        aria-label="Quick log"
-        className="rt-mob-fab"
-        style={{
-          flexShrink: 0,
-          alignSelf: "flex-start",
-          // The nav items are taller than the 40px FAB (icon + label stack),
-          // so centering the FAB in the dock row landed its "+" between the
-          // nav icons and their labels. Anchor it to the row top and nudge
-          // down so the FAB's center lines up with the nav ICON row (icon
-          // center sits ~17px from the item top: 5px pad + ~12px to center).
-          marginTop: -3,
-          width: 40, height: 40,
-          borderRadius: "50%",
-          border: "none",
-          background: "var(--rt-grad-btn)",
-          color: "#fff",
-          fontSize: 22,
-          fontWeight: 300,
-          lineHeight: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
-          transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
-          transition: "transform 180ms var(--rt-ease-out)",
-          fontFamily: "inherit",
-        }}
-      >+</button>
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "5px 0", alignSelf: "center" }}>
+        <button
+          onClick={() => setQuickLogOpen(v => !v)}
+          aria-label="Quick log"
+          className="rt-mob-fab"
+          style={{
+            width: 40, height: 40,
+            borderRadius: "50%",
+            border: "none",
+            background: "var(--rt-grad-btn)",
+            color: "#fff",
+            fontSize: 22,
+            fontWeight: 300,
+            lineHeight: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
+            transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
+            transition: "transform 180ms var(--rt-ease-out)",
+            fontFamily: "inherit",
+          }}
+        >+</button>
+        {/* Invisible label matching the nav items' label height, so the FAB's
+            icon aligns with the nav ICONS (both sit above a same-height label
+            slot) — making it read as part of the menu, not dropped on top. */}
+        <span aria-hidden style={{ fontSize: 10, fontWeight: 600, lineHeight: 1, visibility: "hidden", height: 10 }}>+</span>
+      </div>
       </div>
 
       {/* ─── QUICKLOG — desktop power-user FAB (all pages) ──────────────
