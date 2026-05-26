@@ -2401,9 +2401,9 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   // dial center sits on the RIGHT edge (x = VB_W), radius R. The left half of
   // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
   // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
-  const R = 400;
+  const R = 460;
   const VB_W = 420, VB_H = 2 * R, CX = VB_W, CY = VB_H / 2;
-  const HUB_R = 132;
+  const HUB_R = 150;
   const fracOf = (ms) => (ms - windowStart) / (windowEnd - windowStart); // 0..1
   const angleOf = (f) => (90 + f * 180) * Math.PI / 180; // radians
   const ptAt = (f, r) => {
@@ -8388,9 +8388,16 @@ export default function App({ user }) {
            portion so the dial's body shows to their right. Tasks get more room
            than before (52% was too cramped); composer + band stop before the
            dial rather than running full width under it. */
-        .rt-tasks-col { max-width: min(70%, 1080px); }
+        /* The dial is a FIXED-width layer (~560px) anchored to the right edge,
+           shown >1099px. The left content must reserve room for it as the
+           screen shrinks, or tasks collide with the dial. Cap by both an
+           absolute ceiling AND calc(100% - reserve) so the gap to the dial is
+           preserved at every width. Tasks reserve the most (they must never
+           overlap); composer/band reserve less since they intentionally fade
+           UNDER the dial's faded edge. */
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 500px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(82%, 1240px); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 340px)); }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11701,7 +11708,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 560, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 640, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
