@@ -8388,9 +8388,9 @@ export default function App({ user }) {
            portion so the dial's body shows to their right. Tasks get more room
            than before (52% was too cramped); composer + band stop before the
            dial rather than running full width under it. */
-        .rt-tasks-col { max-width: 70%; }
+        .rt-tasks-col { max-width: min(70%, 920px); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: 82%; }
+        .rt-today-v4 > .rt-composer { max-width: min(82%, 1080px); }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -9967,7 +9967,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
