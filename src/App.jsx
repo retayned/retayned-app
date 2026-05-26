@@ -7712,6 +7712,18 @@ export default function App({ user }) {
         .rt-rai-inputbox {
           transition: box-shadow 200ms var(--rt-ease-out);
         }
+        /* Purple focus state — when the user clicks into the task composer or
+           the initial Rai chat input (both use .rt-composer), a soft purple
+           ring + gentle glow appears. Deliberately understated (low alpha,
+           tight spread) so it reads as elegant focus, not the loud
+           primary-button purple. The in-conversation Rai input
+           (.rt-rai-inputbox) intentionally does NOT get this — once you're
+           in a normal chat it stays neutral. */
+        .rt-composer:focus-within {
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.30),
+                      0 1px 2px rgba(20,30,22,0.04),
+                      0 2px 10px rgba(124,92,243,0.10) !important;
+        }
 
         /* ── CHECKBOX ────────────────────────────────────── */
         .rt-row .rt-check {
@@ -8337,9 +8349,13 @@ export default function App({ user }) {
            than before (52% was too cramped); composer + band stop before the
            dial rather than running full width under it. */
         .rt-tasks-col { max-width: 70%; }
+        .rt-today-v4 > .rt-band,
+        .rt-today-v4 > .rt-composer { max-width: 82%; }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: none !important; }
         }
         .rt-mob-strip { display: none; }
         @media (max-width: 1099px) {
