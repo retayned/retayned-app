@@ -5007,6 +5007,11 @@ export default function App({ user }) {
   // Brief intermediate state between "completed" and "collapsed" — the task is
   // playing its exit animation (max-height shrink + fade). Lives ~360ms.
   const [exitingDoneIds, setExitingDoneIds] = useState({});
+  // True only for a brief window right after a task completes, so the
+  // break-out top task plays its entry animation when the NEXT task promotes
+  // into the slot — NOT on every page mount/navigation (which was causing a
+  // spurious right-to-left swing whenever you returned to the Today tab).
+  const [justPromoted, setJustPromoted] = useState(false);
   // Whether the "Completed today" log is expanded. Defaults to collapsed.
   const [completedLogOpen, setCompletedLogOpen] = useState(false);
   const [newTask, setNewTask] = useState("");
@@ -6164,6 +6169,11 @@ export default function App({ user }) {
             const stillDone = prev.find(t => t.id === id)?.done;
             if (!stillDone) return prev;
             setCollapsedDoneIds(prevSet => ({ ...prevSet, [id]: true }));
+            // The next task is about to promote into the break-out slot — flag
+            // it so the entry animation plays now (and only now). Clear after
+            // the animation so a later page navigation doesn't replay it.
+            setJustPromoted(true);
+            setTimeout(() => setJustPromoted(false), 260);
             setExitingDoneIds(prevSet => {
               const next = { ...prevSet };
               delete next[id];
@@ -6792,23 +6802,22 @@ export default function App({ user }) {
 
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: "transparent" }}>
-      {/* Non-blocking font load. Previously the same Google Fonts URL was
-          @import'd inside the <style> block below — but CSS @import is
-          render-blocking: until it resolves, NONE of the stylesheet's
-          rules apply. On mobile that meant the desktop sidebar showed
-          briefly (its hide-on-mobile rule wasn't applied yet), the
-          grid templates didn't collapse to single column, and the
-          browser auto-zoomed to fit a desktop-wide layout on a phone
-          viewport — the "massive screen shrunken to micro pixels"
-          flash Adam reported. Moving the font fetch to a <link>
-          element makes it non-blocking: the rest of the stylesheet
-          applies on the first paint, mobile media queries hit
-          immediately, layout is correct from frame 1. Fonts swap in
-          when ready (display=swap), text shows in fallback fonts
-          briefly. */}
+      {/* Non-blocking font load via <link> (not @import, which is
+          render-blocking). font-display: OPTIONAL (not swap) — swap caused a
+          visible reflow on every reload: text painted in the fallback font
+          first, then swapped to Manrope, and the differing glyph widths
+          resized the flex nav dock ("small menu that grows") and the FAB
+          glyph. With optional, a cached font (the normal reload case) applies
+          before first paint with no swap; if it isn't ready in time the page
+          stays in the fallback for that load instead of reflowing. */}
+      <link
+        rel="preload"
+        as="style"
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=optional"
+      />
       <link
         rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=optional"
       />
       <style>{`
         ${THEME_CSS}
@@ -7398,6 +7407,12 @@ export default function App({ user }) {
         .rt-today-breakout {
           transform: translateX(-24px);
           margin-bottom: 14px;
+        }
+        /* Entry animation ONLY when a task just promoted into the slot — gated
+           by the .rt-today-breakout-animate class (set briefly via justPromoted
+           state). Without this gate the animation replayed on every page mount,
+           causing a spurious swing when returning to the Today tab. */
+        .rt-today-breakout-animate {
           animation: rt-breakout-in 190ms cubic-bezier(.25,.8,.35,1) both;
         }
         @keyframes rt-breakout-in {
@@ -7407,6 +7422,8 @@ export default function App({ user }) {
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
           box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
+        }
+        .rt-today-breakout-animate .rt-row {
           animation: rt-breakout-row-in 190ms cubic-bezier(.25,.8,.35,1) both;
         }
         @keyframes rt-breakout-row-in {
@@ -7763,10 +7780,10 @@ export default function App({ user }) {
              type carry the rest of the emphasis, same as desktop. */
           .rt-today-breakout { transform: translateX(-10px) !important; }
           @keyframes rt-breakout-in-mobile {
-            from { transform: translateX(0); }
-            to   { transform: translateX(-10px); }
+            from { transform: translateX(0) rotate(-1deg); opacity: 0.4; }
+            to   { transform: translateX(-10px) rotate(0deg); opacity: 1; }
           }
-          .rt-today-breakout { animation: rt-breakout-in-mobile 380ms cubic-bezier(.22,.61,.36,1) both !important; }
+          .rt-today-breakout-animate { animation: rt-breakout-in-mobile 190ms cubic-bezier(.25,.8,.35,1) both !important; }
           /* Band More/Less expand is the wrong UX on mobile — hide it. */
           .rt-band-more { display: none !important; }
         }
@@ -8272,7 +8289,7 @@ export default function App({ user }) {
           /* Tighten the row gap so "Today's client" sits 12px under the sky
              header instead of the 20px desktop grid gap (the greeting used to
              fill this space; now it's in the strip, so the gap read as too low). */
-          .rt-today-v4 { row-gap: 12px !important; }
+          .rt-today-v4 { row-gap: 8px !important; }
           .rt-today-v4 {
             grid-template-areas: "calstrip" "band" "composer" "tasks" !important;
           }
@@ -8628,7 +8645,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.sidebar, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
@@ -11148,7 +11165,7 @@ export default function App({ user }) {
                         <div className="rt-today-canvas">
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
                         {_todayBucket.length > 0 && (
-                          <div className="rt-today-breakout">
+                          <div className={"rt-today-breakout" + (justPromoted ? " rt-today-breakout-animate" : "")}>
                             {renderRow(_todayBucket[0], "today")}
                           </div>
                         )}
@@ -18272,9 +18289,15 @@ export default function App({ user }) {
           top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 78px)",
           left: 0,
           right: 0,
-          background: C.sidebar,
+          // Liquid glass: the same warm beige (#F2EEE8 / C.sidebar) but
+          // translucent + backdrop-blurred so content frosts through it.
+          // Solid beige is the fallback for browsers without backdrop-filter.
+          background: "rgba(242,238,232,0.78)",
+          backdropFilter: "blur(14px) saturate(1.2)",
+          WebkitBackdropFilter: "blur(14px) saturate(1.2)",
           borderRadius: "18px 18px 0 0",
-          boxShadow: "0 -1px 0 0 #EAE4D6, 0 -2px 12px rgba(20,30,22,0.05)",
+          // Bright top "glass lip" inner highlight + cream hairline + soft lift.
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.8), 0 -1px 0 0 rgba(234,228,214,0.6), 0 -2px 14px rgba(20,30,22,0.05)",
           padding: "10px 10px calc(12px + env(safe-area-inset-bottom, 0px))",
           zIndex: 40,
           display: keyboardOpen ? "none" : "flex",
@@ -18351,18 +18374,10 @@ export default function App({ user }) {
         className="rt-mob-fab"
         style={{
           flexShrink: 0,
-          boxSizing: "border-box",
-          padding: 0,
-          margin: 0,
-          width: 40, height: 40, minWidth: 40, minHeight: 40,
+          width: 40, height: 40,
           borderRadius: "50%",
           border: "none",
-          background: "#7c5cf3",
-          backgroundImage: "var(--rt-grad-btn)",
-          color: "#fff",
-          fontSize: 22,
-          fontWeight: 300,
-          lineHeight: 1,
+          background: "var(--rt-grad-btn)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -18370,9 +18385,17 @@ export default function App({ user }) {
           boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
           transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
           transition: "transform 180ms var(--rt-ease-out)",
-          fontFamily: "inherit",
+          padding: 0,
         }}
-      >+</button>
+      >
+        {/* SVG plus, not a text "+" — the text glyph rendered in a fallback
+            font on first paint (before the web font loaded) at the wrong
+            size/baseline, which is what looked small/misshapen until the font
+            swapped. An SVG has no font dependency, so it's correct on frame 1. */}
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
       </div>
 
       {/* ─── QUICKLOG — desktop power-user FAB (all pages) ──────────────
