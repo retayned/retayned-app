@@ -2521,17 +2521,22 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
               <stop key={i} offset={s.off.toFixed(3)} stopColor={s.color} />
             ))}
           </linearGradient>
-          {/* Soft diffuse rim (concept B) — a blurred arc instead of a hard
-              1px stroke. The edge reads as an out-of-focus boundary rather than
-              a crisp line, fitting the dial's atmospheric feel. */}
-          <filter id="rt-dial-rim-blur" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="6" />
-          </filter>
+          {/* Feathered fill (concept E) — a radial mask centered on the disc
+              center (the right edge). The fill is solid through the interior,
+              then fades to transparent as it approaches the rim, so the disc
+              dissolves into the page with NO edge at all. The feather band is
+              the last ~14% of the radius. */}
+          <radialGradient id="rt-dial-feather" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#fff" stopOpacity="1" />
+            <stop offset="0.86" stopColor="#fff" stopOpacity="1" />
+            <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          <mask id="rt-dial-mask">
+            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-feather)" />
+          </mask>
         </defs>
-        {/* Half disc — fill only, no hard stroke. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" />
-        {/* Blurred rim */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(70,75,90,0.30)" strokeWidth="2.5" filter="url(#rt-dial-rim-blur)" />
+        {/* Half disc — feathered fill, no edge. The mask dissolves the rim. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" mask="url(#rt-dial-mask)" />
         {/* Hour ticks */}
         <g stroke="rgba(30,38,31,0.18)" strokeWidth="1.3" strokeLinecap="round">
           {ticks.map((d, i) => <path key={i} d={d} />)}
