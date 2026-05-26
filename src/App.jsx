@@ -3234,7 +3234,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     // Arc that bows HIGH. For a quadratic, the visible peak = 0.5*endY +
     // 0.5*ctrlY, so to put the peak near the top (~18) with ends at ~118 the
     // control point must sit ABOVE the box (negative y). ends run off-edge.
-    const END_Y = 118, CTRL_Y = -82;   // peak ≈ 0.5*118 + 0.5*(-82) = 18
+    const END_Y = 118, CTRL_Y = -58;   // peak ≈ 0.5*118 + 0.5*(-58) = 30
     const arcPath = `M -10 ${END_Y} Q ${W / 2} ${CTRL_Y} ${W + 10} ${END_Y}`;
     const qPt = (t) => {
       const x0 = -10, y0 = END_Y, cx = W / 2, cy = CTRL_Y, x1 = W + 10, y1 = END_Y;
@@ -6171,7 +6171,7 @@ export default function App({ user }) {
             });
             return prev;
           });
-        }, 460);
+        }, 320);
       }, 3500);
     } else {
       // Un-completing: if it was collapsed, bring it back out of the log
@@ -7398,17 +7398,16 @@ export default function App({ user }) {
         .rt-today-breakout {
           transform: translateX(-24px);
           margin-bottom: 14px;
-          animation: rt-breakout-in 220ms cubic-bezier(.34,1.2,.64,1) both;
+          animation: rt-breakout-in 190ms cubic-bezier(.25,.8,.35,1) both;
         }
         @keyframes rt-breakout-in {
-          from { transform: translateX(0) rotate(-1.2deg); }
-          60%  { transform: translateX(-26px) rotate(0.4deg); }
-          to   { transform: translateX(-24px) rotate(0deg); }
+          from { transform: translateX(-18px) rotate(-1deg); opacity: 0.4; }
+          to   { transform: translateX(-24px) rotate(0deg); opacity: 1; }
         }
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
           box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
-          animation: rt-breakout-row-in 220ms cubic-bezier(.34,1.2,.64,1) both;
+          animation: rt-breakout-row-in 190ms cubic-bezier(.25,.8,.35,1) both;
         }
         @keyframes rt-breakout-row-in {
           from { box-shadow: 0 0 0 1px rgba(20,30,22,0.12), 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025); }
@@ -7917,9 +7916,9 @@ export default function App({ user }) {
           max-height: 200px;
           opacity: 1;
           transition:
-            max-height 440ms cubic-bezier(.4, 0, .2, 1),
-            opacity 280ms cubic-bezier(.4, 0, .2, 1),
-            margin 440ms cubic-bezier(.4, 0, .2, 1);
+            max-height 300ms cubic-bezier(.4, 0, .2, 1),
+            opacity 200ms cubic-bezier(.4, 0, .2, 1),
+            margin 300ms cubic-bezier(.4, 0, .2, 1);
         }
         .rt-row-wrap.is-exiting {
           max-height: 0 !important;
@@ -8628,20 +8627,8 @@ export default function App({ user }) {
 
           const callout = computeCallout();
 
-          // On the dark sidebar the cream panel read as a heavy pressed
-          // surface. A drops the panel — stats sit directly in the sidebar
-          // Warm off-white (deepCream, already used for the sidebar border /
-          // wordmark) for text — reads on the dark rail and stays on-palette,
-          // no stark white, no neon. The portfolio bar uses the real brand
-          // retention colors; the count labels stay in the cream text tone so
-          // they don't introduce off-brand bright colors.
-          const segColorOnDark = {
-            "Thriving": C.retGood, "Healthy": C.primaryLight, "Watch": C.retOk,
-            "At risk": C.retWarn, "Critical": C.retCrit,
-          };
-
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.sidebar, borderRadius: 10, position: "relative", flexShrink: 0 }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.deepCream, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
@@ -8652,38 +8639,38 @@ export default function App({ user }) {
                   right: -2,
                   fontFamily: "'Caveat', 'Bradley Hand', 'Marker Felt', cursive",
                   fontSize: 18,
-                  color: C.deepCream,
+                  color: C.primaryDeep,
                   transform: "rotate(-6deg)",
                   pointerEvents: "none",
                   lineHeight: 1.05,
                   fontWeight: 600,
-                  opacity: 0.85,
                 }}
               >
                 {callout.line1}
-                <span style={{ display: "block", fontSize: 13, opacity: 0.7, marginLeft: 8, fontWeight: 500 }}>
+                <span style={{ display: "block", fontSize: 13, opacity: 0.75, marginLeft: 8, fontWeight: 500 }}>
                   {callout.line2}
                 </span>
               </div>
 
               {/* TASKS COMPLETED section */}
-              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid rgba(234,228,214,0.14)" }}>
-                <div style={{ fontSize: 10, color: C.deepCream, opacity: 0.55, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
+              <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.border }}>
+                <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Done</div>
                 <div style={{ display: "flex", justifyContent: "flex-start", gap: 14, marginBottom: 12 }}>
                   {[{ id: "week", label: "Week" }, { id: "month", label: "Month" }, { id: "year", label: "Year" }].map(p => {
                     const active = taskCompletedPeriod === p.id;
                     return (
                       <div
                         key={p.id}
+                        className={active ? undefined : "r-period-opt"}
                         onClick={() => setTaskCompletedPeriod(p.id)}
                         style={{
                           padding: "5px 0",
                           fontSize: 10.5,
                           fontWeight: 500,
                           cursor: "pointer",
-                          color: C.deepCream,
-                          opacity: active ? 1 : 0.5,
-                          borderBottom: active ? "1px solid rgba(234,228,214,0.6)" : "1px solid transparent",
+                          ...(active
+                            ? { color: C.primaryDeep, borderBottom: "1px solid " + C.primary }
+                            : { color: C.textSec }),
                         }}
                       >
                         {p.label}
@@ -8692,31 +8679,31 @@ export default function App({ user }) {
                   })}
                 </div>
                 <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: C.deepCream, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
                   <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
                     <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
-                          stroke={C.primaryLight} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.8" />
+                          stroke={C.primaryDeep} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
                   </svg>
                 </div>
-                <div style={{ color: C.deepCream, opacity: 0.55, fontSize: 9.5 }}>Tasks Completed</div>
+                <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: C.deepCream, opacity: 0.6, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: C.deepCream, opacity: 0.65, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
+                <div style={{ fontSize: 9.5, color: C.textSec, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
                 {segs.map((s, i) => (
-                  <div key={i} style={{ flex: s.n, background: segColorOnDark[s.label] || s.color, borderRadius: i === 0 ? "4px 0 0 4px" : i === segs.length - 1 ? "0 4px 4px 0" : 0 }} />
+                  <div key={i} style={{ flex: s.n, background: s.color, borderRadius: i === 0 ? "4px 0 0 4px" : i === segs.length - 1 ? "0 4px 4px 0" : 0 }} />
                 ))}
               </div>
-              {/* Inline segment labels — count over label */}
+              {/* Inline segment labels — count over label, stacked so 5 buckets fit without truncation. */}
               <div style={{ display: "flex", gap: 6 }}>
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                    <div style={{ color: C.deepCream, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
-                    <div style={{ color: C.deepCream, opacity: 0.5, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
+                    <div style={{ color: s.color, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
+                    <div style={{ color: C.textSec, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -18364,6 +18351,9 @@ export default function App({ user }) {
         className="rt-mob-fab"
         style={{
           flexShrink: 0,
+          boxSizing: "border-box",
+          padding: 0,
+          margin: 0,
           width: 40, height: 40, minWidth: 40, minHeight: 40,
           borderRadius: "50%",
           border: "none",
