@@ -7045,33 +7045,36 @@ export default function App({ user }) {
         .rt-row:hover .rt-dismiss,
         .rt-row:hover .rt-push { opacity: 1 !important; }
 
-        /* ── TODAY EMPHASIS (light wash, "C") ──────────────
-           Canvas = soft warm stage. A diagonal light spills from
-           the canvas top-left across the first task and fades down
-           — the top task is the most-lit object, pulling the eye
-           up with light rather than a rail. Condensed = future
-           buckets tighten. No rail, no node dots. */
+        /* ── TODAY EMPHASIS (break-out, "B") ───────────────
+           The first today task is pulled LEFT out of the grid,
+           lifted and larger — physically closest to the reader.
+           The rest sit indented on a quiet vertical thread.
+           Misalignment is the attention magnet; no color trick.
+           Condensed = future buckets tighten. */
         .rt-today-canvas {
           position: relative;
-          overflow: hidden;
           background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           border-radius: 20px;
           padding: 6px 14px 16px;
           margin: 0 -8px;
         }
-        .rt-today-canvas::before {
-          content: "";
-          position: absolute;
-          left: -40px; top: -40px;
-          width: 320px; height: 210px;
-          pointer-events: none;
-          background: radial-gradient(ellipse at top left, rgba(140,170,140,0.42), rgba(234,228,214,0) 62%);
-          z-index: 0;
+        /* Break-out top task — hangs left past the canvas padding,
+           lifted, with a larger title + checkbox. */
+        .rt-today-breakout {
+          margin: 0 6px 14px -16px;
         }
-        .rt-today-rail { position: relative; z-index: 1; }
-        /* First today row catches the light — a gentle lift. */
-        .rt-today-rail > .rt-rail-node:first-child .rt-row {
-          box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.06), 0 10px 26px rgba(20,30,22,0.08) !important;
+        .rt-today-breakout .rt-row {
+          padding: 16px 18px;
+          box-shadow: 0 0 0 1px rgba(20,30,22,0.10), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
+        }
+        .rt-today-breakout .rt-row .rt-task-title { font-size: 16px; font-weight: 700; }
+        .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
+        /* The rest — indented, on a faint thread that aligns under
+           the break-out's right portion (visually "the backlog"). */
+        .rt-today-rest { position: relative; padding-left: 16px; }
+        .rt-today-rest::before {
+          content: ""; position: absolute; left: 5px; top: 6px; bottom: 6px; width: 1px;
+          background: var(--rt-ink-300); opacity: 0.45;
         }
         /* Condensed future rows (tomorrow/later) */
         .rt-row-condensed .rt-row { padding: 9px 14px; }
@@ -10760,16 +10763,19 @@ export default function App({ user }) {
 
                     return (
                       <>
-                        {/* TODAY bucket — canvas stage + light wash (top task catches the light) */}
+                        {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
-                        <div className="rt-today-rail" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          {_todayBucket.map((t, i) => (
-                            <div key={t.id} className={"rt-rail-node" + (i === 0 ? " is-first" : "")}>
-                              {renderRow(t, "today")}
-                            </div>
-                          ))}
-                        </div>
+                        {_todayBucket.length > 0 && (
+                          <div className="rt-today-breakout">
+                            {renderRow(_todayBucket[0], "today")}
+                          </div>
+                        )}
+                        {_todayBucket.length > 1 && (
+                          <div className="rt-today-rest" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {_todayBucket.slice(1).map(t => renderRow(t, "today"))}
+                          </div>
+                        )}
                         </div>
 
                         {/* Today bucket empty states. Two distinct conditions
