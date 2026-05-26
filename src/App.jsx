@@ -2401,9 +2401,9 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   // dial center sits on the RIGHT edge (x = VB_W), radius R. The left half of
   // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
   // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
-  const R = 460;
+  const R = 420;
   const VB_W = R, VB_H = 2 * R, CX = VB_W, CY = VB_H / 2;
-  const HUB_R = 150;
+  const HUB_R = 140;
   const fracOf = (ms) => (ms - windowStart) / (windowEnd - windowStart); // 0..1
   const angleOf = (f) => (90 + f * 180) * Math.PI / 180; // radians
   const ptAt = (f, r) => {
@@ -2505,11 +2505,12 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: VB_H, overflow: "hidden" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
-          Rendering at exact viewBox px (NOT width:100%) keeps the dial a
-          consistent size on every screen and makes the HTML card overlay's
-          %-of-box positioning line up 1:1 with the SVG coordinates. */}
+          Rendering at exact viewBox px (not a scaled %) keeps a consistent
+          size AND makes the HTML card overlay's %-of-box positioning line up
+          1:1 with the SVG. The disc height (2*R) is kept small enough to fit
+          common viewport heights without overflowing. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} preserveAspectRatio="xMaxYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
         <defs>
@@ -8395,9 +8396,9 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
+        .rt-tasks-col { max-width: min(1280px, calc(100% - 480px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
+        .rt-today-v4 > .rt-composer { max-width: min(1440px, calc(100% - 320px)); }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11708,7 +11709,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 640, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 520, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
