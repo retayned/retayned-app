@@ -10800,11 +10800,10 @@ export default function App({ user }) {
                             {_todayBucket.slice(1).map(t => renderRow(t, "today"))}
                           </div>
                         )}
-                        </div>
 
-                        {/* Today bucket empty states. Two distinct conditions
-                            with different tones — emptiness only earns
-                            acknowledgment when something was actually done.
+                        {/* Today empty states — rendered INSIDE the canvas so a
+                            clear list fills the beige area rather than leaving an
+                            empty husk with the message floating below it.
 
                             CASE A: nothing exists yet. todayCount === 0 means
                             no tasks created for today at all (neither open nor
@@ -10819,12 +10818,12 @@ export default function App({ user }) {
                             is one. The voice stays direct and unsentimental
                             (no "you crushed it" energy). */}
                         {_todayBucket.length === 0 && todayCount === 0 && (
-                          <div style={{ textAlign: "center", padding: "32px 20px", background: "transparent", border: "1px dashed " + C.border, borderRadius: 10, color: C.textMuted, fontSize: 13, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontWeight: 500 }}>
+                          <div style={{ textAlign: "center", padding: "32px 20px", background: "transparent", color: C.textMuted, fontSize: 13, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontWeight: 500 }}>
                             Nothing on today&rsquo;s list yet. Add one above &uarr;
                           </div>
                         )}
                         {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (
-                          <div style={{ textAlign: "center", padding: "28px 20px", background: C.primarySoft, borderRadius: 14, border: "1px solid rgba(51,84,62,0.22)", boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                          <div style={{ textAlign: "center", padding: "28px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
                               <Icon name="check" size={14} color="#fff" />
                             </div>
@@ -10836,6 +10835,8 @@ export default function App({ user }) {
                             )}
                           </div>
                         )}
+                        </div>
+
 
                         {/* TOMORROW bucket */}
                         {_tomorrowBucket.length > 0 && (<>
