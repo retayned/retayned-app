@@ -8279,10 +8279,10 @@ export default function App({ user }) {
         /* Today v4 — Grid layout, 3 breakpoints */
         /* Default: narrow desktop (901-1439px) — 2 cols, status + composer span full width, tasks + focus below */
         .rt-today-v4 {
-          grid-template-columns: minmax(0, 1fr) 440px;
+          grid-template-columns: minmax(0, 1fr) 460px;
           grid-template-areas:
-            "band band"
-            "composer composer"
+            "band focus"
+            "composer focus"
             "tasks focus";
         }
         .rt-mob-strip { display: none; }
@@ -8440,11 +8440,11 @@ export default function App({ user }) {
            genuinely comfortable width). */
         @media (min-width: 1700px) {
           .rt-today-v4 {
-            grid-template-columns: minmax(0, 1fr) 520px;
+            grid-template-columns: minmax(0, 1fr) 560px;
             grid-template-rows: auto auto 1fr;
             grid-template-areas:
-              "band band"
-              "composer composer"
+              "band focus"
+              "composer focus"
               "tasks focus";
           }
           .rt-rai-col {
@@ -11566,7 +11566,7 @@ export default function App({ user }) {
                   (the half-circle time dial engulfing the right edge). The old
                   TodayTimeline is preserved behind a false gate below so it can
                   be restored. The dial IS the calendar now. */}
-              <div className="rt-focus-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 20, alignSelf: "stretch", minHeight: 520 }}>
+              <div className="rt-focus-col rt-dial-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 0, alignSelf: "stretch", minHeight: 520, marginRight: -64, marginTop: -28, marginBottom: -96 }}>
                 <TimeDial
                   clients={clients}
                   events={personalEvents}
