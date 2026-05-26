@@ -7056,7 +7056,7 @@ export default function App({ user }) {
           background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           border-radius: 20px;
           padding: 6px 14px 16px;
-          margin: 12px -8px 0;
+          margin: 6px -8px 0;
         }
         /* Break-out top task — same full width as every other row, just
            shifted left via transform so it breaks the rhythm without
