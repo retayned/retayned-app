@@ -2411,6 +2411,46 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
     return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
   };
 
+  // ── Time-accurate sky color. Maps an hour-of-day (0–24, fractional) to a
+  // sky tint matching the mobile header: indigo night → lilac/peach dawn →
+  // cool daylight → amber dusk → indigo night. Returns an rgba string at low
+  // opacity so it whispers against the cream. The dial's vertical axis IS
+  // clock time (top = window start, bottom = window end), so sampling the hour
+  // at each gradient position makes the disc genuinely reflect the real time:
+  // dark in the evening/early-morning halves, light through midday. ──
+  const skyColorForHour = (h) => {
+    h = ((h % 24) + 24) % 24;
+    // keyframes: [hour, r, g, b, alpha]
+    const keys = [
+      [0,  60, 70, 110, 0.26],   // midnight — deep indigo
+      [5,  120, 110, 150, 0.24], // pre-dawn — dim violet
+      [7,  190, 160, 175, 0.20], // dawn — lilac/peach
+      [9,  200, 215, 225, 0.16], // morning — cool light
+      [13, 255, 250, 235, 0.13], // midday — bright/pale
+      [17, 220, 200, 180, 0.16], // late afternoon — warming
+      [19, 224, 165, 135, 0.19], // dusk — amber
+      [21, 130, 110, 150, 0.22], // twilight — violet
+      [24, 60, 70, 110, 0.26],   // midnight wrap
+    ];
+    let a = keys[0], b = keys[keys.length - 1];
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (h >= keys[i][0] && h <= keys[i + 1][0]) { a = keys[i]; b = keys[i + 1]; break; }
+    }
+    const t = (h - a[0]) / (b[0] - a[0] || 1);
+    const lerp = (x, y) => Math.round(x + (y - x) * t);
+    const r = lerp(a[1], b[1]), g = lerp(a[2], b[2]), bl = lerp(a[3], b[3]);
+    const al = (a[4] + (b[4] - a[4]) * t).toFixed(3);
+    return `rgba(${r},${g},${bl},${al})`;
+  };
+  // Generate gradient stops by sampling the real hour across the window.
+  const windowStartHour = new Date(windowStart).getHours() + new Date(windowStart).getMinutes() / 60;
+  const gradStops = [];
+  for (let i = 0; i <= 12; i++) {
+    const off = i / 12;
+    const hourHere = windowStartHour + off * 12; // 12h window, top→bottom
+    gradStops.push({ off, color: skyColorForHour(hourHere) });
+  }
+
   // Hour ticks + labels across the window (every 2 hours, plus NOW).
   const ticks = [];
   const tickLabels = [];
@@ -2467,13 +2507,13 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} preserveAspectRatio="xMaxYMid meet" style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
         <defs>
-          {/* Time-of-day gradient mapped top(window start)→bottom(window end). */}
+          {/* Time-of-day gradient — stops computed from the REAL hour at each
+              position across the NOW-centered window (top = now−6h, bottom =
+              now+6h). Dark in evening/night, light through midday. */}
           <linearGradient id="rt-dial-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="rgba(160,150,190,0.24)" />
-            <stop offset="0.28" stopColor="rgba(190,215,225,0.17)" />
-            <stop offset="0.5" stopColor="rgba(255,250,235,0.22)" />
-            <stop offset="0.72" stopColor="rgba(218,170,145,0.19)" />
-            <stop offset="1" stopColor="rgba(60,70,110,0.26)" />
+            {gradStops.map((s, i) => (
+              <stop key={i} offset={s.off.toFixed(3)} stopColor={s.color} />
+            ))}
           </linearGradient>
         </defs>
         {/* Half disc */}
@@ -8296,9 +8336,9 @@ export default function App({ user }) {
            portion so the dial's body shows to their right. Tasks get more room
            than before (52% was too cramped); composer + band stop before the
            dial rather than running full width under it. */
-        .rt-tasks-col { max-width: 64%; }
+        .rt-tasks-col { max-width: 76%; }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: 70%; }
+        .rt-today-v4 > .rt-composer { max-width: 82%; }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11590,7 +11630,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "absolute", top: -28, bottom: -96, right: -80, width: 560, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 560, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
