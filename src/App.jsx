@@ -3222,40 +3222,14 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
   // ── COLLAPSED ──
   if (!open) {
-    // ── FULL-BLEED ARC / SKY (B) ──
-    // The sky spans the entire screen width (bleeds past r-main's 16px
-    // padding via negative margin), fading down into the bg so there's no
-    // box/seam. A shallow arc crosses through the header region; events plot
-    // on the curve by time-of-day, NOW rides it. The date + greeting sit on
-    // the LEFT inside the sky; the next-meeting tucks under the right
-    // shoulder — so the header and calendar share one region (reclaiming the
-    // vertical space the old stacked bar wasted). Tap anywhere → expand.
-    const W = 360, H = 150;            // viewBox (stretched full-width)
-    // Arc that bows HIGH. For a quadratic, the visible peak = 0.5*endY +
-    // 0.5*ctrlY, so to put the peak near the top (~18) with ends at ~118 the
-    // control point must sit ABOVE the box (negative y). ends run off-edge.
-    const END_Y = 118, CTRL_Y = -58;   // peak ≈ 0.5*118 + 0.5*(-58) = 30
-    const arcPath = `M -10 ${END_Y} Q ${W / 2} ${CTRL_Y} ${W + 10} ${END_Y}`;
-    const qPt = (t) => {
-      const x0 = -10, y0 = END_Y, cx = W / 2, cy = CTRL_Y, x1 = W + 10, y1 = END_Y;
-      const mt = 1 - t;
-      return {
-        x: mt * mt * x0 + 2 * mt * t * cx + t * t * x1,
-        y: mt * mt * y0 + 2 * mt * t * cy + t * t * y1,
-      };
-    };
-    const dotMarks = dayEvents.map((e, i) => {
-      const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
-      const isNext = nextEvent && e.id === nextEvent.id;
-      const { x, y } = qPt(fracFor(e._start));
-      return (
-        <g key={e.id || i}>
-          {isNext && <circle cx={x} cy={y} r={8.5} fill="none" stroke="#558B68" strokeOpacity="0.30" strokeWidth="2" />}
-          <circle cx={x} cy={y} r={isNext ? 5 : isPast ? 3.5 : 4} fill={isPast ? C.ink300 : (isNext ? C.primary : C.primaryLight)} />
-        </g>
-      );
-    });
-
+    // ── GRADIENT SKY + REFINED TIMELINE (concept 4) ──
+    // Full-bleed time-of-day sky gradient with a restrained timeline across the
+    // header: a near-FLAT hairline curve (not a bouncy arc) + small UNIFORM
+    // dots plotted by time-of-day. Past events read as hollow rings, upcoming
+    // as solid, the next event gets one quiet halo ring. The dots are round
+    // HTML divs (positioned by %/px) so they never oval the way a stretched
+    // SVG viewBox would. Tap → expand. Bands: dawn 6–10a, midday 10a–5p,
+    // dusk 5–8p, night 8p+.
     let countdown = null, imminent = false;
     if (nextEvent) {
       const mins = minutesUntil(nextEvent._start);
@@ -3265,41 +3239,74 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     }
     const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
 
+    // Timeline band geometry (px). A gentle quadratic: baseline BASE_Y, the
+    // midpoint lifts only LIFT px (flat, not a rainbow). y at horizontal
+    // fraction f: quadratic with control at center.
+    const BAND_H = 40, BASE_Y = 26, LIFT = 7;
+    const curveY = (f) => {
+      // Quadratic Bézier y with endpoints at BASE_Y and control at (BASE_Y-2*LIFT)
+      // so the visible peak (at f=0.5) = 0.5*BASE_Y + 0.5*(BASE_Y-2*LIFT) = BASE_Y-LIFT.
+      const cy = BASE_Y - 2 * LIFT, mt = 1 - f;
+      return mt * mt * BASE_Y + 2 * mt * f * cy + f * f * BASE_Y;
+    };
+    const dotEls = dayEvents.map((e, i) => {
+      const f = fracFor(e._start);
+      if (f < 0 || f > 1) return null;
+      const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
+      const isNext = nextEvent && e.id === nextEvent.id;
+      const y = curveY(f);
+      const sz = 5; // uniform diameter for all dots
+      return (
+        <div key={e.id || i} aria-hidden style={{ position: "absolute", left: `${(f * 100).toFixed(2)}%`, top: y, transform: "translate(-50%, -50%)", width: sz, height: sz, pointerEvents: "none" }}>
+          {/* quiet halo for the next event */}
+          {isNext && <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: sz + 9, height: sz + 9, borderRadius: "50%", border: "1px solid rgba(51,84,62,0.25)" }} />}
+          <div style={{
+            width: sz, height: sz, borderRadius: "50%",
+            background: isPast ? C.bg : (isNext ? C.primary : C.primaryLight),
+            border: isPast ? "1.5px solid " + C.ink300 : "none",
+            boxSizing: "border-box",
+          }} />
+        </div>
+      );
+    });
+
     return (
       <div
         onClick={onToggle}
         style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px" }}
       >
-        {/* Full-bleed sky — the ENTIRE day painted horizontally: dawn lilac/
-            peach (left) → cool midday blue (center) → amber dusk → indigo
-            night (right). Subtle (low opacity) so it whispers against the
-            cream UI. A vertical fade dissolves it into the bg. This carries
-            the day-cycle on its own; the guide line below is near-invisible.
-            Time bands: dawn 6–10a, midday 10a–5p, dusk 5–8p, night 8p+. */}
+        {/* Full-bleed time-of-day sky gradient: dawn lilac/peach (left) → cool
+            midday blue → amber dusk → indigo night (right). Low opacity so it
+            whispers against the cream; a vertical fade dissolves it into bg. */}
         <div aria-hidden style={{
-          position: "absolute", top: -40, left: 0, right: 0, height: 250, zIndex: 0, pointerEvents: "none",
+          position: "absolute", top: -40, left: 0, right: 0, height: 200, zIndex: 0, pointerEvents: "none",
           background:
             "linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(250,250,247,1) 100%), " +
             "linear-gradient(90deg, rgba(160,150,190,0.20) 0%, rgba(220,185,160,0.17) 14%, rgba(190,215,225,0.15) 34%, rgba(185,212,218,0.14) 50%, rgba(218,170,145,0.16) 72%, rgba(130,122,165,0.19) 86%, rgba(60,70,110,0.22) 100%)",
         }} />
-        {/* NOW — a soft glow band of daylight at the current-time x-position,
-            travelling left→right across the day. The position IS the time. */}
+        {/* NOW — a soft daylight glow at the current-time x-position. */}
         {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
           <div aria-hidden style={{
-            position: "absolute", top: -40, height: 250, width: 72, zIndex: 1, pointerEvents: "none",
+            position: "absolute", top: -40, height: 200, width: 72, zIndex: 1, pointerEvents: "none",
             left: `calc(${(nowFrac * 100).toFixed(1)}% - 36px)`,
             background: "radial-gradient(ellipse 50% 55% at 50% 26%, rgba(255,250,235,0.30), transparent 70%)",
           }} />
         )}
-        {/* Plotted event dots + a whisper-faint guide line (the gradient now
-            carries the day-cycle, so the line recedes to almost nothing). */}
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 1, display: "block", pointerEvents: "none" }}>
-          <path d={arcPath} fill="none" stroke="rgba(30,38,31,0.06)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-          {dotMarks}
-        </svg>
-        {/* Header row INSIDE the sky, sitting BELOW the high arc: date+greeting
+        {/* Refined timeline: a near-flat hairline curve. Full-bleed; the stroke
+            stays uniform via non-scaling-stroke even when stretched. */}
+        <div style={{ position: "absolute", top: 56, left: 0, right: 0, height: BAND_H, zIndex: 1, pointerEvents: "none" }}>
+          <svg viewBox={`0 0 288 ${BAND_H}`} width="100%" height={BAND_H} preserveAspectRatio="none" style={{ display: "block", position: "absolute", left: 0, right: 0, top: 0 }}>
+            <path d={`M 0 ${BASE_Y} Q 144 ${BASE_Y - 2 * LIFT} 288 ${BASE_Y}`} fill="none" stroke="rgba(30,38,31,0.16)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          </svg>
+          {/* NOW seeker — a small solid marker riding the curve at current time */}
+          {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
+            <div aria-hidden style={{ position: "absolute", left: `${(nowFrac * 100).toFixed(2)}%`, top: curveY(nowFrac), transform: "translate(-50%, -50%)", width: 6, height: 6, borderRadius: "50%", background: C.primaryDeep, boxShadow: "0 0 0 3px rgba(250,250,247,0.9)" }} />
+          )}
+          {dotEls}
+        </div>
+        {/* Header row in the sky, sitting below the timeline band: date+greeting
             left, next-meeting right. */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 96, minHeight: 150 }}>
+        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 88 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
             <h1 style={{ fontSize: 26, fontWeight: 700, margin: "2px 0 0", letterSpacing: -0.4, color: C.text, lineHeight: 1.04 }}>
@@ -3417,23 +3424,31 @@ const navItemsEnterprise = [
 // view when navigation happens. Order matters — primary destinations first
 // (Today, Clients, Rai, Health) so they're visible without scrolling on
 // typical phone widths.
-const mobileNavCore = [
+// Mobile bottom nav — REBUILT as a fixed bar (no horizontal scroll, no JS
+// positioning). 4 primary destinations flank a center capture FAB; everything
+// else lives in the "More" sheet. Best-practice iOS pattern: rock-solid
+// position:fixed bottom:0 + safe-area inset, nothing to lag on scroll.
+const mobileNavPrimary = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
   { id: "health", icon: "health", label: "Health" },
+  { id: "coach", icon: "rai", label: "Rai" },
+];
+const mobileNavMore = [
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
   { id: "workers", icon: "workers", label: "Workers" },
-  { id: "coach", icon: "rai", label: "Rai" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
-const mobileNavEnterprise = [
+const mobileNavEnterprisePrimary = [
   { id: "today", icon: "today", label: "Today" },
   { id: "sweeps", icon: "sweeps", label: "Sweeps" },
   { id: "clients", icon: "clients", label: "Clients" },
+  { id: "coach", icon: "rai", label: "Rai" },
+];
+const mobileNavEnterpriseMore = [
   { id: "health", icon: "health", label: "Health" },
   { id: "referral_intel", icon: "target", label: "Referral Intel" },
-  { id: "coach", icon: "rai", label: "Rai" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
 // Legacy "More" item lists — kept (empty-ish) so any straggler reference doesn't
@@ -4230,19 +4245,6 @@ export default function App({ user }) {
   // window.scrollTo needed.
   useEffect(() => {
     document.querySelectorAll(".r-main, .r-rai-scroll").forEach(el => { el.scrollTop = 0; });
-    // Mobile nav: scroll the active item into view inside the horizontal strip
-    // so destinations that scroll off-screen are reachable. We use scrollIntoView
-    // with inline:"center" so the active pill sits roughly mid-strip, leaving
-    // peeks of neighbors on either side.
-    const navEl = mobileNavRef.current;
-    if (navEl) {
-      const activeItem = navEl.querySelector(`[data-nav-id="${page}"]`);
-      if (activeItem && typeof activeItem.scrollIntoView === "function") {
-        try {
-          activeItem.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-        } catch (e) { /* older browsers ignore options arg silently */ }
-      }
-    }
   }, [page]);
   // iOS Safari viewport fix — when the address bar collapses/expands, 100vh doesn't update,
   // leaving fixed-positioned elements (like the bottom nav) anchored to the wrong bottom.
@@ -4300,6 +4302,9 @@ export default function App({ user }) {
   // Shell v1 (May 2026): plain task creation, no parsing. v2 will add
   // client matching + tense detection (past = touchpoint, future = task).
   const [quickLogOpen, setQuickLogOpen] = useState(false);
+  // Mobile bottom-nav "More" sheet (overflow destinations). Part of the
+  // rebuilt fixed nav bar.
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [quickLogText, setQuickLogText] = useState("");
   // Toast shape: { id, taskId, taskRef } where taskRef is the optimistic
   // task object so undo can restore it precisely.
@@ -4425,7 +4430,6 @@ export default function App({ user }) {
   // Mobile bottom nav strip — horizontally scrollable. We auto-scroll the
   // active item into view whenever `page` changes, so navigating to a
   // destination off-screen pulls it into the visible window.
-  const mobileNavRef = useRef(null);
   // Focus mode: laser-focus on top task, dim everything else. Only available in Rai mode.
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
@@ -6876,17 +6880,6 @@ export default function App({ user }) {
           --icon-body: #558B68;
           --icon-accent: #2F2F31;
         }
-        /* Mobile nav sits on the deep-green bar (#1C3224), so its icons must be
-           LIGHT when inactive (the desktop defaults above are dark, for the
-           cream sidebar). Active item is a white card → dark brand icon. */
-        .nav-item-mobile {
-          --icon-body: rgba(255,255,255,0.55);
-          --icon-accent: rgba(255,255,255,0.40);
-        }
-        .nav-item-mobile.is-active {
-          --icon-body: #33543E;
-          --icon-accent: #1C3224;
-        }
         .nav-item { transition: all 180ms var(--rt-ease-out); cursor: pointer; }
         /* Hover on inactive items lifts to deepCream + darkens text/icon.
            Light-substrate sidebar (post-revert): the hover layer is a
@@ -7704,13 +7697,7 @@ export default function App({ user }) {
            min-width: 768px rule also uses !important and wins via
            cascade order. */
         .r-desk { display: none !important; }
-        .r-mob-bot { display: flex; }
         .r-mob-bot-dock { display: flex; }
-        /* Mobile bottom nav strip is horizontally scrollable. Hide the
-           native scrollbar across all browsers — affordance is the icon
-           overflow itself plus the inertia/snap behavior. */
-        .rt-mob-nav-scroll::-webkit-scrollbar { display: none; }
-        .rt-mob-nav-scroll { -ms-overflow-style: none; }
         /* Mobile-only Revenue-from-referrals card. The desktop version
            lives in the .rc-rail sticky column, which is display:none
            below 768px — so on phones the $ widget vanished entirely.
@@ -18270,141 +18257,141 @@ export default function App({ user }) {
       })()}
 
 
-      {/* MOBILE BOTTOM NAV — horizontally-scrollable strip.
-          Replaces the old "More" popup pattern. All pages live inline; the
-          user swipes left/right within the strip to access ones that scroll
-          off-screen. Active item auto-scrolls into view via the ref hook
-          below. The right-edge fade is a visual hint that there's more
-          content scrollable beyond. Hidden when keyboard is up so inputs
-          aren't covered. */}
-      <div
-        className="r-mob-bot-dock"
-        style={{
-          position: "fixed",
-          // Anchored directly to the layout-viewport bottom. The previous
-          // approach (top: --app-h + translateY -100%) recomputed from
-          // JS-updated visualViewport vars on every scroll frame, which lagged
-          // during fast/momentum scroll and momentarily left a gap below the
-          // nav. bottom:0 needs no JS and never lags. The dock already hides
-          // when the keyboard is up (keyboardOpen), so we don't need the
-          // visualViewport height math here.
-          top: "calc(var(--vv-offset-top, 0px) + var(--app-h, 100vh) - 78px)",
-          left: 0,
-          right: 0,
-          // Solid deep brand green (#1C3224). Matte, no translucency/blur —
-          // consistent with the site's flat surfaces (a lone liquid-glass
-          // element looked out of place). Gives clear separation from the
-          // cream content the beige nav was blending into.
-          background: C.primaryDeep,
-          borderRadius: "18px 18px 0 0",
-          boxShadow: "0 -1px 0 0 rgba(255,255,255,0.06), 0 -2px 14px rgba(20,30,22,0.12)",
-          padding: "10px 10px calc(12px + env(safe-area-inset-bottom, 0px))",
-          zIndex: 40,
-          display: keyboardOpen ? "none" : "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-      <div
-        ref={mobileNavRef}
-        className="r-mob-bot rt-mob-nav-scroll"
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-          overflowX: "auto",
-          overflowY: "hidden",
-          scrollSnapType: "x proximity",
-          WebkitOverflowScrolling: "touch",
-          scrollbarWidth: "none",
-        }}
-      >
-        {(tier === "enterprise" ? mobileNavEnterprise : mobileNavCore).map(n => {
+      {/* MOBILE BOTTOM NAV — REBUILT. A rock-solid fixed bar: 4 primary
+          destinations flanking a center quick-capture FAB, with a "More" sheet
+          for overflow. position:fixed + bottom:0 + safe-area inset, NO
+          JavaScript positioning (no --app-h / visualViewport math) — so it
+          never lags or drifts on scroll, the failure mode of the old strip.
+          No horizontal scroll: a fixed set of equal-width items. */}
+      {(() => {
+        const primary = tier === "enterprise" ? mobileNavEnterprisePrimary : mobileNavPrimary;
+        const more = tier === "enterprise" ? mobileNavEnterpriseMore : mobileNavMore;
+        // Insert the center FAB between items 2 and 3 (4 items → 2 | FAB | 2).
+        const left = primary.slice(0, 2);
+        const right = primary.slice(2, 4);
+        const moreActive = more.some(m => m.id === page);
+        const moreHasDot = more.some(m => hasDot(m.id));
+        const navItem = (n) => {
           const dot = hasDot(n.id);
           const active = page === n.id;
           return (
             <div
               key={n.id}
               className={"nav-item-mobile" + (active ? " is-active" : "")}
-              data-nav-id={n.id}
               onClick={() => goTo(n.id)}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: 3,
-                cursor: "pointer",
-                padding: "5px 12px",
-                borderRadius: 10,
-                background: active ? C.card : "transparent",
-                boxShadow: active ? "var(--rt-sh-card-lift)" : "none",
-                // No transform on active state. Previously translateY(-0.5px)
-                // micro-lifted the active item — invisible but enough to
-                // cascade subpixel repositioning onto neighbors. Active
-                // state is already announced by the card background + lift
-                // shadow + icon color flip; the translate added nothing.
+                flex: 1, minWidth: 0,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                cursor: "pointer", padding: "6px 2px", borderRadius: 12,
+                background: active ? "rgba(85,139,104,0.12)" : "transparent",
                 position: "relative",
-                flexShrink: 0,
-                scrollSnapAlign: "center",
-                minWidth: 60,
-                transition: "background 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
+                transition: "background 160ms var(--rt-ease-out)",
               }}
             >
-              <Icon name={n.icon} size={24} color={active ? C.primaryDeep : "rgba(255,255,255,0.55)"} accent={active ? C.primary : "rgba(255,255,255,0.4)"} />
-              {/* Label font weight stays at 700 across active and inactive
-                  states. Previously 700 active / 600 inactive — but the
-                  weight change made each label's glyphs measurably wider
-                  on activation, which shifted neighboring nav items in
-                  the flex row when the user tapped. Active state is now
-                  signaled by color (primaryDeep vs textSec) alone. */}
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: active ? C.primaryDeep : "rgba(255,255,255,0.6)" }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 4, right: 10, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.primaryDeep) }} />}
+              <Icon name={n.icon} size={23} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
+              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
+              {dot && <div style={{ position: "absolute", top: 2, right: "calc(50% - 18px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? "#EFE9DF" : C.sidebar) }} />}
             </div>
           );
-        })}
-      </div>
-      {/* Pinned quick-capture FAB — sits to the right of the scrolling tab
-          strip, docked nav (mobile). Opens the same QuickLog composer as the
-          desktop FAB. Does NOT scroll with the tabs. */}
-      <button
-        onClick={() => setQuickLogOpen(v => !v)}
-        aria-label="Quick log"
-        className="rt-mob-fab"
-        style={{
-          flexShrink: 0,
-          width: 40, height: 40,
-          borderRadius: "50%",
-          border: "none",
-          // Literal #7c5cf3 base (NOT a CSS var) + gradient layered on top.
-          // The gradient lives in --rt-grad-btn, which is defined in the
-          // JS-rendered <style> block; on first paint that stylesheet may not
-          // be parsed yet, so a var-only background resolved to transparent —
-          // leaving just the white SVG on an invisible circle (the "small,
-          // misshapen" flash) until the var landed. The literal base paints
-          // the purple circle on frame one regardless.
-          background: "#7c5cf3",
-          backgroundImage: "var(--rt-grad-btn)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(124,92,243,0.32)",
-          transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
-          transition: "transform 180ms ease-out",
-          padding: 0,
-        }}
-      >
-        {/* SVG plus, not a text "+" — the text glyph rendered in a fallback
-            font on first paint (before the web font loaded) at the wrong
-            size/baseline, which is what looked small/misshapen until the font
-            swapped. An SVG has no font dependency, so it's correct on frame 1. */}
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      </button>
-      </div>
+        };
+        return (
+          <>
+            {/* More overflow sheet — pops above the bar; tap scrim to dismiss. */}
+            {mobileMoreOpen && (
+              <div
+                className="rt-mob-more-scrim"
+                onClick={() => setMobileMoreOpen(false)}
+                style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(20,30,22,0.18)", display: keyboardOpen ? "none" : "block" }}
+              >
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    position: "fixed", left: 10, right: 10,
+                    bottom: "calc(86px + env(safe-area-inset-bottom, 0px))",
+                    background: C.card, borderRadius: 16, boxShadow: "0 8px 30px rgba(20,30,22,0.18), 0 0 0 1px rgba(20,30,22,0.06)",
+                    padding: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4,
+                  }}
+                >
+                  {more.map(n => {
+                    const active = page === n.id;
+                    const dot = hasDot(n.id);
+                    return (
+                      <div key={n.id} className={"nav-item-mobile" + (active ? " is-active" : "")}
+                        onClick={() => { goTo(n.id); setMobileMoreOpen(false); }}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "13px 4px", borderRadius: 10, cursor: "pointer", position: "relative", background: active ? "rgba(85,139,104,0.12)" : "transparent" }}>
+                        <Icon name={n.icon} size={22} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
+                        <span style={{ fontSize: 10.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
+                        {dot && <div style={{ position: "absolute", top: 8, right: 14, width: 7, height: 7, borderRadius: "50%", background: C.danger }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div
+              className="r-mob-bot-dock"
+              style={{
+                position: "fixed",
+                bottom: 0, left: 0, right: 0,
+                background: C.sidebar,
+                borderRadius: "18px 18px 0 0",
+                borderTop: "1px solid rgba(20,30,22,0.12)",
+                boxShadow: "0 -2px 14px rgba(20,30,22,0.05)",
+                padding: "8px 8px calc(10px + env(safe-area-inset-bottom, 0px))",
+                zIndex: 50,
+                display: keyboardOpen ? "none" : "flex",
+                alignItems: "center",
+                gap: 2,
+              }}
+            >
+              {left.map(navItem)}
+              {/* Center quick-capture FAB — part of the bar, not a floating
+                  sibling (which was fragile + caused the load-flash). */}
+              <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
+                <button
+                  onClick={() => setQuickLogOpen(v => !v)}
+                  aria-label="Quick log"
+                  className="rt-mob-fab"
+                  style={{
+                    width: 46, height: 46, borderRadius: "50%", border: "none",
+                    background: "#7c5cf3", backgroundImage: "var(--rt-grad-btn)",
+                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                    boxShadow: "0 3px 10px rgba(124,92,243,0.35)",
+                    transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
+                    transition: "transform 180ms ease-out", padding: 0, marginTop: -10,
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                    <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              {right.map(navItem)}
+              {/* More — opens the overflow sheet. */}
+              <div
+                className={"nav-item-mobile" + (moreActive ? " is-active" : "")}
+                onClick={() => setMobileMoreOpen(v => !v)}
+                style={{
+                  flex: 1, minWidth: 0,
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                  cursor: "pointer", padding: "6px 2px", borderRadius: 12,
+                  background: (moreActive || mobileMoreOpen) ? "rgba(85,139,104,0.12)" : "transparent",
+                  position: "relative",
+                }}
+              >
+                <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
+                  <circle cx="5" cy="12" r="2" fill={(moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec} />
+                  <circle cx="12" cy="12" r="2" fill={(moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec} />
+                  <circle cx="19" cy="12" r="2" fill={(moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec} />
+                </svg>
+                <span style={{ fontSize: 9.5, fontWeight: (moreActive || mobileMoreOpen) ? 700 : 600, color: (moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec }}>More</span>
+                {moreHasDot && <div style={{ position: "absolute", top: 2, right: "calc(50% - 18px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar }} />}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ─── QUICKLOG — desktop power-user FAB (all pages) ──────────────
           Floating purple "+" quick-capture, bottom-right, on every page.
