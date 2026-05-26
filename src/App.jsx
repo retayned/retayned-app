@@ -2532,7 +2532,7 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
             <stop offset="0.95" stopColor="#fff" stopOpacity="1" />
             <stop offset="1" stopColor="#fff" stopOpacity="0" />
           </radialGradient>
-          <mask id="rt-dial-mask">
+          <mask id="rt-dial-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={VB_W} height={VB_H}>
             <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-feather)" />
           </mask>
         </defs>
