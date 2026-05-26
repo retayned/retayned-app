@@ -8336,14 +8336,10 @@ export default function App({ user }) {
            portion so the dial's body shows to their right. Tasks get more room
            than before (52% was too cramped); composer + band stop before the
            dial rather than running full width under it. */
-        .rt-tasks-col { max-width: 76%; }
-        .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: 82%; }
+        .rt-tasks-col { max-width: 70%; }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: none !important; }
         }
         .rt-mob-strip { display: none; }
         @media (max-width: 1099px) {
@@ -8486,7 +8482,7 @@ export default function App({ user }) {
           transform: translateY(-1px);
         }
         .rt-rec-chip:not(.is-active):hover {
-          box-shadow: var(--rt-sh-card) !important;
+          box-shadow: 0 1px 2px rgba(20,30,22,0.05), 0 2px 6px rgba(20,30,22,0.06) !important;
         }
         .rt-rec-chip:active {
           transform: translateY(0) scale(0.97);
@@ -9590,7 +9586,7 @@ export default function App({ user }) {
           // Format a YYYY-MM-DD due date for display in the chip / row.
           // "Today" / "Tomorrow" for the immediate window; otherwise short date.
           const formatDueLabel = (dateStr, todayStr, tomorrowStr) => {
-            if (!dateStr) return "Due";
+            if (!dateStr) return "Date";
             const s = String(dateStr).slice(0, 10);
             if (s === todayStr) return "Today";
             if (s === tomorrowStr) return "Tomorrow";
@@ -9774,7 +9770,7 @@ export default function App({ user }) {
                 />
               </div>
               {/* STATUS BAND */}
-              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight }}>
+              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, position: "relative", zIndex: 1 }}>
                 <div className="rt-band-greet">
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
                     {displayDate}
@@ -9901,7 +9897,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative" }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -10237,7 +10233,7 @@ export default function App({ user }) {
                         }}
                       >
                         <Icon name={newTaskRecurring ? "infinity" : "due"} size={newTaskRecurring ? 14 : 14} simple color={(newTaskDueDate || newTaskRecurring) ? C.text : C.textMuted} />
-                        <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Due")}</span>
+                        <span>{newTaskRecurring ? formatRecurrenceLabel(newTaskRecurrencePattern) : (newTaskDueDate ? formatDueLabel(newTaskDueDate, _todayStr, _tomorrowStr) : "Date")}</span>
                       </button>
                       {(newTaskDueDate || newTaskRecurring) && (
                         <button
