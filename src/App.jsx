@@ -2401,9 +2401,9 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   // dial center sits on the RIGHT edge (x = VB_W), radius R. The left half of
   // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
   // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
-  const R = 360;
+  const R = 420;
   const VB_W = R, VB_H = 2 * R, CX = VB_W, CY = VB_H / 2;
-  const HUB_R = 124;
+  const HUB_R = 140;
   const fracOf = (ms) => (ms - windowStart) / (windowEnd - windowStart); // 0..1
   const angleOf = (f) => (90 + f * 180) * Math.PI / 180; // radians
   const ptAt = (f, r) => {
@@ -2529,7 +2529,7 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
               the last ~14% of the radius. */}
           <radialGradient id="rt-dial-feather" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="#fff" stopOpacity="1" />
-            <stop offset="0.88" stopColor="#fff" stopOpacity="1" />
+            <stop offset="0.95" stopColor="#fff" stopOpacity="1" />
             <stop offset="1" stopColor="#fff" stopOpacity="0" />
           </radialGradient>
           <mask id="rt-dial-mask">
@@ -8396,9 +8396,9 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11709,7 +11709,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 460, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 520, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
