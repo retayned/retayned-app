@@ -1947,9 +1947,44 @@ function parseComposer(rawText, clients, workers) {
 // the remaining text becomes the title.
 function parseCalendarEntry(rawText, anchorDate = new Date(), clients = null) {
   if (!rawText || !rawText.trim()) return null;
-  const text = rawText.trim();
+  let text = rawText.trim();
 
-  // Helper: build a Date for "today at HH:MM" given an hour+minute
+  // ─── Date-word detection ─────────────────────────────────────
+  // Calendar events can name a day: "tomorrow", a weekday ("Friday",
+  // "next Monday"), "next week", or "in N days". Detect it, shift the
+  // anchor to that day, and strip the word so it doesn't pollute the time
+  // parse or title. Time-of-day parsing below then sets the hour.
+  {
+    const base = new Date(anchorDate); base.setHours(0, 0, 0, 0);
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    let matched = null;
+    let m;
+    if ((m = text.match(/\btomorrow\b/i))) {
+      const d = new Date(base); d.setDate(d.getDate() + 1);
+      matched = { date: d, re: /\btomorrow\b/i };
+    } else if ((m = text.match(/\bin (\d+) days?\b/i))) {
+      const d = new Date(base); d.setDate(d.getDate() + parseInt(m[1], 10));
+      matched = { date: d, re: /\bin \d+ days?\b/i };
+    } else if ((m = text.match(/\bnext week\b/i))) {
+      const d = new Date(base); d.setDate(d.getDate() + 7);
+      matched = { date: d, re: /\bnext week\b/i };
+    } else if ((m = text.match(/\b(?:(next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i))) {
+      const target = dayNames.indexOf(m[2].toLowerCase());
+      const d = new Date(base);
+      let delta = (target - d.getDay() + 7) % 7;
+      if (delta === 0) delta = 7; // bare weekday → upcoming occurrence, never "today"
+      d.setDate(d.getDate() + delta);
+      matched = { date: d, re: new RegExp("\\b(?:next\\s+)?" + m[2] + "\\b", "i") };
+    } else if ((m = text.match(/\btoday\b/i))) {
+      matched = { date: new Date(base), re: /\btoday\b/i };
+    }
+    if (matched) {
+      anchorDate = matched.date;
+      text = text.replace(matched.re, " ").replace(/\s{2,}/g, " ").trim();
+    }
+  }
+
+  // Helper: build a Date for the anchor day at HH:MM given an hour+minute
   const todayAt = (h, m = 0) => {
     const d = new Date(anchorDate);
     d.setHours(h, m, 0, 0);
@@ -5867,6 +5902,7 @@ export default function App({ user }) {
           id: t.id,
           text: t.text,
           client: t.client_name || "",
+          client_id: t.client_id || null,
           done: doneVal,
           completed_at: completedVal,
           alert: t.is_alert,
@@ -9289,7 +9325,22 @@ export default function App({ user }) {
           // ─── DATA PREP ───────────────────────────────────────────────────
           // Visible tasks = non-dismissed (locally). Dismissed = user used the
           // dismiss affordance during this session.
-          const visibleTasks = tasks.filter(t => !dismissedIds[t.id]);
+          // Also hide tasks whose client is currently PAUSED — pausing a client
+          // suspends all their tasks (recurring return on resume; one-off tasks
+          // will typically expire). And hide tasks orphaned by a removed client.
+          const pausedClientIds = new Set((clients || []).filter(c => c && c.is_paused).map(c => c.id));
+          // "Live" = a client that still exists AND isn't archived (moved to
+          // Rolodex). Archived clients keep a row in the array (filtered per-view
+          // elsewhere) but their tasks should be treated as orphaned and hidden.
+          const liveClientIds = new Set((clients || []).filter(c => c && c.id && !c.archived_at).map(c => c.id));
+          const visibleTasks = tasks.filter(t =>
+            !dismissedIds[t.id]
+            // Hide tasks of a paused client (recurring return on resume).
+            && !(t.client_id && pausedClientIds.has(t.client_id))
+            // Hide tasks orphaned by a removed/rolodex'd client (the lingering
+            // "N/A" rows) — their client_id no longer matches a live client.
+            && !(t.client_id && !liveClientIds.has(t.client_id))
+          );
 
           // ─── RAI'S ACTIVE PICKED TASK ────────────────────────────────────
           // Resolve which task carries the "Rai's pick" badge today.
@@ -17353,6 +17404,17 @@ export default function App({ user }) {
                               work: createdRow.notes,
                             } : r));
                           }
+                          // Remove this client's RECURRING tasks — once moved to
+                          // the rolodex, their recurring work shouldn't keep
+                          // surfacing (and would otherwise orphan into "N/A").
+                          // One-off tasks are left as-is.
+                          try {
+                            const recurringForClient = (tasks || []).filter(t => t.client_id === sc.id && t.recurring);
+                            if (recurringForClient.length) {
+                              setTasks(prev => (prev || []).filter(t => !(t.client_id === sc.id && t.recurring)));
+                              for (const t of recurringForClient) { tasksDb.delete(t.id); }
+                            }
+                          } catch (e) { console.warn("Recurring task cleanup on rolodex move failed:", e); }
                           // Mark the client deactivated in DB. If this fails
                           // we don't roll the rolodex back — the row IS in the
                           // rolodex truthfully; the client will reappear on
