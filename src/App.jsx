@@ -8691,7 +8691,7 @@ export default function App({ user }) {
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
-          .rt-spine { display: none !important; }
+          .rt-prep-cards { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
           .rt-today-v4 > .rt-band,
           .rt-today-v4 > .rt-composer { max-width: none !important; }
@@ -12036,36 +12036,71 @@ export default function App({ user }) {
                     feathered rim already softens the upper arc.) */}
               </div>
 
-              {/* TIMELINE SPINE (shell) — vertical hour rail in the gap zone
-                  between tasks and the dial. Fixed-positioned to the viewport
-                  with right offset tracking the dial's visible left edge via
-                  --dial-scale. Visual structure only — events come later. */}
-              <div
-                className="rt-spine"
-                style={{
-                  position: "fixed",
-                  top: 90,
-                  bottom: 60,
-                  right: "calc((720px * var(--dial-scale, 1)) + 50px)",
-                  width: 84,
-                  zIndex: 1,
-                  pointerEvents: "none",
-                }}
-              >
-                <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "linear-gradient(180deg, transparent 0%, rgba(28,50,36,0.18) 8%, rgba(28,50,36,0.18) 92%, transparent 100%)", transform: "translateX(-50%)" }} />
-                {["8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm"].map((label, i, arr) => (
-                  <div key={label} style={{ position: "absolute", left: 0, right: 0, top: `${(i / (arr.length - 1)) * 100}%`, display: "flex", alignItems: "center", gap: 6, transform: "translateY(-50%)" }}>
-                    <span style={{ flex: 1, textAlign: "right", fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: "0.02em", paddingRight: 4 }}>{label}</span>
-                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(28,50,36,0.22)", flexShrink: 0 }} />
-                    <span style={{ flex: 1 }} />
+              {/* PREP CARDS (shell) — for upcoming events with a client in the
+                  next 4 hours, render a small quiet card positioned vertically
+                  by event time. Sits in the gap between tasks and dial.
+                  Static placeholder text — Rai wiring comes after we confirm
+                  the visual works (and the dev-button quality test). */}
+              {(() => {
+                const now = Date.now();
+                const horizon = now + 4 * 60 * 60 * 1000;
+                const upcoming = (personalEvents || [])
+                  .filter(e => e && e.starts_at && e.client_id)
+                  .map(e => ({ ...e, _t: new Date(e.starts_at).getTime() }))
+                  .filter(e => e._t > now && e._t < horizon)
+                  .sort((a, b) => a._t - b._t)
+                  .slice(0, 3);
+                if (!upcoming.length) return null;
+                // Vertical positioning: map event time to a % position within
+                // the working window (8am → top, 9pm → bottom of the strip).
+                const dayStart = new Date(now); dayStart.setHours(8, 0, 0, 0);
+                const dayEnd = new Date(now); dayEnd.setHours(21, 0, 0, 0);
+                const range = dayEnd.getTime() - dayStart.getTime();
+                return (
+                  <div
+                    className="rt-prep-cards"
+                    style={{
+                      position: "fixed",
+                      top: 90,
+                      bottom: 60,
+                      right: "calc((720px * var(--dial-scale, 1)) + 30px)",
+                      width: 180,
+                      zIndex: 2,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {upcoming.map(e => {
+                      const pct = Math.max(0, Math.min(1, (e._t - dayStart.getTime()) / range));
+                      const time = new Date(e._t).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
+                      return (
+                        <div
+                          key={e.id}
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            right: 0,
+                            top: `${pct * 100}%`,
+                            transform: "translateY(-50%)",
+                            background: "rgba(255,255,255,0.85)",
+                            backdropFilter: "blur(4px)",
+                            borderRadius: 8,
+                            padding: "7px 10px 8px",
+                            boxShadow: "0 1px 2px rgba(20,30,22,0.04), 0 0 0 1px rgba(20,30,22,0.06)",
+                            pointerEvents: "auto",
+                          }}
+                        >
+                          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                            Before {time}
+                          </div>
+                          <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3, marginTop: 1, fontWeight: 500 }}>
+                            {e.client_name || "client"} prep suggestion
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-                <div style={{ position: "absolute", left: 0, right: 0, top: "50%", display: "flex", alignItems: "center", gap: 6, transform: "translateY(-50%)" }}>
-                  <span style={{ flex: 1, textAlign: "right", fontSize: 10, color: "#7c5cf3", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", paddingRight: 4 }}>now</span>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c5cf3", boxShadow: "0 0 0 3px rgba(124,92,243,0.18)", flexShrink: 0 }} />
-                  <span style={{ flex: 1 }} />
-                </div>
-              </div>
+                );
+              })()}
 
               {false && (
               <div className="rt-focus-col rt-dial-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 0, alignSelf: "stretch", minHeight: 520, marginRight: -64, marginTop: -28, marginBottom: -96 }}>
