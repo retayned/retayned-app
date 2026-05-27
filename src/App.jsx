@@ -2525,12 +2525,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   // scroll down = later, up = earlier. Each wheel notch nudges the window; the
   // (?) tooltip explains it. Replaces the heavier drag interaction. ──
   const onDialWheel = (e) => {
-    e.preventDefault();
     // ~30 min per notch of deltaY (100 ≈ one notch); trackpads send smaller deltas.
     const step = (e.deltaY) * (30 * 60 * 1000) / 100;
     const LIM = 18 * 60 * 60 * 1000; // clamp to ±18h of swing
     setScrubMs(prev => Math.max(-LIM, Math.min(LIM, prev + step)));
   };
+  // Attach the wheel handler as a NON-passive native listener so preventDefault
+  // works (React's onWheel is passive → preventDefault throws a console warning
+  // on every scroll). This blocks page scroll while scrubbing the dial.
+  useEffect(() => {
+    const el = svgWrapRef.current;
+    if (!el) return;
+    const handler = (e) => { e.preventDefault(); onDialWheel(e); };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
@@ -2546,7 +2555,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           letterboxing/shift and the HTML card overlay (positioned by %) lines
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg ref={svgWrapRef} onWheel={onDialWheel} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
+      <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
           {/* Time-of-day gradient — stops computed from the REAL hour at each
               position across the NOW-centered window (top = now−6h, bottom =
@@ -4792,6 +4801,7 @@ export default function App({ user }) {
     const measure = () => {
       const dial = dialLayerRef.current;
       const col = contentColRef.current;
+      console.log("[dial-gap] measure fired", { hasDial: !!dial, hasCol: !!col });
       if (!dial || !col) { return; }
       const dialRect = dial.getBoundingClientRect();
       const colRect = col.getBoundingClientRect();
