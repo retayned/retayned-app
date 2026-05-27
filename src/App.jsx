@@ -2173,10 +2173,13 @@ function parseCalendarEntry(rawText, anchorDate = new Date(), clients = null) {
         }
       }
 
-      // Pass 3: bare numeric fallback (no meridiem). This is the looseiest
-      // match and only fires when no better signal exists.
+      // Pass 3: bare COLON-form time only (e.g. "15:30", "9:00"). Bare integers
+      // like "1620", "300", "12" are NOT treated as times — they're almost
+      // always IDs, quantities, or prices, and grabbing them silently misrouted
+      // tasks into calendar events. A colon is an unambiguous time signal;
+      // without "at/@" (Pass 1) or a meridiem (Pass 2), require it.
       if (!pick) {
-        const bareRe = /\b(\d{3,4}|\d{1,2}(?::\d{2})?)\b/;
+        const bareRe = /\b(\d{1,2}:\d{2})\b/;
         const bm = stripped.match(bareRe);
         if (bm) {
           const r = tryToken(bm[1]);
@@ -2365,7 +2368,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, clients = [], onCreate }) {
+function TimeDial({ events = [], C }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Re-render each minute so NOW (and the window) advance.
@@ -2397,10 +2400,11 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
   const selectedEvent = selectedId ? all.find(e => e.id === selectedId) : null;
   const hubEvent = selectedEvent || nextEvent;
 
-  // ── Geometry. viewBox is fixed; the SVG scales to fill the column. The
-  // dial center sits on the RIGHT edge (x = VB_W), radius R. The left half of
-  // the circle is drawn. Time fraction f∈[0,1] (0 = window start / top,
-  // 0.5 = now / left-most, 1 = window end / bottom) maps to angle 90°→270°. ──
+  // ── Geometry. The dial renders at fixed viewBox pixels. The disc center sits
+  // on the RIGHT edge (x = CX), radius R, with DIAL_PAD breathing room so
+  // arc-edge dots aren't clipped. The left half-circle is drawn. Time fraction
+  // f∈[0,1] (0 = window start / top, 0.5 = now / left-most, 1 = window end /
+  // bottom) maps to angle 90°→270°. ──
   const R = 420;
   const DIAL_PAD = 24; // breathing room so arc-edge dots (NOW dot, edge events,
                        // top/bottom ticks) aren't clipped at the viewBox edges
@@ -2532,7 +2536,7 @@ function TimeDial({ events = [], C, clients = [], onCreate }) {
               center (the right edge). The fill is solid through the interior,
               then fades to transparent as it approaches the rim, so the disc
               dissolves into the page with NO edge at all. The feather band is
-              the last ~14% of the radius. */}
+              the last ~5% of the radius. */}
           <radialGradient id="rt-dial-feather" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="#fff" stopOpacity="1" />
             <stop offset="0.95" stopColor="#fff" stopOpacity="1" />
@@ -9687,7 +9691,16 @@ export default function App({ user }) {
 
             if (!explicitTask) {
               // ─── ROUTE 0: CALENDAR EVENT (a time is present). ───────────
-              const calEntry = parseCalendarEntry(rawComposer, new Date(), clients);
+              // Strip the matched client's name from the text BEFORE looking for
+              // a time, so a numeric client name (e.g. a client literally named
+              // "1620") can't be reinterpreted as a time-of-day (16:20). A
+              // called-out / matched client token is claimed — never a time.
+              const matchedClientForCal = finalParse.matchedClient || clientObj || null;
+              let calText = rawComposer;
+              if (matchedClientForCal?.name) {
+                calText = calText.replace(new RegExp(matchedClientForCal.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ").replace(/\s+/g, " ").trim();
+              }
+              const calEntry = parseCalendarEntry(calText, new Date(), clients);
               if (calEntry) {
                 try {
                   const { data: createdEv } = await personalCalendarDb.create(user.id, calEntry);
@@ -11719,16 +11732,8 @@ export default function App({ user }) {
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
-                    clients={clients}
                     events={personalEvents}
                     C={C}
-                    onCreate={async (entry) => {
-                      const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                      setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                      const { data, error } = await personalCalendarDb.create(user.id, entry);
-                      if (error) { setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id)); return; }
-                      setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                    }}
                   />
                 </div>
                 {/* Gentle top fade (variant) — dissolves the upper arc under the
@@ -18918,7 +18923,13 @@ export default function App({ user }) {
                   // ("3pm", "9-10am", "noon"), it's a scheduled event, not a
                   // task or touchpoint. parseCalendarEntry returns null when no
                   // time is present, so a non-null result IS the event signal.
-                  const calEntry = parseCalendarEntry(rawText, new Date(), clients);
+                  // Strip the matched client name first so a numeric client
+                  // name (e.g. client "1620") can't be misread as a time.
+                  let calTextQL = rawText;
+                  if (matchedClient?.name) {
+                    calTextQL = calTextQL.replace(new RegExp(matchedClient.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ").replace(/\s+/g, " ").trim();
+                  }
+                  const calEntry = parseCalendarEntry(calTextQL, new Date(), clients);
                   if (calEntry) {
                     const optimisticId = "qlev" + Date.now();
                     try {
