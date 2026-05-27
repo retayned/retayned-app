@@ -2590,8 +2590,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         {/* NOW marker — dot at NOW's position; hidden when the dial is turned
             far enough that NOW leaves the window. */}
         {nowInWindow && <>
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#1C3224" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#1C3224" strokeOpacity="0.2" strokeWidth="1.5" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#7c5cf3" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" />
         </>}
         {/* Hub disc — no stroke; the feathered rim is edgeless so the hub
             stays borderless too for consistency. */}
@@ -8472,32 +8472,32 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
+        /* Reserves tied to the dial's SCALED width (720*scale) + a constant gap,
+           so the gap between the composer/tasks and the dial stays visually
+           constant as the viewport shrinks (dial + composer narrow in lockstep).
+           Tasks reserve more (shorter column + clears the event rail). */
+        .rt-tasks-col { max-width: min(1080px, calc(100% - (720px * var(--dial-scale) + 220px))); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
-        @media (max-width: 1440px) {
-          .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
-        }
-        @media (max-width: 1300px) {
-          .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
-        }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - (720px * var(--dial-scale) + 160px))); }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
+        /* Dial controls sit in the GAP between the task column's right edge and
+           the scaled dial's visible left edge — recomputed per breakpoint since
+           both the task reserve and the dial scale change. */
+        /* Controls sit in the gap, just left of the scaled dial's visible edge. */
+        .rt-dial-controls { right: calc(720px * var(--dial-scale) + 40px); }
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). Width
            drives it; short viewports (laptops) scale further via height. */
-        .rt-dial-layer { --dial-scale: 1; }
-        @media (max-width: 1600px) { .rt-dial-layer { --dial-scale: 0.92; } }
-        @media (max-width: 1440px) { .rt-dial-layer { --dial-scale: 0.84; } }
-        @media (max-width: 1300px) { .rt-dial-layer { --dial-scale: 0.74; } }
-        @media (max-width: 1200px) { .rt-dial-layer { --dial-scale: 0.66; } }
-        @media (max-height: 860px) { .rt-dial-layer { --dial-scale: 0.82; } }
-        @media (max-height: 760px) { .rt-dial-layer { --dial-scale: 0.72; } }
-        @media (max-height: 680px) { .rt-dial-layer { --dial-scale: 0.62; } }
+        /* Continuous dial scale — smooth with viewport width (no stepped jumps),
+           so the dial + composer gap can stay constant. ~1.0 at ≥1700px,
+           ~0.84 at 1366 (laptop target), 0.62 floor. Defined on the page
+           container so the dial layer, composer reserve, AND the controls all
+           share it. */
+        .rt-today-v4 { --dial-scale: clamp(0.62, calc(0.84 + (100vw - 1366px) * 0.00048), 1); }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: clamp(0.62, calc(0.80 + (100vw - 1366px) * 0.00040), 0.90); } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: clamp(0.58, calc(0.72 + (100vw - 1366px) * 0.00036), 0.82); } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: clamp(0.52, calc(0.62 + (100vw - 1366px) * 0.00032), 0.72); } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
@@ -11788,7 +11788,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 14, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
@@ -11812,21 +11812,21 @@ export default function App({ user }) {
                   dial layer so they sit at true size in the GAP between the
                   tasks and the dial, unaffected by the disc's scale transform.
                   Positioned by distance from the right edge (the gap zone). */}
-              <div className="rt-dial-controls" style={{ position: "fixed", right: 540, bottom: 28, zIndex: 5, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+              <div className="rt-dial-controls" style={{ position: "fixed", bottom: 28, zIndex: 5, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
                 {(dialScrubMs !== 0 || dialDayView !== "today") && (
                   <button
                     onClick={() => { setDialScrubMs(0); setDialDayView("today"); }}
-                    style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+                    style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
                   >
                     Now
                   </button>
                 )}
-                <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
+                <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 2.5, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
                   {["today", "tomorrow"].map(v => (
                     <button
                       key={v}
                       onClick={() => { setDialDayView(v); setDialScrubMs(0); }}
-                      style={{ border: "none", background: dialDayView === v ? C.primary : "transparent", color: dialDayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "6px 14px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
+                      style={{ border: "none", background: dialDayView === v ? C.primary : "transparent", color: dialDayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 10.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
                     >
                       {v}
                     </button>
