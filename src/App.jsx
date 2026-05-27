@@ -8501,6 +8501,16 @@ export default function App({ user }) {
         .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
         .rt-today-v4 > .rt-band,
         .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
+        @media (max-width: 1440px) {
+          .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
+        }
+        @media (max-width: 1300px) {
+          .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
+        }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         .rt-dial-ev {
@@ -8514,6 +8524,17 @@ export default function App({ user }) {
         .rt-dial-ev.is-next {
           box-shadow: 0 2px 8px rgba(51,84,62,0.14), 0 0 0 1.5px rgba(51,84,62,0.45);
         }
+        /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
+           scaling the whole layer keeps every internal piece aligned). Width
+           drives it; short viewports (laptops) scale further via height. */
+        .rt-dial-layer { --dial-scale: 1; }
+        @media (max-width: 1600px) { .rt-dial-layer { --dial-scale: 0.92; } }
+        @media (max-width: 1440px) { .rt-dial-layer { --dial-scale: 0.84; } }
+        @media (max-width: 1300px) { .rt-dial-layer { --dial-scale: 0.74; } }
+        @media (max-width: 1200px) { .rt-dial-layer { --dial-scale: 0.66; } }
+        @media (max-height: 860px) { .rt-dial-layer { --dial-scale: 0.82; } }
+        @media (max-height: 760px) { .rt-dial-layer { --dial-scale: 0.72; } }
+        @media (max-height: 680px) { .rt-dial-layer { --dial-scale: 0.62; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11839,7 +11860,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
