@@ -4792,28 +4792,29 @@ export default function App({ user }) {
     const measure = () => {
       const dial = dialLayerRef.current;
       const col = contentColRef.current;
-      if (!dial || !col) { setContentMaxW(null); return; }
+      if (!dial || !col) { return; }
       const dialRect = dial.getBoundingClientRect();
       const colRect = col.getBoundingClientRect();
       // The dial is hidden (display:none) on narrow screens → width 0; in that
       // case release the cap so content goes full-width.
       if (dialRect.width === 0) { setContentMaxW(null); return; }
       // Width available = from the content's left edge to GAP px before the
-      // dial's real visible left edge. Floor so it never goes absurdly small.
+      // dial's real visible left edge.
       const w = Math.round(dialRect.left - DIAL_GAP - colRect.left);
-      setContentMaxW(w > 320 ? w : null);
+      // TEMP DEBUG — remove once dialed in. Tells us the real measured geometry.
+      console.log("[dial-gap]", { vw: window.innerWidth, dialLeft: Math.round(dialRect.left), dialW: Math.round(dialRect.width), colLeft: Math.round(colRect.left), computedMaxW: w });
+      setContentMaxW(w > 280 ? w : null);
     };
-    measure();
+    // Defer first measure to after paint so the dial's SCALED rect is ready.
+    const raf = requestAnimationFrame(measure);
     window.addEventListener("resize", measure);
-    // ResizeObserver catches layout shifts (sidebar collapse, dial scale steps)
-    // that don't fire a window resize.
     let ro = null;
     if (typeof ResizeObserver !== "undefined" && contentColRef.current) {
       ro = new ResizeObserver(measure);
       ro.observe(document.body);
       if (dialLayerRef.current) ro.observe(dialLayerRef.current);
     }
-    return () => { window.removeEventListener("resize", measure); if (ro) ro.disconnect(); };
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); if (ro) ro.disconnect(); };
   }, [dialDayView, focusMode]);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   // (Removed focusFlash state — the lightning entry animation was retired
