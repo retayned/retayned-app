@@ -8489,15 +8489,18 @@ export default function App({ user }) {
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). Width
            drives it; short viewports (laptops) scale further via height. */
-        /* Continuous dial scale — smooth with viewport width (no stepped jumps),
-           so the dial + composer gap can stay constant. ~1.0 at ≥1700px,
-           ~0.84 at 1366 (laptop target), 0.62 floor. Defined on the page
-           container so the dial layer, composer reserve, AND the controls all
-           share it. */
-        .rt-today-v4 { --dial-scale: clamp(0.62, calc(0.84 + (100vw - 1366px) * 0.00048), 1); }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: clamp(0.62, calc(0.80 + (100vw - 1366px) * 0.00040), 0.90); } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: clamp(0.58, calc(0.72 + (100vw - 1366px) * 0.00036), 0.82); } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: clamp(0.52, calc(0.62 + (100vw - 1366px) * 0.00032), 0.72); } }
+        /* Dial scale — stepped unitless values (a continuous clamp can't work
+           here: CSS calc can't derive a unitless ratio from vw, and adding a
+           number to a length is invalid). The reserves below consume this as
+           720px * scale, so the gap tracks each step. */
+        .rt-today-v4 { --dial-scale: 1; }
+        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.92; } }
+        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.84; } }
+        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.76; } }
+        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.68; } }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.82; } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.64; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
