@@ -8488,11 +8488,7 @@ export default function App({ user }) {
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
-        .rt-dial-controls { right: 640px; }
-        @media (max-width: 1600px) { .rt-dial-controls { right: 618px; } }
-        @media (max-width: 1440px) { .rt-dial-controls { right: 550px; } }
-        @media (max-width: 1300px) { .rt-dial-controls { right: 483px; } }
-        @media (max-width: 1200px) { .rt-dial-controls { right: 454px; } }
+        .rt-dial-controls { right: 300px; align-items: center !important; }
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
         .rt-dial-layer { --dial-scale: 1; }
