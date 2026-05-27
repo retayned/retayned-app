@@ -2368,7 +2368,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = null }) {
+function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = null, onDeleteEvent = null }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Scrub offset (ms) — how far the dial has been "turned" from live NOW.
@@ -2682,6 +2682,14 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
             {selectedEvent && (
               <button onClick={() => setSelectedId(null)} style={{ marginTop: 4, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}>show next</button>
             )}
+            <div>
+              <button
+                onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
+                style={{ marginTop: 3, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", padding: 0 }}
+              >
+                delete
+              </button>
+            </div>
           </>
         ) : (
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
@@ -11823,6 +11831,10 @@ export default function App({ user }) {
                   <TimeDial
                     events={personalEvents}
                     C={C}
+                    onDeleteEvent={(id) => {
+                      setPersonalEvents(prev => (prev || []).filter(e => e.id !== id));
+                      try { personalCalendarDb.remove(id); } catch (e) { console.warn("Event delete failed:", e); }
+                    }}
                   />
                 </div>
                 {/* Gentle top fade (variant) — dissolves the upper arc under the
