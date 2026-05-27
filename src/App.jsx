@@ -2368,14 +2368,14 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C }) {
+function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = null }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Scrub offset (ms) — how far the dial has been "turned" from live NOW.
   // Positive = into the future, negative = into the past. Drag the disc to
   // change it; the Now pill resets it to 0.
   const [scrubMs, setScrubMs] = useState(0);
-  const dragRef = useRef(null); // { startAngle, startScrub }
+  const [dayView, setDayView] = useState("today"); // "today" | "tomorrow"
   const svgWrapRef = useRef(null);
   // Re-render each minute so NOW (and the window) advance.
   useEffect(() => {
@@ -2386,10 +2386,16 @@ function TimeDial({ events = [], C }) {
   const now = new Date();
   const nowMs = now.getTime();
   const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
-  const centerMs = nowMs + scrubMs;           // dial center (turned by drag)
+  // Day-view base: Today centers on live now; Tomorrow centers on tomorrow ~noon.
+  let dayBaseMs = nowMs;
+  if (dayView === "tomorrow") {
+    const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(12, 0, 0, 0);
+    dayBaseMs = t.getTime();
+  }
+  const centerMs = dayBaseMs + scrubMs;       // dial center (day view + scroll scrub)
   const windowStart = centerMs - HALF_WINDOW_MS;
   const windowEnd = centerMs + HALF_WINDOW_MS;
-  const isScrubbed = Math.abs(scrubMs) > 60000; // >1 min off live = "turned"
+  const isScrubbed = Math.abs(scrubMs) > 60000 || dayView !== "today";
 
   // Normalize + split events into in-window vs earlier/later.
   const all = events
@@ -2498,20 +2504,15 @@ function TimeDial({ events = [], C }) {
   const nowInWindow = nowFrac >= 0 && nowFrac <= 1;
   const [nowX, nowY] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
 
-  // Event placements — rim dot at f, card pulled inward; stagger clustered.
+  // Event placements — a rim dot at each event's fraction f; the outside rail
+  // lists details aligned to ry. (No inward staggering needed anymore.)
   const placements = [];
-  let lastF = -1, tier = 0;
   for (const e of inWindow) {
     const f = fracOf(e._start.getTime());
-    if (f - lastF < 0.085 && lastF >= 0) tier = (tier + 1) % 3; else tier = 0;
-    lastF = f;
-    const [rx, ry] = ptAt(f, R);                 // rim dot
-    const cardR = (R - 150) - tier * 64;          // inward radius, staggered
-    const [cx2, cy2] = ptAt(f, cardR);
-    const [ex, ey] = ptAt(f, cardR + 22);         // stem inner end
+    const [rx, ry] = ptAt(f, R);
     const isPast = e._start.getTime() < nowMs && (!e._end || e._end.getTime() < nowMs);
     const isNext = nextEvent && e.id === nextEvent.id;
-    placements.push({ e, f, rx, ry, cx: cx2, cy: cy2, ex, ey, isPast, isNext });
+    placements.push({ e, f, rx, ry, isPast, isNext });
   }
 
   let countdown = null, imminent = false;
@@ -2522,40 +2523,50 @@ function TimeDial({ events = [], C }) {
     else { countdown = `in ${Math.round(mins / 60)} hr`; }
   }
 
-  // ── Drag to rotate the dial. The disc center is (CX, CY) in viewBox coords;
-  // angle around the center maps to time (the left half-arc spans 180° = the
-  // 12h window). Dragging changes scrubMs, shifting the visible time band. ──
-  const angleFromCenter = (clientX, clientY) => {
-    const svg = svgWrapRef.current;
-    if (!svg) return 0;
-    const rect = svg.getBoundingClientRect();
-    const sx = (clientX - rect.left) * (VB_W / rect.width);
-    const sy = (clientY - rect.top) * (VB_H / rect.height);
-    return Math.atan2(sy - CY, sx - CX);
-  };
-  const MS_PER_RAD = (windowEnd - windowStart) / Math.PI; // π rad (180°) = full window
-  const onDialPointerDown = (e) => {
-    dragRef.current = { startAngle: angleFromCenter(e.clientX, e.clientY), startScrub: scrubMs };
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
-  };
-  const onDialPointerMove = (e) => {
-    if (!dragRef.current) return;
-    const a = angleFromCenter(e.clientX, e.clientY);
-    let delta = a - dragRef.current.startAngle;
-    while (delta > Math.PI) delta -= 2 * Math.PI;
-    while (delta < -Math.PI) delta += 2 * Math.PI;
-    let next = dragRef.current.startScrub + delta * MS_PER_RAD;
+  // ── Scroll to scrub. Wheel/trackpad over the dial pans the time window:
+  // scroll down = later, up = earlier. Each wheel notch nudges the window; the
+  // (?) tooltip explains it. Replaces the heavier drag interaction. ──
+  const onDialWheel = (e) => {
+    e.preventDefault();
+    // ~30 min per notch of deltaY (100 ≈ one notch); trackpads send smaller deltas.
+    const step = (e.deltaY) * (30 * 60 * 1000) / 100;
     const LIM = 18 * 60 * 60 * 1000; // clamp to ±18h of swing
-    next = Math.max(-LIM, Math.min(LIM, next));
-    setScrubMs(next);
-  };
-  const onDialPointerUp = (e) => {
-    dragRef.current = null;
-    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    setScrubMs(prev => Math.max(-LIM, Math.min(LIM, prev + step)));
   };
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
+      {/* Today / Tomorrow selector — pill at the top of the disc. (Week is
+          deferred — a 12h dial can't show a 168h week.) */}
+      <div style={{ position: "absolute", right: 24, top: 8, zIndex: 8, display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)", pointerEvents: "auto" }}>
+        {["today", "tomorrow"].map(v => (
+          <button
+            key={v}
+            onClick={() => { setDayView(v); setScrubMs(0); }}
+            style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "6px 14px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      {/* Google Calendar connect — bottom of the dial area. The integration
+          backend (OAuth + sync) is not built yet, so this reflects the
+          googleConnected flag and is a placeholder until that ships. */}
+      <div style={{ position: "absolute", right: 24, bottom: 12, zIndex: 8, pointerEvents: "auto" }}>
+        {googleConnected ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 7, background: C.primarySoft, color: C.primary, borderRadius: 9, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, fontFamily: "inherit" }}>
+            <span style={{ fontWeight: 800 }}>✓</span> Google Calendar connected
+          </div>
+        ) : (
+          <button
+            onClick={() => { if (typeof onConnectGoogle === "function") onConnectGoogle(); }}
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "none", borderRadius: 9, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, color: C.primary, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 3px rgba(20,30,22,0.08), 0 0 0 1px rgba(20,30,22,0.08)" }}
+          >
+            <span style={{ width: 14, height: 14, borderRadius: 3, background: "conic-gradient(#4285F4 0 25%,#34A853 0 50%,#FBBC05 0 75%,#EA4335 0)", display: "inline-block" }} />
+            Connect Google Calendar
+          </button>
+        )}
+      </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
           size AND makes the HTML card overlay's %-of-box positioning line up
@@ -2566,7 +2577,7 @@ function TimeDial({ events = [], C }) {
           letterboxing/shift and the HTML card overlay (positioned by %) lines
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg ref={svgWrapRef} onPointerDown={onDialPointerDown} onPointerMove={onDialPointerMove} onPointerUp={onDialPointerUp} onPointerCancel={onDialPointerUp} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}>
+      <svg ref={svgWrapRef} onWheel={onDialWheel} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
           {/* Time-of-day gradient — stops computed from the REAL hour at each
               position across the NOW-centered window (top = now−6h, bottom =
@@ -2599,10 +2610,10 @@ function TimeDial({ events = [], C }) {
         <g fontFamily="Manrope, sans-serif" fontSize="11" fontWeight="700" fill="#9A9A93">
           {tickLabels.map((t, i) => <text key={i} x={t.x.toFixed(1)} y={(t.y + 4).toFixed(1)} textAnchor="middle">{t.lbl}</text>)}
         </g>
-        {/* Event rim dots + stems */}
+        {/* Event rim dots — mark each event's time on the arc; the rail to the
+            left lists the details, aligned to these dots. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            <line x1={p.rx.toFixed(1)} y1={p.ry.toFixed(1)} x2={p.ex.toFixed(1)} y2={p.ey.toFixed(1)} stroke="rgba(30,38,31,0.18)" strokeWidth="1" />
             {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.3" strokeWidth="1.4" />}
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
@@ -2619,34 +2630,36 @@ function TimeDial({ events = [], C }) {
         <circle cx={CX} cy={CY} r={HUB_R} fill="#fff" />
       </svg>
 
-      {/* Event cards INSIDE the disc — HTML overlay positioned by % of viewBox. */}
-      {placements.map((p, i) => (
-        <div
-          key={p.e.id || i}
-          onClick={() => setSelectedId(p.e.id)}
-          style={{
-            position: "absolute",
-            left: `${(p.cx / VB_W * 100).toFixed(2)}%`,
-            top: `${(p.cy / VB_H * 100).toFixed(2)}%`,
-            transform: "translate(-50%, -50%)",
-            background: "rgba(255,255,255,0.92)",
-            backdropFilter: "blur(3px)",
-            WebkitBackdropFilter: "blur(3px)",
-            borderRadius: 10,
-            padding: "6px 10px",
-            boxShadow: p.isNext
-              ? "0 2px 6px rgba(20,30,22,0.12), 0 0 0 1px rgba(51,84,62,0.30)"
-              : "0 1px 3px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.05)",
-            whiteSpace: "nowrap",
-            cursor: "pointer",
-            opacity: p.isPast ? 0.6 : 1,
-            zIndex: 5,
-          }}
-        >
-          <div style={{ fontSize: 9, fontWeight: 700, color: p.isNext ? C.primary : C.textMuted }}>{formatTimeLabel(p.e._start)}</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.text, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis" }}>{p.e.title}</div>
-        </div>
-      ))}
+      {/* Event RAIL — events live OUTSIDE the disc now, in a vertical list to
+          its left (reclaiming the old gap). Each item is aligned vertically to
+          its event's position on the arc (ry), so the rail reads as a legend
+          for the dial. Clicking loads the event into the hub. */}
+      <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 196, zIndex: 5 }}>
+        {placements.map((p, i) => (
+          <div
+            key={p.e.id || i}
+            onClick={() => setSelectedId(p.e.id)}
+            style={{
+              position: "absolute",
+              right: 0,
+              top: `${(p.ry / VB_H * 100).toFixed(2)}%`,
+              transform: "translateY(-50%)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              cursor: "pointer",
+              opacity: p.isPast ? 0.5 : 1,
+              maxWidth: 196,
+            }}
+          >
+            <div style={{ flex: 1, textAlign: "right" }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: p.isNext ? C.primary : C.textMuted }}>{formatTimeLabel(p.e._start)}</div>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: C.text, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{p.e.title}</div>
+            </div>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 4, flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
+          </div>
+        ))}
+      </div>
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
@@ -2678,12 +2691,23 @@ function TimeDial({ events = [], C }) {
           window back to center on the current time. */}
       {isScrubbed && (
         <button
-          onClick={() => setScrubMs(0)}
+          onClick={() => { setScrubMs(0); setDayView("today"); }}
           style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
         >
           Now
         </button>
       )}
+      {/* (?) help — explains the scroll-to-scrub interaction on hover/focus. */}
+      <div
+        className="rt-dial-help"
+        tabIndex={0}
+        style={{ position: "absolute", right: 14, bottom: 14, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit" }}
+      >
+        ?
+        <div className="rt-dial-help-tip" style={{ position: "absolute", right: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
+          This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
+        </div>
+      </div>
       </div>
     </div>
   );
@@ -8463,9 +8487,11 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 460px)); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 700px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 300px)); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 480px)); }
+        .rt-dial-help:hover .rt-dial-help-tip,
+        .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
@@ -11791,7 +11817,7 @@ export default function App({ user }) {
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
                 className="rt-dial-layer"
-                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 500, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}
+                style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
