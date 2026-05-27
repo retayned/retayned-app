@@ -2368,14 +2368,12 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, onDeleteEvent = null }) {
+function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {} }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Scrub offset (ms) — how far the dial has been "turned" from live NOW.
   // Positive = into the future, negative = into the past. Drag the disc to
   // change it; the Now pill resets it to 0.
-  const [scrubMs, setScrubMs] = useState(0);
-  const [dayView, setDayView] = useState("today"); // "today" | "tomorrow"
   const svgWrapRef = useRef(null);
   // Re-render each minute so NOW (and the window) advance.
   useEffect(() => {
@@ -2536,20 +2534,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null }) {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* Today / Tomorrow selector — bottom-center of the disc, filling the
-          lower area between the tasks. (Week deferred — a 12h dial can't show
-          a 168h week.) */}
-      <div style={{ position: "absolute", left: "50%", bottom: 34, transform: "translateX(-50%)", zIndex: 8, display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)", pointerEvents: "auto" }}>
-        {["today", "tomorrow"].map(v => (
-          <button
-            key={v}
-            onClick={() => { setDayView(v); setScrubMs(0); }}
-            style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "6px 14px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
+      {/* (Today/Tomorrow selector + Now pill render OUTSIDE this scaled layer,
+          in the gap — see the App-level dial controls.) */}
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
           size AND makes the HTML card overlay's %-of-box positioning line up
@@ -2601,10 +2587,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null }) {
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — dashed hand from hub to NOW's position; hidden when
-            the dial is turned far enough that NOW leaves the window. */}
+        {/* NOW marker — dot at NOW's position; hidden when the dial is turned
+            far enough that NOW leaves the window. */}
         {nowInWindow && <>
-        <line x1={CX} y1={CY} x2={nowX.toFixed(1)} y2={nowY.toFixed(1)} stroke="#1C3224" strokeWidth="1.3" strokeDasharray="2 3" opacity="0.5" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#1C3224" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#1C3224" strokeOpacity="0.2" strokeWidth="1.5" />
         </>}
@@ -2690,16 +2675,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null }) {
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
       </div>
-      {/* Now pill — appears when the dial has been turned off live; snaps the
-          window back to center on the current time. */}
-      {isScrubbed && (
-        <button
-          onClick={() => { setScrubMs(0); setDayView("today"); }}
-          style={{ position: "absolute", left: "50%", bottom: 76, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
-        >
-          Now
-        </button>
-      )}
+      {/* (Now pill renders OUTSIDE this scaled layer — see App-level controls.) */}
       {/* (?) help — explains the scroll-to-scrub interaction on hover/focus. */}
       <div
         className="rt-dial-help"
@@ -4735,7 +4711,6 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
-  const [pickDetailOpen, setPickDetailOpen] = useState(false);
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
@@ -4799,6 +4774,10 @@ export default function App({ user }) {
   // Focus mode: laser-focus on top task, dim everything else. Only available in Rai mode.
   // Not persisted — resets to off on each session/page reload.
   const [focusMode, setFocusMode] = useState(false);
+  // Dial scrub/day-view state — lifted to App so the Today/Tomorrow + Now pills
+  // can live in the gap OUTSIDE the (scaled) dial layer.
+  const [dialScrubMs, setDialScrubMs] = useState(0);
+  const [dialDayView, setDialDayView] = useState("today"); // "today" | "tomorrow"
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   // (Removed focusFlash state — the lightning entry animation was retired
   // in favor of the calmer/subtler UI language. Focus mode now just toggles
@@ -8521,6 +8500,7 @@ export default function App({ user }) {
         @media (max-height: 680px) { .rt-dial-layer { --dial-scale: 0.62; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
+          .rt-dial-controls { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
           .rt-today-v4 > .rt-band,
           .rt-today-v4 > .rt-composer { max-width: none !important; }
@@ -10041,42 +10021,6 @@ export default function App({ user }) {
                         {pickClient.name}
                       </span>
                       {" "}&mdash;{" "}{cleanedReason}.
-                      {raiPicks.reason_detail && (
-                        <span className="rt-band-more">
-                          {" "}
-                          <span
-                            onClick={(e) => { e.stopPropagation(); setPickDetailOpen(o => !o); }}
-                            style={{
-                              cursor: "pointer",
-                              fontStyle: "normal",
-                              fontFamily: "'Manrope', system-ui, sans-serif",
-                              fontSize: 11.5,
-                              fontWeight: 600,
-                              color: C.textMuted,
-                              whiteSpace: "nowrap",
-                              verticalAlign: "1px",
-                            }}
-                          >
-                            {pickDetailOpen ? "Less" : "More"}
-                            <span style={{ display: "inline-block", transform: pickDetailOpen ? "rotate(90deg)" : "none", transition: "transform 200ms var(--rt-ease-out)", marginLeft: 2, fontSize: 9 }}>&rsaquo;</span>
-                          </span>
-                          <div
-                            style={{
-                              display: "grid",
-                              gridTemplateRows: pickDetailOpen ? "1fr" : "0fr",
-                              opacity: pickDetailOpen ? 1 : 0,
-                              transition: "grid-template-rows 280ms var(--rt-ease-out), opacity 220ms var(--rt-ease-out), margin-top 240ms var(--rt-ease-out)",
-                              marginTop: pickDetailOpen ? 8 : 0,
-                            }}
-                          >
-                            <div style={{ overflow: "hidden", minHeight: 0 }}>
-                              <div style={{ fontSize: 13.5, lineHeight: 1.55, color: C.textMuted, fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500 }}>
-                                {raiPicks.reason_detail}
-                              </div>
-                            </div>
-                          </div>
-                        </span>
-                      )}
                     </div>
                   );
                 })()}
@@ -11850,6 +11794,10 @@ export default function App({ user }) {
                   <TimeDial
                     events={personalEvents}
                     C={C}
+                    scrubMs={dialScrubMs}
+                    setScrubMs={setDialScrubMs}
+                    dayView={dialDayView}
+                    setDayView={setDialDayView}
                     onDeleteEvent={(id) => {
                       setPersonalEvents(prev => (prev || []).filter(e => e.id !== id));
                       try { personalCalendarDb.remove(id); } catch (e) { console.warn("Event delete failed:", e); }
@@ -11859,6 +11807,31 @@ export default function App({ user }) {
                 {/* (Top-fade overlay removed — it painted a visible C.bg band
                     over the dial's tint that read as a shaded slab. The disc's
                     feathered rim already softens the upper arc.) */}
+              </div>
+              {/* Dial controls — Today/Tomorrow + Now — live OUTSIDE the scaled
+                  dial layer so they sit at true size in the GAP between the
+                  tasks and the dial, unaffected by the disc's scale transform.
+                  Positioned by distance from the right edge (the gap zone). */}
+              <div className="rt-dial-controls" style={{ position: "fixed", right: 540, bottom: 28, zIndex: 5, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10 }}>
+                {(dialScrubMs !== 0 || dialDayView !== "today") && (
+                  <button
+                    onClick={() => { setDialScrubMs(0); setDialDayView("today"); }}
+                    style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+                  >
+                    Now
+                  </button>
+                )}
+                <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
+                  {["today", "tomorrow"].map(v => (
+                    <button
+                      key={v}
+                      onClick={() => { setDialDayView(v); setDialScrubMs(0); }}
+                      style={{ border: "none", background: dialDayView === v ? C.primary : "transparent", color: dialDayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, padding: "6px 14px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {false && (
