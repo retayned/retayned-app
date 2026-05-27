@@ -9825,6 +9825,17 @@ export default function App({ user }) {
               }
               const calEntry = parseCalendarEntry(calText, new Date(), clients);
               if (calEntry) {
+                // The calText strip removed the client name to protect time
+                // parsing (so a numeric name like "1620" isn't read as 16:20),
+                // but that also stripped it from the title. Rebuild the title
+                // from the ORIGINAL text (client name intact) and force the
+                // client link from the already-matched client.
+                const titleFromRaw = parseCalendarEntry(rawComposer, new Date(), clients);
+                if (titleFromRaw?.title) calEntry.title = titleFromRaw.title;
+                if (matchedClientForCal?.name) {
+                  calEntry.client_id = matchedClientForCal.id;
+                  calEntry.client_name = matchedClientForCal.name;
+                }
                 let evId = "ev" + Date.now();
                 try {
                   const { data: createdEv } = await personalCalendarDb.create(user.id, calEntry);
