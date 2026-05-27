@@ -4795,19 +4795,34 @@ export default function App({ user }) {
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
+  const SIDEBAR_PIN_BP = 1700; // ≥ this width: sidebar pinned open beside content. Below: rail + overlay.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
-    try { return window.localStorage.getItem("retayned:sidebarCollapsed") === "1"; } catch { return false; }
+    // Below the pin breakpoint the sidebar starts collapsed (thin rail); at or
+    // above it starts open. (No longer persisted — width drives the default.)
+    try { return window.innerWidth < SIDEBAR_PIN_BP; } catch { return false; }
   });
+  // Auto-pin/unpin on resize across the breakpoint, and keep the content's
+  // left offset in sync with the pin state on every resize.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try { window.localStorage.setItem("retayned:sidebarCollapsed", sidebarCollapsed ? "1" : "0"); } catch {}
-    // Sync the CSS var that .r-main reads to compute its left edge. The
-    // root selector defines a default; this override updates it at runtime
-    // so the main content area resizes to fill the freed horizontal space.
-    if (typeof document !== "undefined") {
-      document.documentElement.style.setProperty("--sidebar-w", sidebarCollapsed ? "64px" : "240px");
-    }
+    if (typeof window === "undefined" || typeof document === "undefined") return;
+    const applyWidthState = () => {
+      const pinned = window.innerWidth >= SIDEBAR_PIN_BP;
+      setSidebarCollapsed(!pinned);
+      // --content-sidebar-w: what the CONTENT's left edge uses. Below the
+      // breakpoint the content always sits beside the 64px rail, so opening
+      // the sidebar floats it OVER the content instead of pushing it. At/above
+      // the breakpoint content sits beside the full 240px pinned sidebar.
+      document.documentElement.style.setProperty("--content-sidebar-w", pinned ? "240px" : "64px");
+    };
+    applyWidthState();
+    window.addEventListener("resize", applyWidthState);
+    return () => window.removeEventListener("resize", applyWidthState);
+  }, []);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    // --sidebar-w: the sidebar's actual rendered width (64 rail / 240 expanded).
+    document.documentElement.style.setProperty("--sidebar-w", sidebarCollapsed ? "64px" : "240px");
   }, [sidebarCollapsed]);
   // Whether the Rai pick text is expanded on mobile. Desktop ignores this
   // — the clamp only applies via mobile @media. On mobile: false = clamped
@@ -8296,7 +8311,7 @@ export default function App({ user }) {
             top: var(--page-gap);
             right: var(--page-gap);
             bottom: var(--page-gap);
-            left: calc(var(--sidebar-left) + var(--sidebar-w) + var(--page-gap));
+            left: calc(var(--sidebar-left) + var(--content-sidebar-w, var(--sidebar-w)) + var(--page-gap));
             background: ${C.bg};
             overflow-y: auto;
             overflow-x: hidden;
