@@ -4824,28 +4824,35 @@ export default function App({ user }) {
       });
       if (res.status === 429) { const d = await res.json(); setRaiTestResult(d.message || "Rate-limited."); setRaiTestLoading(false); return; }
       if (!res.ok) { setRaiTestResult("Error: " + res.status + " " + res.statusText); setRaiTestLoading(false); return; }
-      // Read the SSE stream and accumulate text.
+      // Read the SSE stream and accumulate text. Matches production sendAi
+      // parser: split by \n\n event boundary, parse data: lines as JSON, look
+      // for content_block_delta events with delta.type === 'text_delta'.
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buf = "", text = "";
+      let buffer = "", accumulated = "";
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n"); buf = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const payload = line.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
-          try {
-            const evt = JSON.parse(payload);
-            // rai-chat emits {type:"text_delta", delta:"..."} chunks
-            if (evt.type === "text_delta" && typeof evt.delta === "string") { text += evt.delta; setRaiTestResult(text); }
-            else if (typeof evt.text === "string") { text += evt.text; setRaiTestResult(text); }
-          } catch { /* non-JSON heartbeat lines */ }
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+        for (const evt of events) {
+          const lines = evt.split("\n");
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+                accumulated += parsed.delta.text;
+                setRaiTestResult(accumulated);
+              }
+            } catch { /* ignore malformed chunks */ }
+          }
         }
       }
-      if (!text) setRaiTestResult("(No content returned from rai-chat. Check Edge Function logs.)");
+      if (!accumulated) setRaiTestResult("(No content returned from rai-chat. Check Edge Function logs.)");
     } catch (e) {
       setRaiTestResult("Error: " + (e?.message || String(e)));
     } finally {
@@ -4877,6 +4884,11 @@ export default function App({ user }) {
       // breakpoint, content stays at the 64px rail edge so the hover-open
       // sidebar floats OVER content. At/above, content sits beside 240.
       document.documentElement.style.setProperty("--content-sidebar-w", pinned ? "240px" : "64px");
+      // --sidebar-content-gap: breathing room between sidebar's right edge and
+      // content's left edge. Smaller when collapsed (rail), more generous when
+      // pinned open. Used in r-main's left calc INSTEAD of --page-gap so the
+      // top/right/bottom page margins stay constant (no right-side shift).
+      document.documentElement.style.setProperty("--sidebar-content-gap", pinned ? "32px" : "16px");
     };
     applyWidthState();
     window.addEventListener("resize", applyWidthState);
@@ -8385,7 +8397,7 @@ export default function App({ user }) {
             top: var(--page-gap);
             right: var(--page-gap);
             bottom: var(--page-gap);
-            left: calc(var(--sidebar-left) + var(--content-sidebar-w, var(--sidebar-w)) + var(--page-gap));
+            left: calc(var(--sidebar-left) + var(--content-sidebar-w, var(--sidebar-w)) + var(--sidebar-content-gap, 16px));
             background: ${C.bg};
             overflow-y: auto;
             overflow-x: hidden;
@@ -8646,14 +8658,14 @@ export default function App({ user }) {
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
         /* Tasks bundle (band + composer + tasks-col) capped proportional to the
-           dial: right edge sits 220px clear of the dial's visible left edge.
-           Formula = viewport − sidebar-left(14) − sidebar width − page-gap(14)
+           dial: right edge sits 180px clear of the dial's visible left edge.
+           Formula = viewport − sidebar-left(14) − sidebar width − sidebar-content-gap
                    − dial scaled width (720*scale) − gap(180).
-           Falls back to scale 1 + content-sidebar-w 240 if vars don't resolve. */
+           Falls back to scale 1 + content-sidebar-w 240 + gap 16 if vars don't resolve. */
         .rt-tasks-col,
         .rt-today-v4 > .rt-band,
         .rt-today-v4 > .rt-composer {
-          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - 14px - (720px * var(--dial-scale, 1)) - 180px);
+          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 180px);
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
