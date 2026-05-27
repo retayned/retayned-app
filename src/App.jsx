@@ -2371,6 +2371,12 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 function TimeDial({ events = [], C }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  // Scrub offset (ms) — how far the dial has been "turned" from live NOW.
+  // Positive = into the future, negative = into the past. Drag the disc to
+  // change it; the Now pill resets it to 0.
+  const [scrubMs, setScrubMs] = useState(0);
+  const dragRef = useRef(null); // { startAngle, startScrub }
+  const svgWrapRef = useRef(null);
   // Re-render each minute so NOW (and the window) advance.
   useEffect(() => {
     const t = setInterval(() => force(n => n + 1), 60000);
@@ -2380,8 +2386,10 @@ function TimeDial({ events = [], C }) {
   const now = new Date();
   const nowMs = now.getTime();
   const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
-  const windowStart = nowMs - HALF_WINDOW_MS;
-  const windowEnd = nowMs + HALF_WINDOW_MS;
+  const centerMs = nowMs + scrubMs;           // dial center (turned by drag)
+  const windowStart = centerMs - HALF_WINDOW_MS;
+  const windowEnd = centerMs + HALF_WINDOW_MS;
+  const isScrubbed = Math.abs(scrubMs) > 60000; // >1 min off live = "turned"
 
   // Normalize + split events into in-window vs earlier/later.
   const all = events
@@ -2483,8 +2491,12 @@ function TimeDial({ events = [], C }) {
     tickLabels.push({ x: lx, y: ly, lbl });
   }
 
-  // NOW marker (arc midpoint, f = 0.5 → straight left).
-  const [nowX, nowY] = ptAt(0.5, R);
+  // NOW marker — at the REAL now's position in the (possibly scrubbed) window.
+  // When the dial is turned, NOW slides off-center; if it leaves the window it
+  // isn't drawn.
+  const nowFrac = (nowMs - windowStart) / (windowEnd - windowStart);
+  const nowInWindow = nowFrac >= 0 && nowFrac <= 1;
+  const [nowX, nowY] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
 
   // Event placements — rim dot at f, card pulled inward; stagger clustered.
   const placements = [];
@@ -2510,6 +2522,38 @@ function TimeDial({ events = [], C }) {
     else { countdown = `in ${Math.round(mins / 60)} hr`; }
   }
 
+  // ── Drag to rotate the dial. The disc center is (CX, CY) in viewBox coords;
+  // angle around the center maps to time (the left half-arc spans 180° = the
+  // 12h window). Dragging changes scrubMs, shifting the visible time band. ──
+  const angleFromCenter = (clientX, clientY) => {
+    const svg = svgWrapRef.current;
+    if (!svg) return 0;
+    const rect = svg.getBoundingClientRect();
+    const sx = (clientX - rect.left) * (VB_W / rect.width);
+    const sy = (clientY - rect.top) * (VB_H / rect.height);
+    return Math.atan2(sy - CY, sx - CX);
+  };
+  const MS_PER_RAD = (windowEnd - windowStart) / Math.PI; // π rad (180°) = full window
+  const onDialPointerDown = (e) => {
+    dragRef.current = { startAngle: angleFromCenter(e.clientX, e.clientY), startScrub: scrubMs };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+  };
+  const onDialPointerMove = (e) => {
+    if (!dragRef.current) return;
+    const a = angleFromCenter(e.clientX, e.clientY);
+    let delta = a - dragRef.current.startAngle;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    let next = dragRef.current.startScrub + delta * MS_PER_RAD;
+    const LIM = 18 * 60 * 60 * 1000; // clamp to ±18h of swing
+    next = Math.max(-LIM, Math.min(LIM, next));
+    setScrubMs(next);
+  };
+  const onDialPointerUp = (e) => {
+    dragRef.current = null;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+  };
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "hidden" }}>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
@@ -2522,7 +2566,7 @@ function TimeDial({ events = [], C }) {
           letterboxing/shift and the HTML card overlay (positioned by %) lines
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block" }}>
+      <svg ref={svgWrapRef} onPointerDown={onDialPointerDown} onPointerMove={onDialPointerMove} onPointerUp={onDialPointerUp} onPointerCancel={onDialPointerUp} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}>
         <defs>
           {/* Time-of-day gradient — stops computed from the REAL hour at each
               position across the NOW-centered window (top = now−6h, bottom =
@@ -2563,10 +2607,13 @@ function TimeDial({ events = [], C }) {
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — dashed hand from hub to arc midpoint + dot */}
+        {/* NOW marker — dashed hand from hub to NOW's position; hidden when
+            the dial is turned far enough that NOW leaves the window. */}
+        {nowInWindow && <>
         <line x1={CX} y1={CY} x2={nowX.toFixed(1)} y2={nowY.toFixed(1)} stroke="#1C3224" strokeWidth="1.3" strokeDasharray="2 3" opacity="0.5" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#1C3224" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#1C3224" strokeOpacity="0.2" strokeWidth="1.5" />
+        </>}
         {/* Hub disc — no stroke; the feathered rim is edgeless so the hub
             stays borderless too for consistency. */}
         <circle cx={CX} cy={CY} r={HUB_R} fill="#fff" />
@@ -2627,6 +2674,16 @@ function TimeDial({ events = [], C }) {
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
       </div>
+      {/* Now pill — appears when the dial has been turned off live; snaps the
+          window back to center on the current time. */}
+      {isScrubbed && (
+        <button
+          onClick={() => setScrubMs(0)}
+          style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+        >
+          Now
+        </button>
+      )}
       </div>
     </div>
   );
