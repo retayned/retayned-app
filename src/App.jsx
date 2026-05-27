@@ -4778,6 +4778,43 @@ export default function App({ user }) {
   // can live in the gap OUTSIDE the (scaled) dial layer.
   const [dialScrubMs, setDialScrubMs] = useState(0);
   const [dialDayView, setDialDayView] = useState("today"); // "today" | "tomorrow"
+  // Responsive gap system (Option 2): instead of fragile CSS calc that mixes
+  // the dial's viewport coords with the composer's r-main %, measure the dial's
+  // ACTUAL rendered left edge at runtime and size the content to hold a constant
+  // gap. dialLayerRef → the fixed dial layer; contentColRef → the today grid
+  // (left edge of the content). contentMaxW → computed px width applied to the
+  // composer/tasks/band so their right edge stays GAP px clear of the dial.
+  const dialLayerRef = useRef(null);
+  const contentColRef = useRef(null);
+  const [contentMaxW, setContentMaxW] = useState(null);
+  const DIAL_GAP = 220; // px clear space between content right edge and dial
+  useEffect(() => {
+    const measure = () => {
+      const dial = dialLayerRef.current;
+      const col = contentColRef.current;
+      if (!dial || !col) { setContentMaxW(null); return; }
+      const dialRect = dial.getBoundingClientRect();
+      const colRect = col.getBoundingClientRect();
+      // The dial is hidden (display:none) on narrow screens → width 0; in that
+      // case release the cap so content goes full-width.
+      if (dialRect.width === 0) { setContentMaxW(null); return; }
+      // Width available = from the content's left edge to GAP px before the
+      // dial's real visible left edge. Floor so it never goes absurdly small.
+      const w = Math.round(dialRect.left - DIAL_GAP - colRect.left);
+      setContentMaxW(w > 320 ? w : null);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    // ResizeObserver catches layout shifts (sidebar collapse, dial scale steps)
+    // that don't fire a window resize.
+    let ro = null;
+    if (typeof ResizeObserver !== "undefined" && contentColRef.current) {
+      ro = new ResizeObserver(measure);
+      ro.observe(document.body);
+      if (dialLayerRef.current) ro.observe(dialLayerRef.current);
+    }
+    return () => { window.removeEventListener("resize", measure); if (ro) ro.disconnect(); };
+  }, [dialDayView, focusMode]);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   // (Removed focusFlash state — the lightning entry animation was retired
   // in favor of the calmer/subtler UI language. Focus mode now just toggles
@@ -9906,6 +9943,7 @@ export default function App({ user }) {
           // ─── RENDER ──────────────────────────────────────────────────────
           return (
             <div
+              ref={contentColRef}
               className={"rt-today-v4" + (focusMode ? " rt-focus-on" : "")}
               onClick={focusMode ? (e) => {
                 // Exit focus if click target is the wrapper itself (background area), not bubbled from inside a task or button.
@@ -9965,7 +10003,7 @@ export default function App({ user }) {
                 />
               </div>
               {/* STATUS BAND */}
-              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, position: "relative", zIndex: 1 }}>
+              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, position: "relative", zIndex: 1, ...(contentMaxW ? { maxWidth: contentMaxW } : {}) }}>
                 <div className="rt-band-greet">
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
                     {displayDate}
@@ -10056,7 +10094,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", ...(contentMaxW ? { maxWidth: contentMaxW } : {}), zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -10788,7 +10826,7 @@ export default function App({ user }) {
               </div>
 
               {/* TASKS COLUMN */}
-              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
+              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0, ...(contentMaxW ? { maxWidth: contentMaxW } : {}) }}>
                   <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
@@ -11789,6 +11827,7 @@ export default function App({ user }) {
                   BEHIND the content (z-index 0). Desktop only. The old
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
+                ref={dialLayerRef}
                 className="rt-dial-layer"
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
