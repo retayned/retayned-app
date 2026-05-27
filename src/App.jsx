@@ -4801,18 +4801,14 @@ export default function App({ user }) {
     const measure = () => {
       const dial = dialLayerRef.current;
       const col = contentColRef.current;
-      console.log("[dial-gap] measure fired", { hasDial: !!dial, hasCol: !!col });
-      if (!dial || !col) { return; }
+      if (!dial || !col) { console.log("[dial-gap] refs not ready"); return; }
       const dialRect = dial.getBoundingClientRect();
       const colRect = col.getBoundingClientRect();
-      // The dial is hidden (display:none) on narrow screens → width 0; in that
-      // case release the cap so content goes full-width.
-      if (dialRect.width === 0) { setContentMaxW(null); return; }
-      // Width available = from the content's left edge to GAP px before the
-      // dial's real visible left edge.
       const w = Math.round(dialRect.left - DIAL_GAP - colRect.left);
-      // TEMP DEBUG — remove once dialed in. Tells us the real measured geometry.
-      console.log("[dial-gap]", { vw: window.innerWidth, dialLeft: Math.round(dialRect.left), dialW: Math.round(dialRect.width), colLeft: Math.round(colRect.left), computedMaxW: w });
+      // TEMP DEBUG — remove once dialed in. Full geometry every fire.
+      console.log("[dial-gap]", { vw: window.innerWidth, dialLeft: Math.round(dialRect.left), dialW: Math.round(dialRect.width), colLeft: Math.round(colRect.left), computedMaxW: w, willApply: (dialRect.width !== 0 && w > 280) });
+      // The dial is hidden (display:none) on narrow screens → width 0; release cap.
+      if (dialRect.width === 0) { setContentMaxW(null); return; }
       setContentMaxW(w > 280 ? w : null);
     };
     // Defer first measure to after paint so the dial's SCALED rect is ready.
