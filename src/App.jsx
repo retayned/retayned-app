@@ -2368,7 +2368,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = null, onDeleteEvent = null }) {
+function TimeDial({ events = [], C, onDeleteEvent = null }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Scrub offset (ms) — how far the dial has been "turned" from live NOW.
@@ -2549,24 +2549,6 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
             {v}
           </button>
         ))}
-      </div>
-      {/* Google Calendar connect — bottom of the dial area. The integration
-          backend (OAuth + sync) is not built yet, so this reflects the
-          googleConnected flag and is a placeholder until that ships. */}
-      <div style={{ position: "absolute", right: 24, bottom: 12, zIndex: 8, pointerEvents: "auto" }}>
-        {googleConnected ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 7, background: C.primarySoft, color: C.primary, borderRadius: 9, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, fontFamily: "inherit" }}>
-            <span style={{ fontWeight: 800 }}>✓</span> Google Calendar connected
-          </div>
-        ) : (
-          <button
-            onClick={() => { if (typeof onConnectGoogle === "function") onConnectGoogle(); }}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "none", borderRadius: 9, padding: "8px 13px", fontSize: 11.5, fontWeight: 700, color: C.primary, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 3px rgba(20,30,22,0.08), 0 0 0 1px rgba(20,30,22,0.08)" }}
-          >
-            <span style={{ width: 14, height: 14, borderRadius: 3, background: "conic-gradient(#4285F4 0 25%,#34A853 0 50%,#FBBC05 0 75%,#EA4335 0)", display: "inline-block" }} />
-            Connect Google Calendar
-          </button>
-        )}
       </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
@@ -7787,7 +7769,6 @@ export default function App({ user }) {
            Condensed = future buckets tighten. */
         .rt-today-canvas {
           position: relative;
-          background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           border-radius: 20px;
           padding: 6px 14px 16px;
           margin: 6px -8px 0;
@@ -8512,18 +8493,18 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
-        .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
+        .rt-tasks-col,
+        .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 560px)); }
+        .rt-today-v4 > .rt-band { max-width: min(1240px, calc(100% - 380px)); }
         @media (max-width: 1440px) {
-          .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
+          .rt-tasks-col,
+          .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 480px)); }
+          .rt-today-v4 > .rt-band { max-width: min(1240px, calc(100% - 320px)); }
         }
         @media (max-width: 1300px) {
-          .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
+          .rt-tasks-col,
+          .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 420px)); }
+          .rt-today-v4 > .rt-band { max-width: min(1240px, calc(100% - 280px)); }
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
@@ -11875,10 +11856,9 @@ export default function App({ user }) {
                     }}
                   />
                 </div>
-                {/* Gentle top fade (variant) — dissolves the upper arc under the
-                    header items. Page bg solid at the very top → transparent by
-                    ~34% down. */}
-                <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "34%", background: "linear-gradient(180deg, " + C.bg + " 0%, " + C.bg + " 22%, rgba(250,250,247,0) 100%)", pointerEvents: "none", zIndex: 2 }} />
+                {/* (Top-fade overlay removed — it painted a visible C.bg band
+                    over the dial's tint that read as a shaded slab. The disc's
+                    feathered rim already softens the upper arc.) */}
               </div>
 
               {false && (
