@@ -12043,9 +12043,10 @@ export default function App({ user }) {
                   the visual works (and the dev-button quality test). */}
               {(() => {
                 const now = Date.now();
-                const horizon = now + 4 * 60 * 60 * 1000;
+                const endOfDay = new Date(now); endOfDay.setHours(23, 59, 59, 999);
+                const horizon = endOfDay.getTime();
                 const upcoming = (personalEvents || [])
-                  .filter(e => e && e.starts_at && e.client_id)
+                  .filter(e => e && e.starts_at)
                   .map(e => ({ ...e, _t: new Date(e.starts_at).getTime() }))
                   .filter(e => e._t > now && e._t < horizon)
                   .sort((a, b) => a._t - b._t)
@@ -12063,10 +12064,11 @@ export default function App({ user }) {
                       position: "fixed",
                       top: 90,
                       bottom: 60,
-                      right: "calc((720px * var(--dial-scale, 1)) + 30px)",
+                      right: 480,
                       width: 180,
                       zIndex: 2,
                       pointerEvents: "none",
+                      outline: "1px dashed rgba(124,92,243,0.5)",
                     }}
                   >
                     {upcoming.map(e => {
@@ -12093,7 +12095,7 @@ export default function App({ user }) {
                             Before {time}
                           </div>
                           <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3, marginTop: 1, fontWeight: 500 }}>
-                            {e.client_name || "client"} prep suggestion
+                            {e.client_name ? `${e.client_name} prep` : (e.title || "Event prep")}
                           </div>
                         </div>
                       );
