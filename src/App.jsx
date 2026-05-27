@@ -8476,16 +8476,16 @@ export default function App({ user }) {
            so the gap between the composer/tasks and the dial stays visually
            constant as the viewport shrinks (dial + composer narrow in lockstep).
            Tasks reserve more (shorter column + clears the event rail). */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - (720px * var(--dial-scale) + 220px))); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - (720px * var(--dial-scale, 0.84) + 220px))); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - (720px * var(--dial-scale) + 160px))); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - (720px * var(--dial-scale, 0.84) + 160px))); }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Dial controls sit in the GAP between the task column's right edge and
            the scaled dial's visible left edge — recomputed per breakpoint since
            both the task reserve and the dial scale change. */
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
-        .rt-dial-controls { right: calc(720px * var(--dial-scale) + 40px); }
+        .rt-dial-controls { right: calc(720px * var(--dial-scale, 0.84) + 40px); }
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). Width
            drives it; short viewports (laptops) scale further via height. */
