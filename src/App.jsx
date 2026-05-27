@@ -8495,9 +8495,9 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 740px)); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 720px)); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         @media (max-width: 1099px) {
