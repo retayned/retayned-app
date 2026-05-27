@@ -2531,12 +2531,28 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     setScrubMs(prev => Math.max(-LIM, Math.min(LIM, prev + step)));
   };
   // Attach the wheel handler as a NON-passive native listener so preventDefault
-  // works (React's onWheel is passive → preventDefault throws a console warning
-  // on every scroll). This blocks page scroll while scrubbing the dial.
+  // works (React's onWheel is passive). IMPORTANT: only capture the wheel when
+  // the cursor is actually over the visible DISC — the SVG's bounding box is a
+  // large rectangle (444×888) that extends well past the disc curve, and
+  // capturing wheel anywhere in that box blocked page scroll in the empty space
+  // around the disc. We test the pointer against the disc geometry (within R of
+  // the right-edge-anchored center) and only then scrub + preventDefault.
   useEffect(() => {
     const el = svgWrapRef.current;
     if (!el) return;
-    const handler = (e) => { e.preventDefault(); onDialWheel(e); };
+    const handler = (e) => {
+      const rect = el.getBoundingClientRect();
+      // Disc center is at the SVG's right edge, vertical middle (CX=VB_W, CY=VB_H/2),
+      // in viewBox units. Convert pointer to viewBox space using the rendered scale.
+      const sx = rect.width / VB_W, sy = rect.height / VB_H;
+      const px = (e.clientX - rect.left) / sx;
+      const py = (e.clientY - rect.top) / sy;
+      const dx = px - CX, dy = py - CY;
+      const insideDisc = (dx * dx + dy * dy) <= (R * R);
+      if (!insideDisc) return; // outside the disc → let the page scroll
+      e.preventDefault();
+      onDialWheel(e);
+    };
     el.addEventListener("wheel", handler, { passive: false });
     return () => el.removeEventListener("wheel", handler);
   }, []);
@@ -2545,21 +2561,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
       {/* Today/Tomorrow + Now controls — at the disc's bottom-center, INSIDE the
           dial layer so they scale with it. */}
-      <div style={{ position: "absolute", left: "50%", bottom: 24, transform: "translateX(-50%)", zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)", zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, pointerEvents: "auto" }}>
         {isScrubbed && (
           <button
             onClick={() => { setScrubMs(0); setDayView("today"); }}
-            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 15px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
           >
             Now
           </button>
         )}
-        <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 2.5, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
+        <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
           {["today", "tomorrow"].map(v => (
             <button
               key={v}
               onClick={() => { setDayView(v); setScrubMs(0); }}
-              style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 10.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
+              style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 13, fontWeight: 700, padding: "6px 15px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
             >
               {v}
             </button>
@@ -2673,7 +2689,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div style={{ position: "absolute", right: "8%", top: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↑ {earlierCount} earlier</div>
+        <div style={{ position: "absolute", right: "14%", top: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↑ {earlierCount} earlier</div>
       )}
       {laterCount > 0 && (
         <div style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↓ {laterCount} later</div>
@@ -2706,14 +2722,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         )}
       </div>
 
-      {/* (?) help — explains the scroll-to-scrub interaction on hover/focus. */}
+      {/* (?) help — top of the dial, beside the "earlier" count. */}
       <div
         className="rt-dial-help"
         tabIndex={0}
-        style={{ position: "absolute", right: 14, bottom: 14, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit" }}
+        style={{ position: "absolute", right: 14, top: 4, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit" }}
       >
         ?
-        <div className="rt-dial-help-tip" style={{ position: "absolute", right: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
+        <div className="rt-dial-help-tip" style={{ position: "absolute", right: 0, top: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(-4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
           This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
         </div>
       </div>
@@ -7181,7 +7197,8 @@ export default function App({ user }) {
   const totalRefRev = refs.filter(r => r.status === "converted" || r.converted).reduce((a, r) => a + (r.revenue || 0), 0);
 
   const todayDot = tasksDone < tasksTotal;
-  const healthDot = overdueChecks > 0;
+  const hasNewObservation = !!observation && observation.status !== "unpacked" && observation.status !== "dropped";
+  const healthDot = overdueChecks > 0 || hasNewObservation;
   // Rolodex check-in dot: lit when any contact has a reminder due (today or
   // earlier) and the user hasn't opened Rolodex since. Clears on visiting the
   // page (see goTo). Contained entirely in Rolodex — no client/Rai coupling.
@@ -10786,7 +10803,6 @@ export default function App({ user }) {
                     </div>
                     <div className="rt-composer-hint" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
                       <span>Past tense → touchpoint · future → task</span>
-                      <span style={{ color: C.ink300 }}>⏎ to log · Esc</span>
                     </div>
                     <button
                       onClick={submitComposer}
@@ -10820,6 +10836,7 @@ export default function App({ user }) {
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
+                      {newTask.trim() && <span style={{ fontSize: 13, lineHeight: 1, opacity: 0.9 }}>⏎</span>}
                       Add
                     </button>
                   </div>
@@ -12956,6 +12973,7 @@ export default function App({ user }) {
                     };
                     const handleUnpack = async () => {
                       try { await observationsDb.updateStatus(obs.id, "unpacked"); } catch (e) { /* non-blocking */ }
+                      setObservation(prev => prev ? { ...prev, status: "unpacked" } : prev);
                       const seededMessage = `You pulled ${archetype}. ${obs.front_headline}\n\nWhere do you want to start?`;
                       // Stash the observation context so follow-up turns ("how should
                       // I proceed?") are answered against the actual finding, not blind.
