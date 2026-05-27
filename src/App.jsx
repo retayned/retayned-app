@@ -4796,6 +4796,63 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
+  // ─── TEMP DEV: Rai task-suggestion test ──────────────────────────────────
+  // Hits the existing rai-chat Edge Function with a request for 3 concrete
+  // tasks today. Uses full Rai context (all your clients, scores, drift,
+  // recent activity) — same infrastructure as the live chat. Remove this
+  // block + the button JSX + the handler once we've validated quality.
+  const [raiTestOpen, setRaiTestOpen] = useState(false);
+  const [raiTestLoading, setRaiTestLoading] = useState(false);
+  const [raiTestResult, setRaiTestResult] = useState("");
+  const fetchRaiTaskSuggestions = async () => {
+    setRaiTestOpen(true);
+    setRaiTestLoading(true);
+    setRaiTestResult("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setRaiTestResult("Error: not authenticated."); setRaiTestLoading(false); return; }
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const prompt = "Based on everything you know about my clients, recent activity, drift, scores, and what's already on my plate today — suggest 3 concrete tasks I should add to today's list. Be specific (name a client, name an action). For each task, give it in this format:\n\n1. [Task]\n   Why: [one short sentence — what signal makes this matter today]\n\n2. ...\n\n3. ...\n\nDo not pick tasks I already have open. Skip generic suggestions like 'follow up' — be concrete about what to do and why.";
+      const res = await fetch(`${supabaseUrl}/functions/v1/rai-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "Accept": "text/event-stream",
+        },
+        body: JSON.stringify({ message: prompt, history: [], focused_client_id: null, stream: true, attachments: [] }),
+      });
+      if (res.status === 429) { const d = await res.json(); setRaiTestResult(d.message || "Rate-limited."); setRaiTestLoading(false); return; }
+      if (!res.ok) { setRaiTestResult("Error: " + res.status + " " + res.statusText); setRaiTestLoading(false); return; }
+      // Read the SSE stream and accumulate text.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "", text = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n"); buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(payload);
+            // rai-chat emits {type:"text_delta", delta:"..."} chunks
+            if (evt.type === "text_delta" && typeof evt.delta === "string") { text += evt.delta; setRaiTestResult(text); }
+            else if (typeof evt.text === "string") { text += evt.text; setRaiTestResult(text); }
+          } catch { /* non-JSON heartbeat lines */ }
+        }
+      }
+      if (!text) setRaiTestResult("(No content returned from rai-chat. Check Edge Function logs.)");
+    } catch (e) {
+      setRaiTestResult("Error: " + (e?.message || String(e)));
+    } finally {
+      setRaiTestLoading(false);
+    }
+  };
+  // ─── END TEMP DEV ────────────────────────────────────────────────────────
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
@@ -19331,6 +19388,38 @@ export default function App({ user }) {
           </div>
         </>
       )}
+
+      {/* ─── TEMP DEV: Rai task-suggestion test button + result panel ────
+          Bottom-left floating disc on desktop. Click → calls rai-chat with
+          the full Rai context, asks for 3 task suggestions, streams result
+          into a panel above the button. Remove this whole block when done. */}
+      {page === "today" && (
+        <>
+          <button
+            onClick={fetchRaiTaskSuggestions}
+            title="Generate 3 Rai task suggestions (dev test)"
+            style={{ position: "fixed", left: "calc(var(--content-sidebar-w, 240px) + 28px + 14px)", bottom: 28, width: 52, height: 52, borderRadius: 26, background: "#7c5cf3", color: "#fff", border: "none", fontSize: 11, fontWeight: 800, letterSpacing: 0.3, textTransform: "uppercase", cursor: "pointer", boxShadow: "0 4px 14px rgba(124,92,243,0.32), 0 0 0 1px rgba(20,30,22,0.06)", zIndex: 600, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1.1 }}
+          >
+            Rai<br/>3
+          </button>
+          {raiTestOpen && (
+            <div style={{ position: "fixed", left: "calc(var(--content-sidebar-w, 240px) + 28px + 14px)", bottom: 92, width: 440, maxHeight: "70vh", background: "#fff", borderRadius: 14, boxShadow: "0 12px 40px rgba(20,30,22,0.18), 0 0 0 1px rgba(20,30,22,0.08)", zIndex: 600, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style={{ padding: "12px 14px", borderBottom: "1px solid " + C.borderLight, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: "#7c5cf3" }}>Rai · 3 tasks today (dev test)</div>
+                <button onClick={() => setRaiTestOpen(false)} style={{ background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1, fontFamily: "inherit" }}>×</button>
+              </div>
+              <div style={{ padding: "14px 16px", overflowY: "auto", fontSize: 13, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                {raiTestLoading && !raiTestResult ? <span style={{ color: C.textMuted, fontStyle: "italic" }}>Asking Rai…</span> : raiTestResult || <span style={{ color: C.textMuted, fontStyle: "italic" }}>No response yet.</span>}
+                {raiTestLoading && raiTestResult && <span style={{ color: C.textMuted }}> ▍</span>}
+              </div>
+              <div style={{ padding: "8px 14px", borderTop: "1px solid " + C.borderLight, display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={fetchRaiTaskSuggestions} disabled={raiTestLoading} style={{ background: raiTestLoading ? C.surface : "#7c5cf3", color: raiTestLoading ? C.textMuted : "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: raiTestLoading ? "default" : "pointer", fontFamily: "inherit" }}>{raiTestLoading ? "Generating…" : "Regenerate"}</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {/* ─── END TEMP DEV ─────────────────────────────────────────────── */}
 
       {/* Toast — bottom-right confirmation with undo */}
       {quickLogToast && (
