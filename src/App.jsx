@@ -2596,7 +2596,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
       {/* Today/Tomorrow + Now controls — at the disc's bottom-center, INSIDE the
           dial layer so they scale with it. */}
-      <div style={{ position: "absolute", left: "50%", bottom: -10, transform: "translateX(-50%)", zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", left: "50%", bottom: -10, transform: "translateX(-50%)", zIndex: 8, pointerEvents: "auto" }}>
+       <div className="rt-dial-cs" style={{ transformOrigin: "top center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
         {isScrubbed && (
           <button
             onClick={() => { setScrubMs(0); setDayView("today"); }}
@@ -2616,6 +2617,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             </button>
           ))}
         </div>
+       </div>
       </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
@@ -2712,9 +2714,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               cursor: "pointer",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 19, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+            <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
+              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
             </div>
             <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
@@ -2724,14 +2726,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div style={{ position: "absolute", right: "14%", top: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↑ {earlierCount} earlier</div>
+        <div className="rt-dial-cs" style={{ position: "absolute", right: "14%", top: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "top right" }}>↑ {earlierCount} earlier</div>
       )}
       {laterCount > 0 && (
-        <div style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted }}>↓ {laterCount} later</div>
+        <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↓ {laterCount} later</div>
       )}
 
       {/* Hub content — the NEXT event (or selected), against the right edge. */}
       <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: 150, textAlign: "right", zIndex: 6 }}>
+       <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
         {hubEvent ? (
           <>
             <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
@@ -2755,13 +2758,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         ) : (
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
+       </div>
       </div>
 
       {/* (?) help — top of the dial, beside the "earlier" count. */}
       <div
-        className="rt-dial-help"
+        className="rt-dial-help rt-dial-cs"
         tabIndex={0}
-        style={{ position: "absolute", right: 14, top: 4, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit" }}
+        style={{ position: "absolute", right: 14, top: 4, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", transformOrigin: "top right" }}
       >
         ?
         <div className="rt-dial-help-tip" style={{ position: "absolute", right: 0, top: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(-4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
@@ -8571,21 +8575,16 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col,
-        .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 560px)); }
-        @media (max-width: 1440px) {
-          .rt-tasks-col,
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 480px)); }
-        }
-        @media (max-width: 1300px) {
-          .rt-tasks-col,
-          .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 420px)); }
-        }
+        /* (max-width constraints on band/composer/tasks removed — clean base
+           while the responsive system is being rebuilt around the dial scale.) */
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
+        /* Counter-scale utility: elements inside the dial layer (which is scaled
+           by var(--dial-scale)) that should render at a CONSTANT on-screen size
+           regardless of scale. Cancels out the parent transform by 1/scale.
+           Per-element transform-origin is set inline so positioning anchors
+           correctly. */
+        .rt-dial-cs { transform: scale(calc(1 / var(--dial-scale, 1))); }
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
         /* (Today/Tomorrow + Now controls now render inside the dial component
            at the disc's bottom-center, so they scale with the dial.) */
