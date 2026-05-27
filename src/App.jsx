@@ -2543,8 +2543,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* (Today/Tomorrow selector + Now pill render OUTSIDE this scaled layer,
-          in the gap — see the App-level dial controls.) */}
+      {/* Today/Tomorrow + Now controls — at the disc's bottom-center, INSIDE the
+          dial layer so they scale with it. */}
+      <div style={{ position: "absolute", left: "50%", bottom: 24, transform: "translateX(-50%)", zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "auto" }}>
+        {isScrubbed && (
+          <button
+            onClick={() => { setScrubMs(0); setDayView("today"); }}
+            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+          >
+            Now
+          </button>
+        )}
+        <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 2.5, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
+          {["today", "tomorrow"].map(v => (
+            <button
+              key={v}
+              onClick={() => { setDayView(v); setScrubMs(0); }}
+              style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 10.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
           size AND makes the HTML card overlay's %-of-box positioning line up
@@ -2641,8 +2662,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 12.5, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
+              <span style={{ fontSize: 15, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
             </div>
             <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
@@ -2684,7 +2705,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
       </div>
-      {/* (Now pill renders OUTSIDE this scaled layer — see App-level controls.) */}
+
       {/* (?) help — explains the scroll-to-scrub interaction on hover/focus. */}
       <div
         className="rt-dial-help"
@@ -4787,41 +4808,6 @@ export default function App({ user }) {
   // can live in the gap OUTSIDE the (scaled) dial layer.
   const [dialScrubMs, setDialScrubMs] = useState(0);
   const [dialDayView, setDialDayView] = useState("today"); // "today" | "tomorrow"
-  // Responsive gap system (Option 2): instead of fragile CSS calc that mixes
-  // the dial's viewport coords with the composer's r-main %, measure the dial's
-  // ACTUAL rendered left edge at runtime and size the content to hold a constant
-  // gap. dialLayerRef → the fixed dial layer; contentColRef → the today grid
-  // (left edge of the content). contentMaxW → computed px width applied to the
-  // composer/tasks/band so their right edge stays GAP px clear of the dial.
-  const dialLayerRef = useRef(null);
-  const contentColRef = useRef(null);
-  const [contentMaxW, setContentMaxW] = useState(null);
-  const DIAL_GAP = 220; // px clear space between content right edge and dial
-  useEffect(() => {
-    const measure = () => {
-      const dial = dialLayerRef.current;
-      const col = contentColRef.current;
-      if (!dial || !col) { console.log("[dial-gap] refs not ready"); return; }
-      const dialRect = dial.getBoundingClientRect();
-      const colRect = col.getBoundingClientRect();
-      const w = Math.round(dialRect.left - DIAL_GAP - colRect.left);
-      // TEMP DEBUG — remove once dialed in. Full geometry every fire.
-      console.log("[dial-gap]", { vw: window.innerWidth, dialLeft: Math.round(dialRect.left), dialW: Math.round(dialRect.width), colLeft: Math.round(colRect.left), computedMaxW: w, willApply: (dialRect.width !== 0 && w > 280) });
-      // The dial is hidden (display:none) on narrow screens → width 0; release cap.
-      if (dialRect.width === 0) { setContentMaxW(null); return; }
-      setContentMaxW(w > 280 ? w : null);
-    };
-    // Defer first measure to after paint so the dial's SCALED rect is ready.
-    const raf = requestAnimationFrame(measure);
-    window.addEventListener("resize", measure);
-    let ro = null;
-    if (typeof ResizeObserver !== "undefined" && contentColRef.current) {
-      ro = new ResizeObserver(measure);
-      ro.observe(document.body);
-      if (dialLayerRef.current) ro.observe(dialLayerRef.current);
-    }
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); if (ro) ro.disconnect(); };
-  }, [dialDayView, focusMode]);
   // One-shot flash trigger when entering Focus mode. Cleared after animation completes.
   // (Removed focusFlash state — the lightning entry animation was retired
   // in favor of the calmer/subtler UI language. Focus mode now just toggles
@@ -8533,7 +8519,8 @@ export default function App({ user }) {
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
-        .rt-dial-controls { right: 300px; align-items: center !important; }
+        /* (Today/Tomorrow + Now controls now render inside the dial component
+           at the disc's bottom-center, so they scale with the dial.) */
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
         .rt-dial-layer { --dial-scale: 1; }
@@ -9950,7 +9937,6 @@ export default function App({ user }) {
           // ─── RENDER ──────────────────────────────────────────────────────
           return (
             <div
-              ref={contentColRef}
               className={"rt-today-v4" + (focusMode ? " rt-focus-on" : "")}
               onClick={focusMode ? (e) => {
                 // Exit focus if click target is the wrapper itself (background area), not bubbled from inside a task or button.
@@ -10010,7 +9996,7 @@ export default function App({ user }) {
                 />
               </div>
               {/* STATUS BAND */}
-              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, position: "relative", zIndex: 1, ...(contentMaxW ? { maxWidth: contentMaxW } : {}) }}>
+              <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, position: "relative", zIndex: 1 }}>
                 <div className="rt-band-greet">
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
                     {displayDate}
@@ -10101,7 +10087,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", ...(contentMaxW ? { maxWidth: contentMaxW } : {}), zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -10833,7 +10819,7 @@ export default function App({ user }) {
               </div>
 
               {/* TASKS COLUMN */}
-              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0, ...(contentMaxW ? { maxWidth: contentMaxW } : {}) }}>
+              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
                   <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {/* Ranked by Rai / Manual toggle — pill segmented control */}
@@ -11834,7 +11820,6 @@ export default function App({ user }) {
                   BEHIND the content (z-index 0). Desktop only. The old
                   TodayTimeline + Rai brief stay gated (false) below. */}
               <div
-                ref={dialLayerRef}
                 className="rt-dial-layer"
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
@@ -11855,31 +11840,6 @@ export default function App({ user }) {
                 {/* (Top-fade overlay removed — it painted a visible C.bg band
                     over the dial's tint that read as a shaded slab. The disc's
                     feathered rim already softens the upper arc.) */}
-              </div>
-              {/* Dial controls — Today/Tomorrow + Now — live OUTSIDE the scaled
-                  dial layer so they sit at true size in the GAP between the
-                  tasks and the dial, unaffected by the disc's scale transform.
-                  Positioned by distance from the right edge (the gap zone). */}
-              <div className="rt-dial-controls" style={{ position: "fixed", bottom: 28, zIndex: 5, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
-                {(dialScrubMs !== 0 || dialDayView !== "today") && (
-                  <button
-                    onClick={() => { setDialScrubMs(0); setDialDayView("today"); }}
-                    style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
-                  >
-                    Now
-                  </button>
-                )}
-                <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 2.5, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
-                  {["today", "tomorrow"].map(v => (
-                    <button
-                      key={v}
-                      onClick={() => { setDialDayView(v); setDialScrubMs(0); }}
-                      style={{ border: "none", background: dialDayView === v ? C.primary : "transparent", color: dialDayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 10.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {false && (
