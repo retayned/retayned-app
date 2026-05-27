@@ -2635,7 +2635,15 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
-        {placements.map((p, i) => (
+        {placements.map((p, i) => {
+          // Fade cards that ride up behind the composer/band (top of the disc)
+          // so they dissolve BEHIND it instead of peeking past its edges.
+          const ryFrac = p.ry / VB_H;             // 0 = top, 1 = bottom
+          const FADE_START = 0.30, FADE_END = 0.10; // fully faded above 10%, full below 30%
+          let topFade = 1;
+          if (ryFrac < FADE_START) topFade = Math.max(0, (ryFrac - FADE_END) / (FADE_START - FADE_END));
+          const baseOpacity = p.isPast ? 0.55 : 1;
+          return (
           <div
             key={p.e.id || i}
             style={{
@@ -2646,7 +2654,9 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
               display: "flex",
               alignItems: "center",
               gap: 9,
-              opacity: p.isPast ? 0.55 : 1,
+              opacity: baseOpacity * topFade,
+              pointerEvents: topFade < 0.5 ? "none" : "auto",
+              transition: "opacity 120ms var(--rt-ease-out)",
               width: 210,
             }}
           >
@@ -2661,7 +2671,8 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
             </button>
             <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Earlier / later pockets near the arc ends */}
