@@ -2634,29 +2634,32 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
           its left (reclaiming the old gap). Each item is aligned vertically to
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
-      <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 196, zIndex: 5 }}>
+      <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
         {placements.map((p, i) => (
           <div
             key={p.e.id || i}
-            onClick={() => setSelectedId(p.e.id)}
             style={{
               position: "absolute",
               right: 0,
               top: `${(p.ry / VB_H * 100).toFixed(2)}%`,
               transform: "translateY(-50%)",
               display: "flex",
-              alignItems: "flex-start",
-              gap: 8,
-              cursor: "pointer",
-              opacity: p.isPast ? 0.5 : 1,
-              maxWidth: 196,
+              alignItems: "center",
+              gap: 9,
+              opacity: p.isPast ? 0.55 : 1,
+              width: 210,
             }}
           >
-            <div style={{ flex: 1, textAlign: "right" }}>
-              <div style={{ fontSize: 9.5, fontWeight: 700, color: p.isNext ? C.primary : C.textMuted }}>{formatTimeLabel(p.e._start)}</div>
-              <div style={{ fontSize: 11.5, fontWeight: 600, color: C.text, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{p.e.title}</div>
-            </div>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", marginTop: 4, flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
+            <button
+              type="button"
+              className={`rt-dial-ev${p.isNext ? " is-next" : ""}`}
+              onClick={() => setSelectedId(p.e.id)}
+              style={{ flex: 1, display: "flex", flexDirection: "column", textAlign: "left", background: "#fff", border: "none", borderRadius: 11, padding: "9px 13px", cursor: "pointer", fontFamily: "inherit", minWidth: 0 }}
+            >
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: p.isNext ? C.primary : C.textMuted }}>{formatTimeLabel(p.e._start)}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 170 }}>{p.e.title}</span>
+            </button>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
         ))}
       </div>
@@ -8500,6 +8503,17 @@ export default function App({ user }) {
         .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
+        .rt-dial-ev {
+          box-shadow: 0 1px 2px rgba(20,30,22,0.05), 0 0 0 1px rgba(20,30,22,0.10);
+          transition: box-shadow 150ms var(--rt-ease-out), transform 150ms var(--rt-ease-out);
+        }
+        .rt-dial-ev:hover {
+          box-shadow: 0 2px 6px rgba(20,30,22,0.10), 0 0 0 1px rgba(51,84,62,0.30);
+          transform: translateX(-2px);
+        }
+        .rt-dial-ev.is-next {
+          box-shadow: 0 2px 8px rgba(51,84,62,0.14), 0 0 0 1.5px rgba(51,84,62,0.45);
+        }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
