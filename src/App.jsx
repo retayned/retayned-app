@@ -2717,6 +2717,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
               <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+              {!p.isPast && p.e._prepCount > 0 && (
+                <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 10px" }}>
+                  <span style={{ fontSize: 11, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
+                  <span style={{ fontSize: 11, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
+                </div>
+              )}
             </div>
             <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
@@ -8691,7 +8697,6 @@ export default function App({ user }) {
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
-          .rt-prep-cards { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
           .rt-today-v4 > .rt-band,
           .rt-today-v4 > .rt-composer { max-width: none !important; }
@@ -12019,7 +12024,20 @@ export default function App({ user }) {
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
-                    events={personalEvents}
+                    events={(() => {
+                      // Enrich each event with _prepCount = open tasks for that
+                      // event's client. Used to render the "N tasks before" chip
+                      // under the event title on the dial rail.
+                      const openByClient = {};
+                      for (const t of (tasks || [])) {
+                        if (!t || t.done || !t.client_id) continue;
+                        openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
+                      }
+                      return (personalEvents || []).map(e => ({
+                        ...e,
+                        _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
+                      }));
+                    })()}
                     C={C}
                     scrubMs={dialScrubMs}
                     setScrubMs={setDialScrubMs}
@@ -12035,74 +12053,6 @@ export default function App({ user }) {
                     over the dial's tint that read as a shaded slab. The disc's
                     feathered rim already softens the upper arc.) */}
               </div>
-
-              {/* PREP CARDS (shell) — for upcoming events with a client in the
-                  next 4 hours, render a small quiet card positioned vertically
-                  by event time. Sits in the gap between tasks and dial.
-                  Static placeholder text — Rai wiring comes after we confirm
-                  the visual works (and the dev-button quality test). */}
-              {(() => {
-                const now = Date.now();
-                const endOfDay = new Date(now); endOfDay.setHours(23, 59, 59, 999);
-                const horizon = endOfDay.getTime();
-                const upcoming = (personalEvents || [])
-                  .filter(e => e && e.starts_at)
-                  .map(e => ({ ...e, _t: new Date(e.starts_at).getTime() }))
-                  .filter(e => e._t > now && e._t < horizon)
-                  .sort((a, b) => a._t - b._t)
-                  .slice(0, 3);
-                if (!upcoming.length) return null;
-                // Vertical positioning: map event time to a % position within
-                // the working window (8am → top, 9pm → bottom of the strip).
-                const dayStart = new Date(now); dayStart.setHours(8, 0, 0, 0);
-                const dayEnd = new Date(now); dayEnd.setHours(21, 0, 0, 0);
-                const range = dayEnd.getTime() - dayStart.getTime();
-                return (
-                  <div
-                    className="rt-prep-cards"
-                    style={{
-                      position: "fixed",
-                      top: 90,
-                      bottom: 60,
-                      right: 480,
-                      width: 180,
-                      zIndex: 2,
-                      pointerEvents: "none",
-                      outline: "1px dashed rgba(124,92,243,0.5)",
-                    }}
-                  >
-                    {upcoming.map(e => {
-                      const pct = Math.max(0, Math.min(1, (e._t - dayStart.getTime()) / range));
-                      const time = new Date(e._t).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).toLowerCase().replace(" ", "");
-                      return (
-                        <div
-                          key={e.id}
-                          style={{
-                            position: "absolute",
-                            left: 0,
-                            right: 0,
-                            top: `${pct * 100}%`,
-                            transform: "translateY(-50%)",
-                            background: "rgba(255,255,255,0.85)",
-                            backdropFilter: "blur(4px)",
-                            borderRadius: 8,
-                            padding: "7px 10px 8px",
-                            boxShadow: "0 1px 2px rgba(20,30,22,0.04), 0 0 0 1px rgba(20,30,22,0.06)",
-                            pointerEvents: "auto",
-                          }}
-                        >
-                          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                            Before {time}
-                          </div>
-                          <div style={{ fontSize: 11, color: C.text, lineHeight: 1.3, marginTop: 1, fontWeight: 500 }}>
-                            {e.client_name ? `${e.client_name} prep` : (e.title || "Event prep")}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
 
               {false && (
               <div className="rt-focus-col rt-dial-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 0, alignSelf: "stretch", minHeight: 520, marginRight: -64, marginTop: -28, marginBottom: -96 }}>
