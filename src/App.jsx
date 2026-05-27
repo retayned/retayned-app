@@ -9702,12 +9702,14 @@ export default function App({ user }) {
               }
               const calEntry = parseCalendarEntry(calText, new Date(), clients);
               if (calEntry) {
+                let evId = "ev" + Date.now();
                 try {
                   const { data: createdEv } = await personalCalendarDb.create(user.id, calEntry);
-                  const evId = createdEv?.id || "ev" + Date.now();
+                  evId = createdEv?.id || evId;
                   setPersonalEvents(prev => [{ ...calEntry, id: evId, source: "manual" }, ...(prev || [])]
                     .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                } catch (e) { console.warn("Composer event create failed:", e); }
+                  setQuickLogToast({ id: Date.now(), kind: "event", recordId: evId, label: calEntry.client_name || calEntry.title });
+                } catch (e) { console.warn("Composer event create failed:", e); setQuickLogToast({ id: Date.now(), error: true }); }
                 // reset composer + bail
                 setNewTask(""); setComposerClient(""); setNewTaskRecurring(false);
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
@@ -9730,13 +9732,16 @@ export default function App({ user }) {
                 else if (/\btext|\bmessage|\bdm\b|pinged/i.test(lowerC)) ch = "text";
                 else if (/\bmet\b|\bmeeting|\blunch|\bcoffee|caught up|\bsync\b|\bdemo\b/i.test(lowerC)) ch = "meeting";
                 try {
-                  await touchpointsDb.create(user.id, {
+                  const { data: createdTp } = await touchpointsDb.create(user.id, {
                     client_id: matchedClientC.id,
                     client_name: matchedClientC.name,
                     channel: ch,
                     notes: rawComposer,
                   });
-                } catch (e) { console.warn("Composer touchpoint create failed:", e); }
+                  const tpId = createdTp?.id || "tp" + Date.now();
+                  if (createdTp) setTpLogged(prev => [createdTp, ...(prev || [])]);
+                  setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: tpId, label: matchedClientC.name });
+                } catch (e) { console.warn("Composer touchpoint create failed:", e); setQuickLogToast({ id: Date.now(), error: true }); }
                 setNewTask(""); setComposerClient(""); setNewTaskRecurring(false);
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
                 setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
@@ -9775,6 +9780,7 @@ export default function App({ user }) {
               assigned_worker_id: newTaskWorkerId || null,
             };
             setTasks(prev => [task, ...prev]);
+            setQuickLogToast({ id: Date.now(), kind: "task", recordId: task.id, label: clientName || text });
 
             // Fire email send if assigned to a worker (non-blocking).
             if (newTaskWorkerId && created?.id) {
