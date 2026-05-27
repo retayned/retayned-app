@@ -2536,9 +2536,10 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* Today / Tomorrow selector — pill at the top of the disc. (Week is
-          deferred — a 12h dial can't show a 168h week.) */}
-      <div style={{ position: "absolute", right: 24, top: 8, zIndex: 8, display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)", pointerEvents: "auto" }}>
+      {/* Today / Tomorrow selector — bottom-center of the disc, filling the
+          lower area between the tasks. (Week deferred — a 12h dial can't show
+          a 168h week.) */}
+      <div style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 8, display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)", pointerEvents: "auto" }}>
         {["today", "tomorrow"].map(v => (
           <button
             key={v}
@@ -2712,7 +2713,7 @@ function TimeDial({ events = [], C, googleConnected = false, onConnectGoogle = n
       {isScrubbed && (
         <button
           onClick={() => { setScrubMs(0); setDayView("today"); }}
-          style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+          style={{ position: "absolute", left: "50%", bottom: 58, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
         >
           Now
         </button>
@@ -8164,6 +8165,10 @@ export default function App({ user }) {
            Falling back to the inline JSX position (absolute, dropping below
            the chip) makes the relationship clear and matches Worker. */
         .r-main { padding: 16px 16px 96px; scrollbar-gutter: stable; }
+        /* Today page: hide the scrollbar (and its gutter) for a clean edge. */
+        .r-main:has(.rt-today-v4) { scrollbar-gutter: auto; }
+        .r-main:has(.rt-today-v4)::-webkit-scrollbar { display: none; }
+        .r-main:has(.rt-today-v4) { scrollbar-width: none; -ms-overflow-style: none; }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         /* Rai page must fill the mobile viewport (minus the ~60px bottom nav) so
            the flex column lets the scroll area grow and the input bar pins to the
@@ -10124,7 +10129,11 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "0 0 0 1px rgba(20,30,22,0.07), 0 2px 6px rgba(20,30,22,0.05), 0 14px 36px rgba(20,30,22,0.10)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+                {/* Fade veil — extends right from the composer's edge so dial
+                    events dissolve into the page bg before reaching the card,
+                    never peeking sharply beside it. Page-bg → transparent. */}
+                <div aria-hidden="true" style={{ position: "absolute", top: 0, bottom: 0, left: "calc(100% + 24px)", width: 110, background: "linear-gradient(90deg, " + C.bg + " 0%, " + C.bg + " 26%, rgba(250,250,247,0) 100%)", pointerEvents: "none", zIndex: 1 }} />
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
