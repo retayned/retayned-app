@@ -8476,31 +8476,37 @@ export default function App({ user }) {
            so the gap between the composer/tasks and the dial stays visually
            constant as the viewport shrinks (dial + composer narrow in lockstep).
            Tasks reserve more (shorter column + clears the event rail). */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - (720px * var(--dial-scale, 0.84) + 220px))); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - (720px * var(--dial-scale, 0.84) + 160px))); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
+        @media (max-width: 1440px) {
+          .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
+        }
+        @media (max-width: 1300px) {
+          .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
+        }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
-        /* Dial controls sit in the GAP between the task column's right edge and
-           the scaled dial's visible left edge — recomputed per breakpoint since
-           both the task reserve and the dial scale change. */
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
-        .rt-dial-controls { right: calc(720px * var(--dial-scale, 0.84) + 40px); }
+        .rt-dial-controls { right: 640px; }
+        @media (max-width: 1600px) { .rt-dial-controls { right: 618px; } }
+        @media (max-width: 1440px) { .rt-dial-controls { right: 550px; } }
+        @media (max-width: 1300px) { .rt-dial-controls { right: 483px; } }
+        @media (max-width: 1200px) { .rt-dial-controls { right: 454px; } }
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
-           scaling the whole layer keeps every internal piece aligned). Width
-           drives it; short viewports (laptops) scale further via height. */
-        /* Dial scale — stepped unitless values (a continuous clamp can't work
-           here: CSS calc can't derive a unitless ratio from vw, and adding a
-           number to a length is invalid). The reserves below consume this as
-           720px * scale, so the gap tracks each step. */
-        .rt-today-v4 { --dial-scale: 1; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.92; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.84; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.76; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.68; } }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.82; } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.64; } }
+           scaling the whole layer keeps every internal piece aligned). */
+        .rt-dial-layer { --dial-scale: 1; }
+        @media (max-width: 1600px) { .rt-dial-layer { --dial-scale: 0.92; } }
+        @media (max-width: 1440px) { .rt-dial-layer { --dial-scale: 0.84; } }
+        @media (max-width: 1300px) { .rt-dial-layer { --dial-scale: 0.74; } }
+        @media (max-width: 1200px) { .rt-dial-layer { --dial-scale: 0.66; } }
+        @media (max-height: 860px) { .rt-dial-layer { --dial-scale: 0.82; } }
+        @media (max-height: 760px) { .rt-dial-layer { --dial-scale: 0.72; } }
+        @media (max-height: 680px) { .rt-dial-layer { --dial-scale: 0.62; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
