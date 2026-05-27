@@ -8591,12 +8591,12 @@ export default function App({ user }) {
         /* Tasks bundle (band + composer + tasks-col) capped proportional to the
            dial: right edge sits 220px clear of the dial's visible left edge.
            Formula = viewport − sidebar-left(14) − sidebar width − page-gap(14)
-                   − dial scaled width (720*scale) − gap(220).
+                   − dial scaled width (720*scale) − gap(180).
            Falls back to scale 1 + content-sidebar-w 240 if vars don't resolve. */
         .rt-tasks-col,
         .rt-today-v4 > .rt-band,
         .rt-today-v4 > .rt-composer {
-          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - 14px - (720px * var(--dial-scale, 1)) - 220px);
+          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - 14px - (720px * var(--dial-scale, 1)) - 180px);
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
@@ -8836,6 +8836,14 @@ export default function App({ user }) {
           .rt-composer-hint { display: none !important; }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
+        }
+        /* Container query on the composer itself: when the composer is narrow
+           (proportional to dial scale + sidebar state), hide the long hint so
+           Client / Worker / Date / Add stay in one row without overflow. */
+        @container (max-width: 620px) {
+          .rt-composer-hint { display: none !important; }
+        }
+        @media (max-width: 640px) {
           /* Task right-side indicators on mobile — ALL pills render as one
              standardized circle: same width/height, icon centered, no text,
              no chevron. Applies to recurring (∞), Today, Tomorrow/Later, and
@@ -10201,7 +10209,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
