@@ -7747,6 +7747,7 @@ export default function App({ user }) {
            Misalignment is the attention magnet; no color trick.
            Condensed = future buckets tighten. */
         .rt-today-canvas {
+          background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           position: relative;
           border-radius: 20px;
           padding: 6px 14px 16px;
