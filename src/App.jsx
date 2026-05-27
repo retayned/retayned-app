@@ -8472,13 +8472,14 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        /* Constant 220px gap between the composer's right edge and the dial's
-           visible left edge (720px * dial-scale from the right). The composer
-           reserves dial-width + 220; tasks reserve a bit more to clear the
-           event rail. Fallback scale if the var doesn't resolve. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - (720px * var(--dial-scale, 0.84) + 280px))); }
+        /* Constant 220px gap to the dial. The dial is fixed to the VIEWPORT
+           (occupies 720px*scale from the viewport's right edge), so the widths
+           are computed in viewport units, not r-main %: subtract the left inset
+           (sidebar 240 + gaps), the dial's scaled width, and the 220px gap.
+           Tasks reserve 60px more to clear the event rail. */
+        .rt-tasks-col { max-width: calc(100vw - 296px - 720px * var(--dial-scale, 0.84) - 280px); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - (720px * var(--dial-scale, 0.84) + 220px))); }
+        .rt-today-v4 > .rt-composer { max-width: calc(100vw - 296px - 720px * var(--dial-scale, 0.84) - 220px); }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
