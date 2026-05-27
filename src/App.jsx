@@ -2596,21 +2596,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
       {/* Today/Tomorrow + Now controls — at the disc's bottom-center, INSIDE the
           dial layer so they scale with it. */}
-      <div style={{ position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)", zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", left: "50%", bottom: -10, transform: "translateX(-50%)", zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center", gap: 12, pointerEvents: "auto" }}>
         {isScrubbed && (
           <button
             onClick={() => { setScrubMs(0); setDayView("today"); }}
-            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 15px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "8px 18px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
           >
             Now
           </button>
         )}
-        <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
+        <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 4, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
           {["today", "tomorrow"].map(v => (
             <button
               key={v}
               onClick={() => { setDayView(v); setScrubMs(0); }}
-              style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 13, fontWeight: 700, padding: "6px 15px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
+              style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 16, fontWeight: 700, padding: "8px 18px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
             >
               {v}
             </button>
@@ -2713,8 +2713,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             }}
           >
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 15, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
+              <span style={{ fontSize: 19, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
             </div>
             <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
