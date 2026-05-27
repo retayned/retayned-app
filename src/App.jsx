@@ -8472,28 +8472,33 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        /* Constant 220px gap to the dial. The dial is fixed to the VIEWPORT
-           (occupies 720px*scale from the viewport's right edge), so the widths
-           are computed in viewport units, not r-main %: subtract the left inset
-           (sidebar 240 + gaps), the dial's scaled width, and the 220px gap.
-           Tasks reserve 60px more to clear the event rail. */
-        .rt-tasks-col { max-width: calc(100vw - 296px - 720px * var(--dial-scale, 0.84) - 280px); }
+        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: calc(100vw - 296px - 720px * var(--dial-scale, 0.84) - 220px); }
+        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
+        @media (max-width: 1440px) {
+          .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
+        }
+        @media (max-width: 1300px) {
+          .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
+          .rt-today-v4 > .rt-band,
+          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
+        }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
         .rt-dial-controls { right: 300px; align-items: center !important; }
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
-        .rt-today-v4 { --dial-scale: 1; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.92; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.84; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.74; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.66; } }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.82; } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.62; } }
+        .rt-dial-layer { --dial-scale: 1; }
+        @media (max-width: 1600px) { .rt-dial-layer { --dial-scale: 0.92; } }
+        @media (max-width: 1440px) { .rt-dial-layer { --dial-scale: 0.84; } }
+        @media (max-width: 1300px) { .rt-dial-layer { --dial-scale: 0.74; } }
+        @media (max-width: 1200px) { .rt-dial-layer { --dial-scale: 0.66; } }
+        @media (max-height: 860px) { .rt-dial-layer { --dial-scale: 0.82; } }
+        @media (max-height: 760px) { .rt-dial-layer { --dial-scale: 0.72; } }
+        @media (max-height: 680px) { .rt-dial-layer { --dial-scale: 0.62; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
