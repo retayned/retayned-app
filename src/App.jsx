@@ -8691,6 +8691,7 @@ export default function App({ user }) {
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
+          .rt-spine { display: none !important; }
           .rt-tasks-col { max-width: none !important; }
           .rt-today-v4 > .rt-band,
           .rt-today-v4 > .rt-composer { max-width: none !important; }
@@ -8908,7 +8909,9 @@ export default function App({ user }) {
         }
         /* Container query on the composer itself: when the composer is narrow
            (proportional to dial scale + sidebar state), hide the long hint so
-           Client / Worker / Date / Add stay in one row without overflow. */
+           Client / Worker / Date / Add stay in one row without overflow. The
+           Add button has margin-left: auto inline, so when the row wraps it
+           naturally drops to its own line and stays anchored to the right. */
         @container (max-width: 620px) {
           .rt-composer-hint { display: none !important; }
         }
@@ -10982,7 +10985,7 @@ export default function App({ user }) {
                         fontSize: 12,
                         fontWeight: 600,
                         fontFamily: "inherit",
-                        marginLeft: 10,
+                        marginLeft: "auto",
                         flexShrink: 0,
                         cursor: newTask.trim() ? "pointer" : "default",
                         // Two-state treatment: at rest = warm-neutral box with
@@ -12031,6 +12034,37 @@ export default function App({ user }) {
                 {/* (Top-fade overlay removed — it painted a visible C.bg band
                     over the dial's tint that read as a shaded slab. The disc's
                     feathered rim already softens the upper arc.) */}
+              </div>
+
+              {/* TIMELINE SPINE (shell) — vertical hour rail in the gap zone
+                  between tasks and the dial. Fixed-positioned to the viewport
+                  with right offset tracking the dial's visible left edge via
+                  --dial-scale. Visual structure only — events come later. */}
+              <div
+                className="rt-spine"
+                style={{
+                  position: "fixed",
+                  top: 90,
+                  bottom: 60,
+                  right: "calc((720px * var(--dial-scale, 1)) + 50px)",
+                  width: 84,
+                  zIndex: 1,
+                  pointerEvents: "none",
+                }}
+              >
+                <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "linear-gradient(180deg, transparent 0%, rgba(28,50,36,0.18) 8%, rgba(28,50,36,0.18) 92%, transparent 100%)", transform: "translateX(-50%)" }} />
+                {["8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm"].map((label, i, arr) => (
+                  <div key={label} style={{ position: "absolute", left: 0, right: 0, top: `${(i / (arr.length - 1)) * 100}%`, display: "flex", alignItems: "center", gap: 6, transform: "translateY(-50%)" }}>
+                    <span style={{ flex: 1, textAlign: "right", fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: "0.02em", paddingRight: 4 }}>{label}</span>
+                    <span style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(28,50,36,0.22)", flexShrink: 0 }} />
+                    <span style={{ flex: 1 }} />
+                  </div>
+                ))}
+                <div style={{ position: "absolute", left: 0, right: 0, top: "50%", display: "flex", alignItems: "center", gap: 6, transform: "translateY(-50%)" }}>
+                  <span style={{ flex: 1, textAlign: "right", fontSize: 10, color: "#7c5cf3", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", paddingRight: 4 }}>now</span>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#7c5cf3", boxShadow: "0 0 0 3px rgba(124,92,243,0.18)", flexShrink: 0 }} />
+                  <span style={{ flex: 1 }} />
+                </div>
               </div>
 
               {false && (
