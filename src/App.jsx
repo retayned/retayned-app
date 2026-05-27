@@ -2539,7 +2539,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null }) {
       {/* Today / Tomorrow selector — bottom-center of the disc, filling the
           lower area between the tasks. (Week deferred — a 12h dial can't show
           a 168h week.) */}
-      <div style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 8, display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)", pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", left: "50%", bottom: 34, transform: "translateX(-50%)", zIndex: 8, display: "flex", background: "#fff", borderRadius: 999, padding: 3, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)", pointerEvents: "auto" }}>
         {["today", "tomorrow"].map(v => (
           <button
             key={v}
@@ -2695,7 +2695,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null }) {
       {isScrubbed && (
         <button
           onClick={() => { setScrubMs(0); setDayView("today"); }}
-          style={{ position: "absolute", left: "50%", bottom: 58, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+          style={{ position: "absolute", left: "50%", bottom: 76, transform: "translateX(-50%)", zIndex: 7, background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
         >
           Now
         </button>
