@@ -4799,30 +4799,43 @@ export default function App({ user }) {
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
-  const SIDEBAR_PIN_BP = 1700; // ≥ this width: sidebar pinned open beside content. Below: rail + overlay.
+  const SIDEBAR_PIN_BP = 1700; // ≥ this width: sidebar pinned open (always 240). Below: 64px rail + hover-to-open.
+  // Hover-to-open state (only meaningful below the pin breakpoint).
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  const hoverTimerRef = useRef(null);
+  // sidebarCollapsed = "is currently showing as rail (64px)". True below the
+  // breakpoint when not hovering; false otherwise. All visual-layout references
+  // throughout the sidebar JSX use this flag.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
-    // Below the pin breakpoint the sidebar starts collapsed (thin rail); at or
-    // above it starts open. (No longer persisted — width drives the default.)
     try { return window.innerWidth < SIDEBAR_PIN_BP; } catch { return false; }
   });
-  // Auto-pin/unpin on resize across the breakpoint, and keep the content's
-  // left offset in sync with the pin state on every resize.
+  // Width-driven pin state + content offset on every resize.
   useEffect(() => {
     if (typeof window === "undefined" || typeof document === "undefined") return;
     const applyWidthState = () => {
       const pinned = window.innerWidth >= SIDEBAR_PIN_BP;
-      setSidebarCollapsed(!pinned);
+      if (pinned) setHoverExpanded(false); // hover irrelevant when pinned
       // --content-sidebar-w: what the CONTENT's left edge uses. Below the
-      // breakpoint the content always sits beside the 64px rail, so opening
-      // the sidebar floats it OVER the content instead of pushing it. At/above
-      // the breakpoint content sits beside the full 240px pinned sidebar.
+      // breakpoint, content stays at the 64px rail edge so the hover-open
+      // sidebar floats OVER content. At/above, content sits beside 240.
       document.documentElement.style.setProperty("--content-sidebar-w", pinned ? "240px" : "64px");
     };
     applyWidthState();
     window.addEventListener("resize", applyWidthState);
     return () => window.removeEventListener("resize", applyWidthState);
   }, []);
+  // Recompute the visual collapsed flag whenever viewport or hover changes.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const recompute = () => {
+      const pinned = window.innerWidth >= SIDEBAR_PIN_BP;
+      setSidebarCollapsed(!pinned && !hoverExpanded);
+    };
+    recompute();
+    window.addEventListener("resize", recompute);
+    return () => window.removeEventListener("resize", recompute);
+  }, [hoverExpanded]);
   useEffect(() => {
     if (typeof document === "undefined") return;
     // --sidebar-w: the sidebar's actual rendered width (64 rail / 240 expanded).
@@ -8575,8 +8588,16 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        /* (max-width constraints on band/composer/tasks removed — clean base
-           while the responsive system is being rebuilt around the dial scale.) */
+        /* Tasks bundle (band + composer + tasks-col) capped proportional to the
+           dial: right edge sits 220px clear of the dial's visible left edge.
+           Formula = viewport − sidebar-left(14) − sidebar width − page-gap(14)
+                   − dial scaled width (720*scale) − gap(220).
+           Falls back to scale 1 + content-sidebar-w 240 if vars don't resolve. */
+        .rt-tasks-col,
+        .rt-today-v4 > .rt-band,
+        .rt-today-v4 > .rt-composer {
+          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - 14px - (720px * var(--dial-scale, 1)) - 220px);
+        }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Counter-scale utility: elements inside the dial layer (which is scaled
@@ -8590,14 +8611,14 @@ export default function App({ user }) {
            at the disc's bottom-center, so they scale with the dial.) */
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
-        .rt-dial-layer { --dial-scale: 1; }
-        @media (max-width: 1600px) { .rt-dial-layer { --dial-scale: 0.92; } }
-        @media (max-width: 1440px) { .rt-dial-layer { --dial-scale: 0.84; } }
-        @media (max-width: 1300px) { .rt-dial-layer { --dial-scale: 0.74; } }
-        @media (max-width: 1200px) { .rt-dial-layer { --dial-scale: 0.66; } }
-        @media (max-height: 860px) { .rt-dial-layer { --dial-scale: 0.82; } }
-        @media (max-height: 760px) { .rt-dial-layer { --dial-scale: 0.72; } }
-        @media (max-height: 680px) { .rt-dial-layer { --dial-scale: 0.62; } }
+        .rt-today-v4 { --dial-scale: 1; }
+        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.92; } }
+        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.84; } }
+        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.74; } }
+        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.66; } }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.82; } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.62; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
@@ -8968,7 +8989,21 @@ export default function App({ user }) {
       {/* SIDEBAR — dark green primary-deep frame. Provides architectural
           contrast against the cream content area. Active nav items pop
           forward as warm-cream chips; everything else recedes. */}
-      <div className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")} style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 220ms var(--rt-ease-out)" }}>
+      <div
+        className={"r-desk" + (sidebarCollapsed ? " is-collapsed" : "")}
+        onMouseEnter={() => {
+          // Hover-to-open only matters BELOW the pin breakpoint. At/above the
+          // breakpoint the sidebar is pinned 240 already and hover is irrelevant.
+          if (typeof window === "undefined" || window.innerWidth >= SIDEBAR_PIN_BP) return;
+          if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+          hoverTimerRef.current = setTimeout(() => { setHoverExpanded(true); hoverTimerRef.current = null; }, 150);
+        }}
+        onMouseLeave={() => {
+          if (typeof window === "undefined" || window.innerWidth >= SIDEBAR_PIN_BP) return;
+          if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+          hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, 250);
+        }}
+        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -9286,22 +9321,8 @@ export default function App({ user }) {
         </div>
       </div>
 
-      {/* SIDEBAR COLLAPSE TOGGLE — floating disc on the sidebar's right
-          edge. Rendered OUTSIDE the sidebar (as a sibling) so it can
-          straddle the edge without being clipped by the sidebar's
-          overflow-y: auto. Position is computed from --sidebar-w (set
-          on documentElement when sidebarCollapsed changes) so the disc
-          follows the sidebar's right edge through the collapse/expand
-          transition. Vertically aligned with the brand mark. Hidden on
-          mobile — the mobile bottom nav handles all navigation there. */}
-      <button
-        className="rt-sidebar-toggle"
-        onClick={() => setSidebarCollapsed(v => !v)}
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {sidebarCollapsed ? "›" : "‹"}
-      </button>
+      {/* (Sidebar toggle arrow removed — sidebar state is purely width-driven:
+          pinned open at ≥1700px, thin rail with hover-to-overlay below.) */}
 
       {/* MOBILE TOP */}
       {/* Mobile top bar deliberately removed (May 2026).
