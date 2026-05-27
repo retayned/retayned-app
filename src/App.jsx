@@ -8556,18 +8556,18 @@ export default function App({ user }) {
            preserved at every width. Tasks reserve the most (they must never
            overlap); composer/band reserve less since they intentionally fade
            UNDER the dial's faded edge. */
-        .rt-tasks-col { max-width: min(1080px, calc(100% - 560px)); }
+        .rt-tasks-col,
         .rt-today-v4 > .rt-band,
-        .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 380px)); }
+        .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 560px)); }
         @media (max-width: 1440px) {
-          .rt-tasks-col { max-width: min(1080px, calc(100% - 480px)); }
+          .rt-tasks-col,
           .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 320px)); }
+          .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 480px)); }
         }
         @media (max-width: 1300px) {
-          .rt-tasks-col { max-width: min(1080px, calc(100% - 420px)); }
+          .rt-tasks-col,
           .rt-today-v4 > .rt-band,
-          .rt-today-v4 > .rt-composer { max-width: min(1240px, calc(100% - 280px)); }
+          .rt-today-v4 > .rt-composer { max-width: min(1080px, calc(100% - 420px)); }
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
@@ -9151,7 +9151,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.primaryGhost, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.primarySoft, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
