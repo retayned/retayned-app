@@ -10129,11 +10129,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "0 0 0 1px rgba(20,30,22,0.07), 0 2px 6px rgba(20,30,22,0.05), 0 14px 36px rgba(20,30,22,0.10)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
-                {/* Fade veil — extends right from the composer's edge so dial
-                    events dissolve into the page bg before reaching the card,
-                    never peeking sharply beside it. Page-bg → transparent. */}
-                <div aria-hidden="true" style={{ position: "absolute", top: 0, bottom: 0, left: "calc(100% + 24px)", width: 110, background: "linear-gradient(90deg, " + C.bg + " 0%, " + C.bg + " 26%, rgba(250,250,247,0) 100%)", pointerEvents: "none", zIndex: 1 }} />
+              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
