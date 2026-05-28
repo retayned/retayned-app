@@ -2630,20 +2630,40 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
-        {/* D — stripped to bones. A thin arc traces the path of time; event
-            dots mark scheduled things; NOW dot marks current time. No gradient,
-            no ticks, no hour labels, no hub. Quiet radial timeline. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.20)" strokeWidth="0.6" />
-        {/* Event rim dots */}
+        <defs>
+          {/* Inner shadow (concept 05) — makes the disc feel recessed/debossed
+              into the page. Technique: take the shape's alpha, blur it, offset,
+              then composite so the shadow falls INSIDE the fill. */}
+          <filter id="rt-dial-inner" x="-20%" y="-20%" width="140%" height="140%">
+            <feComponentTransfer in="SourceAlpha"><feFuncA type="table" tableValues="1 0" /></feComponentTransfer>
+            <feGaussianBlur stdDeviation="14" />
+            <feOffset dx="6" dy="0" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.14" />
+            <feComposite in2="offsetblur" operator="in" />
+            <feComposite in2="SourceAlpha" operator="in" />
+            <feMerge><feMergeNode in="SourceGraphic" /><feMergeNode /></feMerge>
+          </filter>
+          {/* Drop shadow for event dots — makes them feel raised above the
+              recessed disc. */}
+          <filter id="rt-dial-dot-raise" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.2" floodColor="#141E16" floodOpacity="0.28" />
+          </filter>
+        </defs>
+        {/* Debossed disc — deep-cream fill with inner shadow so it reads as
+            carved into the page. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="#F6F3EC" filter="url(#rt-dial-inner)" />
+        {/* Thin arc traces the path of time */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(51,84,62,0.18)" strokeWidth="0.6" />
+        {/* Event rim dots — raised above the recessed disc via drop shadow. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.3" strokeWidth="1.4" />}
-            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="10" fill="none" stroke="#33543E" strokeOpacity="0.3" strokeWidth="1.4" />}
+            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r={p.isNext ? "5" : "4.5"} fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} filter={p.isPast ? undefined : "url(#rt-dial-dot-raise)"} />
           </g>
         ))}
         {/* NOW marker — purple dot at current time. */}
         {nowInWindow && <>
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#7c5cf3" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#7c5cf3" filter="url(#rt-dial-dot-raise)" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" />
         </>}
       </svg>
