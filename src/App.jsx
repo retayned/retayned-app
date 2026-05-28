@@ -2594,18 +2594,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* Today/Tomorrow + Now controls — at the disc's bottom-center, INSIDE the
+      {/* Today/Tomorrow + Now controls — upper-right of the dial, INSIDE the
           dial layer so they scale with it. */}
-      <div style={{ position: "absolute", left: "50%", bottom: -10, transform: "translateX(-50%)", zIndex: 8, pointerEvents: "auto" }}>
-       <div className="rt-dial-cs" style={{ transformOrigin: "top center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-        {isScrubbed && (
-          <button
-            onClick={() => { setScrubMs(0); setDayView("today"); }}
-            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "8px 18px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
-          >
-            Now
-          </button>
-        )}
+      <div style={{ position: "absolute", right: 14, top: 6, zIndex: 8, pointerEvents: "auto" }}>
+       <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
         <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 4, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
           {["today", "tomorrow"].map(v => (
             <button
@@ -2617,6 +2609,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             </button>
           ))}
         </div>
+        {isScrubbed && (
+          <button
+            onClick={() => { setScrubMs(0); setDayView("today"); }}
+            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "8px 18px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+          >
+            Now
+          </button>
+        )}
        </div>
       </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
@@ -2748,7 +2748,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", right: "14%", top: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "top right" }}>↑ {earlierCount} earlier</div>
+        <div className="rt-dial-cs" style={{ position: "absolute", left: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom left" }}>↑ {earlierCount} earlier</div>
       )}
       {laterCount > 0 && (
         <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↓ {laterCount} later</div>
@@ -2797,14 +2797,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
        </div>
       </div>
 
-      {/* (?) help — top of the dial, beside the "earlier" count. */}
+      {/* (?) help — top-left of the dial. Moved out of the way of the
+          Today/Tomorrow/Now controls which now live upper-right. */}
       <div
         className="rt-dial-help rt-dial-cs"
         tabIndex={0}
-        style={{ position: "absolute", right: 14, top: 4, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", transformOrigin: "top right" }}
+        style={{ position: "absolute", left: "8%", top: 6, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", transformOrigin: "top left" }}
       >
         ?
-        <div className="rt-dial-help-tip" style={{ position: "absolute", right: 0, top: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(-4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
+        <div className="rt-dial-help-tip" style={{ position: "absolute", left: 0, top: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(-4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
           This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
         </div>
       </div>
@@ -8353,13 +8354,18 @@ export default function App({ user }) {
         .r-main:has(.rt-today-v4) { scrollbar-gutter: auto; }
         .r-main:has(.rt-today-v4)::-webkit-scrollbar { display: none; }
         .r-main:has(.rt-today-v4) { scrollbar-width: none; -ms-overflow-style: none; }
-        /* Today page only: subtle radial vignette — page reads as a spotlit
-           composition rather than a flat canvas with two floating panels.
-           Background gradient sits BEHIND content; the sweeping arc (rendered
-           as inline SVG inside .rt-today-v4) adds a single geometric tie. */
+        /* Today page only: the dial's light bleeds into the page. Radial wash
+           anchored at the right edge — warm cream from the dial's gradient
+           fades across to the cream beige under the tasks, with a hint of
+           the dial's evening purple. The dial isn't a separate object — it's
+           a sun in the same sky as the tasks. */
         .r-main:has(.rt-today-v4) {
           background:
-            radial-gradient(ellipse 1400px 900px at 50% 45%, ${C.bg} 0%, ${C.bg} 50%, rgba(234,228,214,0.35) 100%) !important;
+            radial-gradient(ellipse 1100px 800px at 100% 50%,
+              rgba(234,228,214,0.55) 0%,
+              rgba(244,228,200,0.30) 25%,
+              rgba(124,92,243,0.04) 45%,
+              ${C.bg} 70%) !important;
         }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         /* Rai page must fill the mobile viewport (minus the ~60px bottom nav) so
@@ -8711,12 +8717,12 @@ export default function App({ user }) {
         /* Tasks bundle (band + composer + tasks-col) capped proportional to the
            dial: right edge sits 180px clear of the dial's visible left edge.
            Formula = viewport − sidebar-left(14) − sidebar width − sidebar-content-gap
-                   − dial scaled width (720*scale) − gap(180).
+                   − dial scaled width (720*scale) − gap(120).
            Falls back to scale 1 + content-sidebar-w 240 + gap 16 if vars don't resolve. */
         .rt-tasks-col,
         .rt-today-v4 > .rt-band,
         .rt-today-v4 > .rt-composer {
-          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 180px);
+          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 120px);
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
@@ -10195,30 +10201,6 @@ export default function App({ user }) {
                 setFocusMode(false);
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
-              {/* Sweeping arc (#5) — single 0.5px curve from upper-left of the
-                  tasks area down to the dial's visible left edge. Echoes the
-                  dial's circle in line form, ties the two sides into one
-                  geometric gesture. Fixed-positioned to viewport so it crosses
-                  the whole page; pointer-events:none so it never blocks input. */}
-              <svg
-                aria-hidden="true"
-                style={{ position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", pointerEvents: "none", zIndex: 0, opacity: 0.5 }}
-                preserveAspectRatio="none"
-                viewBox="0 0 100 100"
-              >
-                {/* Cubic Bezier — starts top-left of content area (≈14% from left,
-                    12% down), arcs down to the dial's visible left edge (≈right
-                    edge minus dial's scaled width, ~50% vertical). The curve
-                    sweeps gently so it reads as ambient, not directional. */}
-                <path
-                  d="M 14 12 C 32 38, 52 58, 78 50"
-                  stroke="rgba(28,50,36,0.10)"
-                  strokeWidth="0.08"
-                  fill="none"
-                  vectorEffect="non-scaling-stroke"
-                  style={{ strokeWidth: "0.5px" }}
-                />
-              </svg>
               {/* Focus-mode exit scrim — a full-viewport tap target behind the
                   focused task. The dimmed rows/areas have pointer-events:none,
                   so on mobile taps never reached the grid wrapper's onClick;
