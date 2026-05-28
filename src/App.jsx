@@ -18,7 +18,7 @@ import {
 } from "d3-force";
 import { zoom as d3zoom, zoomIdentity } from "d3-zoom";
 import { select as d3select } from "d3-selection";
- 
+
 // ============================================================
 // PALETTE
 // ============================================================
@@ -2631,40 +2631,23 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
-          {/* Subsurface orb — the day's hours glow up from BENEATH the parchment.
-              Warm, dim radial (paper veils what's behind it), brightest slightly
-              up-left to follow the page's light, no drawn edge (a backlit form
-              has none), with a faint perimeter dim where the form curves away
-              below the sheet. The fiber layer below sits OVER the glow (multiply)
-              so it reads as light THROUGH paper, not a lit screen. Backlit paper
-              reveals more grain than ambient — this region is grainier than the
-              rest of the page on purpose. Geometry unchanged.
-              FALLBACK (A-light): drop the fiber rect, raise stop-0 alpha to ~0.52,
-              remove the 0.90 dim stop. That's the pure-radiance variant. */}
-          <radialGradient id="rt-dial-sage" cx={CX - 44} cy={CY - 36} r={R + 6} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 235, 202, 0.40)" />
-            <stop offset="0.34" stopColor="rgba(253, 229, 194, 0.22)" />
-            <stop offset="0.70" stopColor="rgba(250, 226, 190, 0.09)" />
-            <stop offset="0.90" stopColor="rgba(95, 78, 46, 0.04)" />
-            <stop offset="1" stopColor="rgba(95, 78, 46, 0)" />
+          {/* A-light — pure warm radiance off the page. Bright and PRESENT,
+              edgeless (light has no drawn edge), no fiber-multiply (multiply
+              darkens, and on near-white paper a dim glow under it just vanishes —
+              that was the failed subsurface attempt). Bright core pulled into the
+              visible field (cx left of center) so the orb gives the event rail a
+              field to sit on instead of fading to nothing at the rim.
+              Geometry unchanged. Dial: stop-0 alpha = overall presence. */}
+          <radialGradient id="rt-dial-sage" cx={CX - 70} cy={CY} r={R + 20} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 241, 216, 0.55)" />
+            <stop offset="0.32" stopColor="rgba(255, 236, 206, 0.34)" />
+            <stop offset="0.62" stopColor="rgba(255, 233, 200, 0.16)" />
+            <stop offset="0.85" stopColor="rgba(255, 233, 200, 0.06)" />
+            <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
-          {/* Paper fiber revealed by the light beneath. fractalNoise, desaturated,
-              crushed to a whisper of alpha; multiplied over the glow below.
-              Tuning dials: baseFrequency (grain fineness), feFuncA slope (strength). */}
-          <filter id="rt-orb-fiber" x="0" y="0" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="13" stitchTiles="stitch" result="n" />
-            <feColorMatrix in="n" type="saturate" values="0" result="g" />
-            <feComponentTransfer in="g"><feFuncA type="linear" slope="0.06" /></feComponentTransfer>
-          </filter>
-          {/* Clip the fiber to the half-disc so it only reveals inside the orb. */}
-          <clipPath id="rt-orb-clip">
-            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} />
-          </clipPath>
         </defs>
-        {/* Subsurface glow — half disc, no edge stroke (a backlit form has none) */}
+        {/* A-light radiance — half disc, no edge stroke (light has no drawn edge) */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
-        {/* Paper fiber over the glow → reads as light THROUGH the parchment */}
-        <rect x={CX - R} y={CY - R} width={R} height={2 * R} clipPath="url(#rt-orb-clip)" filter="url(#rt-orb-fiber)" style={{ mixBlendMode: "multiply" }} />
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
