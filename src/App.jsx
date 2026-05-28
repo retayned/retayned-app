@@ -2630,57 +2630,22 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
-        <defs>
-          {/* Time-of-day gradient — stops computed from the REAL hour at each
-              position across the NOW-centered window (top = now−6h, bottom =
-              now+6h). Dark in evening/night, light through midday. */}
-          <linearGradient id="rt-dial-grad" x1="0" y1="0" x2="0" y2="1">
-            {gradStops.map((s, i) => (
-              <stop key={i} offset={s.off.toFixed(3)} stopColor={s.color} />
-            ))}
-          </linearGradient>
-          {/* Feathered fill (concept E) — a radial mask centered on the disc
-              center (the right edge). The fill is solid through the interior,
-              then fades to transparent as it approaches the rim, so the disc
-              dissolves into the page with NO edge at all. The feather band is
-              the last ~5% of the radius. */}
-          <radialGradient id="rt-dial-feather" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#fff" stopOpacity="1" />
-            <stop offset="0.95" stopColor="#fff" stopOpacity="1" />
-            <stop offset="1" stopColor="#fff" stopOpacity="0" />
-          </radialGradient>
-          <mask id="rt-dial-mask" maskUnits="userSpaceOnUse" x="0" y="0" width={VB_W} height={VB_H}>
-            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-feather)" />
-          </mask>
-        </defs>
-        {/* Half disc — feathered fill, no edge. The mask dissolves the rim.
-            Faded to 40% so it reads as atmospheric watermark; tick marks +
-            hour labels below stay at full strength for readability. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" mask="url(#rt-dial-mask)" opacity="0.55" />
-        {/* Hour ticks */}
-        <g stroke="rgba(30,38,31,0.18)" strokeWidth="1.3" strokeLinecap="round">
-          {ticks.map((d, i) => <path key={i} d={d} />)}
-        </g>
-        <g fontFamily="Manrope, sans-serif" fontSize="11" fontWeight="700" fill="#9A9A93">
-          {tickLabels.map((t, i) => <text key={i} x={t.x.toFixed(1)} y={(t.y + 4).toFixed(1)} textAnchor="middle">{t.lbl}</text>)}
-        </g>
-        {/* Event rim dots — mark each event's time on the arc; the rail to the
-            left lists the details, aligned to these dots. */}
+        {/* D — stripped to bones. A thin arc traces the path of time; event
+            dots mark scheduled things; NOW dot marks current time. No gradient,
+            no ticks, no hour labels, no hub. Quiet radial timeline. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.20)" strokeWidth="0.6" />
+        {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
             {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.3" strokeWidth="1.4" />}
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — dot at NOW's position; hidden when the dial is turned
-            far enough that NOW leaves the window. */}
+        {/* NOW marker — purple dot at current time. */}
         {nowInWindow && <>
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#7c5cf3" />
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" />
         </>}
-        {/* Hub disc — no stroke; the feathered rim is edgeless so the hub
-            stays borderless too for consistency. */}
-        <circle cx={CX} cy={CY} r={HUB_R} fill="#fff" />
       </svg>
 
       {/* Event RAIL — events live OUTSIDE the disc now, in a vertical list to
