@@ -2430,6 +2430,33 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   const windowEnd = centerMs + HALF_WINDOW_MS;
   const isScrubbed = Math.abs(scrubMs) > 60000 || dayView !== "today";
 
+  // Time-of-day gradient palette — the dial's core color shifts with the
+  // center hour (follows scrubbing). Day = sage/cream; night = purple/navy.
+  // A smooth day-factor (0 = deep night, 1 = full day) crossfades the two.
+  const dialColors = (() => {
+    const h = new Date(centerMs).getHours() + new Date(centerMs).getMinutes() / 60;
+    // Day factor: ramps up 5–8am, full 8am–5pm, ramps down 5–8pm, night otherwise.
+    let day;
+    if (h >= 8 && h <= 17) day = 1;
+    else if (h > 17 && h < 20) day = 1 - (h - 17) / 3;     // dusk
+    else if (h > 5 && h < 8) day = (h - 5) / 3;            // dawn
+    else day = 0;                                          // night
+    day = Math.max(0, Math.min(1, day));
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    const mix = (c1, c2, t) => `rgb(${lerp(c1[0], c2[0], t)}, ${lerp(c1[1], c2[1], t)}, ${lerp(c1[2], c2[2], t)})`;
+    // Night palette → Day palette
+    const coreNight = [76, 70, 165];   // #4C46A5 indigo
+    const coreDay   = [85, 139, 104];  // #558B68 sage
+    const midNight  = [42, 38, 84];    // #2A2654 deep navy-violet
+    const midDay    = [230, 239, 233]; // #E6EFE9 soft sage
+    return {
+      core: mix(coreNight, coreDay, day),
+      mid: mix(midNight, midDay, day),
+      coreOpacity: 0.22 + (1 - day) * 0.10,   // night slightly denser
+      midOpacity: 0.30 + day * 0.25,
+    };
+  })();
+
   // Normalize + split events into in-window vs earlier/later.
   const all = events
     .map(e => ({ ...e, _start: new Date(e.starts_at), _end: e.ends_at ? new Date(e.ends_at) : null }))
@@ -2631,13 +2658,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
-          {/* Sage body fill (concept 03) — single brand-green radial from the
-              disc center (right edge) fading to transparent at the rim. */}
+          {/* Time-of-day body fill — core color shifts day (sage) ↔ night
+              (purple/navy) based on the dial's center hour, following scrubbing.
+              Wider solid core (holds to ~48%) gives the disc more body. */}
           <radialGradient id="rt-dial-sage" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#558B68" stopOpacity="0.22" />
-            <stop offset="0.30" stopColor="#E6EFE9" stopOpacity="0.55" />
-            <stop offset="0.55" stopColor="#F3F8F5" stopOpacity="0.30" />
-            <stop offset="0.72" stopColor="#F3F8F5" stopOpacity="0" />
+            <stop offset="0" stopColor={dialColors.core} stopOpacity={dialColors.coreOpacity} />
+            <stop offset="0.30" stopColor={dialColors.core} stopOpacity={dialColors.coreOpacity * 0.85} />
+            <stop offset="0.48" stopColor={dialColors.mid} stopOpacity={dialColors.midOpacity} />
+            <stop offset="0.68" stopColor={dialColors.mid} stopOpacity={dialColors.midOpacity * 0.5} />
+            <stop offset="0.82" stopColor={dialColors.mid} stopOpacity="0" />
           </radialGradient>
         </defs>
         {/* Sage-filled half disc */}
