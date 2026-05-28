@@ -2629,7 +2629,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           letterboxing/shift and the HTML card overlay (positioned by %) lines
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none", opacity: 0.30 }}>
+      <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
           {/* Time-of-day gradient — stops computed from the REAL hour at each
               position across the NOW-centered window (top = now−6h, bottom =
@@ -2653,8 +2653,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-feather)" />
           </mask>
         </defs>
-        {/* Half disc — feathered fill, no edge. The mask dissolves the rim. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" mask="url(#rt-dial-mask)" />
+        {/* Half disc — feathered fill, no edge. The mask dissolves the rim.
+            Faded to 40% so it reads as atmospheric watermark; tick marks +
+            hour labels below stay at full strength for readability. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" mask="url(#rt-dial-mask)" opacity="0.4" />
         {/* Hour ticks */}
         <g stroke="rgba(30,38,31,0.18)" strokeWidth="1.3" strokeLinecap="round">
           {ticks.map((d, i) => <path key={i} d={d} />)}
