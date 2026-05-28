@@ -2686,6 +2686,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
+        {placements.length === 0 && (
+          <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
+            <span style={{ fontFamily: "'Caveat', 'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 22, color: "#2E6B4F", lineHeight: 1.15 }}>
+              {dayView === "tomorrow" ? "Nothing scheduled tomorrow." : "No calls today."}
+            </span>
+            <span style={{ fontSize: 12, color: "#6B6B66", lineHeight: 1.45 }}>
+              {dayView === "tomorrow" ? "A clear day ahead." : "A clear day. Keep moving."}
+            </span>
+          </div>
+        )}
         {placements.map((p, i) => {
           // Fade cards that ride up behind the composer/band (top of the disc)
           // so they dissolve BEHIND it instead of peeking past its edges.
@@ -2697,6 +2707,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           return (
           <div
             key={p.e.id || i}
+            className="rt-dial-event-row"
             onClick={() => setSelectedId(p.e.id)}
             style={{
               position: "absolute",
@@ -2706,25 +2717,38 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               display: "flex",
               alignItems: "center",
               justifyContent: "flex-end",
-              gap: 10,
+              gap: 0,
               opacity: baseOpacity * topFade,
               pointerEvents: topFade < 0.5 ? "none" : "auto",
-              transition: "opacity 120ms var(--rt-ease-out)",
-              width: 210,
+              transition: "opacity 120ms var(--rt-ease-out), background 120ms var(--rt-ease-out)",
+              width: 230,
+              padding: "6px 4px 6px 14px",
               cursor: "pointer",
             }}
           >
-            <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? C.primaryLight : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+            <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0, background: p.isNext ? "rgba(51,84,62,0.05)" : "transparent", padding: p.isNext ? "8px 12px" : "0", borderRadius: p.isNext ? 10 : 0, marginRight: p.isNext ? -4 : 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{p.isNext ? `Next · ${formatTimeLabel(p.e._start)}` : formatTimeLabel(p.e._start)}</span>
+              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right", textDecoration: (p.isPast && p.e._statusDone) ? "line-through" : "none", textDecorationColor: "rgba(28,50,36,0.30)" }}>{p.e.title}</span>
+              {p.e.client_name && (
+                <span style={{ fontSize: 10, color: "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
+              )}
               {!p.isPast && p.e._prepCount > 0 && (
-                <div style={{ marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 10px" }}>
-                  <span style={{ fontSize: 11, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
-                  <span style={{ fontSize: 11, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
+                <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: p.isNext ? "rgba(124,92,243,0.12)" : "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
+                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
+                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
                 </div>
               )}
             </div>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
+            <span style={{ width: 30, height: 1, background: p.isNext ? "rgba(51,84,62,0.45)" : "rgba(28,50,36,0.18)", margin: "0 8px", flex: "0 0 30px" }} />
+            {p.isPast ? (
+              p.e._statusDone ? (
+                <div style={{ width: 18, height: 18, borderRadius: "50%", flex: "0 0 18px", background: "#558B68", color: "#fff", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>✓</div>
+              ) : (
+                <div style={{ width: 18, height: 18, borderRadius: "50%", flex: "0 0 18px", background: "transparent", boxShadow: "inset 0 0 0 1.5px #B7B7AE", color: "#9A9A93", fontSize: 11, fontStyle: "italic", display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>?</div>
+              )
+            ) : (
+              <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isNext ? "#33543E" : "#558B68", boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
+            )}
           </div>
           );
         })}
@@ -2738,8 +2762,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↓ {laterCount} later</div>
       )}
 
-      {/* Hub content — the NEXT event (or selected), against the right edge. */}
-      <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: 150, textAlign: "right", zIndex: 6 }}>
+      {/* Hub content — the NEXT event (or selected), against the right edge.
+          When SELECTED (clicked), expands into a detail drawer with prep tasks
+          + action pills. When showing default NEXT, stays compact. */}
+      <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 260 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
         {hubEvent ? (
           <>
@@ -2749,17 +2775,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <div style={{ fontSize: 17, fontWeight: 800, color: C.primaryDeep, marginTop: 1 }}>{formatTimeLabel(hubEvent._start)}</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.2 }}>{hubEvent.title}</div>
             {hubEvent.client_name && <div style={{ fontSize: 10.5, color: C.textSec }}>{hubEvent.client_name}</div>}
-            {selectedEvent && (
-              <button onClick={() => setSelectedId(null)} style={{ marginTop: 4, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}>show next</button>
+            {selectedEvent ? (
+              <>
+                {hubEvent._prepCount > 0 && (
+                  <div style={{ marginTop: 10, padding: "8px 0 0", borderTop: "0.5px solid " + C.borderLight, textAlign: "left" }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: C.textMuted, marginBottom: 4 }}>Prep · {hubEvent._prepCount} open</div>
+                    <div style={{ fontSize: 11, color: C.textSec, lineHeight: 1.4 }}>{hubEvent._prepCount} open task{hubEvent._prepCount === 1 ? "" : "s"} for {hubEvent.client_name || "this client"}</div>
+                  </div>
+                )}
+                <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
+                  <button onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }} style={{ background: "rgba(196,67,43,0.10)", color: "#A03422", border: "none", borderRadius: 999, padding: "3px 10px", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+                  <button onClick={() => setSelectedId(null)} style={{ background: "transparent", color: C.textMuted, border: "none", borderRadius: 999, padding: "3px 10px", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>← back</button>
+                </div>
+              </>
+            ) : (
+              <div>
+                <button
+                  onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
+                  style={{ marginTop: 3, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", padding: 0 }}
+                >
+                  delete
+                </button>
+              </div>
             )}
-            <div>
-              <button
-                onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
-                style={{ marginTop: 3, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", padding: 0 }}
-              >
-                delete
-              </button>
-            </div>
           </>
         ) : (
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
@@ -8675,6 +8713,11 @@ export default function App({ user }) {
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
+        /* Dial event row — full strip is the click target. Subtle gray wash
+           on hover. The "next" event already has a sage bg painted via inline
+           styles so it stays visually distinct. */
+        .rt-dial-event-row { transition: background 120ms var(--rt-ease-out); border-radius: 10px; }
+        .rt-dial-event-row:hover { background: rgba(20,30,22,0.04); }
         /* Counter-scale utility: elements inside the dial layer (which is scaled
            by var(--dial-scale)) that should render at a CONSTANT on-screen size
            regardless of scale. Cancels out the parent transform by 1/scale.
@@ -12025,18 +12068,36 @@ export default function App({ user }) {
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
                     events={(() => {
-                      // Enrich each event with _prepCount = open tasks for that
-                      // event's client. Used to render the "N tasks before" chip
-                      // under the event title on the dial rail.
+                      // Enrich each event with:
+                      // _prepCount: open tasks for that event's client (future events)
+                      // _statusDone: bool — true if a completed task/touchpoint for
+                      //   that client exists within ±2h of the event time (past
+                      //   events render ✓ vs '?' badge accordingly).
                       const openByClient = {};
+                      const completionsByClient = {};
                       for (const t of (tasks || [])) {
-                        if (!t || t.done || !t.client_id) continue;
-                        openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
+                        if (!t || !t.client_id) continue;
+                        if (!t.done) {
+                          openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
+                        } else if (t.completed_at) {
+                          (completionsByClient[t.client_id] = completionsByClient[t.client_id] || []).push(t.completed_at);
+                        }
                       }
-                      return (personalEvents || []).map(e => ({
-                        ...e,
-                        _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
-                      }));
+                      const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+                      return (personalEvents || []).map(e => {
+                        const eventTime = e && e.starts_at ? new Date(e.starts_at).getTime() : 0;
+                        let statusDone = false;
+                        if (e && e.client_id && eventTime > 0 && completionsByClient[e.client_id]) {
+                          for (const c of completionsByClient[e.client_id]) {
+                            if (Math.abs(c - eventTime) <= TWO_HOURS_MS) { statusDone = true; break; }
+                          }
+                        }
+                        return {
+                          ...e,
+                          _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
+                          _statusDone: statusDone,
+                        };
+                      });
                     })()}
                     C={C}
                     scrubMs={dialScrubMs}
