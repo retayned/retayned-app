@@ -4932,7 +4932,10 @@ export default function App({ user }) {
       // content's left edge. Smaller when collapsed (rail), more generous when
       // pinned open. Used in r-main's left calc INSTEAD of --page-gap so the
       // top/right/bottom page margins stay constant (no right-side shift).
-      document.documentElement.style.setProperty("--sidebar-content-gap", pinned ? "32px" : "16px");
+      document.documentElement.style.setProperty("--sidebar-content-gap", pinned ? "48px" : "16px");
+      // Attribute selector mirror — used by a high-specificity !important rule
+      // on .r-main so the gap can't be silently overridden by other CSS.
+      document.documentElement.setAttribute("data-sidebar-pin", pinned ? "pinned" : "rail");
     };
     applyWidthState();
     window.addEventListener("resize", applyWidthState);
@@ -8446,6 +8449,10 @@ export default function App({ user }) {
             overflow-y: auto;
             overflow-x: hidden;
           }
+          /* Force-apply the gap regardless of var resolution. Pinned (≥1700)
+             gets a clearly larger gap than rail. */
+          html[data-sidebar-pin="rail"] .r-main { left: calc(14px + 64px + 16px) !important; }
+          html[data-sidebar-pin="pinned"] .r-main { left: calc(14px + 240px + 48px) !important; }
           /* Coach page keeps the card chrome (rounded corners, shadow) like every
              other page. overflow: hidden clips the purple gradient to the rounded
              corners. height (not min-height) locks the card exactly to the viewport
