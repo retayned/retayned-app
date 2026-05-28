@@ -2656,7 +2656,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         {/* Half disc — feathered fill, no edge. The mask dissolves the rim.
             Faded to 40% so it reads as atmospheric watermark; tick marks +
             hour labels below stay at full strength for readability. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" mask="url(#rt-dial-mask)" opacity="0.4" />
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-grad)" mask="url(#rt-dial-mask)" opacity="0.55" />
         {/* Hour ticks */}
         <g stroke="rgba(30,38,31,0.18)" strokeWidth="1.3" strokeLinecap="round">
           {ticks.map((d, i) => <path key={i} d={d} />)}
