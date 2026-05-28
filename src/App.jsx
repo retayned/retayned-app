@@ -2631,19 +2631,40 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
-          {/* Orb-warm (designer concept) — warm-cream atmospheric center fading
-              out, with the perimeter WEIGHTED by barely-there brown ink rather
-              than brightened. "Inverse of a dark-mode glow: on dark you brighten
-              the edge, on cream you weight it." Static warm treatment (no
-              time-of-day shift). Geometry unchanged. */}
-          <radialGradient id="rt-dial-sage" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 238, 210, 0.30)" />
-            <stop offset="0.60" stopColor="rgba(255, 238, 210, 0.10)" />
-            <stop offset="1" stopColor="rgba(60, 40, 15, 0.06)" />
+          {/* Subsurface orb — the day's hours glow up from BENEATH the parchment.
+              Warm, dim radial (paper veils what's behind it), brightest slightly
+              up-left to follow the page's light, no drawn edge (a backlit form
+              has none), with a faint perimeter dim where the form curves away
+              below the sheet. The fiber layer below sits OVER the glow (multiply)
+              so it reads as light THROUGH paper, not a lit screen. Backlit paper
+              reveals more grain than ambient — this region is grainier than the
+              rest of the page on purpose. Geometry unchanged.
+              FALLBACK (A-light): drop the fiber rect, raise stop-0 alpha to ~0.52,
+              remove the 0.90 dim stop. That's the pure-radiance variant. */}
+          <radialGradient id="rt-dial-sage" cx={CX - 44} cy={CY - 36} r={R + 6} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 235, 202, 0.40)" />
+            <stop offset="0.34" stopColor="rgba(253, 229, 194, 0.22)" />
+            <stop offset="0.70" stopColor="rgba(250, 226, 190, 0.09)" />
+            <stop offset="0.90" stopColor="rgba(95, 78, 46, 0.04)" />
+            <stop offset="1" stopColor="rgba(95, 78, 46, 0)" />
           </radialGradient>
+          {/* Paper fiber revealed by the light beneath. fractalNoise, desaturated,
+              crushed to a whisper of alpha; multiplied over the glow below.
+              Tuning dials: baseFrequency (grain fineness), feFuncA slope (strength). */}
+          <filter id="rt-orb-fiber" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="13" stitchTiles="stitch" result="n" />
+            <feColorMatrix in="n" type="saturate" values="0" result="g" />
+            <feComponentTransfer in="g"><feFuncA type="linear" slope="0.06" /></feComponentTransfer>
+          </filter>
+          {/* Clip the fiber to the half-disc so it only reveals inside the orb. */}
+          <clipPath id="rt-orb-clip">
+            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} />
+          </clipPath>
         </defs>
-        {/* Orb-warm filled half disc + forest-green hairline edge */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" stroke="rgba(33, 58, 44, 0.18)" strokeWidth="1" />
+        {/* Subsurface glow — half disc, no edge stroke (a backlit form has none) */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
+        {/* Paper fiber over the glow → reads as light THROUGH the parchment */}
+        <rect x={CX - R} y={CY - R} width={R} height={2 * R} clipPath="url(#rt-orb-clip)" filter="url(#rt-orb-fiber)" style={{ mixBlendMode: "multiply" }} />
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
