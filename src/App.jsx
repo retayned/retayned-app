@@ -2631,22 +2631,43 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
-          {/* A-light — pure warm radiance off the page, EDGELESS. Centered on the
-              disc with r = R so the fill reaches zero exactly at the curved
-              boundary (every arc point is distance R from center) — no clip edge,
-              no line. Bright core, feathers fully out before the rim.
-              Dial: stop-0 alpha = overall presence. */}
+          {/* A-light, TWO layers, both EDGELESS. The single centered glow couldn't
+              light the events: the rim sits at radius R = the gradient's zero
+              point, so brightness only built up off-screen at the right edge,
+              never where the dots are. Fix = a second bloom living INSIDE the
+              visible field that dies before the arc (stays edgeless) and pools
+              warmth where the events sit.
+                base  = edge-anchored atmosphere (centered, 0 at the rim)
+                bloom = presence at the events (offset left, 0 before the rim)
+              Dials: base stop-0 = overall warmth; bloom stop-0 = event-area punch;
+              bloom cx/cy = where the light pools. */}
           <radialGradient id="rt-dial-sage" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 241, 216, 0.55)" />
-            <stop offset="0.30" stopColor="rgba(255, 237, 208, 0.34)" />
-            <stop offset="0.58" stopColor="rgba(255, 234, 202, 0.18)" />
-            <stop offset="0.80" stopColor="rgba(255, 233, 200, 0.07)" />
-            <stop offset="0.93" stopColor="rgba(255, 233, 200, 0.02)" />
+            <stop offset="0" stopColor="rgba(255, 240, 214, 0.42)" />
+            <stop offset="0.45" stopColor="rgba(255, 235, 205, 0.17)" />
+            <stop offset="0.78" stopColor="rgba(255, 233, 200, 0.05)" />
+            <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
+          </radialGradient>
+          <radialGradient id="rt-dial-duo" cx={CX - 120} cy={CY + 130} r="320" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(86, 139, 104, 0.10)" />
+            <stop offset="0.6" stopColor="rgba(86, 139, 104, 0.04)" />
+            <stop offset="1" stopColor="rgba(86, 139, 104, 0)" />
+          </radialGradient>
+          {/* NOW-glow — warm pool bound to the live NOW height (nowY); rides the
+              day so warmth sits at the current moment. Pulled toward the events
+              side, dies before the rim. Dials: cx (how far in), r (spread). */}
+          <radialGradient id="rt-dial-core" cx={CX - 150} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="215" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 243, 220, 0.48)" />
+            <stop offset="0.50" stopColor="rgba(255, 237, 208, 0.20)" />
+            <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
         </defs>
-        {/* A-light radiance — half disc, no edge stroke (light has no drawn edge) */}
+        {/* base atmosphere — half disc, edge-anchored, feathers to 0 at the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
+        {/* duotone — a whisper of brand sage in the atmosphere */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-duo)" />
+        {/* NOW-glow — warm pool riding the live now-height, dies before the rim */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-core)" />
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
@@ -2666,6 +2687,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
+        {/* Vertical spine — the line the event dots already sit on, made visible.
+            Spans top dot center → bottom dot center. right:3.5 = the 8px dots' center.
+            Dial: right offset if it's off the dot centers. */}
+        {placements.length > 1 && (() => {
+          const ys = placements.map(p => p.ry);
+          const top = Math.min(...ys), bot = Math.max(...ys);
+          return <div style={{ position: "absolute", right: 3.5, top: `${(top / VB_H * 100).toFixed(2)}%`, height: `${((bot - top) / VB_H * 100).toFixed(2)}%`, width: 1, background: "rgba(28,50,36,0.18)", zIndex: 0, pointerEvents: "none" }} />;
+        })()}
         {placements.length === 0 && (
           <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
             <span style={{ fontFamily: "'Caveat', 'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 22, color: "#2E6B4F", lineHeight: 1.15 }}>
