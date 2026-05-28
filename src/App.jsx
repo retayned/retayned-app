@@ -2631,18 +2631,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
       <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
         <defs>
-          {/* A-light — pure warm radiance off the page. Bright and PRESENT,
-              edgeless (light has no drawn edge), no fiber-multiply (multiply
-              darkens, and on near-white paper a dim glow under it just vanishes —
-              that was the failed subsurface attempt). Bright core pulled into the
-              visible field (cx left of center) so the orb gives the event rail a
-              field to sit on instead of fading to nothing at the rim.
-              Geometry unchanged. Dial: stop-0 alpha = overall presence. */}
-          <radialGradient id="rt-dial-sage" cx={CX - 70} cy={CY} r={R + 20} gradientUnits="userSpaceOnUse">
+          {/* A-light — pure warm radiance off the page, EDGELESS. Centered on the
+              disc with r = R so the fill reaches zero exactly at the curved
+              boundary (every arc point is distance R from center) — no clip edge,
+              no line. Bright core, feathers fully out before the rim.
+              Dial: stop-0 alpha = overall presence. */}
+          <radialGradient id="rt-dial-sage" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="rgba(255, 241, 216, 0.55)" />
-            <stop offset="0.32" stopColor="rgba(255, 236, 206, 0.34)" />
-            <stop offset="0.62" stopColor="rgba(255, 233, 200, 0.16)" />
-            <stop offset="0.85" stopColor="rgba(255, 233, 200, 0.06)" />
+            <stop offset="0.30" stopColor="rgba(255, 237, 208, 0.34)" />
+            <stop offset="0.58" stopColor="rgba(255, 234, 202, 0.18)" />
+            <stop offset="0.80" stopColor="rgba(255, 233, 200, 0.07)" />
+            <stop offset="0.93" stopColor="rgba(255, 233, 200, 0.02)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
         </defs>
