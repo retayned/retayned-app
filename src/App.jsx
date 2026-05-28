@@ -8354,18 +8354,22 @@ export default function App({ user }) {
         .r-main:has(.rt-today-v4) { scrollbar-gutter: auto; }
         .r-main:has(.rt-today-v4)::-webkit-scrollbar { display: none; }
         .r-main:has(.rt-today-v4) { scrollbar-width: none; -ms-overflow-style: none; }
-        /* Today page only: the dial's light bleeds into the page. Radial wash
-           anchored at the right edge — warm cream from the dial's gradient
-           fades across to the cream beige under the tasks, with a hint of
-           the dial's evening purple. The dial isn't a separate object — it's
-           a sun in the same sky as the tasks. */
-        .r-main:has(.rt-today-v4) {
+        /* Today page only: the dial's light bleeds into the page. Painted on
+           a fixed full-viewport pseudo-layer rendered via .rt-today-v4::before
+           so it spans the whole page (including under the dial's fixed
+           position) without fighting the .r-main background. */
+        .rt-today-v4::before {
+          content: "";
+          position: fixed;
+          inset: 0;
           background:
             radial-gradient(ellipse 1100px 800px at 100% 50%,
               rgba(234,228,214,0.55) 0%,
               rgba(244,228,200,0.30) 25%,
               rgba(124,92,243,0.04) 45%,
-              ${C.bg} 70%) !important;
+              transparent 70%);
+          pointer-events: none;
+          z-index: 0;
         }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         /* Rai page must fill the mobile viewport (minus the ~60px bottom nav) so
