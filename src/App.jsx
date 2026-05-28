@@ -2726,29 +2726,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               cursor: "pointer",
             }}
           >
-            <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0, background: p.isNext ? "rgba(51,84,62,0.05)" : "transparent", padding: p.isNext ? "8px 12px" : "0", borderRadius: p.isNext ? 10 : 0, marginRight: p.isNext ? -4 : 0 }}>
+            <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{p.isNext ? `Next · ${formatTimeLabel(p.e._start)}` : formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right", textDecoration: (p.isPast && p.e._statusDone) ? "line-through" : "none", textDecorationColor: "rgba(28,50,36,0.30)" }}>{p.e.title}</span>
+              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
               {p.e.client_name && (
                 <span style={{ fontSize: 10, color: "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
               )}
               {!p.isPast && p.e._prepCount > 0 && (
-                <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: p.isNext ? "rgba(124,92,243,0.12)" : "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
+                <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
                   <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
                   <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
                 </div>
               )}
             </div>
             <span style={{ width: 30, height: 1, background: p.isNext ? "rgba(51,84,62,0.45)" : "rgba(28,50,36,0.18)", margin: "0 8px", flex: "0 0 30px" }} />
-            {p.isPast ? (
-              p.e._statusDone ? (
-                <div style={{ width: 18, height: 18, borderRadius: "50%", flex: "0 0 18px", background: "#558B68", color: "#fff", fontSize: 11, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>✓</div>
-              ) : (
-                <div style={{ width: 18, height: 18, borderRadius: "50%", flex: "0 0 18px", background: "transparent", boxShadow: "inset 0 0 0 1.5px #B7B7AE", color: "#9A9A93", fontSize: 11, fontStyle: "italic", display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>?</div>
-              )
-            ) : (
-              <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isNext ? "#33543E" : "#558B68", boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
-            )}
+            <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
           </div>
           );
         })}
@@ -4932,7 +4924,7 @@ export default function App({ user }) {
       // content's left edge. Smaller when collapsed (rail), more generous when
       // pinned open. Used in r-main's left calc INSTEAD of --page-gap so the
       // top/right/bottom page margins stay constant (no right-side shift).
-      document.documentElement.style.setProperty("--sidebar-content-gap", pinned ? "48px" : "16px");
+      document.documentElement.style.setProperty("--sidebar-content-gap", pinned ? "48px" : "24px");
       // Attribute selector mirror — used by a high-specificity !important rule
       // on .r-main so the gap can't be silently overridden by other CSS.
       document.documentElement.setAttribute("data-sidebar-pin", pinned ? "pinned" : "rail");
@@ -8361,6 +8353,14 @@ export default function App({ user }) {
         .r-main:has(.rt-today-v4) { scrollbar-gutter: auto; }
         .r-main:has(.rt-today-v4)::-webkit-scrollbar { display: none; }
         .r-main:has(.rt-today-v4) { scrollbar-width: none; -ms-overflow-style: none; }
+        /* Today page only: subtle radial vignette — page reads as a spotlit
+           composition rather than a flat canvas with two floating panels.
+           Background gradient sits BEHIND content; the sweeping arc (rendered
+           as inline SVG inside .rt-today-v4) adds a single geometric tie. */
+        .r-main:has(.rt-today-v4) {
+          background:
+            radial-gradient(ellipse 1400px 900px at 50% 45%, ${C.bg} 0%, ${C.bg} 50%, rgba(234,228,214,0.35) 100%) !important;
+        }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         /* Rai page must fill the mobile viewport (minus the ~60px bottom nav) so
            the flex column lets the scroll area grow and the input bar pins to the
@@ -8451,7 +8451,7 @@ export default function App({ user }) {
           }
           /* Force-apply the gap regardless of var resolution. Pinned (≥1700)
              gets a clearly larger gap than rail. */
-          html[data-sidebar-pin="rail"] .r-main { left: calc(14px + 64px + 16px) !important; }
+          html[data-sidebar-pin="rail"] .r-main { left: calc(14px + 64px + 24px) !important; }
           html[data-sidebar-pin="pinned"] .r-main { left: calc(14px + 240px + 48px) !important; }
           /* Coach page keeps the card chrome (rounded corners, shadow) like every
              other page. overflow: hidden clips the purple gradient to the rounded
@@ -10195,6 +10195,30 @@ export default function App({ user }) {
                 setFocusMode(false);
               } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
+              {/* Sweeping arc (#5) — single 0.5px curve from upper-left of the
+                  tasks area down to the dial's visible left edge. Echoes the
+                  dial's circle in line form, ties the two sides into one
+                  geometric gesture. Fixed-positioned to viewport so it crosses
+                  the whole page; pointer-events:none so it never blocks input. */}
+              <svg
+                aria-hidden="true"
+                style={{ position: "fixed", left: 0, top: 0, width: "100vw", height: "100vh", pointerEvents: "none", zIndex: 0, opacity: 0.5 }}
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+              >
+                {/* Cubic Bezier — starts top-left of content area (≈14% from left,
+                    12% down), arcs down to the dial's visible left edge (≈right
+                    edge minus dial's scaled width, ~50% vertical). The curve
+                    sweeps gently so it reads as ambient, not directional. */}
+                <path
+                  d="M 14 12 C 32 38, 52 58, 78 50"
+                  stroke="rgba(28,50,36,0.10)"
+                  strokeWidth="0.08"
+                  fill="none"
+                  vectorEffect="non-scaling-stroke"
+                  style={{ strokeWidth: "0.5px" }}
+                />
+              </svg>
               {/* Focus-mode exit scrim — a full-viewport tap target behind the
                   focused task. The dimmed rows/areas have pointer-events:none,
                   so on mobile taps never reached the grid wrapper's onClick;
@@ -12075,36 +12099,18 @@ export default function App({ user }) {
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
                     events={(() => {
-                      // Enrich each event with:
-                      // _prepCount: open tasks for that event's client (future events)
-                      // _statusDone: bool — true if a completed task/touchpoint for
-                      //   that client exists within ±2h of the event time (past
-                      //   events render ✓ vs '?' badge accordingly).
+                      // Enrich each event with _prepCount = open tasks for that
+                      // event's client. Used to render the "N tasks before" chip
+                      // under the event title on the dial rail.
                       const openByClient = {};
-                      const completionsByClient = {};
                       for (const t of (tasks || [])) {
-                        if (!t || !t.client_id) continue;
-                        if (!t.done) {
-                          openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
-                        } else if (t.completed_at) {
-                          (completionsByClient[t.client_id] = completionsByClient[t.client_id] || []).push(t.completed_at);
-                        }
+                        if (!t || t.done || !t.client_id) continue;
+                        openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
                       }
-                      const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-                      return (personalEvents || []).map(e => {
-                        const eventTime = e && e.starts_at ? new Date(e.starts_at).getTime() : 0;
-                        let statusDone = false;
-                        if (e && e.client_id && eventTime > 0 && completionsByClient[e.client_id]) {
-                          for (const c of completionsByClient[e.client_id]) {
-                            if (Math.abs(c - eventTime) <= TWO_HOURS_MS) { statusDone = true; break; }
-                          }
-                        }
-                        return {
-                          ...e,
-                          _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
-                          _statusDone: statusDone,
-                        };
-                      });
+                      return (personalEvents || []).map(e => ({
+                        ...e,
+                        _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
+                      }));
                     })()}
                     C={C}
                     scrubMs={dialScrubMs}
