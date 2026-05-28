@@ -2629,7 +2629,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           letterboxing/shift and the HTML card overlay (positioned by %) lines
           up with the SVG. */}
       <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: VB_W, height: VB_H }}>
-      <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none" }}>
+      <svg ref={svgWrapRef} viewBox={`0 0 ${VB_W} ${VB_H}`} width={VB_W} height={VB_H} style={{ position: "absolute", right: 0, top: 0, display: "block", touchAction: "none", opacity: 0.30 }}>
         <defs>
           {/* Time-of-day gradient — stops computed from the REAL hour at each
               position across the NOW-centered window (top = now−6h, bottom =
@@ -8354,23 +8354,6 @@ export default function App({ user }) {
         .r-main:has(.rt-today-v4) { scrollbar-gutter: auto; }
         .r-main:has(.rt-today-v4)::-webkit-scrollbar { display: none; }
         .r-main:has(.rt-today-v4) { scrollbar-width: none; -ms-overflow-style: none; }
-        /* Today page only: the dial's light bleeds into the page. Painted on
-           a fixed full-viewport pseudo-layer rendered via .rt-today-v4::before
-           so it spans the whole page (including under the dial's fixed
-           position) without fighting the .r-main background. */
-        .rt-today-v4::before {
-          content: "";
-          position: fixed;
-          inset: 0;
-          background:
-            radial-gradient(ellipse 1100px 800px at 100% 50%,
-              rgba(234,228,214,0.55) 0%,
-              rgba(244,228,200,0.30) 25%,
-              rgba(124,92,243,0.04) 45%,
-              transparent 70%);
-          pointer-events: none;
-          z-index: 0;
-        }
         .r-main:has(.r-rai-page) { background: none; padding: 0 !important; }
         /* Rai page must fill the mobile viewport (minus the ~60px bottom nav) so
            the flex column lets the scroll area grow and the input bar pins to the
