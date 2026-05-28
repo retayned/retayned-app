@@ -2644,6 +2644,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         </defs>
         {/* Orb-warm filled half disc + forest-green hairline edge */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" stroke="rgba(33, 58, 44, 0.18)" strokeWidth="1" />
+        {/* Concept 05 — inner hour ring + ticks. Faint green inner arc (echoes
+            the edge stroke) with brown-ink hour ticks crossing it, giving the
+            orb a true-instrument face. */}
+        {(() => {
+          const innerR = R - 60;
+          const [ix0, iy0] = ptAt(0, innerR);
+          const [ix1, iy1] = ptAt(1, innerR);
+          return <path d={`M ${ix0.toFixed(1)} ${iy0.toFixed(1)} A ${innerR} ${innerR} 0 0 0 ${ix1.toFixed(1)} ${iy1.toFixed(1)}`} fill="none" stroke="rgba(33,58,44,0.10)" strokeWidth="0.8" />;
+        })()}
+        <g stroke="rgba(60,40,15,0.30)" strokeWidth="1.4" strokeLinecap="round">
+          {ticks.map((d, i) => <path key={i} d={d} />)}
+        </g>
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
