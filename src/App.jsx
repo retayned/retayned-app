@@ -2715,6 +2715,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             {tl.lbl}
           </text>
         ))}
+        {/* Connector (E) — a faint dashed leader from each event's dial dot toward
+            the rail (running left, off the disc). Ties every event to its point on
+            the TIMELINE rather than to a vertical rail. Drawn under the dots. */}
+        {placements.map((p, i) => (
+          <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
+            stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
+        ))}
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
@@ -2737,18 +2744,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
-        {/* Connector (G) — short segments BETWEEN consecutive event dots, with a
-            gap around each dot, so the dots punctuate the line (beads on a string)
-            rather than one rigid vertical bar. right:3.5 = the 8px dots' center. */}
-        {placements.length > 1 && (() => {
-          const ys = placements.map(p => p.ry).sort((a, b) => a - b);
-          const GAP = 12; // px gap around each dot
-          return ys.slice(0, -1).map((y0, i) => {
-            const segTop = y0 + GAP, segBot = ys[i + 1] - GAP;
-            if (segBot <= segTop) return null;
-            return <div key={`seg-${i}`} style={{ position: "absolute", right: 3.5, top: `${(segTop / VB_H * 100).toFixed(2)}%`, height: `${((segBot - segTop) / VB_H * 100).toFixed(2)}%`, width: 1, background: "rgba(28,50,36,0.14)", zIndex: 0, pointerEvents: "none" }} />;
-          });
-        })()}
         {placements.length === 0 && (
           <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
             <span style={{ fontFamily: "'Caveat', 'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 22, color: "#2E6B4F", lineHeight: 1.15 }}>
