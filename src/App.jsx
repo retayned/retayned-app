@@ -2416,6 +2416,34 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     return () => clearInterval(t);
   }, []);
 
+  // ── Ribbon wave phase. The elapsed ribbon's outer edge ripples like water;
+  // the ripple FLOWS as you scroll the day list (.r-main) and keeps a faint
+  // idle breath at rest. phaseRef is mutated each frame (no per-frame React
+  // state churn); a rAF loop bumps `force` only while the value is changing so
+  // we don't spin the CPU when idle is imperceptible. Tuned: scroll-flow 80,
+  // idle ~6 (barely-there breathing). Read by the ribbon path builder below. */
+  const phaseRef = useRef(0);
+  useEffect(() => {
+    let raf = 0, idleT = 0, last = -1;
+    const SCROLL_FLOW = 0.024;   // scroll-flow 80 → how fast the ripple travels per px scrolled
+    const IDLE_AMP = 0.34;       // idle ~6 → amplitude of the at-rest breath (radians)
+    const IDLE_SPEED = 0.0009;   // slow breath
+    const tick = () => {
+      const scroller = document.querySelector(".r-main");
+      const sTop = scroller ? scroller.scrollTop : 0;
+      idleT += IDLE_SPEED * 16;
+      const next = sTop * SCROLL_FLOW + Math.sin(idleT) * IDLE_AMP;
+      if (Math.abs(next - last) > 0.0008) {   // only re-render when the edge actually moves
+        phaseRef.current = next;
+        last = next;
+        force(n => n + 1);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
   const now = new Date();
   const nowMs = now.getTime();
   const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
@@ -2701,22 +2729,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           //   dial curve. Tuned: thickness 45, wave size 5, speed 35.
           //   ANIMATION NOTE: PHASE is constant → the wave is a frozen shape. To make
           //   it breathe later, drive PHASE from a rAF/state clock (one value).
-          const N = 64;
-          const THICK = 45 / 100 * 5.5;     // half-width swell at NOW (≈2.48px units)
-          const AMP = 3.5;                  // wave amplitude in px — "size 5 = subtle but visible"
-                                            //   (slider math scaled to ~0.4px at R=420, invisible;
-                                            //    pinned to absolute px so the sun-curve actually reads)
-          const WAVE_FREQ = 7;              // crests along the line
-          const PHASE = 0;                  // static; wire to a clock to animate (speed 35)
+          const N = 72;
+          const BASE_HALF = 1.5;            // half-width at dawn (px) — thin
+          const SWELL = 11;                 // px added toward NOW → swelling band
+          const AMP_PX = 9.5;               // wave amplitude in px (size 12, clearly visible at R=420)
+          const WAVE_FREQ = 6;              // ripples 6 → crests along the line
+          const PHASE = phaseRef.current;   // driven by scroll (flow) + faint idle breath
           const outer = [], inner = [];
           for (let i = 0; i <= N; i++) {
             const fr = i / N;
             const ff = fr * f;                       // 0..f along elapsed
             const taper = Math.pow(fr, 0.7);         // thin→thick toward now
-            const w = 1.0 + taper * THICK;
-            const wave = Math.sin(fr * WAVE_FREQ * Math.PI * 2 - PHASE) * AMP * (0.25 + taper);
-            const [ox, oy] = ptAt(ff, R + w / 2 + wave);
-            const [ix, iy] = ptAt(ff, R - w / 2);
+            const half = BASE_HALF + taper * SWELL;
+            const wave = Math.sin(fr * WAVE_FREQ * Math.PI * 2 - PHASE) * AMP_PX * (0.3 + taper);
+            const [ox, oy] = ptAt(ff, R + half + wave);
+            const [ix, iy] = ptAt(ff, R - half);
             outer.push([ox, oy]); inner.push([ix, iy]);
           }
           inner.reverse();
