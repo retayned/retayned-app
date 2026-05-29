@@ -2607,7 +2607,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         {isScrubbed && (
           <button
             onClick={() => { setScrubMs(0); }}
-            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "8px 18px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
           >
             Now
           </button>
@@ -2801,10 +2801,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", left: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom left" }}>↑ {earlierCount} earlier</div>
+        <div className="rt-dial-cs" style={{ position: "absolute", left: "8%", bottom: 6, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom left" }}>
+          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↓ {earlierCount} earlier</span>
+          <span
+            className="rt-dial-help"
+            tabIndex={0}
+            style={{ position: "relative", width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit" }}
+          >?
+            <span className="rt-dial-help-tip" style={{ position: "absolute", left: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500, fontFamily: "'Manrope', sans-serif", textAlign: "left" }}>
+              This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
+            </span>
+          </span>
+        </div>
       )}
       {laterCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontSize: 10, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↓ {laterCount} later</div>
+        <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↑ {laterCount} later</div>
       )}
 
       {/* Hub content — the NEXT event (or selected), against the right edge.
@@ -2848,19 +2859,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
        </div>
-      </div>
-
-      {/* (?) help — top-left of the dial. Moved out of the way of the
-          Today/Tomorrow/Now controls which now live upper-right. */}
-      <div
-        className="rt-dial-help rt-dial-cs"
-        tabIndex={0}
-        style={{ position: "absolute", left: "8%", top: 6, zIndex: 7, width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", transformOrigin: "top left" }}
-      >
-        ?
-        <div className="rt-dial-help-tip" style={{ position: "absolute", left: 0, top: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(-4px)", transition: "opacity .14s, transform .14s", fontWeight: 500 }}>
-          This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
-        </div>
       </div>
       </div>
     </div>
