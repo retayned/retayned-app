@@ -2602,7 +2602,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       {/* Now control — upper-right of the dial. The Today/Tomorrow toggle was
           removed: the dial is day-bounded (scrolls only within today), so there's
           no other day to switch to. Now appears only when scrubbed off live time. */}
-      <div style={{ position: "absolute", right: 14, top: 58, zIndex: 8, pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", right: 32, top: 88, zIndex: 8, pointerEvents: "auto" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
         {isScrubbed && (
           <button
@@ -2801,14 +2801,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", left: "8%", bottom: 6, zIndex: 9, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom left", pointerEvents: "auto" }}>
+        <div className="rt-dial-cs" style={{ position: "absolute", right: 320, bottom: 6, zIndex: 9, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom right", pointerEvents: "auto" }}>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↓ {earlierCount} earlier</span>
           <span
             className="rt-dial-help"
             tabIndex={0}
-            style={{ position: "relative", width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit" }}
+            style={{ position: "relative", width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", flex: "none" }}
           >?
-            <span className="rt-dial-help-tip" style={{ position: "absolute", left: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500, fontFamily: "'Manrope', sans-serif", textAlign: "left" }}>
+            <span className="rt-dial-help-tip" style={{ position: "absolute", right: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500, fontFamily: "'Manrope', sans-serif", textAlign: "left" }}>
               This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
             </span>
           </span>
