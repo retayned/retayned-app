@@ -2661,6 +2661,30 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
+          {/* ① elapsed warm→cool: cool/faint sage at dawn (window start, bottom)
+              → warm bright green at NOW. userSpaceOnUse anchored start=dawn pt,
+              end=now pt so the warm end tracks the leading edge. */}
+          {nowInWindow && (() => {
+            const [dx, dy] = ptAt(0, R);
+            const [nx2, ny2] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
+            return (
+              <linearGradient id="rt-arc-elapsed" gradientUnits="userSpaceOnUse" x1={dx.toFixed(1)} y1={dy.toFixed(1)} x2={nx2.toFixed(1)} y2={ny2.toFixed(1)}>
+                <stop offset="0" stopColor="rgba(120, 150, 135, 0.20)" />
+                <stop offset="0.65" stopColor="rgba(70, 120, 92, 0.36)" />
+                <stop offset="1" stopColor="rgba(58, 140, 98, 0.58)" />
+              </linearGradient>
+            );
+          })()}
+          {/* intentional ember — small warm bloom at NOW (the good version of the
+              taper shimmer you liked, built on purpose so it's stable/tunable).
+              Dials: r (ember size), stop-0 alpha (heat). */}
+          {nowInWindow && (
+            <radialGradient id="rt-arc-ember" cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="46" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="rgba(255, 196, 120, 0.62)" />
+              <stop offset="0.45" stopColor="rgba(255, 168, 92, 0.26)" />
+              <stop offset="1" stopColor="rgba(255, 168, 92, 0)" />
+            </radialGradient>
+          )}
         </defs>
         {/* base atmosphere — half disc, edge-anchored, feathers to 0 at the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
@@ -2686,7 +2710,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}`;
           return <>
             <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />
-            <path d={elapsed} fill="none" stroke="rgba(33,84,62,0.40)" strokeWidth="3" strokeLinecap="round" />
+            <path d={elapsed} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
+            {/* intentional ember at the leading edge */}
+            <circle cx={ex.toFixed(1)} cy={ey.toFixed(1)} r="46" fill="url(#rt-arc-ember)" />
           </>;
         })()}
         {/* Event rim dots */}
@@ -2696,10 +2722,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — purple dot at current time. */}
+        {/* NOW marker — purple dot at current time, with a slow live-pulse halo (②). */}
         {nowInWindow && <>
         <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#7c5cf3" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5">
+          <animate attributeName="r" values="11;17;11" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.28;0.05;0.28" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        </circle>
         </>}
       </svg>
 
