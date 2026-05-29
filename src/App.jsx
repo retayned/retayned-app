@@ -2661,26 +2661,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
-          {/* ① elapsed warm→cool: cool/faint sage at dawn → warm bright green at NOW. */}
+          {/* AHEAD gradient — the green LEADS the NOW dot: brightest green right
+              at NOW, fading to grey toward the future edge of the window. Anchored
+              now→top so the fade tracks the dot as it climbs. */}
           {nowInWindow && (() => {
-            const [dx, dy] = ptAt(0, R);
             const [nx2, ny2] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
+            const [tx, ty] = ptAt(1, R);
             return (
-              <linearGradient id="rt-arc-elapsed" gradientUnits="userSpaceOnUse" x1={dx.toFixed(1)} y1={dy.toFixed(1)} x2={nx2.toFixed(1)} y2={ny2.toFixed(1)}>
-                <stop offset="0" stopColor="rgba(120, 150, 135, 0.20)" />
-                <stop offset="0.65" stopColor="rgba(70, 120, 92, 0.36)" />
-                <stop offset="1" stopColor="rgba(58, 140, 98, 0.58)" />
+              <linearGradient id="rt-arc-elapsed" gradientUnits="userSpaceOnUse" x1={nx2.toFixed(1)} y1={ny2.toFixed(1)} x2={tx.toFixed(1)} y2={ty.toFixed(1)}>
+                <stop offset="0" stopColor="rgba(58, 140, 98, 0.62)" />
+                <stop offset="0.45" stopColor="rgba(82, 130, 100, 0.34)" />
+                <stop offset="0.78" stopColor="rgba(120, 130, 120, 0.16)" />
+                <stop offset="1" stopColor="rgba(140, 143, 138, 0.08)" />
               </linearGradient>
             );
           })()}
-          {/* intentional ember — small warm bloom at the leading edge (NOW). */}
-          {nowInWindow && (
-            <radialGradient id="rt-arc-ember" cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="46" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stopColor="rgba(255, 196, 120, 0.62)" />
-              <stop offset="0.45" stopColor="rgba(255, 168, 92, 0.26)" />
-              <stop offset="1" stopColor="rgba(255, 168, 92, 0)" />
-            </radialGradient>
-          )}
         </defs>
         {/* base atmosphere — half disc, edge-anchored, feathers to 0 at the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
@@ -2688,27 +2683,23 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-duo)" />
         {/* NOW-glow — warm pool riding the live now-height, dies before the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-core)" />
-        {/* ── ARC SWEEP — the day made visible. A faint full guide-arc is the whole
-            day's path; the ELAPSED arc (dawn → now) is drawn solid on top, so the
-            shape literally fills as the day passes. Geometry uses ptAt() so the
-            sweep rides the exact curve the rim dots sit on. f=0 is bottom (earliest),
-            f=1 top (latest), so elapsed fills from the bottom upward toward NOW.
-            Dials: guide stroke alpha (the "to come"), elapsed stroke alpha/width. */}
+        {/* ── ARC — the ~6h AHEAD of NOW (in-window future) drawn green, leading
+            the purple dot and fading to grey toward the future edge. The faint
+            full guide-arc is the rest of the day (grey). As NOW climbs to the top,
+            the green shrinks and the bottom is all grey. f=0 bottom, f=1 top. */}
         {(() => {
-          const [gx0, gy0] = ptAt(0, R);   // dawn / window start (bottom)
+          const [gx0, gy0] = ptAt(0, R);   // window start (bottom)
           const [gx1, gy1] = ptAt(1, R);   // window end (top)
           const guide = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
           if (!nowInWindow) {
             return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
           }
           const f = Math.min(1, Math.max(0, nowFrac));
-          const [ex, ey] = ptAt(f, R);
-          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}`;
+          const [nx2, ny2] = ptAt(f, R);
+          const ahead = `M ${nx2.toFixed(1)} ${ny2.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
           return <>
             <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />
-            <path d={elapsed} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
-            {/* intentional ember at the leading edge */}
-            <circle cx={ex.toFixed(1)} cy={ey.toFixed(1)} r="46" fill="url(#rt-arc-ember)" />
+            <path d={ahead} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
           </>;
         })()}
         {/* Event rim dots */}
