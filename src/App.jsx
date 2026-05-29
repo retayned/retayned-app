@@ -4891,6 +4891,25 @@ export default function App({ user }) {
   const [raiTestOpen, setRaiTestOpen] = useState(false);
   const [raiTestLoading, setRaiTestLoading] = useState(false);
   const [raiTestResult, setRaiTestResult] = useState("");
+  // Locally-dismissed suggestion ids (until real suggestionsDb wiring lands).
+  const [raiDismissed, setRaiDismissed] = useState(() => new Set());
+  // Parse the rai-chat text ("N. Task\n   Why: ...") into structured items so
+  // the RaiSuggestions card can render them. Best-effort; tolerant of spacing.
+  const raiSuggestionItems = useMemo(() => {
+    if (!raiTestResult) return [];
+    const out = [];
+    // Split on leading "N." markers.
+    const blocks = raiTestResult.split(/\n(?=\s*\d+\.\s)/);
+    for (const b of blocks) {
+      const m = b.match(/^\s*\d+\.\s*(.+?)(?:\n\s*Why:\s*(.+))?$/s);
+      if (!m) continue;
+      const title = (m[1] || "").trim().replace(/\s+/g, " ");
+      const why = (m[2] || "").trim().replace(/\s+/g, " ");
+      if (!title) continue;
+      out.push({ id: "rai-" + out.length + "-" + title.slice(0, 24), title, why });
+    }
+    return out.filter(it => !raiDismissed.has(it.id));
+  }, [raiTestResult, raiDismissed]);
   const fetchRaiTaskSuggestions = async () => {
     setRaiTestOpen(true);
     setRaiTestLoading(true);
@@ -11970,6 +11989,25 @@ export default function App({ user }) {
                       <>
                         {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
+                        <RaiSuggestions
+                          items={raiSuggestionItems}
+                          daysSinceStart={user?.created_at ? Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86400000) : 99}
+                          onAdd={(s) => {
+                            // Promote to a real task using the canonical create
+                            // signature. ai:true marks Rai provenance (local flag).
+                            const tmpId = "tmp-" + Date.now();
+                            const optimistic = { id: tmpId, text: s.title, client: s.client_name || null, done: false, ai: true, recurring: false, due_date: null, raiPriority: false, alert: false, created_at: Date.now(), assigned_worker_id: null };
+                            setTasks(prev => [optimistic, ...prev]);
+                            tasksDb.create(user.id, { text: s.title, client_name: s.client_name || null, client_id: null, is_recurring: false, due_date: null })
+                              .then(({ data: created }) => {
+                                if (created) setTasks(prev => prev.map(t => t.id === tmpId ? { ...t, id: created.id } : t));
+                              })
+                              .catch(() => setTasks(prev => prev.filter(t => t.id !== tmpId)));
+                            setRaiDismissed(prev => new Set(prev).add(s.id));
+                          }}
+                          onDismiss={(s) => { setRaiDismissed(prev => new Set(prev).add(s.id)); }}
+                          C={C}
+                        />
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
                         {_todayBucket.length > 0 && (
                           <div className={"rt-today-breakout" + (justPromoted ? " rt-today-breakout-animate" : "")}>
@@ -19585,6 +19623,112 @@ export default function App({ user }) {
 // Quick log confirmation toast — auto-dismisses after 4s. Pulled out
 // as its own component so the setTimeout cleanup is tied to the toast's
 // lifecycle, not the parent's render cycle.
+// ─── RaiSuggestions ──────────────────────────────────────────────────────
+// Rai's proposed tasks, surfaced above the TODAY list. Collapsible section in
+// the purple-hairline card language (item 2: matches the first-Rai-chat box —
+// --rt-sh-purple at rest, no hover loudness). During the first 14 days the
+// model is still calibrating on the user's book, so instead of empty/no-pick
+// confusion we show a calibration state explaining why (item 3).
+//   props:
+//     items        — [{ id, title, why, client_name, client_badge }]
+//     daysSinceStart — number (account age; <14 → calibration state)
+//     onAdd(item)  — promote to a real task (ai:true)
+//     onDismiss(item, reason) — dismiss with optional reason
+//     C            — design tokens
+function RaiSuggestions({ items = [], daysSinceStart = 99, onAdd = () => {}, onDismiss = () => {}, C }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [reasonFor, setReasonFor] = useState(null); // item pending a dismiss reason
+  const calibrating = daysSinceStart < 14;
+
+  // Nothing to show and not calibrating → render nothing (don't take space).
+  if (!calibrating && items.length === 0) return null;
+
+  const chip = (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "5px 11px 5px 7px" }}>
+      <span style={{ width: 18, height: 18, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>R</span>
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#5a3fb8" }}>
+        {calibrating ? "Rai · calibrating" : `Rai suggests · ${items.length} today`}
+      </span>
+    </span>
+  );
+
+  return (
+    <div style={{ background: C.card, border: "1px solid rgba(124,92,243,0.20)", borderRadius: 16, padding: "6px 8px 10px", marginBottom: 16, boxShadow: "var(--rt-sh-purple)" }}>
+      <div
+        onClick={() => !calibrating && setCollapsed(c => !c)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 10px 8px", cursor: calibrating ? "default" : "pointer" }}
+      >
+        {chip}
+        {!calibrating && (
+          <span style={{ color: C.btn, fontSize: 12, transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .18s" }}>▾</span>
+        )}
+      </div>
+
+      {calibrating ? (
+        <div style={{ padding: "4px 12px 10px" }}>
+          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 14, lineHeight: 1.5, color: "#5a5550" }}>
+            Rai is learning your book. For your first two weeks she watches how you work your clients before suggesting tasks — so the picks, when they start, are actually yours.
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+            Daily picks begin on day 14 · {Math.max(0, 14 - daysSinceStart)} {Math.max(0, 14 - daysSinceStart) === 1 ? "day" : "days"} to go
+          </div>
+        </div>
+      ) : !collapsed && (
+        <div>
+          {items.map((s) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 8px", margin: "0 4px", borderTop: "1px solid " + C.borderLight }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.35, color: C.text }}>{s.title}</div>
+                {s.why && <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13, lineHeight: 1.45, color: "#5a5550", marginTop: 4 }}>{s.why}</div>}
+                {s.client_name && (
+                  <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: C.textSec }}>
+                    {s.client_badge && <span style={{ width: 18, height: 18, borderRadius: "50%", background: C.primaryLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700 }}>{s.client_badge}</span>}
+                    {s.client_name}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => onAdd(s)}
+                  style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#fff", background: C.btn, border: "none", borderRadius: 999, padding: "8px 15px", cursor: "pointer" }}
+                >Add</button>
+                <button
+                  onClick={() => setReasonFor(s)}
+                  style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: C.textMuted, background: "transparent", border: "none", borderRadius: 999, padding: "8px 11px", cursor: "pointer" }}
+                >Dismiss</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dismiss-reason picker (downvote folds in here) */}
+      {reasonFor && (
+        <div
+          onClick={() => setReasonFor(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.28)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 700 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 22, width: 390, maxWidth: "90vw", boxShadow: "0 20px 60px rgba(20,30,22,0.3)" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>Not helpful? Tell Rai why</div>
+            <div style={{ fontSize: 13, lineHeight: 1.45, color: C.textSec, marginBottom: 14 }}>This helps Rai stop suggesting things like it.</div>
+            {["Not relevant to this client", "I already did this", "Bad timing — not now", "Just not useful"].map((r) => (
+              <button
+                key={r}
+                onClick={() => { onDismiss(reasonFor, r); setReasonFor(null); }}
+                style={{ display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, color: C.text, background: C.bg, border: "1px solid " + C.borderLight, borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer" }}
+              >{r}</button>
+            ))}
+            <button
+              onClick={() => { onDismiss(reasonFor, null); setReasonFor(null); }}
+              style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, background: "none", border: "none", cursor: "pointer", marginTop: 4 }}
+            >Dismiss without a reason</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuickLogToast({ toast, onUndo, onDismiss, C }) {
   useEffect(() => {
     const t = setTimeout(() => onDismiss(), 4000);
