@@ -2668,6 +2668,27 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-duo)" />
         {/* NOW-glow — warm pool riding the live now-height, dies before the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-core)" />
+        {/* ── ARC SWEEP — the day made visible. A faint full guide-arc is the whole
+            day's path; the ELAPSED arc (dawn → now) is drawn solid on top, so the
+            shape literally fills as the day passes. Geometry uses ptAt() so the
+            sweep rides the exact curve the rim dots sit on. f=0 is bottom (earliest),
+            f=1 top (latest), so elapsed fills from the bottom upward toward NOW.
+            Dials: guide stroke alpha (the "to come"), elapsed stroke alpha/width. */}
+        {(() => {
+          const [gx0, gy0] = ptAt(0, R);   // dawn / window start (bottom)
+          const [gx1, gy1] = ptAt(1, R);   // window end (top)
+          const guide = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          if (!nowInWindow) {
+            return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
+          }
+          const f = Math.min(1, Math.max(0, nowFrac));
+          const [ex, ey] = ptAt(f, R);
+          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}`;
+          return <>
+            <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />
+            <path d={elapsed} fill="none" stroke="rgba(33,84,62,0.40)" strokeWidth="3" strokeLinecap="round" />
+          </>;
+        })()}
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
