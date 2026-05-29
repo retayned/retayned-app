@@ -2599,20 +2599,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* Now control — upper-right of the dial. The Today/Tomorrow toggle was
-          removed: the dial is day-bounded (scrolls only within today), so there's
-          no other day to switch to. Now appears only when scrubbed off live time. */}
-      <div style={{ position: "absolute", right: 32, top: 88, zIndex: 8, pointerEvents: "auto" }}>
-       <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+      {/* Now control — appears only when scrubbed off live time. Soft white pill
+          (not the heavy dark-green that fought the orb), tucked at the dial's
+          upper-left where there's natural space rather than floating above it.
+          Positioned by the SVG's own top-geometry (top:0, height 888). */}
+      <div style={{ position: "absolute", right: 300, top: 70, zIndex: 8, pointerEvents: "auto" }}>
         {isScrubbed && (
           <button
             onClick={() => { setScrubMs(0); }}
-            style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
+            style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "5px 13px", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 5 }}
           >
-            Now
+            <span style={{ fontSize: 13, lineHeight: 1 }}>↺</span> Now
           </button>
         )}
-       </div>
       </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
@@ -2801,7 +2800,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", right: 320, bottom: 6, zIndex: 9, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom right", pointerEvents: "auto" }}>
+        <div className="rt-dial-cs" style={{ position: "absolute", right: 300, top: 812, zIndex: 9, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom right", pointerEvents: "auto" }}>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↓ {earlierCount} earlier</span>
           <span
             className="rt-dial-help"
@@ -8106,6 +8105,16 @@ export default function App({ user }) {
           box-shadow: 0 0 0 1px rgba(124,92,243,0.30),
                       0 1px 2px rgba(20,30,22,0.04),
                       0 2px 10px rgba(124,92,243,0.10) !important;
+        }
+        /* (1) The TASK composer (inside the Today page) gets the SITE-STANDARD
+           grey focus instead of purple — purple is reserved for Rai surfaces.
+           This overrides the shared purple rule above for the Today composer
+           only; the initial Rai chat input (also .rt-composer, but NOT inside
+           .rt-today-v4) keeps its purple focus. */
+        .rt-today-v4 .rt-composer:focus-within {
+          box-shadow: 0 0 0 1px rgba(20,30,22,0.18),
+                      0 1px 2px rgba(20,30,22,0.05),
+                      0 2px 10px rgba(20,30,22,0.07) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
