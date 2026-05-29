@@ -2416,34 +2416,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     return () => clearInterval(t);
   }, []);
 
-  // ── Ribbon wave phase. The elapsed ribbon's outer edge ripples like water;
-  // the ripple FLOWS as you scroll the day list (.r-main) and keeps a faint
-  // idle breath at rest. phaseRef is mutated each frame (no per-frame React
-  // state churn); a rAF loop bumps `force` only while the value is changing so
-  // we don't spin the CPU when idle is imperceptible. Tuned: scroll-flow 80,
-  // idle ~6 (barely-there breathing). Read by the ribbon path builder below. */
-  const phaseRef = useRef(0);
-  useEffect(() => {
-    let raf = 0, idleT = 0, last = -999;
-    const SCROLL_FLOW = 0.04;    // more travel per px scrolled → more active notch movement
-    const IDLE_AMP = 6 / 100 * 1.2;   // idle ~6 → 0.072 rad: barely-there breath (mock formula)
-    const IDLE_SPEED = 6 / 100 * 0.012; // mock: idleT += (idle/100)*0.012 per frame
-    const tick = () => {
-      const scroller = document.querySelector(".r-main");
-      const sTop = scroller ? scroller.scrollTop : 0;
-      idleT += IDLE_SPEED;
-      const next = sTop * SCROLL_FLOW + Math.sin(idleT) * IDLE_AMP;
-      if (Math.abs(next - last) > 0.0004) {   // low gate so the faint idle breath stays alive
-        phaseRef.current = next;
-        last = next;
-        force(n => n + 1);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
   const now = new Date();
   const nowMs = now.getTime();
   const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
@@ -2689,21 +2661,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
-          {/* elapsed gradient — reused as the tapered ribbon's FILL: cool/faint
-              sage at dawn → warm bright green at NOW. Always defined (anchored to
-              the clamped NOW) so the ribbon keeps its fill even when NOW is
-              scrubbed out of the window and the green trails the dot. */}
-          {(() => {
+          {/* ① elapsed warm→cool: cool/faint sage at dawn → warm bright green at NOW. */}
+          {nowInWindow && (() => {
             const [dx, dy] = ptAt(0, R);
             const [nx2, ny2] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
             return (
               <linearGradient id="rt-arc-elapsed" gradientUnits="userSpaceOnUse" x1={dx.toFixed(1)} y1={dy.toFixed(1)} x2={nx2.toFixed(1)} y2={ny2.toFixed(1)}>
-                <stop offset="0" stopColor="rgba(110, 150, 128, 0.30)" />
-                <stop offset="0.70" stopColor="rgba(70, 125, 93, 0.50)" />
-                <stop offset="1" stopColor="rgba(46, 120, 82, 0.72)" />
+                <stop offset="0" stopColor="rgba(120, 150, 135, 0.20)" />
+                <stop offset="0.65" stopColor="rgba(70, 120, 92, 0.36)" />
+                <stop offset="1" stopColor="rgba(58, 140, 98, 0.58)" />
               </linearGradient>
             );
           })()}
+          {/* intentional ember — small warm bloom at the leading edge (NOW). */}
+          {nowInWindow && (
+            <radialGradient id="rt-arc-ember" cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="46" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stopColor="rgba(255, 196, 120, 0.62)" />
+              <stop offset="0.45" stopColor="rgba(255, 168, 92, 0.26)" />
+              <stop offset="1" stopColor="rgba(255, 168, 92, 0)" />
+            </radialGradient>
+          )}
         </defs>
         {/* base atmosphere — half disc, edge-anchored, feathers to 0 at the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
@@ -2721,48 +2698,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           const [gx0, gy0] = ptAt(0, R);   // dawn / window start (bottom)
           const [gx1, gy1] = ptAt(1, R);   // window end (top)
           const guide = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
-          // NOW clamped into [0,1] so the ribbon still draws when the dot is
-          // scrubbed out of the window: above top → full arc elapsed; below
-          // bottom → none. The ribbon follows the dot instead of disappearing.
-          const nowClamped = Math.min(1, Math.max(0, nowFrac));
-          // Elapsed extent. The ribbon fills the dial from the bottom (f=0) up to
-          // NOW, and must PERSIST as the dot travels — it should never blink out.
-          // When the dial is scrubbed so NOW leaves the window, clamp instead of
-          // hiding: NOW above the top → the whole visible arc is behind us (fill
-          // all); NOW below the bottom → nothing elapsed yet (fill none). This is
-          // what makes the green trail the dot rather than disappear.
-          const f = nowClamped;
-          if (f <= 0.001) {
+          if (!nowInWindow) {
             return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
           }
-          // ── TAPERED RIBBON — the elapsed day as a filled ribbon: thin at dawn,
-          //   swelling toward NOW, with a gentle wavy outer edge (the "curve of the
-          //   sun" undulation). Built deterministically from ptAt so it rides the
-          //   dial curve. Tuned: thickness 45, wave size 5, speed 35.
-          //   ANIMATION NOTE: PHASE is constant → the wave is a frozen shape. To make
-          //   it breathe later, drive PHASE from a rAF/state clock (one value).
-          const N = 96;
-          const BASE_HALF = 1.5;            // half-width at dawn (px) — thin
-          const SWELL = 6;                  // px toward NOW → narrower, more reasonable band (was 11)
-          const AMP_PX = 2.6;               // deeper notches → more ripple (was 1.7)
-          const WAVE_FREQ = 13;             // more crests → more ripple (was 9)
-          const PHASE = phaseRef.current;   // driven by scroll (flow) + faint idle breath
-          const outer = [], inner = [];
-          for (let i = 0; i <= N; i++) {
-            const fr = i / N;
-            const ff = fr * f;                       // 0..f along elapsed
-            const taper = Math.pow(fr, 0.7);         // thin→thick toward now
-            const half = BASE_HALF + taper * SWELL;
-            const wave = Math.sin(fr * WAVE_FREQ * Math.PI * 2 - PHASE) * AMP_PX * (0.3 + taper);
-            const [ox, oy] = ptAt(ff, R + half + wave);
-            const [ix, iy] = ptAt(ff, R - half);
-            outer.push([ox, oy]); inner.push([ix, iy]);
-          }
-          inner.reverse();
-          const ribbon = "M " + [...outer, ...inner].map(p => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L ") + " Z";
+          const f = Math.min(1, Math.max(0, nowFrac));
+          const [ex, ey] = ptAt(f, R);
+          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${ex.toFixed(1)} ${ey.toFixed(1)}`;
           return <>
             <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />
-            <path d={ribbon} fill="url(#rt-arc-elapsed)" stroke="none" />
+            <path d={elapsed} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
+            {/* intentional ember at the leading edge */}
+            <circle cx={ex.toFixed(1)} cy={ey.toFixed(1)} r="46" fill="url(#rt-arc-ember)" />
           </>;
         })()}
         {/* Event rim dots */}
