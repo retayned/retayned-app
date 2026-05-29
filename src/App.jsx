@@ -2424,16 +2424,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   // idle ~6 (barely-there breathing). Read by the ribbon path builder below. */
   const phaseRef = useRef(0);
   useEffect(() => {
-    let raf = 0, idleT = 0, last = -1;
-    const SCROLL_FLOW = 0.024;   // scroll-flow 80 → how fast the ripple travels per px scrolled
-    const IDLE_AMP = 0.34;       // idle ~6 → amplitude of the at-rest breath (radians)
-    const IDLE_SPEED = 0.0009;   // slow breath
+    let raf = 0, idleT = 0, last = -999;
+    const SCROLL_FLOW = 0.024;   // scroll-flow 80 → ripple travel per px scrolled (matches mock)
+    const IDLE_AMP = 6 / 100 * 1.2;   // idle ~6 → 0.072 rad: barely-there breath (mock formula)
+    const IDLE_SPEED = 6 / 100 * 0.012; // mock: idleT += (idle/100)*0.012 per frame
     const tick = () => {
       const scroller = document.querySelector(".r-main");
       const sTop = scroller ? scroller.scrollTop : 0;
-      idleT += IDLE_SPEED * 16;
+      idleT += IDLE_SPEED;
       const next = sTop * SCROLL_FLOW + Math.sin(idleT) * IDLE_AMP;
-      if (Math.abs(next - last) > 0.0008) {   // only re-render when the edge actually moves
+      if (Math.abs(next - last) > 0.0004) {   // low gate so the faint idle breath stays alive
         phaseRef.current = next;
         last = next;
         force(n => n + 1);
@@ -2732,7 +2732,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           const N = 72;
           const BASE_HALF = 1.5;            // half-width at dawn (px) — thin
           const SWELL = 11;                 // px added toward NOW → swelling band
-          const AMP_PX = 9.5;               // wave amplitude in px (size 12, clearly visible at R=420)
+          const AMP_PX = 12 / 100 * 9;      // wave size 12 → 1.08px (MATCHES the mock; 9.5 was ~9× too big)
           const WAVE_FREQ = 6;              // ripples 6 → crests along the line
           const PHASE = phaseRef.current;   // driven by scroll (flow) + faint idle breath
           const outer = [], inner = [];
