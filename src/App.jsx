@@ -2661,13 +2661,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
-          {/* COMET-TAIL gradient — 12h green tail led by the NOW dot (the full dial
-              window). Bright green at the dot (head), fading to grey across the 12h
-              ahead (tail). Anchored head=now → tail=now+12h so the whole fade slides
-              WITH the dot and rides off the top edge. 12h = 1.0 in fraction units. */}
+          {/* COMET-TAIL gradient — green tail led by the NOW dot, fading to grey
+              behind it. Anchored head=now → tail behind, clipped at window edges. */}
           {(() => {
             const headF = Math.min(1, Math.max(0, nowFrac));
-            const tailF = headF + 1.0;                 // 12h ahead (exceeds 1 → clipped)
+            const tailF = headF + 1.0;
             const [hx, hy] = ptAt(headF, R);
             const [tx, ty] = ptAt(tailF, R);
             return (
@@ -2739,13 +2737,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
-        {/* Vertical spine — the line the event dots already sit on, made visible.
-            Spans top dot center → bottom dot center. right:3.5 = the 8px dots' center.
-            Dial: right offset if it's off the dot centers. */}
+        {/* Connector (G) — short segments BETWEEN consecutive event dots, with a
+            gap around each dot, so the dots punctuate the line (beads on a string)
+            rather than one rigid vertical bar. right:3.5 = the 8px dots' center. */}
         {placements.length > 1 && (() => {
-          const ys = placements.map(p => p.ry);
-          const top = Math.min(...ys), bot = Math.max(...ys);
-          return <div style={{ position: "absolute", right: 3.5, top: `${(top / VB_H * 100).toFixed(2)}%`, height: `${((bot - top) / VB_H * 100).toFixed(2)}%`, width: 1, background: "rgba(28,50,36,0.18)", zIndex: 0, pointerEvents: "none" }} />;
+          const ys = placements.map(p => p.ry).sort((a, b) => a - b);
+          const GAP = 12; // px gap around each dot
+          return ys.slice(0, -1).map((y0, i) => {
+            const segTop = y0 + GAP, segBot = ys[i + 1] - GAP;
+            if (segBot <= segTop) return null;
+            return <div key={`seg-${i}`} style={{ position: "absolute", right: 3.5, top: `${(segTop / VB_H * 100).toFixed(2)}%`, height: `${((segBot - segTop) / VB_H * 100).toFixed(2)}%`, width: 1, background: "rgba(28,50,36,0.14)", zIndex: 0, pointerEvents: "none" }} />;
+          });
         })()}
         {placements.length === 0 && (
           <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
