@@ -2425,7 +2425,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   const phaseRef = useRef(0);
   useEffect(() => {
     let raf = 0, idleT = 0, last = -999;
-    const SCROLL_FLOW = 0.024;   // scroll-flow 80 → ripple travel per px scrolled (matches mock)
+    const SCROLL_FLOW = 0.04;    // more travel per px scrolled → more active notch movement
     const IDLE_AMP = 6 / 100 * 1.2;   // idle ~6 → 0.072 rad: barely-there breath (mock formula)
     const IDLE_SPEED = 6 / 100 * 0.012; // mock: idleT += (idle/100)*0.012 per frame
     const tick = () => {
@@ -2690,8 +2690,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
           {/* elapsed gradient — reused as the tapered ribbon's FILL: cool/faint
-              sage at dawn → warm bright green at NOW. Anchored dawn→now. */}
-          {nowInWindow && (() => {
+              sage at dawn → warm bright green at NOW. Always defined (anchored to
+              the clamped NOW) so the ribbon keeps its fill even when NOW is
+              scrubbed out of the window and the green trails the dot. */}
+          {(() => {
             const [dx, dy] = ptAt(0, R);
             const [nx2, ny2] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
             return (
@@ -2719,21 +2721,31 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           const [gx0, gy0] = ptAt(0, R);   // dawn / window start (bottom)
           const [gx1, gy1] = ptAt(1, R);   // window end (top)
           const guide = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
-          if (!nowInWindow) {
+          // NOW clamped into [0,1] so the ribbon still draws when the dot is
+          // scrubbed out of the window: above top → full arc elapsed; below
+          // bottom → none. The ribbon follows the dot instead of disappearing.
+          const nowClamped = Math.min(1, Math.max(0, nowFrac));
+          // Elapsed extent. The ribbon fills the dial from the bottom (f=0) up to
+          // NOW, and must PERSIST as the dot travels — it should never blink out.
+          // When the dial is scrubbed so NOW leaves the window, clamp instead of
+          // hiding: NOW above the top → the whole visible arc is behind us (fill
+          // all); NOW below the bottom → nothing elapsed yet (fill none). This is
+          // what makes the green trail the dot rather than disappear.
+          const f = nowClamped;
+          if (f <= 0.001) {
             return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
           }
-          const f = Math.min(1, Math.max(0, nowFrac));
           // ── TAPERED RIBBON — the elapsed day as a filled ribbon: thin at dawn,
           //   swelling toward NOW, with a gentle wavy outer edge (the "curve of the
           //   sun" undulation). Built deterministically from ptAt so it rides the
           //   dial curve. Tuned: thickness 45, wave size 5, speed 35.
           //   ANIMATION NOTE: PHASE is constant → the wave is a frozen shape. To make
           //   it breathe later, drive PHASE from a rAF/state clock (one value).
-          const N = 72;
+          const N = 96;
           const BASE_HALF = 1.5;            // half-width at dawn (px) — thin
-          const SWELL = 11;                 // px added toward NOW → swelling band
-          const AMP_PX = 12 / 100 * 9;      // wave size 12 → 1.08px (MATCHES the mock; 9.5 was ~9× too big)
-          const WAVE_FREQ = 6;              // ripples 6 → crests along the line
+          const SWELL = 6;                  // px toward NOW → narrower, more reasonable band (was 11)
+          const AMP_PX = 2.6;               // deeper notches → more ripple (was 1.7)
+          const WAVE_FREQ = 13;             // more crests → more ripple (was 9)
           const PHASE = phaseRef.current;   // driven by scroll (flow) + faint idle breath
           const outer = [], inner = [];
           for (let i = 0; i <= N; i++) {
