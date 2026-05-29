@@ -2661,13 +2661,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
-          {/* COMET-TAIL gradient — fixed 6h green tail led by the NOW dot. Bright
-              green at the dot (head), fading to grey across the 6h ahead (tail).
-              Anchored head=now → tail=now+6h so the whole fade slides WITH the dot
-              and rides off the top edge with it. 6h = 0.5 in fraction units. */}
+          {/* COMET-TAIL gradient — 12h green tail led by the NOW dot (the full dial
+              window). Bright green at the dot (head), fading to grey across the 12h
+              ahead (tail). Anchored head=now → tail=now+12h so the whole fade slides
+              WITH the dot and rides off the top edge. 12h = 1.0 in fraction units. */}
           {(() => {
             const headF = Math.min(1, Math.max(0, nowFrac));
-            const tailF = headF + 0.5;                 // 6h ahead (may exceed 1 → clipped)
+            const tailF = headF + 1.0;                 // 12h ahead (exceeds 1 → clipped)
             const [hx, hy] = ptAt(headF, R);
             const [tx, ty] = ptAt(tailF, R);
             return (
@@ -2686,11 +2686,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-duo)" />
         {/* NOW-glow — warm pool riding the live now-height, dies before the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-core)" />
-        {/* ── COMET TAIL — a fixed 6h green segment led by the purple NOW dot.
-            Head at NOW, tail trailing 6h ahead, fading green→grey along its length.
-            Anchored to the dot (not the window): as NOW climbs, the tail slides up
-            and rides off the top edge, clipped by the SVG viewport. The faint full
-            guide-arc underneath is the rest of the day (grey). f=0 bottom, f=1 top. */}
+        {/* ── COMET TAIL — a 12h green segment led by the purple NOW dot (full dial
+            window). Head at NOW, tail trailing 12h ahead, fading green→grey along
+            its length. Anchored to the dot (not the window): as NOW climbs, the tail
+            slides up and rides off the top edge, clipped by the SVG viewport. The
+            faint full guide-arc underneath is the rest of the day (grey). */}
         {(() => {
           const [gx0, gy0] = ptAt(0, R);
           const [gx1, gy1] = ptAt(1, R);
@@ -2699,7 +2699,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
           }
           const headF = Math.min(1, Math.max(0, nowFrac));
-          const drawTailF = Math.min(1, headF + 0.5);   // clip the 6h tail at the visible top
+          const drawTailF = Math.min(1, headF + 1.0);   // 12h tail, clipped at the visible top
           const [hx, hy] = ptAt(headF, R);
           const [tx, ty] = ptAt(drawTailF, R);
           const tail = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${tx.toFixed(1)} ${ty.toFixed(1)}`;
@@ -2708,6 +2708,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <path d={tail} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
           </>;
         })()}
+        {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
+            the arc at the positions the tickLabels array already computes (R−30).
+            Muted so they read as a quiet scale under the events + tail. */}
+        {tickLabels.map((tl, i) => (
+          <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
+            style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 600, fill: "#9A9A93", pointerEvents: "none" }}>
+            {tl.lbl}
+          </text>
+        ))}
         {/* Event rim dots */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
