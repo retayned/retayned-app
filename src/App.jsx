@@ -2602,7 +2602,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       {/* Now control — upper-right of the dial. The Today/Tomorrow toggle was
           removed: the dial is day-bounded (scrolls only within today), so there's
           no other day to switch to. Now appears only when scrubbed off live time. */}
-      <div style={{ position: "absolute", right: 14, top: 6, zIndex: 8, pointerEvents: "auto" }}>
+      <div style={{ position: "absolute", right: 14, top: 58, zIndex: 8, pointerEvents: "auto" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
         {isScrubbed && (
           <button
@@ -2739,7 +2739,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           its event's position on the arc (ry), so the rail reads as a legend
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
-        {placements.length === 0 && (
+        {placements.length === 0 && earlierCount === 0 && laterCount === 0 && (
           <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
             <span style={{ fontFamily: "'Caveat', 'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 22, color: "#2E6B4F", lineHeight: 1.15 }}>
               No calls today.
@@ -2801,7 +2801,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
       {/* Earlier / later pockets near the arc ends */}
       {earlierCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", left: "8%", bottom: 6, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom left" }}>
+        <div className="rt-dial-cs" style={{ position: "absolute", left: "8%", bottom: 6, zIndex: 9, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom left", pointerEvents: "auto" }}>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↓ {earlierCount} earlier</span>
           <span
             className="rt-dial-help"
