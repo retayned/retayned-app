@@ -6801,61 +6801,10 @@ export default function App({ user }) {
       });
     }
     const countable = updated;
-    // Fireworks fire EXACTLY ONCE — when the LAST today-bucket task is checked
-    // off. Triple-gated to prevent the historical bugs:
-    //   (1) Only fires when newDone is true (we're checking, not unchecking)
-    //   (2) Only fires when the TOGGLED task itself is in the today bucket
-    //       (so finishing a tomorrow/later task never triggers, even if all
-    //        today tasks happen to already be complete)
-    //   (3) Only fires on TRANSITION — i.e. the previous state had at least
-    //       one today task still incomplete, and the new state has none.
-    //       Prevents re-firing on subsequent toggles when today is already
-    //       complete, prevents stale-state confetti if the optimistic update
-    //       didn't apply for some reason (we explicitly verify the count
-    //       went from < total to === total).
-    // Day boundary at midnight stored-TZ (matches task rollover and bucketing).
-    const _now = new Date();
-    const _todayStr = userTimezone
-      ? ymdInTz(userTimezone, _now)
-      : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
-    const isTodayBucket = (t) => {
-      if (t.recurring) {
-        // Recurring tasks only count toward "today" if their next occurrence
-        // IS today. Weekly/monthly tasks not due today are hidden from the UI
-        // (see bucketOf) and shouldn't inflate today's counts either.
-        if (t.done) return true; // done recurring tasks live in today's done list
-        const next = nextOccurrenceDate(t.recurrence_pattern, _now, true);
-        const nextStr = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
-        return nextStr <= _todayStr;
-      }
-      if (!t.due_date) return true;
-      const d = String(t.due_date).slice(0, 10);
-      return d <= _todayStr;
-    };
-    // Was the toggled task itself a today-bucket task?
-    const toggledIsToday = isTodayBucket(task);
-    // Today-bucket counts BEFORE this toggle (using the pre-update tasks state).
-    const todayBucketBefore = tasks.filter(isTodayBucket);
-    const todayDoneBefore = todayBucketBefore.filter(t => t.done).length;
-    const todayTotalBefore = todayBucketBefore.length;
-    // Today-bucket counts AFTER (from updated).
-    const todayBucketAfter = countable.filter(isTodayBucket);
-    const todayDoneAfter = todayBucketAfter.filter(t => t.done).length;
-    const todayTotalAfter = todayBucketAfter.length;
-    // Fire only when:
-    //   - we're checking (not unchecking)
-    //   - toggled task is a today task
-    //   - we transitioned: before had some incomplete, after is fully complete
-    if (
-      newDone &&
-      toggledIsToday &&
-      todayTotalAfter > 0 &&
-      todayDoneBefore < todayTotalBefore &&
-      todayDoneAfter === todayTotalAfter
-    ) {
-      setConfetti(true);
-      setTimeout(() => setConfetti(false), 2000);
-    }
+    // Fireworks REMOVED — no celebration animation on completing the last
+    // today task (per product decision). The detection logic below is left in
+    // place but no longer triggers any visual; setConfetti is never called.
+    // (Block kept minimal in case a quieter affordance is wanted later.)
     // Persist. On failure, revert the optimistic state so the UI doesn't
     // show a phantom (un)check that a later hydration would silently undo —
     // the intermittent "I checked it and it stayed" bug. We snapshot the
@@ -8432,6 +8381,13 @@ export default function App({ user }) {
         /* Make the inputbar inherit the gradient background so it doesn't show a seam */
         .r-rai-intro .r-rai-inputbar,
         .r-rai-chat .r-rai-inputbar { background: transparent !important; }
+        /* De-facto (intro) Rai surface: the hero input box ("Ask about a
+           client…") is a .rt-composer inside .r-rai-intro. Give it the purple
+           hairline + shadow at rest (same --rt-sh-purple as the Rai suggestion
+           cards) so it reads as Rai's surface. Targets BOTH the hero composer
+           and the reply inputbox for that state. */
+        .r-rai-intro .rt-composer,
+        .r-rai-intro .rt-rai-inputbox { box-shadow: var(--rt-sh-purple) !important; }
         /* Mobile: don't vertically center the intro — start content near the top */
         @media (max-width: 767px) {
           .r-rai-intro .r-rai-inner { justify-content: flex-start !important; padding-top: 48px !important; }
@@ -11857,8 +11813,11 @@ export default function App({ user }) {
                       // out on either side of the label (vs a solid line below).
                       // Editorial typography move — section is centered between
                       // two fades, calmer than a hard line.
-                      const dotColor = C.ink300;
-                      const dotHalo = C.surfaceWarm;
+                      // Today is the active surface — its dot is "on" (brand
+                      // green with a soft sage halo). Tomorrow/later stay muted.
+                      const isToday = name === "Today";
+                      const dotColor = isToday ? C.primary : C.ink300;
+                      const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
                       return (
                         <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
@@ -11883,25 +11842,46 @@ export default function App({ user }) {
                           items={raiSuggestionItems}
                           daysSinceStart={user?.created_at ? Math.floor((Date.now() - new Date(user.created_at).getTime()) / 86400000) : 99}
                           onAdd={(s) => {
-                            // Promote to a real task using the canonical create
-                            // signature. ai:true marks Rai provenance (local flag).
+                            // Promote to a real task. Lands on TODAY (due_date =
+                            // today) — the user can change the date after. ai:true
+                            // marks Rai provenance (local flag).
+                            const todayStr = localYmd();
                             const tmpId = "tmp-" + Date.now();
-                            const optimistic = { id: tmpId, text: s.title, client: s.client_name || null, done: false, ai: true, recurring: false, due_date: null, raiPriority: false, alert: false, created_at: Date.now(), assigned_worker_id: null };
+                            const optimistic = { id: tmpId, text: s.title, client: s.client_name || null, done: false, ai: true, recurring: false, due_date: todayStr, raiPriority: false, alert: false, created_at: Date.now(), assigned_worker_id: null };
                             setTasks(prev => [optimistic, ...prev]);
                             setRaiDismissed(prev => new Set(prev).add(s.id));
-                            tasksDb.create(user.id, { text: s.title, client_name: s.client_name || null, client_id: s.client_id || null, is_recurring: false, due_date: null })
-                              .then(({ data: created }) => {
-                                if (created) {
-                                  setTasks(prev => prev.map(t => t.id === tmpId ? { ...t, id: created.id } : t));
-                                  // Mark the suggestion promoted so the sweep learns + won't re-suggest.
-                                  supabase.from("rai_suggestions").update({ status: "promoted", promoted_task_id: created.id, acted_at: new Date().toISOString() }).eq("id", s.id);
+                            tasksDb.create(user.id, { text: s.title, client_name: s.client_name || null, client_id: s.client_id || null, is_recurring: false, due_date: todayStr })
+                              .then(({ data: created, error }) => {
+                                if (error || !created) {
+                                  // Create failed (Supabase resolves with {error}
+                                  // rather than throwing) — roll back the optimistic
+                                  // task and un-hide the card so the user can retry.
+                                  console.error("Add suggestion failed:", error);
+                                  setTasks(prev => prev.filter(t => t.id !== tmpId));
+                                  setRaiDismissed(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+                                  return;
                                 }
+                                setTasks(prev => prev.map(t => t.id === tmpId ? { ...t, id: created.id } : t));
+                                // Mark the suggestion promoted so the sweep learns + won't re-suggest.
+                                supabase.from("rai_suggestions").update({ status: "promoted", promoted_task_id: created.id, acted_at: new Date().toISOString() }).eq("id", s.id);
                               })
                               .catch(() => { setTasks(prev => prev.filter(t => t.id !== tmpId)); setRaiDismissed(prev => { const n = new Set(prev); n.delete(s.id); return n; }); });
                           }}
                           onDismiss={(s, reason) => {
+                            // Optimistically hide, then persist. If the DB write
+                            // fails, roll back the hide so the card reappears
+                            // (otherwise it vanishes locally but stays pending in
+                            // the DB and pops back on next load — a silent lie).
                             setRaiDismissed(prev => new Set(prev).add(s.id));
-                            supabase.from("rai_suggestions").update({ status: "dismissed", dismiss_reason: reason || null, acted_at: new Date().toISOString() }).eq("id", s.id);
+                            supabase.from("rai_suggestions")
+                              .update({ status: "dismissed", dismiss_reason: reason || null, acted_at: new Date().toISOString() })
+                              .eq("id", s.id)
+                              .then(({ error }) => {
+                                if (error) {
+                                  console.error("Dismiss failed:", error);
+                                  setRaiDismissed(prev => { const n = new Set(prev); n.delete(s.id); return n; });
+                                }
+                              });
                           }}
                           C={C}
                         />
