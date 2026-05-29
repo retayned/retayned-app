@@ -4883,14 +4883,6 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
-  // ─── TEMP DEV: Rai task-suggestion test ──────────────────────────────────
-  // Hits the existing rai-chat Edge Function with a request for 3 concrete
-  // tasks today. Uses full Rai context (all your clients, scores, drift,
-  // recent activity) — same infrastructure as the live chat. Remove this
-  // block + the button JSX + the handler once we've validated quality.
-  const [raiTestOpen, setRaiTestOpen] = useState(false);
-  const [raiTestLoading, setRaiTestLoading] = useState(false);
-  const [raiTestResult, setRaiTestResult] = useState("");
   // ─── Rai daily suggestions (from rai_suggestions, written by the sweep) ───
   // Loaded once per data-load + on the rai_picks realtime ping (the sweep
   // writes picks + suggestions in the same run). Locally-acted ids hide
@@ -4911,62 +4903,6 @@ export default function App({ user }) {
   }, [user?.id]);
   // NOTE: raiSuggestionItems (which reads `clients`) is declared AFTER the
   // clients state below — defining it here would hit the temporal dead zone.
-  const fetchRaiTaskSuggestions = async () => {
-    setRaiTestOpen(true);
-    setRaiTestLoading(true);
-    setRaiTestResult("");
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setRaiTestResult("Error: not authenticated."); setRaiTestLoading(false); return; }
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const prompt = "Based on everything you know about my clients, recent activity, drift, scores, and what's already on my plate today — suggest 3 concrete tasks I should add to today's list. Be specific (name a client, name an action). For each task, give it in this format:\n\n1. [Task]\n   Why: [one short sentence — what signal makes this matter today]\n\n2. ...\n\n3. ...\n\nDo not pick tasks I already have open. Skip generic suggestions like 'follow up' — be concrete about what to do and why.";
-      const res = await fetch(`${supabaseUrl}/functions/v1/rai-chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-          "Accept": "text/event-stream",
-        },
-        body: JSON.stringify({ message: prompt, history: [], focused_client_id: null, stream: true, attachments: [] }),
-      });
-      if (res.status === 429) { const d = await res.json(); setRaiTestResult(d.message || "Rate-limited."); setRaiTestLoading(false); return; }
-      if (!res.ok) { setRaiTestResult("Error: " + res.status + " " + res.statusText); setRaiTestLoading(false); return; }
-      // Read the SSE stream and accumulate text. Matches production sendAi
-      // parser: split by \n\n event boundary, parse data: lines as JSON, look
-      // for content_block_delta events with delta.type === 'text_delta'.
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "", accumulated = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() || "";
-        for (const evt of events) {
-          const lines = evt.split("\n");
-          for (const line of lines) {
-            if (!line.startsWith("data:")) continue;
-            const data = line.slice(5).trim();
-            if (!data || data === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-                accumulated += parsed.delta.text;
-                setRaiTestResult(accumulated);
-              }
-            } catch { /* ignore malformed chunks */ }
-          }
-        }
-      }
-      if (!accumulated) setRaiTestResult("(No content returned from rai-chat. Check Edge Function logs.)");
-    } catch (e) {
-      setRaiTestResult("Error: " + (e?.message || String(e)));
-    } finally {
-      setRaiTestLoading(false);
-    }
-  };
-  // ─── END TEMP DEV ────────────────────────────────────────────────────────
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
@@ -12219,62 +12155,11 @@ export default function App({ user }) {
                     feathered rim already softens the upper arc.) */}
               </div>
 
-              {false && (
-              <div className="rt-focus-col rt-dial-col" style={{ gridArea: "focus", display: "flex", flexDirection: "column", position: "sticky", top: 0, alignSelf: "stretch", minHeight: 520, marginRight: -64, marginTop: -28, marginBottom: -96 }}>
-                <div style={{ padding: 0 }}>
-                  <TodayTimeline
-                    clients={clients}
-                    events={personalEvents}
-                    C={C}
-                    showHeader={true}
-                    compact={false}
-                    googleConnected={false}
-                        onConnectClick={() => setPage("settings")}
-                        promptDismissed={googleCalPromptDismissed}
-                        onDismissConnectPrompt={dismissGoogleCalPrompt}
-                    onCreate={async (entry) => {
-                      const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                      setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                      const { data, error } = await personalCalendarDb.create(user.id, entry);
-                      if (error) {
-                        console.error("Calendar create failed:", error);
-                        setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
-                        return;
-                      }
-                      setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                    }}
-                    onUpdate={async (id, patch) => {
-                      // Optimistic move/resize. Capture prev so we can
-                      // roll back if the server rejects the update.
-                      const prev = personalEvents;
-                      setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                      const { error } = await personalCalendarDb.update(id, patch);
-                      if (error) {
-                        console.error("Calendar update failed:", error);
-                        setPersonalEvents(prev);
-                      }
-                    }}
-                    onDelete={async (id) => {
-                      const prev = personalEvents;
-                      setPersonalEvents(prev.filter(e => e.id !== id));
-                      const { error } = await personalCalendarDb.remove(id);
-                      if (error) {
-                        console.error("Calendar delete failed:", error);
-                        setPersonalEvents(prev);
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-              )}
-
-              {/* DAYBOOK / RAI BRIEF COLUMN — TEMPORARILY HIDDEN (gated false)
-                  while the TimeDial occupies the right side. Not deleted. */}
-              {false && (
-              <div className="rt-rai-col" style={{ gridArea: "rai", display: "none", flexDirection: "column", gap: 16, position: "sticky", top: 20, alignSelf: "start" }}>
-                <RaiBriefPanel pick={raiPicks} clients={clients} />
-              </div>
-              )}
+              {/* (Removed: two dead {false && …} render blocks that previously
+                  held a gated TodayTimeline focus-column and a gated
+                  RaiBriefPanel. Both components remain defined — TodayTimeline
+                  is live in the mobile calendar sheet, RaiBriefPanel on other
+                  pages — only these never-rendered branches were deleted.) */}
 
               {/* CONFETTI */}
               {/* Confetti layer removed (May 2026) — celebration is fireworks
@@ -19587,37 +19472,7 @@ export default function App({ user }) {
         </>
       )}
 
-      {/* ─── TEMP DEV: Rai task-suggestion test button + result panel ────
-          Bottom-left floating disc on desktop. Click → calls rai-chat with
-          the full Rai context, asks for 3 task suggestions, streams result
-          into a panel above the button. Remove this whole block when done. */}
-      {page === "today" && (
-        <>
-          <button
-            onClick={fetchRaiTaskSuggestions}
-            title="Generate 3 Rai task suggestions (dev test)"
-            style={{ position: "fixed", left: "calc(var(--content-sidebar-w, 240px) + 28px + 14px)", bottom: 28, width: 52, height: 52, borderRadius: 26, background: "#7c5cf3", color: "#fff", border: "none", fontSize: 11, fontWeight: 800, letterSpacing: 0.3, textTransform: "uppercase", cursor: "pointer", boxShadow: "0 4px 14px rgba(124,92,243,0.32), 0 0 0 1px rgba(20,30,22,0.06)", zIndex: 600, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1.1 }}
-          >
-            Rai<br/>3
-          </button>
-          {raiTestOpen && (
-            <div style={{ position: "fixed", left: "calc(var(--content-sidebar-w, 240px) + 28px + 14px)", bottom: 92, width: 440, maxHeight: "70vh", background: "#fff", borderRadius: 14, boxShadow: "0 12px 40px rgba(20,30,22,0.18), 0 0 0 1px rgba(20,30,22,0.08)", zIndex: 600, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              <div style={{ padding: "12px 14px", borderBottom: "1px solid " + C.borderLight, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase", color: "#7c5cf3" }}>Rai · 3 tasks today (dev test)</div>
-                <button onClick={() => setRaiTestOpen(false)} style={{ background: "transparent", border: "none", color: C.textMuted, cursor: "pointer", fontSize: 16, padding: 0, lineHeight: 1, fontFamily: "inherit" }}>×</button>
-              </div>
-              <div style={{ padding: "14px 16px", overflowY: "auto", fontSize: 13, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
-                {raiTestLoading && !raiTestResult ? <span style={{ color: C.textMuted, fontStyle: "italic" }}>Asking Rai…</span> : raiTestResult || <span style={{ color: C.textMuted, fontStyle: "italic" }}>No response yet.</span>}
-                {raiTestLoading && raiTestResult && <span style={{ color: C.textMuted }}> ▍</span>}
-              </div>
-              <div style={{ padding: "8px 14px", borderTop: "1px solid " + C.borderLight, display: "flex", justifyContent: "flex-end" }}>
-                <button onClick={fetchRaiTaskSuggestions} disabled={raiTestLoading} style={{ background: raiTestLoading ? C.surface : "#7c5cf3", color: raiTestLoading ? C.textMuted : "#fff", border: "none", borderRadius: 999, padding: "6px 14px", fontSize: 11.5, fontWeight: 700, cursor: raiTestLoading ? "default" : "pointer", fontFamily: "inherit" }}>{raiTestLoading ? "Generating…" : "Regenerate"}</button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-      {/* ─── END TEMP DEV ─────────────────────────────────────────────── */}
+
 
       {/* Toast — bottom-right confirmation with undo */}
       {quickLogToast && (
