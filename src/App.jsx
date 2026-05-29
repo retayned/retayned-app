@@ -11194,79 +11194,16 @@ export default function App({ user }) {
                         </span>
                       )}
                     </div>
-                    {/* Mobile-only calendar trigger (LEGACY — hidden, replaced by band-level trigger above) */}
-                    <button
-                      className="rt-mob-cal-trigger"
-                      onClick={() => setTodayStripOpen(!todayStripOpen)}
-                      style={{
-                        display: "none",
-                        alignItems: "center",
-                        gap: 5,
-                        padding: "5px 4px",
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        color: C.textSec,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        fontFamily: "inherit"
-                      }}
-                    >
-                      <Icon name="calendar" size={13} color={C.textSec} />
-                      <span>3 events today</span>
-                      <Icon name="chevron-right" size={11} color={C.textSec} />
-                    </button>
                   </div>
 
-                  {/* Mobile-only expanded calendar sheet (toggled by trigger above)
-                      Renders the today timeline in compact mode (caps at 6 visible
-                      hours with internal scroll). */}
-                  {todayStripOpen && (
-                    <div className="rt-mob-cal-sheet" style={{ display: "none", marginBottom: 12, background: C.card, borderRadius: 10, padding: "14px" }}>
-                      <TodayTimeline
-                        clients={clients}
-                        events={personalEvents}
-                        C={C}
-                        showHeader={true}
-                        compact={true}
-                        googleConnected={false}
-                        onConnectClick={() => setPage("settings")}
-                        promptDismissed={googleCalPromptDismissed}
-                        onDismissConnectPrompt={dismissGoogleCalPrompt}
-                        onCreate={async (entry) => {
-                          const optimistic = { id: `tmp-${Date.now()}`, source: "manual", ...entry };
-                          setPersonalEvents(prev => [...prev, optimistic].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                          const { data, error } = await personalCalendarDb.create(user.id, entry);
-                          if (error) {
-                            console.error("Calendar create failed:", error);
-                            setPersonalEvents(prev => prev.filter(e => e.id !== optimistic.id));
-                            return;
-                          }
-                          setPersonalEvents(prev => prev.map(e => e.id === optimistic.id ? data : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                        }}
-                        onUpdate={async (id, patch) => {
-                          // Optimistic move/resize. Capture prev so we can
-                          // roll back if the server rejects the update.
-                          const prev = personalEvents;
-                          setPersonalEvents(prev.map(e => e.id === id ? { ...e, ...patch } : e).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                          const { error } = await personalCalendarDb.update(id, patch);
-                          if (error) {
-                            console.error("Calendar update failed:", error);
-                            setPersonalEvents(prev);
-                          }
-                        }}
-                        onDelete={async (id) => {
-                          const prev = personalEvents;
-                          setPersonalEvents(prev.filter(e => e.id !== id));
-                          const { error } = await personalCalendarDb.remove(id);
-                          if (error) {
-                            console.error("Calendar delete failed:", error);
-                            setPersonalEvents(prev);
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
+                  {/* (Removed: legacy rt-mob-cal-trigger button — display:none,
+                      replaced by the band-level trigger above.) */}
+
+                  {/* (Removed: dead TodayTimeline render — the old calendar
+                      widget. Its wrapper .rt-mob-cal-sheet was display:none on
+                      desktop AND forced display:none on mobile, so it never
+                      rendered in any viewport. Replaced by MobileCalendarStrip
+                      (the band) on mobile and the TimeDial on desktop.) */}
 
                   {dataLoaded && openTasks.length === 0 && completedTasks.length === 0 && (
                     <div style={{ padding: "40px 4px 28px", borderTop: "1px solid " + C.borderLight, textAlign: "center" }}>
