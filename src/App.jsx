@@ -4891,25 +4891,35 @@ export default function App({ user }) {
   const [raiTestOpen, setRaiTestOpen] = useState(false);
   const [raiTestLoading, setRaiTestLoading] = useState(false);
   const [raiTestResult, setRaiTestResult] = useState("");
-  // Locally-dismissed suggestion ids (until real suggestionsDb wiring lands).
+  // ─── Rai daily suggestions (from rai_suggestions, written by the sweep) ───
+  // Loaded once per data-load + on the rai_picks realtime ping (the sweep
+  // writes picks + suggestions in the same run). Locally-acted ids hide
+  // immediately while the DB write settles.
+  const [raiSuggestions, setRaiSuggestions] = useState([]);
   const [raiDismissed, setRaiDismissed] = useState(() => new Set());
-  // Parse the rai-chat text ("N. Task\n   Why: ...") into structured items so
-  // the RaiSuggestions card can render them. Best-effort; tolerant of spacing.
+  const loadRaiSuggestions = useCallback(async () => {
+    if (!user?.id) return;
+    const { data, error } = await supabase
+      .from("rai_suggestions")
+      .select("id, client_id, title, why, signal, status, expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .order("suggested_at", { ascending: true })
+      .limit(3);
+    if (!error) setRaiSuggestions(data || []);
+  }, [user?.id]);
+  // Map DB rows → component items (resolve client name + 2-letter badge).
   const raiSuggestionItems = useMemo(() => {
-    if (!raiTestResult) return [];
-    const out = [];
-    // Split on leading "N." markers.
-    const blocks = raiTestResult.split(/\n(?=\s*\d+\.\s)/);
-    for (const b of blocks) {
-      const m = b.match(/^\s*\d+\.\s*(.+?)(?:\n\s*Why:\s*(.+))?$/s);
-      if (!m) continue;
-      const title = (m[1] || "").trim().replace(/\s+/g, " ");
-      const why = (m[2] || "").trim().replace(/\s+/g, " ");
-      if (!title) continue;
-      out.push({ id: "rai-" + out.length + "-" + title.slice(0, 24), title, why });
-    }
-    return out.filter(it => !raiDismissed.has(it.id));
-  }, [raiTestResult, raiDismissed]);
+    return (raiSuggestions || [])
+      .filter(r => !raiDismissed.has(r.id))
+      .map(r => {
+        const cli = r.client_id ? (clients || []).find(c => c.id === r.client_id) : null;
+        const name = cli?.name || null;
+        const badge = name ? name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() : null;
+        return { id: r.id, title: r.title, why: r.why, client_id: r.client_id || null, client_name: name, client_badge: badge };
+      });
+  }, [raiSuggestions, raiDismissed, clients]);
   const fetchRaiTaskSuggestions = async () => {
     setRaiTestOpen(true);
     setRaiTestLoading(true);
@@ -5942,6 +5952,7 @@ export default function App({ user }) {
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
+    loadRaiSuggestions();
 
     // Build per-client revenue history map: client_id → [history rows]
     const revHistoryByClient = {};
@@ -6428,6 +6439,7 @@ export default function App({ user }) {
       try {
         const pickRes = await raiPicksDb.getCurrent(user.id, userTimezone || null);
         setRaiPicks(pickRes?.data || null);
+        loadRaiSuggestions();
       } catch (e) {
         console.warn("Failed to refetch rai pick after change:", e);
       }
@@ -11998,14 +12010,21 @@ export default function App({ user }) {
                             const tmpId = "tmp-" + Date.now();
                             const optimistic = { id: tmpId, text: s.title, client: s.client_name || null, done: false, ai: true, recurring: false, due_date: null, raiPriority: false, alert: false, created_at: Date.now(), assigned_worker_id: null };
                             setTasks(prev => [optimistic, ...prev]);
-                            tasksDb.create(user.id, { text: s.title, client_name: s.client_name || null, client_id: null, is_recurring: false, due_date: null })
-                              .then(({ data: created }) => {
-                                if (created) setTasks(prev => prev.map(t => t.id === tmpId ? { ...t, id: created.id } : t));
-                              })
-                              .catch(() => setTasks(prev => prev.filter(t => t.id !== tmpId)));
                             setRaiDismissed(prev => new Set(prev).add(s.id));
+                            tasksDb.create(user.id, { text: s.title, client_name: s.client_name || null, client_id: s.client_id || null, is_recurring: false, due_date: null })
+                              .then(({ data: created }) => {
+                                if (created) {
+                                  setTasks(prev => prev.map(t => t.id === tmpId ? { ...t, id: created.id } : t));
+                                  // Mark the suggestion promoted so the sweep learns + won't re-suggest.
+                                  supabase.from("rai_suggestions").update({ status: "promoted", promoted_task_id: created.id, acted_at: new Date().toISOString() }).eq("id", s.id);
+                                }
+                              })
+                              .catch(() => { setTasks(prev => prev.filter(t => t.id !== tmpId)); setRaiDismissed(prev => { const n = new Set(prev); n.delete(s.id); return n; }); });
                           }}
-                          onDismiss={(s) => { setRaiDismissed(prev => new Set(prev).add(s.id)); }}
+                          onDismiss={(s, reason) => {
+                            setRaiDismissed(prev => new Set(prev).add(s.id));
+                            supabase.from("rai_suggestions").update({ status: "dismissed", dismiss_reason: reason || null, acted_at: new Date().toISOString() }).eq("id", s.id);
+                          }}
                           C={C}
                         />
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
