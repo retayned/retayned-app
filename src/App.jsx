@@ -2661,18 +2661,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
             <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
           </radialGradient>
-          {/* AHEAD gradient — the green LEADS the NOW dot: brightest green right
-              at NOW, fading to grey toward the future edge of the window. Anchored
-              now→top so the fade tracks the dot as it climbs. */}
-          {nowInWindow && (() => {
-            const [nx2, ny2] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
-            const [tx, ty] = ptAt(1, R);
+          {/* COMET-TAIL gradient — fixed 6h green tail led by the NOW dot. Bright
+              green at the dot (head), fading to grey across the 6h ahead (tail).
+              Anchored head=now → tail=now+6h so the whole fade slides WITH the dot
+              and rides off the top edge with it. 6h = 0.5 in fraction units. */}
+          {(() => {
+            const headF = Math.min(1, Math.max(0, nowFrac));
+            const tailF = headF + 0.5;                 // 6h ahead (may exceed 1 → clipped)
+            const [hx, hy] = ptAt(headF, R);
+            const [tx, ty] = ptAt(tailF, R);
             return (
-              <linearGradient id="rt-arc-elapsed" gradientUnits="userSpaceOnUse" x1={nx2.toFixed(1)} y1={ny2.toFixed(1)} x2={tx.toFixed(1)} y2={ty.toFixed(1)}>
+              <linearGradient id="rt-arc-elapsed" gradientUnits="userSpaceOnUse" x1={hx.toFixed(1)} y1={hy.toFixed(1)} x2={tx.toFixed(1)} y2={ty.toFixed(1)}>
                 <stop offset="0" stopColor="rgba(58, 140, 98, 0.62)" />
-                <stop offset="0.45" stopColor="rgba(82, 130, 100, 0.34)" />
-                <stop offset="0.78" stopColor="rgba(120, 130, 120, 0.16)" />
-                <stop offset="1" stopColor="rgba(140, 143, 138, 0.08)" />
+                <stop offset="0.45" stopColor="rgba(82, 130, 100, 0.32)" />
+                <stop offset="0.78" stopColor="rgba(120, 130, 120, 0.14)" />
+                <stop offset="1" stopColor="rgba(140, 143, 138, 0.05)" />
               </linearGradient>
             );
           })()}
@@ -2683,23 +2686,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-duo)" />
         {/* NOW-glow — warm pool riding the live now-height, dies before the rim */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-core)" />
-        {/* ── ARC — the ~6h AHEAD of NOW (in-window future) drawn green, leading
-            the purple dot and fading to grey toward the future edge. The faint
-            full guide-arc is the rest of the day (grey). As NOW climbs to the top,
-            the green shrinks and the bottom is all grey. f=0 bottom, f=1 top. */}
+        {/* ── COMET TAIL — a fixed 6h green segment led by the purple NOW dot.
+            Head at NOW, tail trailing 6h ahead, fading green→grey along its length.
+            Anchored to the dot (not the window): as NOW climbs, the tail slides up
+            and rides off the top edge, clipped by the SVG viewport. The faint full
+            guide-arc underneath is the rest of the day (grey). f=0 bottom, f=1 top. */}
         {(() => {
-          const [gx0, gy0] = ptAt(0, R);   // window start (bottom)
-          const [gx1, gy1] = ptAt(1, R);   // window end (top)
+          const [gx0, gy0] = ptAt(0, R);
+          const [gx1, gy1] = ptAt(1, R);
           const guide = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
           if (!nowInWindow) {
             return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
           }
-          const f = Math.min(1, Math.max(0, nowFrac));
-          const [nx2, ny2] = ptAt(f, R);
-          const ahead = `M ${nx2.toFixed(1)} ${ny2.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          const headF = Math.min(1, Math.max(0, nowFrac));
+          const drawTailF = Math.min(1, headF + 0.5);   // clip the 6h tail at the visible top
+          const [hx, hy] = ptAt(headF, R);
+          const [tx, ty] = ptAt(drawTailF, R);
+          const tail = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${tx.toFixed(1)} ${ty.toFixed(1)}`;
           return <>
             <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />
-            <path d={ahead} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
+            <path d={tail} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
           </>;
         })()}
         {/* Event rim dots */}
