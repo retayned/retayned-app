@@ -2419,16 +2419,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   const now = new Date();
   const nowMs = now.getTime();
   const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
-  // Day-view base: Today centers on live now; Tomorrow centers on tomorrow ~noon.
-  let dayBaseMs = nowMs;
-  if (dayView === "tomorrow") {
-    const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(12, 0, 0, 0);
-    dayBaseMs = t.getTime();
-  }
-  const centerMs = dayBaseMs + scrubMs;       // dial center (day view + scroll scrub)
+  // Day bounds — the window can be scrubbed freely but is trapped inside TODAY:
+  // it can never cross midnight at either end, so the user can't drift into
+  // tomorrow or yesterday and lose track of which day they're in.
+  const dayStartMs = new Date(now).setHours(0, 0, 0, 0);
+  const dayEndMs = dayStartMs + 24 * 60 * 60 * 1000 - 1; // 23:59:59.999
+  // Center = live now + scrub, clamped so [center−6h, center+6h] stays within the day.
+  const centerMin = dayStartMs + HALF_WINDOW_MS;
+  const centerMax = dayEndMs - HALF_WINDOW_MS;
+  const centerMs = Math.max(centerMin, Math.min(centerMax, nowMs + scrubMs));
   const windowStart = centerMs - HALF_WINDOW_MS;
   const windowEnd = centerMs + HALF_WINDOW_MS;
-  const isScrubbed = Math.abs(scrubMs) > 60000 || dayView !== "today";
+  const isScrubbed = Math.abs(centerMs - nowMs) > 60000;
 
   // Normalize + split events into in-window vs earlier/later.
   const all = events
@@ -2562,8 +2564,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   const onDialWheel = (e) => {
     // ~30 min per notch of deltaY (100 ≈ one notch); trackpads send smaller deltas.
     const step = (e.deltaY) * (30 * 60 * 1000) / 100;
-    const LIM = 18 * 60 * 60 * 1000; // clamp to ±18h of swing
-    setScrubMs(prev => Math.max(-LIM, Math.min(LIM, prev + step)));
+    // Clamp scrub so center = now + scrub stays inside the day (window never
+    // crosses midnight). Bounds derived from the day edges + the half-window.
+    const loScrub = (dayStartMs + HALF_WINDOW_MS) - nowMs;
+    const hiScrub = (dayEndMs - HALF_WINDOW_MS) - nowMs;
+    setScrubMs(prev => Math.max(loScrub, Math.min(hiScrub, prev + step)));
   };
   // Attach the wheel handler as a NON-passive native listener so preventDefault
   // works (React's onWheel is passive). IMPORTANT: only capture the wheel when
@@ -2594,24 +2599,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* Today/Tomorrow + Now controls — upper-right of the dial, INSIDE the
-          dial layer so they scale with it. */}
+      {/* Now control — upper-right of the dial. The Today/Tomorrow toggle was
+          removed: the dial is day-bounded (scrolls only within today), so there's
+          no other day to switch to. Now appears only when scrubbed off live time. */}
       <div style={{ position: "absolute", right: 14, top: 6, zIndex: 8, pointerEvents: "auto" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-        <div style={{ display: "flex", background: "#fff", borderRadius: 999, padding: 4, boxShadow: "0 2px 8px rgba(20,30,22,0.10), 0 0 0 1px rgba(20,30,22,0.07)" }}>
-          {["today", "tomorrow"].map(v => (
-            <button
-              key={v}
-              onClick={() => { setDayView(v); setScrubMs(0); }}
-              style={{ border: "none", background: dayView === v ? C.primary : "transparent", color: dayView === v ? "#fff" : C.textSec, fontFamily: "inherit", fontSize: 16, fontWeight: 700, padding: "8px 18px", borderRadius: 999, cursor: "pointer", textTransform: "capitalize" }}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
         {isScrubbed && (
           <button
-            onClick={() => { setScrubMs(0); setDayView("today"); }}
+            onClick={() => { setScrubMs(0); }}
             style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 999, padding: "8px 18px", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(20,30,22,0.18)" }}
           >
             Now
@@ -2747,10 +2742,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         {placements.length === 0 && (
           <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
             <span style={{ fontFamily: "'Caveat', 'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 22, color: "#2E6B4F", lineHeight: 1.15 }}>
-              {dayView === "tomorrow" ? "Nothing scheduled tomorrow." : "No calls today."}
+              No calls today.
             </span>
             <span style={{ fontSize: 12, color: "#6B6B66", lineHeight: 1.45 }}>
-              {dayView === "tomorrow" ? "A clear day ahead." : "A clear day. Keep moving."}
+              A clear day. Keep moving.
             </span>
           </div>
         )}
