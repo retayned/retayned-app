@@ -4909,17 +4909,8 @@ export default function App({ user }) {
       .limit(3);
     if (!error) setRaiSuggestions(data || []);
   }, [user?.id]);
-  // Map DB rows → component items (resolve client name + 2-letter badge).
-  const raiSuggestionItems = useMemo(() => {
-    return (raiSuggestions || [])
-      .filter(r => !raiDismissed.has(r.id))
-      .map(r => {
-        const cli = r.client_id ? (clients || []).find(c => c.id === r.client_id) : null;
-        const name = cli?.name || null;
-        const badge = name ? name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() : null;
-        return { id: r.id, title: r.title, why: r.why, client_id: r.client_id || null, client_name: name, client_badge: badge };
-      });
-  }, [raiSuggestions, raiDismissed, clients]);
+  // NOTE: raiSuggestionItems (which reads `clients`) is declared AFTER the
+  // clients state below — defining it here would hit the temporal dead zone.
   const fetchRaiTaskSuggestions = async () => {
     setRaiTestOpen(true);
     setRaiTestLoading(true);
@@ -5191,6 +5182,20 @@ export default function App({ user }) {
     setRolodexRemoveConfirm(false);
   }, [selectedRolodex?.id]);
   const [clients, setClients] = useState([]);
+  // Map Rai suggestion rows → component items (resolve client name + 2-letter
+  // badge). Declared here, AFTER `clients`, because it reads it — declaring it
+  // earlier (with the other rai-suggestion state) hit the temporal dead zone
+  // and white-screened the app.
+  const raiSuggestionItems = useMemo(() => {
+    return (raiSuggestions || [])
+      .filter(r => !raiDismissed.has(r.id))
+      .map(r => {
+        const cli = r.client_id ? (clients || []).find(c => c.id === r.client_id) : null;
+        const name = cli?.name || null;
+        const badge = name ? name.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() : null;
+        return { id: r.id, title: r.title, why: r.why, client_id: r.client_id || null, client_name: name, client_badge: badge };
+      });
+  }, [raiSuggestions, raiDismissed, clients]);
   // Move a rolodex contact back into active clients. Creates a fresh
   // client row from the contact's data (name, contact, tenure) at a
   // neutral baseline score, archives the rolodex entry (soft delete),
