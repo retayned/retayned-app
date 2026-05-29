@@ -9387,7 +9387,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: C.primarySoft, borderRadius: 10, position: "relative", boxShadow: "var(--rt-sh-xs)", flexShrink: 0 }}>
+            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: "linear-gradient(180deg, #FFFFFF 0%, #F5F1E8 100%)", borderRadius: 12, position: "relative", boxShadow: "inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(28,50,36,0.05), 0 1px 2px rgba(20,30,22,0.04), 0 6px 16px rgba(20,30,22,0.06)", flexShrink: 0 }}>
               {/* Handwritten callout — always rendered. Hovers over the
                   big completion number in the top-right corner of the
                   Done section. ↙ on line two points down at the number. */}
