@@ -7960,7 +7960,7 @@ export default function App({ user }) {
           animation: rt-breakout-in 200ms cubic-bezier(.22,.61,.36,1) both;
         }
         @keyframes rt-breakout-in {
-          from { transform: translateX(-24px) translateY(-4px); opacity: 0; }
+          from { transform: translateX(-24px) translateY(-3px); opacity: 0.85; }
           to   { transform: translateX(-24px) translateY(0); opacity: 1; }
         }
         .rt-today-breakout .rt-row {
@@ -8346,7 +8346,7 @@ export default function App({ user }) {
              type carry the rest of the emphasis, same as desktop. */
           .rt-today-breakout { transform: translateX(-10px) !important; }
           @keyframes rt-breakout-in-mobile {
-            from { transform: translateX(-10px) translateY(-4px); opacity: 0; }
+            from { transform: translateX(-10px) translateY(-3px); opacity: 0.85; }
             to   { transform: translateX(-10px) translateY(0); opacity: 1; }
           }
           .rt-today-breakout-animate { animation: rt-breakout-in-mobile 200ms cubic-bezier(.22,.61,.36,1) both !important; }
