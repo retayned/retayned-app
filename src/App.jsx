@@ -8711,14 +8711,14 @@ export default function App({ user }) {
            at the disc's bottom-center, so they scale with the dial.) */
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
-        .rt-today-v4 { --dial-scale: 0.95; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.87; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.79; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.69; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.61; } }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.77; } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.67; } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.57; } }
+        .rt-today-v4 { --dial-scale: 0.90; }
+        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.82; } }
+        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.74; } }
+        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.64; } }
+        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.56; } }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.72; } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.62; } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.52; } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
