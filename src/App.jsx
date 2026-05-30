@@ -6783,7 +6783,7 @@ export default function App({ user }) {
             });
             return prev;
           });
-        }, 320);
+        }, 240);
       }, 3500);
     } else {
       // Un-completing: if it was collapsed, bring it back out of the log
@@ -8510,9 +8510,9 @@ export default function App({ user }) {
           max-height: 200px;
           opacity: 1;
           transition:
-            max-height 300ms cubic-bezier(.4, 0, .2, 1),
-            opacity 200ms cubic-bezier(.4, 0, .2, 1),
-            margin 300ms cubic-bezier(.4, 0, .2, 1);
+            max-height 220ms cubic-bezier(.22,.61,.36,1),
+            opacity 160ms cubic-bezier(.22,.61,.36,1),
+            margin 220ms cubic-bezier(.22,.61,.36,1);
         }
         .rt-row-wrap.is-exiting {
           max-height: 0 !important;
@@ -10245,6 +10245,15 @@ export default function App({ user }) {
                   const pickClient = clients.find(c => c.id === raiPicks.client_id);
                   if (!pickClient) return null;
                   const handleAddTask = () => {
+                    // Desktop: focus the master composer with the client prefilled.
+                    // Mobile: the master composer is display:none, so route to the
+                    // quick-log popover instead (seed it with the client name).
+                    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+                    if (isMobile) {
+                      setQuickLogText(pickClient.name + " ");
+                      setQuickLogOpen(true);
+                      return;
+                    }
                     setTodayComposerClient(pickClient.name);
                     setTimeout(() => {
                       const el = document.getElementById("rt-composer-input");
@@ -10997,7 +11006,7 @@ export default function App({ user }) {
                         </>
                       )}
                     </div>
-                    <div className="rt-composer-hint" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <div className="rt-composer-hint" style={{ marginLeft: "auto", marginRight: 14, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: C.textMuted, whiteSpace: "nowrap", flexShrink: 0 }}>
                       <span>Past tense → touchpoint · future → task</span>
                     </div>
                     <button
