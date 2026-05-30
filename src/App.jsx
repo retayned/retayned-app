@@ -12022,10 +12022,18 @@ export default function App({ user }) {
                         if (!t || t.done || !t.client_id) continue;
                         openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
                       }
-                      return (personalEvents || []).map(e => ({
-                        ...e,
-                        _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
-                      }));
+                      // The dial is a SINGLE DAY. Only today's events (in the
+                      // user's timezone) belong on it — an event from yesterday
+                      // must NOT count as "earlier," and with no events today the
+                      // empty-state ("No calls today") should show. Filter to the
+                      // local-today YMD before the dial ever sees them.
+                      const todayYmd = ymdInTz(userTimezone, new Date());
+                      return (personalEvents || [])
+                        .filter(e => e && e.starts_at && ymdInTz(userTimezone, new Date(e.starts_at)) === todayYmd)
+                        .map(e => ({
+                          ...e,
+                          _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
+                        }));
                     })()}
                     C={C}
                     scrubMs={dialScrubMs}
