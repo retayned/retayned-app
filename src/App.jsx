@@ -11699,6 +11699,16 @@ export default function App({ user }) {
                               );
                             })()}
 
+                            {t.ai && (
+                              <span
+                                title="Added automatically by Rai"
+                                style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(124,92,243,0.10)", color: "#5a3fb8", borderRadius: 999, padding: "3px 9px 3px 5px", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}
+                              >
+                                <span style={{ width: 14, height: 14, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 800 }}>R</span>
+                                Rai
+                              </span>
+                            )}
+
                             {/* Right-side indicator — recurring infinity OR date pill (mutually exclusive) */}
                             {t.recurring ? (
                               <span className="rt-row-recur" style={{
@@ -11774,16 +11784,6 @@ export default function App({ user }) {
                                 </span>
                               );
                             })() : null}
-
-                            {t.ai && (
-                              <span
-                                title="Added automatically by Rai"
-                                style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(124,92,243,0.10)", color: "#5a3fb8", borderRadius: 999, padding: "3px 9px 3px 5px", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}
-                              >
-                                <span style={{ width: 14, height: 14, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 800 }}>R</span>
-                                Rai
-                              </span>
-                            )}
 
                             <button onClick={(e) => { e.stopPropagation(); dismissRaiTaskFeedback(t); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
@@ -16966,6 +16966,55 @@ export default function App({ user }) {
                   </div>
                 </div>
               )}
+
+              {/* Rai involvement — Managed (Rai helps: scores, suggests tasks,
+                  flags, can pick) vs Advisory (Rai keeps score only — no tasks,
+                  no flags, never picked). For clients the user handles on their
+                  own / on an unusual cadence, so Rai stops false-positive nags. */}
+              {(() => {
+                const mode = sc.rai_mode || "managed";
+                const setMode = (next) => {
+                  if (next === mode) return;
+                  setSelectedClient(prev => prev ? { ...prev, rai_mode: next } : prev);
+                  setClients(prev => prev.map(c => c.id === sc.id ? { ...c, rai_mode: next } : c));
+                  clientsDb.update(sc.id, { rai_mode: next }).then(({ error }) => {
+                    if (error) {
+                      console.error("Failed to save rai_mode:", error);
+                      setSelectedClient(prev => prev ? { ...prev, rai_mode: mode } : prev);
+                      setClients(prev => prev.map(c => c.id === sc.id ? { ...c, rai_mode: mode } : c));
+                    }
+                  });
+                };
+                return (
+                  <div style={{ padding: "14px 20px", borderTop: sc.ret ? "none" : "1px solid " + C.borderLight, borderBottom: "1px solid " + C.borderLight, background: C.surfaceWarm }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>Rai's role</div>
+                        <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.4 }}>
+                          {mode === "managed"
+                            ? "Rai helps manage this client — suggests tasks and flags risks."
+                            : "Rai keeps score only — no tasks or flags. You've got this one."}
+                        </div>
+                      </div>
+                      <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, flexShrink: 0 }}>
+                        {[["managed", "Managed"], ["advisory", "Advisory"]].map(([val, label]) => (
+                          <button
+                            key={val}
+                            onClick={() => setMode(val)}
+                            style={{
+                              padding: "6px 12px", borderRadius: 999, border: "none", cursor: "pointer",
+                              fontFamily: "inherit", fontSize: 12, fontWeight: 600,
+                              ...(mode === val
+                                ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
+                                : { background: "transparent", color: C.textMuted }),
+                            }}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ padding: "16px 20px 0" }}>
                 <div style={{ display: "flex", gap: 0, background: C.surface, borderRadius: 10, padding: 3 }}>
