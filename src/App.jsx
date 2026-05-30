@@ -6041,6 +6041,8 @@ export default function App({ user }) {
           worker_completed_at: t.worker_completed_at || null,
           sort_order: t.sort_order,
           raiPriority: t.is_rai_priority || false,
+          ai: t.is_ai || false,
+          rai_suggestion_id: t.rai_suggestion_id || null,
           // Note: Rai's nudge + reasoning lives on the CLIENT, not the task.
           // Sort comparator looks up the client by t.client and reads raiNudge
           // from there. This way new tasks added during the day inherit the
@@ -11582,6 +11584,14 @@ export default function App({ user }) {
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
+                                {t.ai && (
+                                  <span
+                                    title="Added automatically by Rai"
+                                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8A7CC0", marginLeft: 2 }}
+                                  >
+                                    <span style={{ opacity: 0.7 }}>×</span> Rai
+                                  </span>
+                                )}
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
                                   const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
