@@ -8709,16 +8709,22 @@ export default function App({ user }) {
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
         /* (Today/Tomorrow + Now controls now render inside the dial component
            at the disc's bottom-center, so they scale with the dial.) */
-        /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
-           scaling the whole layer keeps every internal piece aligned). */
-        .rt-today-v4 { --dial-scale: 1; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.92; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.84; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.74; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.66; } }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.82; } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.62; } }
+        /* Dial scales to a PROPORTION of the content area (viewport minus the
+           sidebar) — NOT the raw viewport — so the tasks/dial ratio holds at
+           every width. Target: dial occupies ~36% of content width. The tasks
+           column (calc above) uses the same baseline, so the split is a true
+           ~64/36. Dimensions: dial layer is 720px wide; effective width =
+           720 * scale, so scale = (0.36 * content) / 720.
+           --rt-content-w: content area = 100vw − 14 (sidebar left) − sidebar − gap.
+           clamp() keeps the dial sane on extreme widths; the height media
+           queries below act as CEILINGS (min()) so a short screen still fits. */
+        .rt-today-v4 {
+          --rt-content-w: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px));
+          --dial-scale: clamp(0.55, calc((0.36 * var(--rt-content-w)) / 720), 1);
+        }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: min(clamp(0.55, calc((0.36 * var(--rt-content-w)) / 720), 1), 0.82); } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: min(clamp(0.55, calc((0.36 * var(--rt-content-w)) / 720), 1), 0.72); } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: min(clamp(0.55, calc((0.36 * var(--rt-content-w)) / 720), 1), 0.62); } }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
