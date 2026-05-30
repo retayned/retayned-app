@@ -19293,40 +19293,16 @@ export default function App({ user }) {
                     return;
                   }
 
-                  // ─── Intent detection — QuickLog DEFAULTS TO TOUCHPOINT.
-                  // This is the "quick log" box: logging things that happened
-                  // is the primary action, so touchpoint is the fallback. Only
-                  // explicit future/imperative phrasing routes to a task. The
-                  // confirmation toast (with cancel) is the safety net for the
-                  // rare wrong guess. (The main top composer is the opposite —
-                  // it defaults to task. This inversion is QuickLog-only.)
+                  // ─── Intent detection — same routing as the main composer.
+                  // DEFAULT IS TASK. Route to touchpoint ONLY on explicit
+                  // past-tense ("called", "met") or comm-noun ("call with X")
+                  // phrasing AND a matched client. (Previously QuickLog inverted
+                  // this and defaulted to touchpoint — that mis-logged tasks like
+                  // "create ads." Now both surfaces classify identically.)
                   const lower = rawText.toLowerCase();
-                  // Future / imperative signals → TASK. Bare imperative verbs
-                  // ("schedule", "create", "make") are tasks; their past-tense
-                  // forms ("created", "made") are NOT here, so they fall
-                  // through to the touchpoint default — matching the rule
-                  // "create = task, created = touchpoint".
-                  const TASK_VERBS = [
-                    "schedule", "set up", "book", "plan", "arrange",
-                    "need to", "needs to", "have to", "has to", "gotta",
-                    "remember to", "don't forget", "dont forget", "remind me",
-                    "follow up", "follow-up", "create", "make", "build",
-                    "draft", "prep", "prepare", "todo", "to-do", "to do",
-                  ];
-                  let isTask = false;
-                  for (const v of TASK_VERBS) {
-                    const vPattern = v.replace(/'/g, "['\u2019]?");
-                    const isLeading = new RegExp(`^\\s*${vPattern}\\b`, "i").test(lower);
-                    const isPhrase = v.includes(" ") && new RegExp(`\\b${vPattern}\\b`, "i").test(lower);
-                    if (isLeading || isPhrase) { isTask = true; break; }
-                  }
-                  // Bare comm verbs (call/email/text/ping) leading the entry are
-                  // tasks — UNLESS immediately followed by "with", which makes
-                  // them a noun ("call with David" = a call, a touchpoint; vs
-                  // "call David" = an action, a task).
-                  if (!isTask && /^\s*(call|email|text|ping|message)\b/i.test(lower) && !/^\s*\w+\s+with\b/i.test(lower)) {
-                    isTask = true;
-                  }
+                  const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lower);
+                  const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lower);
+                  const isTask = !(isCommNoun || isPastTouch);
 
                   // Channel detection (for nice touchpoint display) — derived
                   // from the words present regardless of routing.
@@ -19360,9 +19336,9 @@ export default function App({ user }) {
                       });
                       if (created?.id) {
                         setTpLogged(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
-                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: created.id, label: matchedClient.name });
+                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: created.id, label: matchedClient.name, relog: { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel } });
                       } else {
-                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: optimisticId, label: matchedClient.name });
+                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: optimisticId, label: matchedClient.name, relog: { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel } });
                       }
                     } catch (err) {
                       setTpLogged(prev => prev.filter(t => t.id !== optimisticId));
@@ -19424,11 +19400,12 @@ export default function App({ user }) {
                       dueHint = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
                     }
                     const toastLabel = (matchedClient?.name || "personal task") + (dueHint ? " · " + dueHint : "");
+                    const relog = matchedClient ? { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel, dueDate: dueDateForCreate } : null;
                     if (created?.id) {
                       setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
-                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: toastLabel });
+                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: toastLabel, relog });
                     } else {
-                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: toastLabel });
+                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: toastLabel, relog });
                     }
                   } catch (err) {
                     setTasks(prev => prev.filter(t => t.id !== optimisticId));
@@ -19455,17 +19432,50 @@ export default function App({ user }) {
         <QuickLogToast
           toast={quickLogToast}
           onUndo={() => {
-            if (quickLogToast.kind === "task" && quickLogToast.recordId) {
-              setTasks(prev => prev.filter(t => t.id !== quickLogToast.recordId));
-              tasksDb.delete(quickLogToast.recordId);
-            } else if (quickLogToast.kind === "touchpoint" && quickLogToast.recordId) {
-              setTpLogged(prev => prev.filter(t => t.id !== quickLogToast.recordId));
-              touchpointsDb.delete(quickLogToast.recordId);
-            } else if (quickLogToast.kind === "event" && quickLogToast.recordId) {
-              setPersonalEvents(prev => (prev || []).filter(e => e.id !== quickLogToast.recordId));
-              personalCalendarDb.remove(quickLogToast.recordId);
+            const t = quickLogToast;
+            if (t.kind === "task" && t.recordId) {
+              setTasks(prev => prev.filter(x => x.id !== t.recordId));
+              tasksDb.delete(t.recordId);
+            } else if (t.kind === "touchpoint" && t.recordId) {
+              setTpLogged(prev => prev.filter(x => x.id !== t.recordId));
+              touchpointsDb.delete(t.recordId);
+            } else if (t.kind === "event" && t.recordId) {
+              setPersonalEvents(prev => (prev || []).filter(e => e.id !== t.recordId));
+              personalCalendarDb.remove(t.recordId);
             }
-            setQuickLogToast(null);
+            // After removing, offer to re-log as the opposite type — the most
+            // likely reason for an undo is a wrong task/touchpoint guess. Only
+            // for task↔touchpoint (events excluded), and only when we captured a
+            // client (a touchpoint needs one). correctTo carries the target type.
+            if (t.relog && (t.kind === "task" || t.kind === "touchpoint")) {
+              const other = t.kind === "task" ? "touchpoint" : "task";
+              setQuickLogToast({ id: Date.now(), kind: "removed", correctTo: other, relog: t.relog, label: t.relog.clientName });
+            } else {
+              setQuickLogToast(null);
+            }
+          }}
+          onCorrect={async () => {
+            const t = quickLogToast;
+            const r = t.relog;
+            if (!r) { setQuickLogToast(null); return; }
+            if (t.correctTo === "touchpoint") {
+              const optimisticId = "qltp" + Date.now();
+              setTpLogged(prev => [{ id: optimisticId, client: r.clientName, channel: r.channel }, ...prev]);
+              try {
+                const { data: created } = await touchpointsDb.create(user.id, { client_id: r.clientId, client_name: r.clientName, channel: r.channel, notes: r.text });
+                if (created?.id) setTpLogged(prev => prev.map(x => x.id === optimisticId ? { ...x, id: created.id } : x));
+                setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: created?.id || optimisticId, label: r.clientName, relog: r });
+              } catch { setTpLogged(prev => prev.filter(x => x.id !== optimisticId)); setQuickLogToast({ id: Date.now(), error: true }); }
+            } else {
+              const dueDate = r.dueDate || (userTimezone ? ymdInTz(userTimezone, new Date()) : localYmd(new Date()));
+              const optimisticId = "ql" + Date.now();
+              setTasks(prev => [{ id: optimisticId, text: r.cleanedText, client: r.clientName, client_id: r.clientId, done: false, ai: false, recurring: false, recurrence_pattern: null, due_date: dueDate, raiPriority: false, alert: false, created_at: Date.now(), assigned_worker_id: null }, ...prev]);
+              try {
+                const { data: created } = await tasksDb.create(user.id, { text: r.cleanedText, client_name: r.clientName, client_id: r.clientId, is_recurring: false, recurrence_pattern: null, due_date: dueDate, assigned_worker_id: null });
+                if (created?.id) setTasks(prev => prev.map(x => x.id === optimisticId ? { ...x, id: created.id } : x));
+                setQuickLogToast({ id: Date.now(), kind: "task", recordId: created?.id || optimisticId, label: r.clientName, relog: r });
+              } catch { setTasks(prev => prev.filter(x => x.id !== optimisticId)); setQuickLogToast({ id: Date.now(), error: true }); }
+            }
           }}
           onDismiss={() => setQuickLogToast(null)}
           C={C}
@@ -19478,7 +19488,7 @@ export default function App({ user }) {
 // Quick log confirmation toast — auto-dismisses after 4s. Pulled out
 // as its own component so the setTimeout cleanup is tied to the toast's
 // lifecycle, not the parent's render cycle.
-function QuickLogToast({ toast, onUndo, onDismiss, C }) {
+function QuickLogToast({ toast, onUndo, onCorrect, onDismiss, C }) {
   useEffect(() => {
     const t = setTimeout(() => onDismiss(), 4000);
     return () => clearTimeout(t);
@@ -19487,6 +19497,17 @@ function QuickLogToast({ toast, onUndo, onDismiss, C }) {
     return (
       <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: C.danger, color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
         <span>Couldn't save — try again</span>
+      </div>
+    );
+  }
+  // "removed" state — shown right after an undo, offering to re-log as the
+  // opposite type (the likely reason for the undo was a wrong type guess).
+  if (toast.kind === "removed") {
+    const label = toast.correctTo === "touchpoint" ? "Log as touchpoint instead" : "Log as task instead";
+    return (
+      <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
+        <span style={{ color: "#A8B0A8" }}>Removed{toast.label ? " · " + toast.label : ""}</span>
+        <button onClick={onCorrect} style={{ background: "none", border: "none", color: "#C4A5F0", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>{label}</button>
       </div>
     );
   }
