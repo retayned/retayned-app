@@ -2802,6 +2802,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
       {earlierCount > 0 && (
         <div className="rt-dial-cs" style={{ position: "absolute", right: 300, top: 812, zIndex: 9, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom right", pointerEvents: "auto" }}>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↓ {earlierCount} earlier</span>
+        </div>
+      )}
+      {/* Dial help (?) — explains the whole wheel, so it renders ALWAYS, not
+          gated on having "earlier" events. Anchored by top: (shares the SVG's
+          top:0 origin; the layer is viewport-tall so bottom: would mis-place it). */}
+      <div className="rt-dial-cs" style={{ position: "absolute", right: 270, top: 812, zIndex: 9, display: "flex", alignItems: "center", transformOrigin: "bottom right", pointerEvents: "auto" }}>
           <span
             className="rt-dial-help"
             tabIndex={0}
@@ -2811,8 +2817,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
             </span>
           </span>
-        </div>
-      )}
+      </div>
       {laterCount > 0 && (
         <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↑ {laterCount} later</div>
       )}
@@ -6670,6 +6675,18 @@ export default function App({ user }) {
       .eq("id", t.rai_suggestion_id)
       .then(({ error }) => { if (error) console.error("Rai task delete-feedback failed:", error); });
   };
+  // When a task is deleted, also delete its completion/occurrence history so it
+  // leaves ZERO footprint for Rai. The sweep reads task_completions and
+  // task_occurrences for signals (velocity, drift, activity counts); orphaned
+  // rows from a deleted task would otherwise still feed those signals — the
+  // user already said "this doesn't matter," so it must not resurface.
+  const purgeTaskHistory = (taskId) => {
+    if (!taskId) return;
+    supabase.from("task_completions").delete().eq("task_id", taskId)
+      .then(({ error }) => { if (error) console.error("purge task_completions failed:", error); });
+    supabase.from("task_occurrences").delete().eq("task_id", taskId)
+      .then(({ error }) => { if (error) console.error("purge task_occurrences failed:", error); });
+  };
   const toggleTask = async (id) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
@@ -7940,11 +7957,11 @@ export default function App({ user }) {
            state). Without this gate the animation replayed on every page mount,
            causing a spurious swing when returning to the Today tab. */
         .rt-today-breakout-animate {
-          animation: rt-breakout-in 190ms cubic-bezier(.25,.8,.35,1) both;
+          animation: rt-breakout-in 200ms cubic-bezier(.22,.61,.36,1) both;
         }
         @keyframes rt-breakout-in {
-          from { transform: translateX(-18px) rotate(-1deg); opacity: 0.4; }
-          to   { transform: translateX(-24px) rotate(0deg); opacity: 1; }
+          from { transform: translateX(-24px) translateY(-4px); opacity: 0; }
+          to   { transform: translateX(-24px) translateY(0); opacity: 1; }
         }
         .rt-today-breakout .rt-row {
           padding: 16px 18px;
@@ -8329,10 +8346,10 @@ export default function App({ user }) {
              type carry the rest of the emphasis, same as desktop. */
           .rt-today-breakout { transform: translateX(-10px) !important; }
           @keyframes rt-breakout-in-mobile {
-            from { transform: translateX(0) rotate(-1deg); opacity: 0.4; }
-            to   { transform: translateX(-10px) rotate(0deg); opacity: 1; }
+            from { transform: translateX(-10px) translateY(-4px); opacity: 0; }
+            to   { transform: translateX(-10px) translateY(0); opacity: 1; }
           }
-          .rt-today-breakout-animate { animation: rt-breakout-in-mobile 190ms cubic-bezier(.25,.8,.35,1) both !important; }
+          .rt-today-breakout-animate { animation: rt-breakout-in-mobile 200ms cubic-bezier(.22,.61,.36,1) both !important; }
           /* Band More/Less expand is the wrong UX on mobile — hide it. */
           .rt-band-more { display: none !important; }
         }
@@ -8410,7 +8427,7 @@ export default function App({ user }) {
           /* Force-apply the gap regardless of var resolution. Pinned (≥1700)
              gets a clearly larger gap than rail. */
           html[data-sidebar-pin="rail"] .r-main { left: calc(14px + 64px + 24px) !important; }
-          html[data-sidebar-pin="pinned"] .r-main { left: calc(14px + 240px + 48px) !important; }
+          html[data-sidebar-pin="pinned"] .r-main { left: calc(14px + 240px + 24px) !important; }
           /* Coach page keeps the card chrome (rounded corners, shadow) like every
              other page. overflow: hidden clips the purple gradient to the rounded
              corners. height (not min-height) locks the card exactly to the viewport
@@ -10998,7 +11015,6 @@ export default function App({ user }) {
                         fontSize: 12,
                         fontWeight: 600,
                         fontFamily: "inherit",
-                        marginLeft: "auto",
                         flexShrink: 0,
                         cursor: newTask.trim() ? "pointer" : "default",
                         // Two-state treatment: at rest = warm-neutral box with
@@ -11342,6 +11358,7 @@ export default function App({ user }) {
                             setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
                             setTimeout(() => {
                               dismissRaiTaskFeedback(t);
+                              purgeTaskHistory(t.id);
                               setTasks(prev => prev.filter(t2 => t2.id !== t.id));
                               tasksDb.delete(t.id);
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
@@ -11785,7 +11802,7 @@ export default function App({ user }) {
                               );
                             })() : null}
 
-                            <button onClick={(e) => { e.stopPropagation(); dismissRaiTaskFeedback(t); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
+                            <button onClick={(e) => { e.stopPropagation(); dismissRaiTaskFeedback(t); purgeTaskHistory(t.id); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
                               style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0, background: "none", border: "none", cursor: "pointer", flexShrink: 0, transition: "opacity 120ms ease" }}
                               aria-label="dismiss">
