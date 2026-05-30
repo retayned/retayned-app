@@ -7909,20 +7909,6 @@ export default function App({ user }) {
           box-shadow: var(--rt-sh-row-hover) !important;
           transform: translateY(-1px);
         }
-        /* Rai-added tasks (is_ai) carry a purple hairline instead of the grey
-           one — quiet provenance, consistent with purple = Rai elsewhere. The
-           hover rule keeps the purple ring (the generic row hover above would
-           otherwise clobber it back to grey via !important). */
-        .rt-ai-row {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.32), 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025) !important;
-        }
-        .rt-ai-row:hover:not(.is-done) {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.40), 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(124,92,243,0.10) !important;
-          transform: translateY(-1px);
-        }
-        .rt-ai-row.is-done {
-          box-shadow: var(--rt-sh-row) !important;
-        }
         .rt-row:hover .rt-dismiss,
         .rt-row:hover .rt-push { opacity: 1 !important; }
 
@@ -11249,7 +11235,7 @@ export default function App({ user }) {
                           return clients.find(c => c.id === raiPicks.client_id) || null;
                         })();
                         const isRaiBoosted = !!(raiBoostClient && t.client && t.client === raiBoostClient.name);
-                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "") + (isRaiBoosted ? " rt-rai-boost" : "") + (t.ai ? " rt-ai-row" : "");
+                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "") + (isRaiBoosted ? " rt-rai-boost" : "");
   
                         // Reorder handler: when dropping onto target, move dragging task to target's position
                         const handleDrop = (e) => {
@@ -11730,18 +11716,22 @@ export default function App({ user }) {
                                 <Icon name="infinity" size={12} color={C.textSec} />
                                 <span className="rt-row-text">{formatRecurrenceLabel(t.recurrence_pattern)}</span>
                               </span>
-                            ) : t.due_date ? (() => {
-                              const isToday = String(t.due_date).slice(0,10) === _todayStr;
-                              const isTomorrow = String(t.due_date).slice(0,10) === _tomorrowStr;
-                              const isOverdue = !isDone && String(t.due_date).slice(0,10) < _todayStr;
+                            ) : (!t.recurring) ? (() => {
+                              // A today-bucket task with no explicit due_date
+                              // still shows a "Today" pill (was blank before).
+                              // Effective date falls back to today when null.
+                              const effDue = t.due_date ? String(t.due_date).slice(0,10) : _todayStr;
+                              const isToday = effDue === _todayStr;
+                              const isTomorrow = effDue === _tomorrowStr;
+                              const isOverdue = !isDone && effDue < _todayStr;
                               const label = isOverdue
                                 ? (() => {
-                                    const days = Math.round((new Date(_todayStr) - new Date(String(t.due_date).slice(0,10))) / 86400000);
+                                    const days = Math.round((new Date(_todayStr) - new Date(effDue)) / 86400000);
                                     return days === 1 ? "1d late" : days + "d late";
                                   })()
                                 : isToday ? "Today"
                                 : isTomorrow ? "Tomorrow"
-                                : new Date(String(t.due_date).slice(0,10) + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                                : new Date(effDue + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
                               return (
                                 <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
                                 <button
@@ -11784,7 +11774,17 @@ export default function App({ user }) {
                                 </span>
                               );
                             })() : null}
-  
+
+                            {t.ai && (
+                              <span
+                                title="Added automatically by Rai"
+                                style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(124,92,243,0.10)", color: "#5a3fb8", borderRadius: 999, padding: "3px 9px 3px 5px", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}
+                              >
+                                <span style={{ width: 14, height: 14, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 800 }}>R</span>
+                                Rai
+                              </span>
+                            )}
+
                             <button onClick={(e) => { e.stopPropagation(); dismissRaiTaskFeedback(t); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
                               style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0, background: "none", border: "none", cursor: "pointer", flexShrink: 0, transition: "opacity 120ms ease" }}
