@@ -19439,58 +19439,52 @@ function RaiSuggestions({ items = [], daysSinceStart = 99, onAdd = () => {}, onD
   // Nothing to show and not calibrating → render nothing (don't take space).
   if (!calibrating && items.length === 0) return null;
 
-  const chip = (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "5px 11px 5px 7px" }}>
-      <span style={{ width: 18, height: 18, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>R</span>
-      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "#5a3fb8" }}>
-        {calibrating ? "Rai · calibrating" : `Rai suggests · ${items.length} today`}
-      </span>
-    </span>
-  );
-
   return (
-    <div style={{ background: C.card, border: "1px solid rgba(124,92,243,0.20)", borderRadius: 16, padding: "6px 8px 10px", marginBottom: 16, boxShadow: "var(--rt-sh-purple)" }}>
+    <div style={{ marginBottom: 16 }}>
+      {/* Rai eyebrow — quiet caption, no chip pill. Collapsible. */}
       <div
         onClick={() => !calibrating && setCollapsed(c => !c)}
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 10px 8px", cursor: calibrating ? "default" : "pointer" }}
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 4px 10px", cursor: calibrating ? "default" : "pointer" }}
       >
-        {chip}
+        <span style={{ width: 18, height: 18, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 }}>R</span>
+        <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "#5a3fb8" }}>Rai suggests</span>
+        {!calibrating && <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 600, color: C.textMuted }}>· {items.length} today</span>}
         {!calibrating && (
-          <span style={{ color: C.btn, fontSize: 12, transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .18s" }}>▾</span>
+          <span style={{ marginLeft: "auto", color: C.btn, fontSize: 12, transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .18s" }}>▾</span>
         )}
       </div>
 
       {calibrating ? (
-        <div style={{ padding: "4px 12px 10px" }}>
+        <div style={{ padding: "0 4px 6px" }}>
           <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 14, lineHeight: 1.5, color: "#5a5550" }}>
             Rai is learning your book. For your first two weeks she watches how you work your clients before suggesting tasks — so the picks, when they start, are actually yours.
           </div>
-          <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
+          <div style={{ marginTop: 8, fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted }}>
             Daily picks begin on day 14 · {Math.max(0, 14 - daysSinceStart)} {Math.max(0, 14 - daysSinceStart) === 1 ? "day" : "days"} to go
           </div>
         </div>
       ) : !collapsed && (
         <div>
-          {items.map((s) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 8px", margin: "0 4px", borderTop: "1px solid " + C.borderLight }}>
+          {items.map((s, i) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 4px", borderTop: i === 0 ? "none" : "1px solid " + C.borderLight }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.35, color: C.text }}>{s.title}</div>
-                {s.why && <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13, lineHeight: 1.45, color: "#5a5550", marginTop: 4 }}>{s.why}</div>}
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 500, lineHeight: 1.3, color: C.text }}>{s.title}</div>
+                {s.why && <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13, lineHeight: 1.45, color: "#6a655f", marginTop: 4 }}>{s.why}</div>}
                 {s.client_name && (
-                  <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: C.textSec }}>
+                  <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 6, fontFamily: "'Manrope', sans-serif", fontSize: 11.5, fontWeight: 600, color: C.textSec }}>
                     {s.client_badge && <span style={{ width: 18, height: 18, borderRadius: "50%", background: C.primaryLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700 }}>{s.client_badge}</span>}
                     {s.client_name}
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <button
                   onClick={() => onAdd(s)}
-                  style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#fff", background: C.btn, border: "none", borderRadius: 999, padding: "8px 15px", cursor: "pointer" }}
+                  style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.btn, background: "transparent", border: "none", borderRadius: 8, padding: "7px 10px", cursor: "pointer" }}
                 >Add</button>
                 <button
                   onClick={() => setReasonFor(s)}
-                  style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: C.textMuted, background: "transparent", border: "none", borderRadius: 999, padding: "8px 11px", cursor: "pointer" }}
+                  style={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted, background: "transparent", border: "none", borderRadius: 8, padding: "7px 8px", cursor: "pointer" }}
                 >Dismiss</button>
               </div>
             </div>
