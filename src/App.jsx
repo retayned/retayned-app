@@ -4888,6 +4888,8 @@ export default function App({ user }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
+  const [tomorrowCalOpen, setTomorrowCalOpen] = useState(false);
+  const [laterCalOpen, setLaterCalOpen] = useState(false);
   // Sidebar collapse state — when true, sidebar is 64px wide with icon-only
   // nav, "R." brand mark, and hidden secondary sections (convo list, widget).
   // Persisted in localStorage so user preference survives reloads.
@@ -11911,6 +11913,19 @@ export default function App({ user }) {
                           <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 3, padding: "0 6px" }}>
                             {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                           </div>
+                          {(() => {
+                            // Tomorrow's calendar (Direction A). Only render the
+                            // toggle if tomorrow actually has events.
+                            const tz = userTimezone;
+                            const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+                            const tmrwYmd = ymdInTz(tz, tmrw);
+                            const tmrwEvents = (personalEvents || []).filter(e => e && e.starts_at && ymdInTz(tz, new Date(e.starts_at)) === tmrwYmd);
+                            if (tmrwEvents.length === 0) return null;
+                            return (<>
+                              <BucketCalToggle label="Tomorrow's calendar" count={tmrwEvents.length} open={tomorrowCalOpen} onToggle={() => setTomorrowCalOpen(o => !o)} C={C} />
+                              {tomorrowCalOpen && <BucketCalendarTomorrow events={tmrwEvents} C={C} />}
+                            </>);
+                          })()}
                         </>)}
 
                         {/* LATER bucket */}
@@ -11919,6 +11934,35 @@ export default function App({ user }) {
                           <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 2, padding: "0 6px" }}>
                             {_laterBucket.map(t => renderRow(t, "later"))}
                           </div>
+                          {(() => {
+                            // Later calendar (Direction B) — next 5 days = days 3–7
+                            // from today (next 7 minus tomorrow). Group events per day.
+                            const tz = userTimezone;
+                            const days = [];
+                            for (let i = 2; i <= 6; i++) {
+                              const d = new Date(); d.setDate(d.getDate() + i);
+                              const ymd = ymdInTz(tz, d);
+                              days.push({
+                                ymd,
+                                label: d.toLocaleDateString("en-US", { weekday: "short" }),
+                                dateLabel: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                                events: [],
+                              });
+                            }
+                            const byYmd = {}; days.forEach(dd => { byYmd[dd.ymd] = dd; });
+                            for (const e of (personalEvents || [])) {
+                              if (!e || !e.starts_at) continue;
+                              const ymd = ymdInTz(tz, new Date(e.starts_at));
+                              if (byYmd[ymd]) byYmd[ymd].events.push(e);
+                            }
+                            days.forEach(dd => dd.events.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                            const total = days.reduce((s, dd) => s + dd.events.length, 0);
+                            if (total === 0) return null;
+                            return (<>
+                              <BucketCalToggle label="This week's calendar" count={total} open={laterCalOpen} onToggle={() => setLaterCalOpen(o => !o)} C={C} />
+                              {laterCalOpen && <BucketCalendarLater days={days} C={C} />}
+                            </>);
+                          })()}
                         </>)}
 
                         {/* COMPLETED TODAY log — sits at the bottom, below all
@@ -19496,6 +19540,76 @@ export default function App({ user }) {
 // Quick log confirmation toast — auto-dismisses after 4s. Pulled out
 // as its own component so the setTimeout cleanup is tied to the toast's
 // lifecycle, not the parent's render cycle.
+// ─── Bucket calendars ────────────────────────────────────────────────────
+// Collapsible calendar views under the Tomorrow / Later task buckets.
+// Tomorrow = single-day horizontal strip (A). Later = next 5 days as columns
+// (B). Toggle only renders when the bucket has events (no dead-end expands).
+function BucketCalToggle({ label, count, open, onToggle, C }) {
+  return (
+    <div onClick={onToggle}
+      style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.primary }}>
+      <span style={{ fontSize: 13 }}>🗓</span>
+      <span>{label}</span>
+      <span style={{ color: C.textMuted, fontWeight: 500 }}>· {count} event{count === 1 ? "" : "s"}</span>
+      <span style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11, transform: open ? "none" : "rotate(-90deg)", transition: "transform .18s" }}>▾</span>
+    </div>
+  );
+}
+function BucketCalendarTomorrow({ events, C }) {
+  const DAY_START = 8, DAY_END = 20;
+  const span = DAY_END - DAY_START;
+  const frac = (d) => Math.max(0, Math.min(1, ((d.getHours() + d.getMinutes() / 60) - DAY_START) / span));
+  const sorted = [...events].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const axis = ["8a", "10a", "12p", "2p", "4p", "6p", "8p"];
+  return (
+    <div style={{ background: C.primaryGhost, borderRadius: 12, padding: "14px 16px", margin: "8px 6px 4px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, padding: "0 2px" }}>
+        {axis.map(a => <span key={a}>{a}</span>)}
+      </div>
+      <div style={{ position: "relative", height: 30, background: C.card, borderRadius: 7, boxShadow: "inset 0 0 0 1px " + C.borderLight }}>
+        {sorted.map((e, i) => {
+          const left = frac(new Date(e.starts_at)) * 100;
+          const width = Math.min(34, Math.max(16, 100 - left));
+          return (
+            <div key={e.id || i} title={e.title + (e.client_name ? " · " + e.client_name : "")}
+              style={{ position: "absolute", top: 4, height: 22, left: left + "%", width: width + "%", background: i % 2 === 0 ? C.primary : C.primaryLight, color: "#fff", fontFamily: "'Manrope', sans-serif", fontSize: 10, fontWeight: 600, lineHeight: "22px", padding: "0 9px", borderRadius: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {e.title}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+function BucketCalendarLater({ days, C }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, margin: "8px 6px 4px" }}>
+      {days.map((d) => {
+        const has = d.events.length > 0;
+        return (
+          <div key={d.ymd} style={{ background: C.card, borderRadius: 10, boxShadow: "var(--rt-sh-row)", padding: 10, minHeight: 96 }}>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: has ? C.text : C.textMuted }}>{d.label}</div>
+            <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 500, color: C.textMuted, marginTop: 3 }}>{d.dateLabel}</div>
+            {has ? (
+              <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+                {d.events.slice(0, 3).map((e, i) => (
+                  <div key={e.id || i} title={e.title + (e.client_name ? " · " + e.client_name : "")}
+                    style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, lineHeight: 1.2, color: C.primary, background: C.primaryGhost, borderRadius: 5, padding: "4px 6px", borderLeft: "2px solid " + C.primaryLight, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {e.title}
+                  </div>
+                ))}
+                {d.events.length > 3 && <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9, color: C.textMuted }}>+{d.events.length - 3} more</div>}
+              </div>
+            ) : (
+              <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontStyle: "italic", color: C.textMuted, marginTop: 10 }}>clear</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function QuickLogToast({ toast, onUndo, onCorrect, onDismiss, C }) {
   useEffect(() => {
     const t = setTimeout(() => onDismiss(), 4000);
