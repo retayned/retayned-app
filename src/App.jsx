@@ -77,7 +77,7 @@ const THEME_CSS = `
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
     --rt-deep-cream: #EAE4D6;
-    --rt-sidebar: #EAE4D6;
+    --rt-sidebar: #F2EEE8;
     --rt-text: #1E261F;
     --rt-text-sec: #6B6B66;
     --rt-text-muted: #9A9A93;
@@ -7938,7 +7938,7 @@ export default function App({ user }) {
            Misalignment is the attention magnet; no color trick.
            Condensed = future buckets tighten. */
         .rt-today-canvas {
-          background: linear-gradient(180deg, rgba(242,238,232,0.80), rgba(242,238,232,0.16));
+          background: linear-gradient(180deg, rgba(234,228,214,0.32), rgba(234,228,214,0.02));
           position: relative;
           border-radius: 20px;
           padding: 6px 14px 16px;
@@ -9115,7 +9115,7 @@ export default function App({ user }) {
           if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
           hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, 250);
         }}
-        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px #D8CFBC, 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
+        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
