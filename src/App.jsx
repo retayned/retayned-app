@@ -7909,6 +7909,20 @@ export default function App({ user }) {
           box-shadow: var(--rt-sh-row-hover) !important;
           transform: translateY(-1px);
         }
+        /* Rai-added tasks (is_ai) carry a purple hairline instead of the grey
+           one — quiet provenance, consistent with purple = Rai elsewhere. The
+           hover rule keeps the purple ring (the generic row hover above would
+           otherwise clobber it back to grey via !important). */
+        .rt-ai-row {
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.32), 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025) !important;
+        }
+        .rt-ai-row:hover:not(.is-done) {
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.40), 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(124,92,243,0.10) !important;
+          transform: translateY(-1px);
+        }
+        .rt-ai-row.is-done {
+          box-shadow: var(--rt-sh-row) !important;
+        }
         .rt-row:hover .rt-dismiss,
         .rt-row:hover .rt-push { opacity: 1 !important; }
 
@@ -11235,7 +11249,7 @@ export default function App({ user }) {
                           return clients.find(c => c.id === raiPicks.client_id) || null;
                         })();
                         const isRaiBoosted = !!(raiBoostClient && t.client && t.client === raiBoostClient.name);
-                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "") + (isRaiBoosted ? " rt-rai-boost" : "");
+                        const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "") + (isRaiBoosted ? " rt-rai-boost" : "") + (t.ai ? " rt-ai-row" : "");
   
                         // Reorder handler: when dropping onto target, move dragging task to target's position
                         const handleDrop = (e) => {
@@ -11596,14 +11610,6 @@ export default function App({ user }) {
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
-                                {t.ai && (
-                                  <span
-                                    title="Added automatically by Rai"
-                                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8A7CC0", marginLeft: 2 }}
-                                  >
-                                    <span style={{ opacity: 0.7 }}>×</span> Rai
-                                  </span>
-                                )}
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
                                   const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
