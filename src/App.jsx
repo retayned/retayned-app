@@ -6659,6 +6659,17 @@ export default function App({ user }) {
   }, [user, loadData, userTimezone]);
 
   // ═══ SUPABASE-BACKED MUTATIONS ═══
+  // When a Rai-added task is deleted, close the learning loop: mark the
+  // originating rai_suggestions row dismissed with reason 'user_deleted' so the
+  // next sweep (which reads recent_suggestions) won't re-add the same thing.
+  // Safe no-op for non-Rai tasks or tasks with no suggestion link.
+  const dismissRaiTaskFeedback = (t) => {
+    if (!t || !t.ai || !t.rai_suggestion_id) return;
+    supabase.from("rai_suggestions")
+      .update({ status: "dismissed", dismiss_reason: "user_deleted", acted_at: new Date().toISOString() })
+      .eq("id", t.rai_suggestion_id)
+      .then(({ error }) => { if (error) console.error("Rai task delete-feedback failed:", error); });
+  };
   const toggleTask = async (id) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
@@ -11330,6 +11341,7 @@ export default function App({ user }) {
                             // Left swipe past threshold → DELETE the task. Slide off-screen left, then remove.
                             setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
                             setTimeout(() => {
+                              dismissRaiTaskFeedback(t);
                               setTasks(prev => prev.filter(t2 => t2.id !== t.id));
                               tasksDb.delete(t.id);
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
@@ -11767,7 +11779,7 @@ export default function App({ user }) {
                               );
                             })() : null}
   
-                            <button onClick={(e) => { e.stopPropagation(); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
+                            <button onClick={(e) => { e.stopPropagation(); dismissRaiTaskFeedback(t); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
                               className="rt-dismiss"
                               style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0, background: "none", border: "none", cursor: "pointer", flexShrink: 0, transition: "opacity 120ms ease" }}
                               aria-label="dismiss">
@@ -16476,6 +16488,45 @@ export default function App({ user }) {
                 {userTimezone ? `Your day rolls over at midnight ${userTimezone.split("/").pop().replace(/_/g, " ")} time. Detected from this device — moves with you.` : ""}
               </div>
             </div>
+
+            {/* Rai — auto-task behavior. When on (default), Rai's daily
+                suggestions are added straight to the Today list (marked × Rai).
+                Off = no auto-added tasks. Writes rai_user_state.ai_tasks_enabled. */}
+            {(() => {
+              const aiTasksOn = raiState?.ai_tasks_enabled !== false; // default ON
+              const toggle = () => {
+                const next = !aiTasksOn;
+                setRaiState(prev => prev ? { ...prev, ai_tasks_enabled: next } : { ai_tasks_enabled: next });
+                supabase.from("rai_user_state")
+                  .update({ ai_tasks_enabled: next })
+                  .eq("user_id", user.id)
+                  .then(({ error }) => {
+                    if (error) {
+                      console.error("Failed to save ai_tasks_enabled:", error);
+                      setRaiState(prev => prev ? { ...prev, ai_tasks_enabled: aiTasksOn } : prev);
+                    }
+                  });
+              };
+              return (
+                <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Rai</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>Let Rai add tasks to my day</div>
+                      <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>When on, Rai adds a few suggested tasks to your Today list each morning, marked × Rai. Delete one and she won't suggest it again.</div>
+                    </div>
+                    <button
+                      onClick={toggle}
+                      role="switch"
+                      aria-checked={aiTasksOn}
+                      style={{ flexShrink: 0, width: 44, height: 26, borderRadius: 999, border: "none", cursor: "pointer", padding: 3, background: aiTasksOn ? C.btn : C.border, transition: "background 160ms ease", display: "flex", alignItems: "center", justifyContent: aiTasksOn ? "flex-end" : "flex-start" }}
+                    >
+                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 2px rgba(20,30,22,0.25)" }} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Integrations — real, all-tiers. Currently just Google
                 Calendar. This is the permanent home for the connection:
