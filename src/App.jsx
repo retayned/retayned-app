@@ -9115,7 +9115,7 @@ export default function App({ user }) {
           if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
           hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, 250);
         }}
-        style={{ width: sidebarCollapsed ? 64 : 240, background: "linear-gradient(170deg, #F6F2EC 0%, #ECE6DA 100%)", display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
+        style={{ width: sidebarCollapsed ? 64 : 240, background: C.bg, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, border: "1.5px solid " + C.primary, boxShadow: "6px 0 18px rgba(20,30,22,0.05)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -9147,15 +9147,10 @@ export default function App({ user }) {
                 marginBottom: 2,
                 color: active ? C.primaryDeep : C.textSec,
                 fontWeight: active ? 600 : 500,
-                // Embossed active surface — subtle white→warm-cream gradient +
-                // stacked inset highlights + outer shadow so the active card
-                // reads as a key set into the rail.
-                background: active
-                  ? "linear-gradient(180deg, #FFFFFF 0%, #F5F1E8 100%)"
-                  : "transparent",
-                boxShadow: active
-                  ? "inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(28,50,36,0.05), 0 1px 2px rgba(20,30,22,0.04), 0 4px 10px rgba(20,30,22,0.05)"
-                  : "none",
+                // B — flat green-bordered sidebar: active item gets a soft green
+                // fill (primarySoft) rather than the old cream-rail emboss.
+                background: active ? C.primarySoft : "transparent",
+                boxShadow: "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
                 position: "relative",
@@ -9163,7 +9158,7 @@ export default function App({ user }) {
               }}>
                 <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} /></span>
                 {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>}
-                {hasDot(n.id) && <div style={{ position: sidebarCollapsed ? "absolute" : "static", top: sidebarCollapsed ? 6 : "auto", right: sidebarCollapsed ? 6 : "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
+                {hasDot(n.id) && <div style={{ position: sidebarCollapsed ? "absolute" : "static", top: sidebarCollapsed ? 6 : "auto", right: sidebarCollapsed ? 6 : "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.primarySoft : C.bg), flexShrink: 0 }} />}
               </div>
             );
           })}
@@ -9403,12 +9398,8 @@ export default function App({ user }) {
                 marginBottom: 2,
                 color: active ? C.primaryDeep : C.textSec,
                 fontWeight: active ? 600 : 500,
-                background: active
-                  ? "linear-gradient(180deg, #FFFFFF 0%, #F5F1E8 100%)"
-                  : "transparent",
-                boxShadow: active
-                  ? "inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(28,50,36,0.05), 0 1px 2px rgba(20,30,22,0.04), 0 4px 10px rgba(20,30,22,0.05)"
-                  : "none",
+                background: active ? C.primarySoft : "transparent",
+                boxShadow: "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
                 position: "relative",
