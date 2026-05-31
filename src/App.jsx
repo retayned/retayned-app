@@ -9310,9 +9310,8 @@ export default function App({ user }) {
 
           return (
             <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: "rgba(60,45,25,0.03)", borderRadius: 12, position: "relative", boxShadow: "inset 0 1px 3px rgba(60,45,25,0.10), inset 0 -1px 0 rgba(255,255,255,0.4)", flexShrink: 0 }}>
-              {/* Handwritten callout — always rendered. Hovers over the
-                  big completion number in the top-right corner of the
-                  Done section. ↙ on line two points down at the number. */}
+              {/* Handwritten callout — TEMPORARILY HIDDEN per request.
+                  Restore by uncommenting the block below.
               <div
                 style={{
                   position: "absolute",
@@ -9332,6 +9331,7 @@ export default function App({ user }) {
                   {callout.line2}
                 </span>
               </div>
+              */}
 
               {/* TASKS COMPLETED section */}
               <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "0.5px solid " + C.border }}>
