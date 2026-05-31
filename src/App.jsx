@@ -77,7 +77,7 @@ const THEME_CSS = `
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
     --rt-deep-cream: #EAE4D6;
-    --rt-sidebar: #F2EEE8;
+    --rt-sidebar: #FAFAF7;
     --rt-text: #1E261F;
     --rt-text-sec: #6B6B66;
     --rt-text-muted: #9A9A93;
@@ -9115,7 +9115,7 @@ export default function App({ user }) {
           if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
           hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, 250);
         }}
-        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
+        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.borderLight + ", 0 1px 2px rgba(20,30,22,0.04), 6px 0 16px rgba(20,30,22,0.05)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -9147,17 +9147,13 @@ export default function App({ user }) {
                 marginBottom: 2,
                 color: active ? C.primaryDeep : C.textSec,
                 fontWeight: active ? 600 : 500,
-                // Embossed active surface — subtle white→warm-cream linear
-                // gradient + stacked inset highlights + outer shadow so the
-                // card reads as a key set into the rail rather than paper
-                // stuck on top. Three signals already announce active state
-                // (embossing, icon color flip, label color flip); no need
-                // for a fourth marker like an accent bar.
-                background: active
-                  ? "linear-gradient(180deg, #FFFFFF 0%, #F5F1E8 100%)"
-                  : "transparent",
+                // Active surface — a clean white pill with a crisp hairline and
+                // soft lift, so it reads clearly against the near-white merged
+                // sidebar. (The previous white→cream gradient only stood out
+                // against the old cream rail; on #FAFAF7 it would blend.)
+                background: active ? "#FFFFFF" : "transparent",
                 boxShadow: active
-                  ? "inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(28,50,36,0.05), 0 1px 2px rgba(20,30,22,0.04), 0 4px 10px rgba(20,30,22,0.05)"
+                  ? "0 0 0 1px " + C.borderLight + ", 0 1px 2px rgba(20,30,22,0.05), 0 4px 10px rgba(20,30,22,0.05)"
                   : "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
@@ -10025,7 +10021,14 @@ export default function App({ user }) {
             // Explicit task intent: if the user toggled recurrence, assigned a
             // worker, or hand-picked a due date, they clearly mean a TASK — skip
             // auto-detection and create the task directly (below).
-            const explicitTask = newTaskRecurring || !!newTaskWorkerId || !!newTaskDueDate;
+            // IMPORTANT: a due date the PARSER auto-detected from a typed date
+            // word (e.g. "tomorrow") does NOT count as explicit — otherwise
+            // "Call w/Matte at 8pm tomorrow" would set the due-date pill and
+            // suppress calendar detection, wrongly creating a task instead of an
+            // 8pm event. Only a MANUAL date pick (newTaskDueDate present AND not
+            // the value the parser set itself) counts as explicit task intent.
+            const dueIsManual = !!newTaskDueDate && newTaskDueDate !== parserSetDueDateRef.current;
+            const explicitTask = newTaskRecurring || !!newTaskWorkerId || dueIsManual;
 
             if (!explicitTask) {
               // ─── ROUTE 0: CALENDAR EVENT (a time is present). ───────────
