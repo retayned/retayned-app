@@ -77,7 +77,7 @@ const THEME_CSS = `
     --rt-surface: #EEEFEB;
     --rt-surface-warm: #F2EEE8;
     --rt-deep-cream: #EAE4D6;
-    --rt-sidebar: #1C3224;
+    --rt-sidebar: #F2EEE8;
     --rt-text: #1E261F;
     --rt-text-sec: #6B6B66;
     --rt-text-muted: #9A9A93;
@@ -9115,7 +9115,7 @@ export default function App({ user }) {
           if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
           hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, 250);
         }}
-        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px rgba(0,0,0,0.10), 0 1px 2px rgba(20,30,22,0.06), 6px 0 18px rgba(20,30,22,0.10)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
+        style={{ width: sidebarCollapsed ? 64 : 240, background: C.sidebar, display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
@@ -9126,7 +9126,7 @@ export default function App({ user }) {
             fontFamily: "system-ui, -apple-system, sans-serif",
             fontWeight: 900,
             fontSize: 22,
-            color: "#FFFFFF",
+            color: C.primary,
             letterSpacing: "-0.04em",
             lineHeight: 1.15,
             display: "inline-block",
@@ -9145,21 +9145,23 @@ export default function App({ user }) {
                 padding: sidebarCollapsed ? "10px 0" : "9px 12px",
                 borderRadius: 9,
                 marginBottom: 2,
-                color: active ? "#FFFFFF" : "#BFD4C6",
+                color: active ? C.primaryDeep : C.ink300,
                 fontWeight: active ? 600 : 500,
-                // Active surface on the DARK green rail — a translucent light
-                // fill so the selected item lifts off the deep green without a
-                // hard white block. Light text/icons carry the rest.
-                background: active ? "rgba(255,255,255,0.12)" : "transparent",
+                // #1 — internal hierarchy on the cream rail: inactive items are
+                // quieted (light ink300) so they recede; the active item is the
+                // only one with weight — dark label + a clean white pill set
+                // into the cream. Mass differentiated → reads as "a list with
+                // one selected" not "one heavy block."
+                background: active ? "#FFFFFF" : "transparent",
                 boxShadow: active
-                  ? "inset 0 0 0 1px rgba(255,255,255,0.08)"
+                  ? "0 0 0 1px rgba(28,50,36,0.06), 0 1px 2px rgba(20,30,22,0.05), 0 3px 8px rgba(20,30,22,0.06)"
                   : "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
                 position: "relative",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? "#FFFFFF" : "#9DB6A4"} accent={active ? C.primaryLight : "#9DB6A4"} /></span>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={n.icon} size={20} color={active ? C.primaryDeep : C.ink300} accent={active ? C.primary : C.ink300} /></span>
                 {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>{n.label}</span>}
                 {hasDot(n.id) && <div style={{ position: sidebarCollapsed ? "absolute" : "static", top: sidebarCollapsed ? 6 : "auto", right: sidebarCollapsed ? 6 : "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? C.card : C.sidebar), flexShrink: 0 }} />}
               </div>
@@ -9348,8 +9350,8 @@ export default function App({ user }) {
                           fontWeight: 500,
                           cursor: "pointer",
                           ...(active
-                            ? { color: "#FFFFFF", borderBottom: "1px solid " + C.primaryLight }
-                            : { color: "#9DB6A4" }),
+                            ? { color: C.primaryDeep, borderBottom: "1px solid " + C.primary }
+                            : { color: C.textSec }),
                         }}
                       >
                         {p.label}
@@ -9358,18 +9360,18 @@ export default function App({ user }) {
                   })}
                 </div>
                 <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
                   <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
                     <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
                           stroke={C.primaryDeep} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
                   </svg>
                 </div>
-                <div style={{ color: "#9DB6A4", fontSize: 9.5 }}>Tasks Completed</div>
+                <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
               {/* PORTFOLIO section */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: "#9DB6A4", fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: "#BFD4C6", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
+                <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
+                <div style={{ fontSize: 9.5, color: C.textSec, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
               </div>
               {/* Stacked bar — only non-zero buckets */}
               <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
@@ -9382,7 +9384,7 @@ export default function App({ user }) {
                 {segs.map((s, i) => (
                   <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                     <div style={{ color: s.color, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
-                    <div style={{ color: "#9DB6A4", fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
+                    <div style={{ color: C.textSec, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -9399,18 +9401,18 @@ export default function App({ user }) {
                 padding: sidebarCollapsed ? "10px 0" : "9px 12px",
                 borderRadius: 9,
                 marginBottom: 2,
-                color: active ? "#FFFFFF" : "#BFD4C6",
+                color: active ? C.primaryDeep : C.ink300,
                 fontWeight: active ? 600 : 500,
-                background: active ? "rgba(255,255,255,0.12)" : "transparent",
+                background: active ? "#FFFFFF" : "transparent",
                 boxShadow: active
-                  ? "inset 0 0 0 1px rgba(255,255,255,0.08)"
+                  ? "0 0 0 1px rgba(28,50,36,0.06), 0 1px 2px rgba(20,30,22,0.05), 0 3px 8px rgba(20,30,22,0.06)"
                   : "none",
                 transform: active ? "translateY(-0.5px)" : "none",
                 cursor: "pointer",
                 position: "relative",
                 transition: "all 180ms var(--rt-ease-out)",
               }}>
-                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={20} color={active ? "#FFFFFF" : "#9DB6A4"} accent={active ? C.primaryLight : "#9DB6A4"} /></span>
+                <span style={{ width: 20, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="settings" size={20} color={active ? C.primaryDeep : C.ink300} accent={active ? C.primary : C.ink300} /></span>
                 {!sidebarCollapsed && <span style={{ fontSize: 14, flex: 1 }}>Settings</span>}
               </div>
             );
@@ -9420,7 +9422,7 @@ export default function App({ user }) {
           <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10, justifyContent: sidebarCollapsed ? "center" : "flex-start", padding: sidebarCollapsed ? "8px 0" : "8px 10px", borderRadius: 8, cursor: "pointer", background: "transparent", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
             <div style={{ width: 28, height: 28, borderRadius: 14, background: C.primarySoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>{getUserInitial(user)}</div>
             {!sidebarCollapsed && (
-              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: "#9DB6A4", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
+              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
             )}
           </div>
         </div>
