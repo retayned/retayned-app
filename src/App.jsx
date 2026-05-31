@@ -9115,7 +9115,7 @@ export default function App({ user }) {
           if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
           hoverTimerRef.current = setTimeout(() => { setHoverExpanded(false); hoverTimerRef.current = null; }, 250);
         }}
-        style={{ width: sidebarCollapsed ? 64 : 240, background: "linear-gradient(170deg, #F6F2EC 0%, #ECE6DA 100%)", display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
+        style={{ width: sidebarCollapsed ? 64 : 240, background: "linear-gradient(170deg, #F0EBE0 0%, #EAE4D6 100%)", display: "flex", flexDirection: "column", position: "fixed", top: 14, left: 14, bottom: 14, zIndex: 50, borderRadius: 14, boxShadow: "0 0 0 1px " + C.deepCream + ", 0 1px 2px rgba(20,30,22,0.05), 6px 0 18px rgba(20,30,22,0.08)", overflowY: "auto", transition: "width 200ms var(--rt-ease-out)" }}>
         {/* Brand. Expanded: "Retayned." aligned left at 22px padding.
             Collapsed: "R." centered. The collapse/expand toggle lives
             OUTSIDE the sidebar (as a sibling, see below) so it can
