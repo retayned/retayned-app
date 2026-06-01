@@ -5036,6 +5036,24 @@ export default function App({ user }) {
     if (m !== "rai") setFocusMode(false);
     try { window.localStorage.setItem("rt_rank_mode", m); } catch {}
   };
+  // Shared writer for ai_tasks_enabled — used by BOTH the Settings toggle and
+  // the Today segmented control (the "(+Tasks)" segment), so the two surfaces
+  // never disagree. Optimistic with rollback on error.
+  const setAiTasks = (next) => {
+    const prevVal = raiState?.ai_tasks_enabled !== false;
+    setRaiState(prev => prev ? { ...prev, ai_tasks_enabled: next } : { ai_tasks_enabled: next });
+    if (user?.id) {
+      supabase.from("rai_user_state")
+        .update({ ai_tasks_enabled: next })
+        .eq("user_id", user.id)
+        .then(({ error }) => {
+          if (error) {
+            console.error("Failed to save ai_tasks_enabled:", error);
+            setRaiState(prev => prev ? { ...prev, ai_tasks_enabled: prevVal } : prev);
+          }
+        });
+    }
+  };
   const [manualTaskOrder, _setManualTaskOrder] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -5048,6 +5066,29 @@ export default function App({ user }) {
     try { window.localStorage.setItem("rt_manual_task_order", JSON.stringify(order)); } catch {}
   };
   const [draggingTaskId, setDraggingTaskId] = useState(null);
+  // #3 — inline task-title editing. editingTaskId = the task currently being
+  // edited in place; editingTaskText = the working draft. Entered via
+  // double-click (desktop) or long-press (mobile); saved on Enter/blur,
+  // cancelled on Escape. Persists via tasksDb.update.
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTaskText, setEditingTaskText] = useState("");
+  const longPressTimerRef = useRef(null);
+  const beginTaskEdit = (t) => {
+    if (t.done) return; // don't edit completed tasks
+    setEditingTaskId(t.id);
+    setEditingTaskText(t.text || "");
+  };
+  const commitTaskEdit = () => {
+    const id = editingTaskId;
+    const next = (editingTaskText || "").trim();
+    if (!id) return;
+    const orig = tasks.find(t => t.id === id);
+    setEditingTaskId(null);
+    if (!orig || !next || next === orig.text) return; // no-op on empty/unchanged
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, text: next } : t));
+    try { tasksDb.setText(id, next); } catch (e) { console.warn("Task title save failed:", e); }
+  };
+  const cancelTaskEdit = () => { setEditingTaskId(null); setEditingTaskText(""); };
   // Mobile swipe state — tracks touch translation per task ID.
   // swipeOffset[id] = current x offset (negative when swiping left).
   // swipeStartX[id] = the touchStart X coordinate.
@@ -5841,7 +5882,7 @@ export default function App({ user }) {
       // Both render on the default landing page so they belong in critical
       // path. As fire-and-forget they hydrated late, causing visible pop-in
       // on the Today calendar widget and the sidebar Portfolio widget.
-      personalCalendarDb.listToday(uid).catch(e => { console.warn("personal calendar load failed:", e); return { data: null, error: e }; }),
+      personalCalendarDb.listUpcoming(uid).catch(e => { console.warn("personal calendar load failed:", e); return { data: null, error: e }; }),
       (typeof tasksDb.getCompletedCounts === "function")
         ? tasksDb.getCompletedCounts(uid).catch(e => { console.warn("task completion counts failed:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
@@ -6991,7 +7032,7 @@ export default function App({ user }) {
   // Reset Rai textarea heights when input clears (e.g. after sending a message)
   useEffect(() => {
     if (aiInput === "") {
-      document.querySelectorAll('textarea[placeholder="Reply to Rai…"], textarea[placeholder="Ask about a client, draft a message, get advice…"]').forEach(t => {
+      document.querySelectorAll('textarea[placeholder="Reply to Rai…"], textarea[placeholder="Ask about a client, draft a message, or talk shop…"]').forEach(t => {
         t.style.height = "auto";
       });
     }
@@ -7978,21 +8019,14 @@ export default function App({ user }) {
         }
         .rt-today-breakout .rt-row .rt-task-title { font-size: 14.5px; font-weight: 500; }
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
-        /* When the break-out top task is ALSO today's Rai pick, the break-out's
-           own lifted box-shadow (!important) would otherwise clobber the purple
-           ring + inset bar from .rt-rai-boost — leaving only the ✦ medallion
-           visible. This more-specific rule restores the purple annotation while
-           keeping the break-out lift. Also override the entrance animation's
-           shadow keyframes (which animate to the grey-only lift) by clearing the
-           animation so the purple ring isn't briefly stripped. */
-        /* Rai mark hidden (May 2026): when the break-out task is also the Rai
-           pick, just keep the break-out's own lifted grey shadow — no purple.
-           (Restore by reverting these two rules + the .rt-rai-boost overrides.) */
+        /* When the break-out top task is ALSO a Rai task, layer the purple
+           ring + inset bar over the break-out's lifted shadow (more-specific
+           rule so the lift doesn't clobber the purple annotation). */
         .rt-today-breakout .rt-row.rt-rai-boost {
-          box-shadow: 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.30), inset 2px 0 0 0 #7c5cf3, 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
         }
         .rt-today-breakout .rt-row.rt-rai-boost:hover:not(.is-done) {
-          box-shadow: 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(20,30,22,0.10) !important;
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.30), inset 2px 0 0 0 #7c5cf3, 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(20,30,22,0.10) !important;
         }
         /* The rest — plain stack, no thread (break-out carries emphasis). */
         .rt-today-rest { position: relative; }
@@ -8060,22 +8094,14 @@ export default function App({ user }) {
         .rt-row.is-done .rt-check svg { opacity: 1; transform: scale(1); }
 
         /* ── RAI CLIENT-OF-THE-DAY RAIL ──────────────────── */
-        /* Applied via class .rt-rai-boost to every task whose client is
-           today's Rai pick. HIDDEN per request (May 2026) — the purple ring,
-           inset bar, and bobbing ✦ medallion are neutralized so marked tasks
-           render as normal rows. The rules below are kept (overridden) so the
-           mark can be restored by removing these two override rules. */
+        /* Applied via class .rt-rai-boost to Rai-marked tasks. The purple edge
+           ring + inset left bar + bobbing ✦ medallion signal "Rai" from the
+           row's edge and corner — no right-side pill competing for space. */
         .rt-rai-boost {
-          box-shadow: var(--rt-sh-row) !important;
-          position: relative;
-        }
-        .rt-rai-boost::before { display: none !important; }
-        .rt-rai-boost:hover:not(.is-done) { box-shadow: var(--rt-sh-row-hover, var(--rt-sh-row)) !important; }
-        .rt-rai-boost-DISABLED {
           box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025) !important;
           position: relative;
         }
-        .rt-rai-boost-DISABLED:hover:not(.is-done) {
+        .rt-rai-boost:hover:not(.is-done) {
           box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06) !important;
         }
         /* When the Rai-marked task is checked off, drop both the purple
@@ -9581,6 +9607,14 @@ export default function App({ user }) {
             const bHeld = b.created_at && (now - b.created_at) < HOLD_MS;
             if (aHeld !== bHeld) return aHeld ? -1 : 1;
             if (aHeld && bHeld) return (b.created_at || 0) - (a.created_at || 0);
+            // #1 — client-less tasks sort BELOW client tasks. Rai's ranking is
+            // about which CLIENT needs attention; a task with no client has no
+            // client signal to rank on, so it sits beneath the client-anchored
+            // work rather than above it. (Only when exactly one has a client;
+            // if both or neither do, fall through to the normal comparison.)
+            const aHasClient = !!a.client;
+            const bHasClient = !!b.client;
+            if (aHasClient !== bHasClient) return aHasClient ? -1 : 1;
             // Days late: integer count of days the task is overdue. Computed
             // from the difference between today's local date and the task's
             // due_date (date part only — time-of-day ignored to avoid timezone
@@ -10854,7 +10888,7 @@ export default function App({ user }) {
                                               if (opt.key === "daily") setNewTaskRecurrencePattern({ kind: "daily" });
                                               else if (opt.key === "weekdays") setNewTaskRecurrencePattern({ kind: "weekdays" });
                                               else if (opt.key === "weekly") setNewTaskRecurrencePattern({ kind: "weekly", days: [(_now.getDay())] });
-                                              else if (opt.key === "monthly_date") setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() });
+                                              else if (opt.key === "monthly_date") setNewTaskRecurrencePattern({ kind: "monthly_date", day: 1 });
                                             }}
                                             style={{
                                               padding: "6px 14px",
@@ -10918,7 +10952,7 @@ export default function App({ user }) {
                                         <div style={{ display: "flex", gap: 5 }}>
                                           <button
                                             className={"rt-rec-chip" + (newTaskRecurrencePattern.kind === "monthly_date" ? " is-active" : "")}
-                                            onClick={() => setNewTaskRecurrencePattern({ kind: "monthly_date", day: _now.getDate() })}
+                                            onClick={() => setNewTaskRecurrencePattern({ kind: "monthly_date", day: 1 })}
                                             style={{
                                               flex: 1, padding: "6px 12px",
                                               border: "none",
@@ -11060,55 +11094,55 @@ export default function App({ user }) {
               <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
                   <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 4px 12px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {/* Ranked by Rai / Manual toggle — pill segmented control */}
-                      <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
-                        <button
-                          className={"rt-rank-opt" + (rankMode === "rai" ? " is-active" : "")}
-                          onClick={() => setRankMode("rai")}
-                          style={{
-                            padding: "6px 14px 6px 10px",
-                            // Option B "perfectly nested" geometry: inner radius
-                            // = (outer height ÷ 2) − container padding. Locked
-                            // to current button dimensions (padding 6/14, fontSize 12,
-                            // container padding 3); if you resize either, recompute.,
-                            borderRadius: 13,
-                            border: "none",
-                            fontFamily: "inherit",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 4,
-                            ...(rankMode === "rai"
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
-                              : {}),
-                          }}
-                        >
+                      {/* 3-way Rai control: ✦ Ranked (+Tasks) / ✦ Ranked / Manual.
+                          The star carries the "Rai" meaning (so the word is
+                          dropped for compactness on mobile). Both ✦ options keep
+                          rankMode="rai" (so all ranking logic is unchanged); the
+                          difference is ai_tasks_enabled. Manual = no Rai at all
+                          (rankMode manual + tasks off). */}
+                      {(() => {
+                        const aiTasksOn = raiState?.ai_tasks_enabled !== false; // default ON
+                        const isRaiPlus = rankMode === "rai" && aiTasksOn;
+                        const isRaiOnly = rankMode === "rai" && !aiTasksOn;
+                        const isManual = rankMode === "manual";
+                        const optBase = { borderRadius: 13, border: "none", fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 };
+                        const activeStyle = { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" };
+                        const Star = ({ lit }) => (
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block", transition: "opacity 120ms" }} aria-hidden="true">
-                            <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={rankMode === "rai" ? C.btn : C.textMuted} opacity={rankMode === "rai" ? 1 : 0.55} />
+                            <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={lit ? C.btn : C.textMuted} opacity={lit ? 1 : 0.55} />
                           </svg>
-                          <span style={{}}>Ranked by Rai</span>
-                        </button>
-                        <button
-                          className={"rt-rank-opt" + (rankMode === "manual" ? " is-active" : "")}
-                          onClick={() => setRankMode("manual")}
-                          style={{
-                            padding: "6px 14px",
-                            borderRadius: 13,
-                            border: "none",
-                            fontFamily: "inherit",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            ...(rankMode === "manual"
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
-                              : {}),
-                          }}
-                        >
-                          Manual
-                        </button>
-                      </div>
+                        );
+                        return (
+                          <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
+                            <button
+                              className={"rt-rank-opt" + (isRaiPlus ? " is-active" : "")}
+                              onClick={() => { setRankMode("rai"); setAiTasks(true); }}
+                              title="Rai ranks your list and adds a few suggested tasks each morning"
+                              style={{ ...optBase, padding: "6px 12px 6px 10px", ...(isRaiPlus ? activeStyle : {}) }}
+                            >
+                              <Star lit={isRaiPlus} />
+                              <span>Ranked <span style={{ color: isRaiPlus ? C.btnDeep : C.textMuted, fontWeight: 700 }}>(+Tasks)</span></span>
+                            </button>
+                            <button
+                              className={"rt-rank-opt" + (isRaiOnly ? " is-active" : "")}
+                              onClick={() => { setRankMode("rai"); setAiTasks(false); }}
+                              title="Rai ranks your list but won't add tasks"
+                              style={{ ...optBase, padding: "6px 12px 6px 10px", ...(isRaiOnly ? activeStyle : {}) }}
+                            >
+                              <Star lit={isRaiOnly} />
+                              <span>Ranked</span>
+                            </button>
+                            <button
+                              className={"rt-rank-opt" + (isManual ? " is-active" : "")}
+                              onClick={() => { setRankMode("manual"); setAiTasks(false); }}
+                              title="Your own order, no Rai"
+                              style={{ ...optBase, padding: "6px 14px", ...(isManual ? activeStyle : {}) }}
+                            >
+                              Manual
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {/* Focus mode button — only enabled in Rai mode.
                           Idle: transparent with site-standard ink-300 outline.
                           Active: deep-green fill with white text. No watermark,
@@ -11265,7 +11299,7 @@ export default function App({ user }) {
                           if (!raiPicks || !raiPicks.client_id) return null;
                           return clients.find(c => c.id === raiPicks.client_id) || null;
                         })();
-                        const isRaiBoosted = !!(raiBoostClient && t.client && t.client === raiBoostClient.name);
+                        const isRaiBoosted = !!t.ai;
                         const cls = "rt-row" + (isDone ? " is-done" : "") + (isJustDone ? " is-just-done" : "") + (isFocusTop ? " rt-focus-top" : "") + (isRaiBoosted ? " rt-rai-boost" : "");
   
                         // Reorder handler: when dropping onto target, move dragging task to target's position
@@ -11600,11 +11634,40 @@ export default function App({ user }) {
                                   // verb AND has a client tag AND task isn't done. Click
                                   // opens the Rai chat page with task + client preloaded.
                                   const isDiscussable = !isDone && client && detectThinkingVerb(t.text);
+                                  // #3 — inline edit: when this task is being edited,
+                                  // swap the title for a text input.
+                                  if (editingTaskId === t.id) {
+                                    return (
+                                      <input
+                                        autoFocus
+                                        value={editingTaskText}
+                                        onChange={(e) => setEditingTaskText(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") { e.preventDefault(); commitTaskEdit(); }
+                                          else if (e.key === "Escape") { e.preventDefault(); cancelTaskEdit(); }
+                                        }}
+                                        onBlur={commitTaskEdit}
+                                        className="rt-task-title-edit"
+                                        style={{ width: "100%", font: "inherit", fontSize: 14, fontWeight: 500, color: C.text, background: C.card, border: "1px solid " + C.btnLight, borderRadius: 6, padding: "2px 6px", outline: "none", boxShadow: "0 0 0 3px rgba(124,92,243,0.12)" }}
+                                      />
+                                    );
+                                  }
+                                  // Long-press (mobile) → edit. Pointer-based so it
+                                  // works on touch; cancelled on move/up before the
+                                  // threshold. Double-click handles desktop.
+                                  const lpStart = () => { longPressTimerRef.current = setTimeout(() => beginTaskEdit(t), 500); };
+                                  const lpCancel = () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } };
                                   if (isDiscussable) {
                                     return (
                                       <span
                                         className="rt-task-title is-discussable"
-                                        title={`${t.text}\n\nClick to talk this through with Rai`}
+                                        title={`${t.text}\n\nClick to talk this through with Rai · double-click to edit`}
+                                        onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
+                                        onPointerDown={lpStart}
+                                        onPointerUp={lpCancel}
+                                        onPointerMove={lpCancel}
+                                        onPointerLeave={lpCancel}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setAiConvoId(null);
@@ -11620,7 +11683,16 @@ export default function App({ user }) {
                                       </span>
                                     );
                                   }
-                                  return <span className="rt-task-title" title={t.text} style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}>{t.text}</span>;
+                                  return <span
+                                    className="rt-task-title"
+                                    title={isDone ? t.text : `${t.text}\n\nDouble-click to edit`}
+                                    onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
+                                    onPointerDown={lpStart}
+                                    onPointerUp={lpCancel}
+                                    onPointerMove={lpCancel}
+                                    onPointerLeave={lpCancel}
+                                    style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
+                                  >{t.text}</span>;
                                 })()}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
@@ -11731,15 +11803,11 @@ export default function App({ user }) {
                               );
                             })()}
 
-                            {t.ai && (
-                              <span
-                                title="Added automatically by Rai"
-                                style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(124,92,243,0.10)", color: "#5a3fb8", borderRadius: 999, padding: "3px 9px 3px 5px", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}
-                              >
-                                <span style={{ width: 14, height: 14, borderRadius: "50%", background: C.btn, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 800 }}>R</span>
-                                Rai
-                              </span>
-                            )}
+                            {/* RAI attribution pill removed — the purple edge
+                                ring + inset bar + bobbing ✦ medallion (via
+                                .rt-rai-boost on t.ai rows) now signals "Rai"
+                                from the row edge, so the right gutter stays free
+                                for the date and the title gets full width. */}
 
                             {/* Right-side indicator — recurring infinity OR date pill (mutually exclusive) */}
                             {t.recurring ? (
@@ -11911,63 +11979,72 @@ export default function App({ user }) {
                         </div>
 
 
-                        {/* TOMORROW bucket */}
-                        {_tomorrowBucket.length > 0 && (<>
-                          <BucketHeader name="Tomorrow" dimmed={true} count={_tomorrowBucket.length} />
-                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 3, padding: "0 6px" }}>
-                            {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
-                          </div>
-                          {(() => {
-                            // Tomorrow's calendar (Direction A). Only render the
-                            // toggle if tomorrow actually has events.
-                            const tz = userTimezone;
-                            const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
-                            const tmrwYmd = ymdInTz(tz, tmrw);
-                            const tmrwEvents = (personalEvents || []).filter(e => e && e.starts_at && ymdInTz(tz, new Date(e.starts_at)) === tmrwYmd);
-                            if (tmrwEvents.length === 0) return null;
-                            return (<>
-                              <BucketCalToggle label="Tomorrow's calendar" count={tmrwEvents.length} open={tomorrowCalOpen} onToggle={() => setTomorrowCalOpen(o => !o)} C={C} />
-                              {tomorrowCalOpen && <BucketCalendarTomorrow events={tmrwEvents} C={C} />}
-                            </>);
-                          })()}
-                        </>)}
+                        {/* TOMORROW bucket — ALWAYS rendered (it's where users
+                            see tomorrow's schedule, with or without tasks). */}
+                        {(() => {
+                          const tz = userTimezone;
+                          const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+                          const tmrwYmd = ymdInTz(tz, tmrw);
+                          const tmrwEvents = (personalEvents || []).filter(e => e && e.starts_at && ymdInTz(tz, new Date(e.starts_at)) === tmrwYmd);
+                          const hasTasks = _tomorrowBucket.length > 0;
+                          return (<>
+                            <BucketHeader name="Tomorrow" dimmed={true} count={hasTasks ? _tomorrowBucket.length : 0} />
+                            {hasTasks ? (
+                              <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 3, padding: "0 6px" }}>
+                                {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
+                              </div>
+                            ) : (
+                              <div style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks tomorrow.</div>
+                            )}
+                            {/* Calendar toggle — always present. Label per #5: just "Calendar". */}
+                            <BucketCalToggle label="Calendar" count={tmrwEvents.length} open={tomorrowCalOpen} onToggle={() => setTomorrowCalOpen(o => !o)} C={C} />
+                            {tomorrowCalOpen && (
+                              tmrwEvents.length > 0
+                                ? <BucketCalendarTomorrow events={tmrwEvents} C={C} />
+                                : <div style={{ background: C.primaryGhost, borderRadius: 12, padding: "16px", margin: "8px 6px 4px", fontFamily: "'Manrope', sans-serif", fontSize: 12, color: C.textMuted, fontStyle: "italic", textAlign: "center" }}>Nothing on the calendar tomorrow.</div>
+                            )}
+                          </>);
+                        })()}
 
-                        {/* LATER bucket */}
-                        {_laterBucket.length > 0 && (<>
-                          <BucketHeader name="Later" dimmed={true} count={_laterBucket.length} />
-                          <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 2, padding: "0 6px" }}>
-                            {_laterBucket.map(t => renderRow(t, "later"))}
-                          </div>
-                          {(() => {
-                            // Later calendar (Direction B) — next 5 days = days 3–7
-                            // from today (next 7 minus tomorrow). Group events per day.
-                            const tz = userTimezone;
-                            const days = [];
-                            for (let i = 2; i <= 6; i++) {
-                              const d = new Date(); d.setDate(d.getDate() + i);
-                              const ymd = ymdInTz(tz, d);
-                              days.push({
-                                ymd,
-                                label: d.toLocaleDateString("en-US", { weekday: "short" }),
-                                dateLabel: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-                                events: [],
-                              });
-                            }
-                            const byYmd = {}; days.forEach(dd => { byYmd[dd.ymd] = dd; });
-                            for (const e of (personalEvents || [])) {
-                              if (!e || !e.starts_at) continue;
-                              const ymd = ymdInTz(tz, new Date(e.starts_at));
-                              if (byYmd[ymd]) byYmd[ymd].events.push(e);
-                            }
-                            days.forEach(dd => dd.events.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
-                            const total = days.reduce((s, dd) => s + dd.events.length, 0);
-                            if (total === 0) return null;
-                            return (<>
-                              <BucketCalToggle label="This week's calendar" count={total} open={laterCalOpen} onToggle={() => setLaterCalOpen(o => !o)} C={C} />
-                              {laterCalOpen && <BucketCalendarLater days={days} C={C} />}
-                            </>);
-                          })()}
-                        </>)}
+                        {/* LATER bucket — ALWAYS rendered. */}
+                        {(() => {
+                          const tz = userTimezone;
+                          const days = [];
+                          for (let i = 2; i <= 6; i++) {
+                            const d = new Date(); d.setDate(d.getDate() + i);
+                            const ymd = ymdInTz(tz, d);
+                            days.push({
+                              ymd,
+                              label: d.toLocaleDateString("en-US", { weekday: "short" }),
+                              dateLabel: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+                              events: [],
+                            });
+                          }
+                          const byYmd = {}; days.forEach(dd => { byYmd[dd.ymd] = dd; });
+                          for (const e of (personalEvents || [])) {
+                            if (!e || !e.starts_at) continue;
+                            const ymd = ymdInTz(tz, new Date(e.starts_at));
+                            if (byYmd[ymd]) byYmd[ymd].events.push(e);
+                          }
+                          days.forEach(dd => dd.events.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                          const total = days.reduce((s, dd) => s + dd.events.length, 0);
+                          const hasTasks = _laterBucket.length > 0;
+                          return (<>
+                            <BucketHeader name="Later" dimmed={true} count={hasTasks ? _laterBucket.length : 0} />
+                            {hasTasks ? (
+                              <div className="rt-row-condensed" style={{ display: "flex", flexDirection: "column", gap: 10, opacity: 0.76, position: "relative", zIndex: 2, padding: "0 6px" }}>
+                                {_laterBucket.map(t => renderRow(t, "later"))}
+                              </div>
+                            ) : (
+                              <div style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks scheduled.</div>
+                            )}
+                            {/* Calendar toggle — always present. The 5-day grid
+                                shows "clear" per empty day, so it reads fine even
+                                with no events; this is the upcoming-week view. */}
+                            <BucketCalToggle label="Calendar" count={total} open={laterCalOpen} onToggle={() => setLaterCalOpen(o => !o)} C={C} />
+                            {laterCalOpen && <BucketCalendarLater days={days} C={C} />}
+                          </>);
+                        })()}
 
                         {/* COMPLETED TODAY log — sits at the bottom, below all
                             active buckets. Active work gets prime real estate;
@@ -12265,6 +12342,10 @@ export default function App({ user }) {
           };
 
           const clientCadence = (c) => {
+            // #2 — advisory clients aren't on a managed contact rhythm, so a
+            // cadence verdict doesn't apply. Return an N/A verdict in the same
+            // shape consumers expect (state/label/color/momentum).
+            if (c && c.rai_mode === "advisory") return { state: "na", label: "N/A", color: C.textMuted, momentum: 1 };
             // CADENCE — is this client getting more or less attention than their
             // own normal active week?
             //  • Calibration: first 7 days after the client was ADDED (created_at).
@@ -12645,7 +12726,7 @@ export default function App({ user }) {
                     // momentum = getting more attention than usual = warmest.
                     const ranked = (activeClients || [])
                       .map(c => ({ c, cad: clientCadence(c) }))
-                      .filter(x => x.cad.state !== "calibrating")
+                      .filter(x => x.cad.state !== "calibrating" && x.cad.state !== "na")
                       .sort((a, b) => b.cad.momentum - a.cad.momentum);
                     const mostActive = ranked.slice(0, 3);
                     const leastActive = ranked.slice(-3).reverse().filter(x => !mostActive.includes(x));
@@ -13672,6 +13753,8 @@ export default function App({ user }) {
           //   momentum >= 1.25 → Ahead · < 0.75 → Slipping · else On rhythm.
           //   <7 days since added, or no real prior week → Calibrating.
           const healthCadence = (c) => {
+            // #2 — advisory clients have no managed cadence → N/A.
+            if (c && c.rai_mode === "advisory") return { state: "na", label: "N/A", color: C.textMuted, momentum: 1 };
             const NOW = Date.now();
             const DAY = 86400000;
             const WINDOW = 90 * DAY;
@@ -16438,7 +16521,7 @@ export default function App({ user }) {
                           value={aiInput}
                           onChange={e => { setAiInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 240) + "px"; }}
                           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }}
-                          placeholder="Ask about a client, draft a message, get advice…"
+                          placeholder="Ask about a client, draft a message, or talk shop…"
                           rows={3}
                           style={{ width: "100%", minHeight: 72, padding: "2px 0", border: "none", fontSize: 16, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.55, color: C.text, overflowY: "auto" }}
                         />
@@ -16465,7 +16548,7 @@ export default function App({ user }) {
                             onClick={() => {
                               setAiInput(s);
                               setTimeout(() => {
-                                const ta = document.querySelector('textarea[placeholder="Ask about a client, draft a message, get advice…"]');
+                                const ta = document.querySelector('textarea[placeholder="Ask about a client, draft a message, or talk shop…"]');
                                 if (ta) { ta.focus(); ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 240) + "px"; }
                               }, 0);
                             }}
@@ -16582,19 +16665,7 @@ export default function App({ user }) {
                 Off = no auto-added tasks. Writes rai_user_state.ai_tasks_enabled. */}
             {(() => {
               const aiTasksOn = raiState?.ai_tasks_enabled !== false; // default ON
-              const toggle = () => {
-                const next = !aiTasksOn;
-                setRaiState(prev => prev ? { ...prev, ai_tasks_enabled: next } : { ai_tasks_enabled: next });
-                supabase.from("rai_user_state")
-                  .update({ ai_tasks_enabled: next })
-                  .eq("user_id", user.id)
-                  .then(({ error }) => {
-                    if (error) {
-                      console.error("Failed to save ai_tasks_enabled:", error);
-                      setRaiState(prev => prev ? { ...prev, ai_tasks_enabled: aiTasksOn } : prev);
-                    }
-                  });
-              };
+              const toggle = () => { setAiTasks(!aiTasksOn); };
               return (
                 <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Rai</div>
