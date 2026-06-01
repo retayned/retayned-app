@@ -9828,6 +9828,13 @@ export default function App({ user }) {
           const _todayStr = userTimezone ? ymdInTz(userTimezone, _now) : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _tomorrow = new Date(_now.getTime() + 86400000);
           const _tomorrowStr = userTimezone ? ymdInTz(userTimezone, _tomorrow) : `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
+          // End of the Later window: today + 6 days (matches the "later"
+          // convention used elsewhere and the Later calendar strip, which
+          // spans day-after-tomorrow through today+6). Non-daily recurring
+          // tasks whose next occurrence falls in (_tomorrowStr, _laterEndStr]
+          // surface in Later; anything past it stays hidden until it rolls in.
+          const _laterEnd = new Date(_now.getTime() + 6 * 86400000);
+          const _laterEndStr = userTimezone ? ymdInTz(userTimezone, _laterEnd) : `${_laterEnd.getFullYear()}-${String(_laterEnd.getMonth() + 1).padStart(2, "0")}-${String(_laterEnd.getDate()).padStart(2, "0")}`;
 
           const bucketOf = (t) => {
             // Recurring tasks are standing work with a "next occurrence"
@@ -9853,10 +9860,13 @@ export default function App({ user }) {
               // from the future view; they're implicit.
               const isDaily = !t.recurrence_pattern || !t.recurrence_pattern.kind || t.recurrence_pattern.kind === "daily";
               if (nextStr === _tomorrowStr) return isDaily ? "hidden" : "tomorrow";
-              // Non-daily recurring more than 1 day out: hide entirely.
-              // Otherwise weekly/monthly tasks would clog Later every day
-              // of the week. They reappear in Tomorrow the day before
-              // they're due, and in Today on the day itself.
+              // Non-daily recurring more than 1 day out: show in Later ONLY if
+              // the next occurrence falls within the Later window (day-after-
+              // tomorrow through today+6, matching the Later calendar strip).
+              // Each task contributes at most one Later row (its soonest
+              // occurrence). Anything past the window stays hidden until it
+              // rolls into range, so Later never clogs with far-future work.
+              if (!isDaily && nextStr > _tomorrowStr && nextStr <= _laterEndStr) return "later";
               return "hidden";
             }
             if (!t.due_date) return "today";
@@ -10211,6 +10221,33 @@ export default function App({ user }) {
                     Hidden when: no pick, picked client not in roster, or
                     user dismissed it today. */}
                 {(() => {
+                  // First 7 days: Rai is calibrating, so no tasks land yet
+                  // (mirrors the Edge Function's 7-day gate in writeSuggestedTasks).
+                  // Explain the quiet slot instead of showing a thin pick. Fail
+                  // open — if the signup date can't be read, fall through to the
+                  // normal brief rather than mislabel an established account.
+                  const signupMs = user?.created_at ? new Date(user.created_at).getTime() : null;
+                  const inCalibration = signupMs != null && (Date.now() - signupMs) < 7 * 24 * 60 * 60 * 1000;
+                  if (inCalibration) {
+                    return (
+                      <div
+                        className="rt-band-pick is-expanded"
+                        style={{
+                          marginTop: 8,
+                          fontSize: 13.5,
+                          lineHeight: 1.5,
+                          color: C.textMuted,
+                          fontFamily: "'Fraunces', Georgia, serif",
+                          fontStyle: "italic",
+                          fontWeight: 500,
+                          fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0",
+                          position: "relative",
+                        }}
+                      >
+                        Suggested tasks and client actions will show up here. Rai&rsquo;s still calibrating to your workflow and your clients.
+                      </div>
+                    );
+                  }
                   if (!raiPicks || !raiPicks.client_id) return null;
                   if (raiState?.todays_pick_dismissed_at) return null;
                   const pickClient = clients.find(c => c.id === raiPicks.client_id);
