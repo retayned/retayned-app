@@ -5026,6 +5026,11 @@ export default function App({ user }) {
   const [rolodexFiledFilter, setRolodexFiledFilter] = useState("all");
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(false);
+  // Cleared→set true when the user opens the Health page, so the "new
+  // observation" red dot disappears on visit (without changing the
+  // observation's own status — it still shows on the page until unpacked/
+  // dropped). Reset to false when a NEW observation arrives.
+  const [healthObsSeen, setHealthObsSeen] = useState(false);
   const [reminderDate, setReminderDate] = useState("");
   const [reminderRecur, setReminderRecur] = useState("1m"); // last-picked interval code
   const [reminderRepeatOn, setReminderRepeatOn] = useState(false);
@@ -5695,6 +5700,8 @@ export default function App({ user }) {
   // strip reveal. Desktop ignores this state (CSS always shows expanded
   // content). Resets per observation (different obs.id → reset to false).
   const [obsMobileExpanded, setObsMobileExpanded] = useState(false);
+  // Expand toggle for Rai's daily brief ("Why" → shows reason_detail).
+  const [briefExpanded, setBriefExpanded] = useState(false);
 
   // ─── Daybook removed — replaced by RaiBriefPanel in the right rail. ──
 
@@ -5830,6 +5837,9 @@ export default function App({ user }) {
     if (observerRes?.data) {
       setObservation(observerRes.data);
       setObsMobileExpanded(false);
+      // A freshly loaded observation hasn't been seen on the Health page yet —
+      // reset so the nav dot shows until the user opens Health.
+      setHealthObsSeen(false);
     }
     // Daybook hydration removed — RaiBriefPanel reads raiPicks/clients directly.
 
@@ -6427,8 +6437,8 @@ export default function App({ user }) {
 
       // Pick highest-priority among settled
       const sorted = [...settled].sort((a, b) => {
-        const psA = getProfileSortScore(a.client, a.raiPriority, 0);
-        const psB = getProfileSortScore(b.client, b.raiPriority, 0);
+        const psA = getProfileSortScore(a.client, a.raiPriority);
+        const psB = getProfileSortScore(b.client, b.raiPriority);
         if (psA !== psB) return psB - psA;
         if (a.alert !== b.alert) return a.alert ? -1 : 1;
         if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
@@ -6798,12 +6808,12 @@ export default function App({ user }) {
     return 25;
   };
 
-  const getProfileSortScore = (clientName, hasRaiBoost = false, pickBoost = 0, daysLate = 0) => {
+  const getProfileSortScore = (clientName, hasRaiBoost = false, daysLate = 0) => {
     // All Clients sentinel: a task tagged "All Clients" should always sort
     // first regardless of any per-client math. Set high enough to clear the
-    // theoretical max real score: ~104 base + 25 raiBoost + 10 nudge + 20
-    // pickBoost + 60 lateBoost + 15 newClientBoost ≈ 234 max. 500 leaves
-    // generous headroom for future score expansions.
+    // theoretical max real score: ~104 base + 25 raiBoost + 10 nudge +
+    // 60 lateBoost + 15 newClientBoost ≈ 214 max. 500 leaves generous
+    // headroom for future score expansions.
     if (!clientName || clientName === "All Clients") return 500;
     const c = clients.find(x => x.name === clientName);
     if (!c) return 0;
@@ -6819,11 +6829,11 @@ export default function App({ user }) {
     const boost = calcNewClientBoost(c.ret || 50, revPct, c.daysOld != null ? c.daysOld : 999);
     const raiBoost = hasRaiBoost ? getRaiBoost(ps) : 0;
     // Layered Rai score:
-    //   client nudge (-10..+10) — all tasks of this client get this
-    //   pick boost (+10..+20)  — only the specific picked task gets this on top
-    // Pick is captured in rai_picks.task_id (NOT stored on the client), so this
-    // function takes pickBoost as a parameter and the caller passes it in only
-    // when the task being scored matches the active pick.
+    //   client nudge (-10..+10) — all tasks of this client get this.
+    // The old "pick boost" (+10..+20 on the client-of-the-day's task) was
+    // removed (May 2026) — Rai's daily brief no longer moves the sort. Only
+    // the per-client nudge does, and a nudged client need not be the one the
+    // brief centers on.
     const raiNudge = c.raiNudge || 0;
     // Late-task boost: overdue tasks surface aggressively, with fragile clients
     // (low retention score) getting much larger lifts per day late than healthy
@@ -6840,7 +6850,7 @@ export default function App({ user }) {
     // ties between top-tier clients. Display layers round/cap for UI (the
     // score badge shows 99 max). Without removing this clamp, two clients
     // both scoring 105 raw would tie at 99 and lose their differentiator.
-    return ps + boost + raiBoost + raiNudge + (pickBoost || 0) + lateBoost;
+    return ps + boost + raiBoost + raiNudge + lateBoost;
   };
 
 
@@ -7271,7 +7281,7 @@ export default function App({ user }) {
 
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
-  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } if (id === "retros") setRolodexRemindersSeen(true); setPage(id); };
+  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } if (id === "retros") setRolodexRemindersSeen(true); if (id === "health") setHealthObsSeen(true); setPage(id); };
   const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
@@ -7280,7 +7290,7 @@ export default function App({ user }) {
 
   const todayDot = tasksDone < tasksTotal;
   const hasNewObservation = !!observation && observation.status !== "unpacked" && observation.status !== "dropped";
-  const healthDot = overdueChecks > 0 || hasNewObservation;
+  const healthDot = overdueChecks > 0 || (hasNewObservation && !healthObsSeen && page !== "health");
   // Rolodex check-in dot: lit when any contact has a reminder due (today or
   // earlier) and the user hasn't opened Rolodex since. Clears on visiting the
   // page (see goTo). Contained entirely in Rolodex — no client/Rai coupling.
@@ -9443,9 +9453,9 @@ export default function App({ user }) {
           //   priority_score (deterministic, with soft clamp inside)
           //   + new_client_boost
           //   + client.raiNudge   (-10..+10) — applies to ALL tasks of that client
-          //   + pick_boost        (+10..+20) — applies to ALL tasks of the
-          //     Client of the Day, layered on top of the nudge
           //   → clamped to 99
+          // (The old Client-of-the-Day pick_boost was removed May 2026 — Rai's
+          //  daily brief no longer moves the sort; only the per-client nudge does.)
           //
           // Tiebreakers, in order:
           //   1. final score desc
@@ -9464,15 +9474,6 @@ export default function App({ user }) {
           // pick (we still keep the boost active even after dismissal so
           // their tasks stay surfaced — dismissal only hides the card, not
           // the underlying signal).
-          const pickBoostForClient = (clientName) => {
-            if (!clientName) return 0;
-            if (!raiPicks || !raiPicks.client_id) return 0;
-            const pickClient = clients.find(c => c.id === raiPicks.client_id);
-            if (!pickClient) return 0;
-            if (clientName !== pickClient.name) return 0;
-            return Number(raiPicks.pick_boost) || 0;
-          };
-
           // ─── Cross-client tiebreaker precompute ──────────────────────
           // When two tasks score identically AND belong to DIFFERENT clients,
           // we break the tie using signals that aren't in the score itself.
@@ -9534,8 +9535,8 @@ export default function App({ user }) {
             };
             const aDaysLate = computeDaysLate(a);
             const bDaysLate = computeDaysLate(b);
-            const psA = getProfileSortScore(a.client, a.raiPriority, pickBoostForClient(a.client), aDaysLate);
-            const psB = getProfileSortScore(b.client, b.raiPriority, pickBoostForClient(b.client), bDaysLate);
+            const psA = getProfileSortScore(a.client, a.raiPriority, aDaysLate);
+            const psB = getProfileSortScore(b.client, b.raiPriority, bDaysLate);
             if (psA !== psB) return psB - psA;
             // ─── CROSS-CLIENT TIEBREAKERS ───────────────────────────────
             // When two tasks belong to DIFFERENT clients but scored
@@ -10202,7 +10203,10 @@ export default function App({ user }) {
                   };
                   const cleanedReason = raiPicks.reason
                     ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "")
-                    : "Worth a check-in";
+                    : "A quiet day — nothing flagging across your book";
+                  const briefDetail = raiPicks.reason_detail
+                    ? String(raiPicks.reason_detail).trim()
+                    : null;
                   return (
                     <div
                       className="rt-band-pick is-expanded"
@@ -10218,7 +10222,11 @@ export default function App({ user }) {
                         position: "relative",
                       }}
                     >
-                      Today&rsquo;s client is{" "}
+                      {/* Rai's daily brief — her read of the book today. The
+                          anchored client name is a clickable link (prefill the
+                          composer); the reason text is her voice. Reads the same
+                          whether or not Rai's task suggestions are toggled on —
+                          it describes what she's seeing, not what she added. */}
                       <span
                         className="rt-purple-link"
                         onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
@@ -10227,6 +10235,20 @@ export default function App({ user }) {
                         {pickClient.name}
                       </span>
                       {" "}&mdash;{" "}{cleanedReason}.
+                      {briefDetail && (
+                        <>
+                          {" "}
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setBriefExpanded(v => !v); }}
+                            style={{ cursor: "pointer", color: C.btnDeep, fontStyle: "normal", fontWeight: 600, fontFamily: "'Manrope', sans-serif", fontSize: 11.5, whiteSpace: "nowrap" }}
+                          >
+                            {briefExpanded ? "Less" : "Why"}
+                          </span>
+                          {briefExpanded && (
+                            <span style={{ display: "block", marginTop: 6, color: C.textSec }}>{briefDetail}</span>
+                          )}
+                        </>
+                      )}
                     </div>
                   );
                 })()}
@@ -11608,9 +11630,7 @@ export default function App({ user }) {
                                   const newBoost = calcNewClientBoost(client.ret || 50, revPct, client.daysOld != null ? client.daysOld : 999);
                                   const raiBoost = t.raiPriority ? getRaiBoost(psFloat) : 0;
                                   const nudge = client.raiNudge || 0;
-                                  const isPicked = raiPicks && raiPicks.client_id === client.id;
-                                  const pickBoost = isPicked ? (Number(raiPicks.pick_boost) || 0) : 0;
-                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge + pickBoost);
+                                  const finalScore = Math.min(99, psFloat + newBoost + raiBoost + nudge);
                                   return (
                                     <span style={{
                                       fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
@@ -11624,7 +11644,7 @@ export default function App({ user }) {
                                       flexShrink: 0,
                                       whiteSpace: "nowrap",
                                     }}>
-                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} nudge:{nudge >= 0 ? "+" : ""}{nudge}{isPicked ? ` pick:+${pickBoost}` : ""} → <b>{finalScore.toFixed(1)}</b>
+                                      ret:{client.ret} raw:{psRaw} ps:{psFloat.toFixed(1)} nb:{newBoost} rai:{raiBoost} nudge:{nudge >= 0 ? "+" : ""}{nudge} → <b>{finalScore.toFixed(1)}</b>
                                     </span>
                                   );
                                 })()}
