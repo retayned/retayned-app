@@ -443,6 +443,18 @@ export const tasks = {
   //   - Custom date picker
   // Pass null to clear (returns task to "no specific date" → renders in Today bucket).
   // Pass YYYY-MM-DD string or Date object.
+  // Update a task's title text (inline editing on the Today page). Trims and
+  // ignores empty input at the caller; this just persists the new text.
+  setText: async (taskId, text) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ text })
+      .eq('id', taskId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
   setDueDate: async (taskId, dueDate) => {
     const dateStr = dueDate == null
       ? null
@@ -2362,6 +2374,26 @@ export const workerTokens = {
 // ============================================================
 
 export const personalCalendar = {
+  // Get events from ~now through 7 days ahead — covers the Today dial, the
+  // Tomorrow strip, and the Later (days 2–6) columns in ONE fetch. Far-future
+  // events (e.g. Sep 1 created today) are not returned here but remain safely
+  // stored; once the rolling 7-day window reaches their date they surface
+  // automatically. Nothing expires or deletes them. Wide UTC span (−2h..+8d)
+  // for tz-safety; the UI filters to exact local days.
+  listUpcoming: async (userId) => {
+    const now = Date.now();
+    const startIso = new Date(now - 2 * 3600 * 1000).toISOString();
+    const endIso = new Date(now + 8 * 24 * 3600 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('personal_calendar_events')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('starts_at', startIso)
+      .lte('starts_at', endIso)
+      .order('starts_at', { ascending: true });
+    return { data: data || [], error };
+  },
+
   // Get every event for today. "Today" is a 24-hour window aligned to the
   // user's local day, but we use a +/- 23h relative window centered on
   // "now" to be timezone-safe (same pattern as raiPicks.getCurrent). The
