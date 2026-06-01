@@ -2240,6 +2240,12 @@ function parseCalendarEntry(rawText, anchorDate = new Date(), clients = null) {
   let title = stripped
     .replace(/^\s*(at|@)\s+/i, "")
     .replace(/\s+(at|@)\s*$/i, "")
+    // A date phrase (weekday / "tomorrow" / etc.) was stripped elsewhere,
+    // but the connector word that introduced it ("on", "by", "this",
+    // "next") is often left dangling at the end — e.g. "Call w/Fool on
+    // Tuesday" → strip "Tuesday" → "Call w/Fool on". Remove a trailing
+    // connector so the title reads clean.
+    .replace(/\s+(on|by|this|next|the|for)\s*$/i, "")
     .replace(/^\s*[-–—,:]\s*/, "")
     .replace(/\s*[-–—,:]\s*$/, "")
     .replace(/\s{2,}/g, " ")
@@ -3992,115 +3998,6 @@ const coachDemos = {
 };
 
 const Dot = () => <div style={{ width: 7, height: 7, borderRadius: "50%", background: C.danger, flexShrink: 0 }} />;
-
-// ============================================================
-// RAI BRIEF PANEL — replaces the Notes/Daybook right rail.
-// Two stacked flat-white cards (no gradient — the page already
-// carries beige on the Today canvas + band):
-//   1. Daily brief — Rai's expanded read of today's pick
-//      (pick.reason_detail, written by the same daily sweep call).
-//   2. Needs you today — the pulse: top clients by |raiNudge|,
-//      with their rationale + a retention-color status dot. Same
-//      sweep data, no extra call.
-// Both are powered entirely by the existing daily Ranker sweep.
-// ============================================================
-const RaiBriefPanel = ({ pick, clients }) => {
-  const today = new Date();
-  const dateLine = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-
-  const pickClientName = pick && pick.client_id
-    ? ((clients || []).find(c => c.id === pick.client_id)?.name || null)
-    : null;
-
-  // Pulse: clients with a real signal today, strongest first, top 3.
-  const pulse = (clients || [])
-    .filter(c => c.raiNudge && Math.abs(c.raiNudge) >= 2 && c.raiRationale)
-    .sort((a, b) => Math.abs(b.raiNudge) - Math.abs(a.raiNudge))
-    .slice(0, 3);
-
-  const briefText = pick && pick.reason_detail ? pick.reason_detail : null;
-
-  return (
-    <div className="r-today-panel" style={{ width: "100%", flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-
-      {/* 1 · DAILY BRIEF — flat white, thin purple left-rule header */}
-      <div style={{
-        background: C.card,
-        borderRadius: 14,
-        overflow: "hidden",
-        border: "1px solid rgba(20,30,22,0.12)",
-        boxShadow: "0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04)",
-      }}>
-        <div style={{
-          padding: "14px 16px 12px",
-          borderBottom: "1px solid " + C.borderLight,
-          borderLeft: "3px solid " + C.btn,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 22, height: 22, borderRadius: "50%", background: C.btn, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>✦</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Rai&rsquo;s brief</span>
-          </div>
-          <span style={{ fontSize: 11, color: C.textMuted }}>{dateLine}</span>
-        </div>
-        <div style={{ padding: "14px 16px 16px" }}>
-          {briefText ? (
-            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 14, lineHeight: 1.55, color: C.text, fontStyle: "italic", fontWeight: 500 }}>
-              {pickClientName ? <><b style={{ fontStyle: "normal", fontWeight: 600, color: C.primaryDeep }}>{pickClientName}</b>{" — "}</> : null}
-              {briefText}
-            </div>
-          ) : (
-            <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.5 }}>
-              Rai&rsquo;s read posts with your morning sweep.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2 · NEEDS YOU TODAY — flat white pulse */}
-      {pulse.length > 0 && (
-        <div style={{
-          background: C.card,
-          borderRadius: 14,
-          overflow: "hidden",
-          border: "1px solid rgba(20,30,22,0.12)",
-          boxShadow: "0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04)",
-        }}>
-          <div style={{
-            padding: "14px 16px 12px",
-            borderBottom: "1px solid " + C.borderLight,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Needs you today</span>
-            <span style={{ fontSize: 11, color: C.textMuted }}>{pulse.length}</span>
-          </div>
-          <div style={{ padding: "4px 16px 8px" }}>
-            {pulse.map((c, i) => {
-              const grad = retGradient(c.ret || 0);
-              const dot = retColor(c.ret || 0);
-              const initials = (c.name || "?").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
-              return (
-                <div key={c.id || i} style={{
-                  display: "flex", alignItems: "center", gap: 11,
-                  padding: "11px 0",
-                  borderTop: i === 0 ? "none" : "1px solid #F2F1EC",
-                }}>
-                  <span style={{ width: 30, height: 30, borderRadius: "50%", background: grad, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>{initials}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
-                    <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.raiRationale}</div>
-                  </div>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot, flexShrink: 0 }} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-};
 
 // ============================================================
 // REFERRAL NETWORK · d3-force simulation
@@ -9017,9 +8914,12 @@ export default function App({ user }) {
           .rt-band-sub-events { cursor: default !important; pointer-events: none !important; }
         }
         @media (min-width: 1440px) {
-          .rc-grid { grid-template-columns: 240px minmax(0, 1fr) 360px; }
+          /* Rai brief / right rail removed — main content stretches to fill.
+             Both grid variants are now 2-col (240px nav + flexible main); the
+             .rc-rai-col panels are hidden everywhere. */
+          .rc-grid { grid-template-columns: 240px minmax(0, 1fr); }
           .rc-grid.rc-grid-2col { grid-template-columns: 240px minmax(0, 1fr); }
-          .rc-rai-col { display: block !important; }
+          .rc-rai-col { display: none !important; }
         }
         @keyframes rt-slideover-in {
           from { transform: translateX(40px); opacity: 0.5; }
@@ -11121,7 +11021,7 @@ export default function App({ user }) {
                               style={{ ...optBase, padding: "6px 12px 6px 10px", ...(isRaiPlus ? activeStyle : {}) }}
                             >
                               <Star lit={isRaiPlus} />
-                              <span>Ranked <span style={{ color: isRaiPlus ? C.btnDeep : C.textMuted, fontWeight: 700 }}>(+Tasks)</span></span>
+                              <span>Ranked<span style={{ display: "inline-block", marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.01em", borderRadius: 6, padding: "2px 6px", background: isRaiPlus ? "rgba(124,92,243,0.14)" : C.surface, color: isRaiPlus ? C.btnDeep : C.textMuted, transition: "all 140ms" }}>+Tasks</span></span>
                             </button>
                             <button
                               className={"rt-rank-opt" + (isRaiOnly ? " is-active" : "")}
@@ -12178,9 +12078,8 @@ export default function App({ user }) {
 
               {/* (Removed: two dead {false && …} render blocks that previously
                   held a gated TodayTimeline focus-column and a gated
-                  RaiBriefPanel. Both components remain defined — TodayTimeline
-                  is live in the mobile calendar sheet, RaiBriefPanel on other
-                  pages — only these never-rendered branches were deleted.) */}
+                  RaiBriefPanel. TodayTimeline is still live in the mobile
+                  calendar sheet; RaiBriefPanel has been removed entirely.) */}
 
               {/* CONFETTI */}
               {/* Confetti layer removed (May 2026) — celebration is fireworks
@@ -14352,10 +14251,6 @@ export default function App({ user }) {
                   )}
                 </div>
 
-                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
-                <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiBriefPanel pick={raiPicks} clients={clients} />
-                </div>
               </div>
               </>)}
             </div>
@@ -15092,10 +14987,6 @@ export default function App({ user }) {
                     })}
                   </div>
                   </div>
-                  {/* DAYBOOK COLUMN — wide desktop only (>=1440px), shared global notes */}
-                  <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                    <RaiBriefPanel pick={raiPicks} clients={clients} />
-                  </div>
                 </div>
               )}
             </div>
@@ -15786,10 +15677,6 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
-                <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiBriefPanel pick={raiPicks} clients={clients} />
-                </div>
               </div>
 
               {/* Referral form modal — preserved from v1 */}
@@ -16401,10 +16288,6 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-                {/* DAYBOOK COLUMN — wide desktop only (>=1440px) */}
-                <div className="rc-rai-col" style={{ display: "none", position: "sticky", top: 20, alignSelf: "start" }}>
-                  <RaiBriefPanel pick={raiPicks} clients={clients} />
-                </div>
               </div>
 
               {/* Add contact modal */}
@@ -19643,10 +19526,17 @@ function BucketCalendarTomorrow({ events, C }) {
       </div>
       <div style={{ position: "relative", height: 30, background: C.card, borderRadius: 7, boxShadow: "inset 0 0 0 1px " + C.borderLight }}>
         {sorted.map((e, i) => {
-          const left = frac(new Date(e.starts_at)) * 100;
-          const width = Math.min(34, Math.max(16, 100 - left));
+          const _start = new Date(e.starts_at);
+          // End = explicit ends_at, else default to 30 minutes after start.
+          const _end = e.ends_at ? new Date(e.ends_at) : new Date(_start.getTime() + 30 * 60000);
+          const left = frac(_start) * 100;
+          // Width = the span the event actually covers, as a % of the 8a–8p
+          // track. Floor at ~3% so a 30-min event is still a tappable sliver;
+          // clamp so it never runs past the track's right edge.
+          const rawWidth = (frac(_end) - frac(_start)) * 100;
+          const width = Math.max(3, Math.min(rawWidth, 100 - left));
           return (
-            <div key={e.id || i} title={e.title + (e.client_name ? " · " + e.client_name : "")}
+            <div key={e.id || i} title={(() => { const _t = new Date(e.starts_at); const _tl = _t.toLocaleTimeString("en-US", { hour: "numeric", minute: _t.getMinutes() ? "2-digit" : undefined }).replace(":00", ""); return _tl + " · " + e.title + (e.client_name ? " · " + e.client_name : ""); })()}
               style={{ position: "absolute", top: 4, height: 22, left: left + "%", width: width + "%", background: i % 2 === 0 ? C.primary : C.primaryLight, color: "#fff", fontFamily: "'Manrope', sans-serif", fontSize: 10, fontWeight: 600, lineHeight: "22px", padding: "0 9px", borderRadius: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {e.title}
             </div>
@@ -19667,12 +19557,16 @@ function BucketCalendarLater({ days, C }) {
             <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 500, color: C.textMuted, marginTop: 3 }}>{d.dateLabel}</div>
             {has ? (
               <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
-                {d.events.slice(0, 3).map((e, i) => (
-                  <div key={e.id || i} title={e.title + (e.client_name ? " · " + e.client_name : "")}
+                {d.events.slice(0, 3).map((e, i) => {
+                  const _t = e.starts_at ? new Date(e.starts_at) : null;
+                  const _timeLabel = _t ? _t.toLocaleTimeString("en-US", { hour: "numeric", minute: _t.getMinutes() ? "2-digit" : undefined }).replace(":00", "") : "";
+                  return (
+                  <div key={e.id || i} title={(_timeLabel ? _timeLabel + " · " : "") + e.title + (e.client_name ? " · " + e.client_name : "")}
                     style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, lineHeight: 1.2, color: C.primary, background: C.primaryGhost, borderRadius: 5, padding: "4px 6px", borderLeft: "2px solid " + C.primaryLight, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {e.title}
+                    {_timeLabel && <span style={{ fontWeight: 700, marginRight: 4 }}>{_timeLabel}</span>}{e.title}
                   </div>
-                ))}
+                  );
+                })}
                 {d.events.length > 3 && <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9, color: C.textMuted }}>+{d.events.length - 3} more</div>}
               </div>
             ) : (
