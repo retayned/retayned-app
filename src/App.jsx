@@ -12133,9 +12133,27 @@ export default function App({ user }) {
                       // Enrich each event with _prepCount = open tasks for that
                       // event's client. Used to render the "N tasks before" chip
                       // under the event title on the dial rail.
+                      //
+                      // The dial is a SINGLE DAY, so prep should count only work
+                      // actually due TODAY for the client — not every open task.
+                      // A recurring task counts only if its next occurrence is
+                      // today (a Thursday task does NOT count on Monday). A
+                      // one-off counts if it has no due_date (active now) or is
+                      // due today/overdue. This mirrors bucketOf's "today" rule.
+                      const _prepTodayYmd = ymdInTz(userTimezone, new Date());
+                      const _countsToday = (t) => {
+                        if (t.recurring) {
+                          const next = nextOccurrenceDate(t.recurrence_pattern, new Date(), true);
+                          const nextYmd = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+                          return nextYmd <= _prepTodayYmd;
+                        }
+                        if (!t.due_date) return true;
+                        return String(t.due_date).slice(0, 10) <= _prepTodayYmd;
+                      };
                       const openByClient = {};
                       for (const t of (tasks || [])) {
                         if (!t || t.done || !t.client_id) continue;
+                        if (!_countsToday(t)) continue;
                         openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
                       }
                       // The dial is a SINGLE DAY. Only today's events (in the
