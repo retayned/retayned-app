@@ -2518,6 +2518,30 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     gradStops.push({ off, color: skyColorForHour(hourHere) });
   }
 
+  // ── Time-of-day fill: warm cream sun by day, phasing to deep green ink at
+  // night. Driven by the dial's centered hour (so it follows the real time
+  // and also shifts as the dial is scrubbed toward evening). eveningT: 0 in
+  // full daylight → 1 deep night. Ramp: warm through ~17:00, crossing to
+  // night by ~21:00; pre-dawn (<6:00) is also night.
+  const centerHour = new Date(centerMs).getHours() + new Date(centerMs).getMinutes() / 60;
+  const eveningT = (() => {
+    const h = ((centerHour % 24) + 24) % 24;
+    if (h >= 6 && h <= 17) return 0;                       // day
+    if (h > 17 && h < 21) return (h - 17) / 4;             // dusk ramp 17→21
+    if (h >= 21 || h < 4) return 1;                        // night
+    // 4–6: pre-dawn easing back to day
+    return Math.max(0, (6 - h) / 2);
+  })();
+  // Warm sun RGB (255,240,214) → deep green ink (28,50,36) by eveningT.
+  const lerpC = (a, b, t) => Math.round(a + (b - a) * t);
+  const fillR = lerpC(255, 28, eveningT);
+  const fillG = lerpC(240, 50, eveningT);
+  const fillB = lerpC(214, 36, eveningT);
+  const fillRGB = `${fillR}, ${fillG}, ${fillB}`;
+  // Night reads a touch more present than the airy day glow, so alphas lift
+  // slightly as it darkens (keeps the evening disc from disappearing).
+  const aBoost = 1 + eveningT * 0.5;
+
   // Hour ticks + labels across the window (every 2 hours, plus NOW).
   const ticks = [];
   const tickLabels = [];
@@ -2642,10 +2666,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               Dials: base stop-0 = overall warmth; bloom stop-0 = event-area punch;
               bloom cx/cy = where the light pools. */}
           <radialGradient id="rt-dial-sage" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 240, 214, 0.42)" />
-            <stop offset="0.45" stopColor="rgba(255, 235, 205, 0.17)" />
-            <stop offset="0.78" stopColor="rgba(255, 233, 200, 0.05)" />
-            <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
+            <stop offset="0" stopColor={`rgba(${fillRGB}, ${(0.42 * aBoost).toFixed(3)})`} />
+            <stop offset="0.45" stopColor={`rgba(${fillRGB}, ${(0.17 * aBoost).toFixed(3)})`} />
+            <stop offset="0.78" stopColor={`rgba(${fillRGB}, ${(0.05 * aBoost).toFixed(3)})`} />
+            <stop offset="1" stopColor={`rgba(${fillRGB}, 0)`} />
           </radialGradient>
           <radialGradient id="rt-dial-duo" cx={CX - 120} cy={CY + 130} r="320" gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="rgba(86, 139, 104, 0.10)" />
@@ -2656,10 +2680,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               day so warmth sits at the current moment. Pulled toward the events
               side, dies before the rim. Dials: cx (how far in), r (spread). */}
           <radialGradient id="rt-dial-core" cx={CX - 150} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="215" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 243, 220, 0.48)" />
-            <stop offset="0.50" stopColor="rgba(255, 237, 208, 0.20)" />
-            <stop offset="0.82" stopColor="rgba(255, 233, 200, 0.05)" />
-            <stop offset="1" stopColor="rgba(255, 233, 200, 0)" />
+            <stop offset="0" stopColor={`rgba(${fillRGB}, ${(0.48 * aBoost).toFixed(3)})`} />
+            <stop offset="0.50" stopColor={`rgba(${fillRGB}, ${(0.20 * aBoost).toFixed(3)})`} />
+            <stop offset="0.82" stopColor={`rgba(${fillRGB}, ${(0.05 * aBoost).toFixed(3)})`} />
+            <stop offset="1" stopColor={`rgba(${fillRGB}, 0)`} />
           </radialGradient>
           {/* COMET-TAIL gradient — green tail led by the NOW dot, fading to grey
               behind it. Anchored head=now → tail behind, clipped at window edges. */}
@@ -5700,8 +5724,6 @@ export default function App({ user }) {
   // strip reveal. Desktop ignores this state (CSS always shows expanded
   // content). Resets per observation (different obs.id → reset to false).
   const [obsMobileExpanded, setObsMobileExpanded] = useState(false);
-  // Expand toggle for Rai's daily brief ("Why" → shows reason_detail).
-  const [briefExpanded, setBriefExpanded] = useState(false);
 
   // ─── Daybook removed — replaced by RaiBriefPanel in the right rail. ──
 
@@ -9413,8 +9435,16 @@ export default function App({ user }) {
           // Rolodex). Archived clients keep a row in the array (filtered per-view
           // elsewhere) but their tasks should be treated as orphaned and hidden.
           const liveClientIds = new Set((clients || []).filter(c => c && c.id && !c.archived_at).map(c => c.id));
+          // +Tasks opt-out: when the user has Rai's task suggestions turned OFF
+          // (either "✦ Ranked" with ai_tasks off, or "Manual"), Rai-added tasks
+          // (t.ai) are hidden COMPLETELY — not just no-new-ones. Opting out means
+          // never seeing a Rai task or its purple dot, regardless of whether the
+          // user previously engaged with it, moved it to tomorrow, etc.
+          const aiTasksVisible = rankMode === "rai" && raiState?.ai_tasks_enabled !== false;
           const visibleTasks = tasks.filter(t =>
             !dismissedIds[t.id]
+            // Hide ALL Rai-added tasks when the user has opted out of +Tasks.
+            && !(t.ai && !aiTasksVisible)
             // Hide tasks of a paused client (recurring return on resume).
             && !(t.client_id && pausedClientIds.has(t.client_id))
             // Hide tasks orphaned by a removed/rolodex'd client (the lingering
@@ -10201,12 +10231,16 @@ export default function App({ user }) {
                       if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
                     }, 0);
                   };
-                  const cleanedReason = raiPicks.reason
-                    ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "")
-                    : "A quiet day — nothing flagging across your book";
-                  const briefDetail = raiPicks.reason_detail
-                    ? String(raiPicks.reason_detail).trim()
-                    : null;
+                  // One blurb. Prefer the longer read (reason_detail, 1-2
+                  // sentences); fall back to the short reason. Client name links
+                  // inline. Single uniform style — no expander, no color shift.
+                  const briefText = (raiPicks.reason_detail && String(raiPicks.reason_detail).trim())
+                    || (raiPicks.reason
+                        ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") + "."
+                        : "A quiet day — nothing flagging across your book.");
+                  // If the brief text already opens with the client's name,
+                  // don't double it — link that leading occurrence instead.
+                  const startsWithName = briefText.toLowerCase().startsWith(pickClient.name.toLowerCase());
                   return (
                     <div
                       className="rt-band-pick is-expanded"
@@ -10222,31 +10256,31 @@ export default function App({ user }) {
                         position: "relative",
                       }}
                     >
-                      {/* Rai's daily brief — her read of the book today. The
-                          anchored client name is a clickable link (prefill the
-                          composer); the reason text is her voice. Reads the same
-                          whether or not Rai's task suggestions are toggled on —
-                          it describes what she's seeing, not what she added. */}
-                      <span
-                        className="rt-purple-link"
-                        onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
-                        style={{ cursor: "pointer", paddingBottom: 1 }}
-                      >
-                        {pickClient.name}
-                      </span>
-                      {" "}&mdash;{" "}{cleanedReason}.
-                      {briefDetail && (
+                      {/* Rai's daily brief — one blurb, her read of the book.
+                          Same style throughout; the client name is the only
+                          clickable element. Reads the same regardless of the
+                          +Tasks toggle. */}
+                      {startsWithName ? (
                         <>
-                          {" "}
                           <span
-                            onClick={(e) => { e.stopPropagation(); setBriefExpanded(v => !v); }}
-                            style={{ cursor: "pointer", color: C.btnDeep, fontStyle: "normal", fontWeight: 600, fontFamily: "'Manrope', sans-serif", fontSize: 11.5, whiteSpace: "nowrap" }}
+                            className="rt-purple-link"
+                            onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
+                            style={{ cursor: "pointer", paddingBottom: 1 }}
                           >
-                            {briefExpanded ? "Less" : "Why"}
+                            {pickClient.name}
                           </span>
-                          {briefExpanded && (
-                            <span style={{ display: "block", marginTop: 6, color: C.textSec }}>{briefDetail}</span>
-                          )}
+                          {briefText.slice(pickClient.name.length)}
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            className="rt-purple-link"
+                            onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
+                            style={{ cursor: "pointer", paddingBottom: 1 }}
+                          >
+                            {pickClient.name}
+                          </span>
+                          {" "}&mdash;{" "}{briefText}
                         </>
                       )}
                     </div>
@@ -19539,26 +19573,40 @@ function BucketCalendarTomorrow({ events, C }) {
   const frac = (d) => Math.max(0, Math.min(1, ((d.getHours() + d.getMinutes() / 60) - DAY_START) / span));
   const sorted = [...events].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
   const axis = ["8a", "10a", "12p", "2p", "4p", "6p", "8p"];
+  const fmtTime = (d) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: d.getMinutes() ? "2-digit" : undefined }).replace(":00", "");
   return (
     <div style={{ background: C.primaryGhost, borderRadius: 12, padding: "14px 16px", margin: "8px 6px 4px" }}>
+      {/* Timeline strip — at-a-glance time-of-day positioning. */}
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, color: C.textMuted, marginBottom: 8, padding: "0 2px" }}>
         {axis.map(a => <span key={a}>{a}</span>)}
       </div>
       <div style={{ position: "relative", height: 30, background: C.card, borderRadius: 7, boxShadow: "inset 0 0 0 1px " + C.borderLight }}>
         {sorted.map((e, i) => {
           const _start = new Date(e.starts_at);
-          // End = explicit ends_at, else default to 30 minutes after start.
           const _end = e.ends_at ? new Date(e.ends_at) : new Date(_start.getTime() + 30 * 60000);
           const left = frac(_start) * 100;
-          // Width = the span the event actually covers, as a % of the 8a–8p
-          // track. Floor at ~3% so a 30-min event is still a tappable sliver;
-          // clamp so it never runs past the track's right edge.
           const rawWidth = (frac(_end) - frac(_start)) * 100;
           const width = Math.max(3, Math.min(rawWidth, 100 - left));
           return (
-            <div key={e.id || i} title={(() => { const _t = new Date(e.starts_at); const _tl = _t.toLocaleTimeString("en-US", { hour: "numeric", minute: _t.getMinutes() ? "2-digit" : undefined }).replace(":00", ""); return _tl + " · " + e.title + (e.client_name ? " · " + e.client_name : ""); })()}
-              style={{ position: "absolute", top: 4, height: 22, left: left + "%", width: width + "%", background: i % 2 === 0 ? C.primary : C.primaryLight, color: "#fff", fontFamily: "'Manrope', sans-serif", fontSize: 10, fontWeight: 600, lineHeight: "22px", padding: "0 9px", borderRadius: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {e.title}
+            <div key={e.id || i} title={fmtTime(_start) + " · " + e.title + (e.client_name ? " · " + e.client_name : "")}
+              style={{ position: "absolute", top: 4, height: 22, left: left + "%", width: width + "%", background: i % 2 === 0 ? C.primary : C.primaryLight, borderRadius: 6 }} />
+          );
+        })}
+      </div>
+      {/* Agenda list — the actual event names, fully readable. The timeline
+          above can't show titles (30-min bars truncate to nothing), so the
+          names live here: time · title · client, one row each. */}
+      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
+        {sorted.map((e, i) => {
+          const _start = new Date(e.starts_at);
+          return (
+            <div key={(e.id || i) + "-row"} style={{ display: "flex", alignItems: "baseline", gap: 10, fontFamily: "'Manrope', sans-serif" }}>
+              <span style={{ flexShrink: 0, width: 52, textAlign: "right", fontSize: 11, fontWeight: 700, color: C.primary, fontVariantNumeric: "tabular-nums" }}>{fmtTime(_start)}</span>
+              <span style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", marginTop: 5, background: i % 2 === 0 ? C.primary : C.primaryLight }} />
+              <span style={{ minWidth: 0, flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text, lineHeight: 1.3 }}>
+                {e.title}
+                {e.client_name && <span style={{ fontWeight: 500, color: C.textSec }}>{" · " + e.client_name}</span>}
+              </span>
             </div>
           );
         })}
