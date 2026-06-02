@@ -652,21 +652,31 @@ function retGradient(v) {
   return `linear-gradient(135deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0) 55%, rgba(0,0,0,0.12) 100%), ${retColor(v)}`;
 }
 
-// Whitelist of verbs that signal a thinking/planning task — i.e. one
-// where the user is pausing to deliberate, not executing. When a task
-// matches one of these (and has a client tag), we surface a "Discuss
-// with Rai" affordance to open Confidant preloaded with that client.
+// Whitelist of verbs that signal a task where the user benefits from
+// talking it through with Rai — either DELIBERATION (decide, plan,
+// analyze) or COMPOSITION (write the thing, draft the note). Pure-
+// execution verbs (call, log, file, complete, finish) are deliberately
+// excluded — those tasks need doing, not discussing.
 //
-// Strict whitelist by design. Adding verbs is cheap; removing them is
-// painful once users get used to the affordance. Start small, expand
-// based on what users actually type.
+// Adding verbs is cheap; removing them is painful once users get used
+// to the affordance. Start small, expand based on what users type.
 //
-// EXCLUDED on purpose: draft, write, send, email, call, text, follow up,
-// finish, complete, do — these are execution verbs, not thinking verbs.
+// EXCLUDED on purpose: call, text, email (the verb — "email Ardath"),
+// log, file, finish, complete, do, follow up. These are execution
+// verbs — the user knows what to do, Rai can't help them do it faster.
 const THINKING_VERBS = [
+  // Deliberation
   "decide", "figure out", "plan", "prep", "think through",
   "strategize", "approach", "review", "read", "check",
   "analyze", "assess", "evaluate",
+  // Composition (added v2.1, June 2026) — tasks that require the user
+  // to WRITE something or PROPOSE something where the substance is the
+  // work. Rai has client context that makes the draft faster.
+  "write", "draft", "compose",
+  "send", // covers "send a note", "send the recap" — composition tasks
+  "prepare", "propose", "outline",
+  "recap", "summarize", "brief",
+  "pitch", "frame",
 ];
 
 // Detect whether a task's text begins with (or prominently contains) a
@@ -689,6 +699,138 @@ function detectThinkingVerb(text) {
     }
   }
   return null;
+}
+
+// Build the context payload that gets prepended (as a synthesized
+// assistant message) when a user opens the Rai chat from a task. Goal:
+// Rai already knows everything she'd need to help draft / decide /
+// analyze, so the user doesn't have to re-explain who the client is.
+//
+// Pulls 14 days of activity per the user's request. Cost is trivial
+// at this scale — a few hundred tokens of structured text per click.
+//
+// Sources (all pre-filtered to this client):
+//   - client profile (revenue, tenure, retention, drift, profile scores)
+//   - last 14 days of tasks (text + status + age)
+//   - last 14 days of touchpoints (channel + age)
+//   - if AI-suggested: the `why` from rai_suggestions
+//   - most recent Rai pick if this client was the anchor in last 7 days
+//
+// Returns a multi-paragraph string sized for direct insertion as
+// the first assistant turn in the chat history.
+function buildTaskDiscussionContext({ task, client, tasks, touchpoints, recentPick, suggestion }) {
+  if (!client) return null;
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  const TWO_WEEKS = 14 * DAY;
+  const ageDays = (iso) => {
+    if (!iso) return null;
+    const ms = new Date(iso).getTime();
+    if (Number.isNaN(ms)) return null;
+    return Math.max(0, Math.floor((now - ms) / DAY));
+  };
+
+  // ─── Client snapshot ──────────────────────────────────────────────
+  const lines = [];
+  lines.push(`The user is about to work on this task:`);
+  lines.push(`  "${task.text}"`);
+  lines.push("");
+  lines.push(`Client: ${client.name}`);
+  const facts = [];
+  if (client.revenue != null) facts.push(`revenue $${Number(client.revenue).toLocaleString()}/mo`);
+  if (client.months != null) facts.push(`${client.months} months in`);
+  else if (client.start_date) {
+    const m = Math.floor((now - new Date(client.start_date).getTime()) / (30.4375 * DAY));
+    if (Number.isFinite(m) && m >= 0) facts.push(`${m} months in`);
+  }
+  if (client.retention_score != null) facts.push(`retention ${client.retention_score}`);
+  if (client.drift_status) facts.push(`drift ${client.drift_status}`);
+  if (facts.length) lines.push(`  ${facts.join(" · ")}`);
+  // Profile scores expose the relationship texture (trust, grace, etc.)
+  if (client.profile_scores && typeof client.profile_scores === "object") {
+    const entries = Object.entries(client.profile_scores)
+      .filter(([, v]) => typeof v === "number")
+      .map(([k, v]) => `${k} ${v}`);
+    if (entries.length) lines.push(`  Profile: ${entries.join(", ")}`);
+  }
+
+  // ─── Why Rai surfaced this task (if AI-suggested) ─────────────────
+  if (suggestion && (suggestion.why || suggestion.signal)) {
+    lines.push("");
+    lines.push(`I (Rai) proposed this task because:`);
+    if (suggestion.why) lines.push(`  ${suggestion.why}`);
+    if (suggestion.signal && suggestion.signal !== "no_signal") {
+      lines.push(`  Signal type: ${suggestion.signal}`);
+    }
+  }
+
+  // ─── Recent pick context (if this client was anchored recently) ───
+  if (recentPick && recentPick.reason_detail) {
+    lines.push("");
+    lines.push(`Recent daily brief that mentioned this client:`);
+    lines.push(`  "${recentPick.reason_detail}"`);
+  }
+
+  // ─── 14d task history for this client ─────────────────────────────
+  const clientTasks = (tasks || []).filter(t => {
+    if (!t) return false;
+    const matchesClient = t.client_id === client.id || t.client_name === client.name;
+    if (!matchesClient) return false;
+    const createdMs = t.created_at ? new Date(t.created_at).getTime() : null;
+    const completedMs = t.completed_at ? new Date(t.completed_at).getTime() : null;
+    const anchorMs = completedMs || createdMs;
+    if (anchorMs == null) return false;
+    return (now - anchorMs) <= TWO_WEEKS;
+  })
+    // Newest first; cap to 20 entries to keep the payload tight
+    .sort((a, b) => {
+      const am = new Date(a.completed_at || a.created_at).getTime();
+      const bm = new Date(b.completed_at || b.created_at).getTime();
+      return bm - am;
+    })
+    .slice(0, 20);
+  if (clientTasks.length) {
+    lines.push("");
+    lines.push(`Last 14 days of tasks for ${client.name} (newest first):`);
+    for (const t of clientTasks) {
+      const status = t.done ? "done" : (t.cleared_at ? "cleared" : "open");
+      const ageRef = t.completed_at || t.created_at;
+      const age = ageDays(ageRef);
+      const ageStr = age === 0 ? "today" : age === 1 ? "1d ago" : `${age}d ago`;
+      lines.push(`  · [${status}, ${ageStr}] ${t.text}`);
+    }
+  } else {
+    lines.push("");
+    lines.push(`No tasks logged for ${client.name} in the last 14 days.`);
+  }
+
+  // ─── 14d touchpoint history for this client ───────────────────────
+  const clientTouchpoints = (touchpoints || []).filter(tp => {
+    if (!tp || tp.client_id !== client.id) return false;
+    const ms = tp.occurred_at ? new Date(tp.occurred_at).getTime() : null;
+    return ms != null && (now - ms) <= TWO_WEEKS;
+  })
+    .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
+    .slice(0, 15);
+  if (clientTouchpoints.length) {
+    lines.push("");
+    lines.push(`Last 14 days of logged touchpoints for ${client.name}:`);
+    for (const tp of clientTouchpoints) {
+      const age = ageDays(tp.occurred_at);
+      const ageStr = age === 0 ? "today" : age === 1 ? "1d ago" : `${age}d ago`;
+      const channel = tp.channel || "contact";
+      const note = tp.note ? ` — ${String(tp.note).slice(0, 120)}` : "";
+      lines.push(`  · [${channel}, ${ageStr}]${note}`);
+    }
+  } else {
+    lines.push("");
+    lines.push(`No touchpoints logged for ${client.name} in the last 14 days.`);
+  }
+
+  lines.push("");
+  lines.push(`When the user replies, help them with the actual work — drafting, deciding, analyzing — using the context above. Don't ask them to re-explain who the client is; you already know.`);
+
+  return lines.join("\n");
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -10262,32 +10404,77 @@ export default function App({ user }) {
                   if (raiState?.todays_pick_dismissed_at) return null;
                   const pickClient = clients.find(c => c.id === raiPicks.client_id);
                   if (!pickClient) return null;
-                  const handleAddTask = () => {
-                    // Desktop: focus the master composer with the client prefilled.
-                    // Mobile: the master composer is display:none, so route to the
-                    // quick-log popover instead (seed it with the client name).
+                  // Seed the composer (desktop) or quick-log (mobile) with a
+                  // client's name. Used by every client link in the brief —
+                  // the anchor AND any other client Rai mentions in the prose.
+                  const handleAddTaskFor = (clientName) => {
                     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
                     if (isMobile) {
-                      setQuickLogText(pickClient.name + " ");
+                      setQuickLogText(clientName + " ");
                       setQuickLogOpen(true);
                       return;
                     }
-                    setTodayComposerClient(pickClient.name);
+                    setTodayComposerClient(clientName);
                     setTimeout(() => {
                       const el = document.getElementById("rt-composer-input");
                       if (el) { el.focus(); el.scrollIntoView({ behavior: "smooth", block: "center" }); }
                     }, 0);
                   };
                   // One blurb. Prefer the longer read (reason_detail, 1-2
-                  // sentences); fall back to the short reason. Client name links
-                  // inline. Single uniform style — no expander, no color shift.
+                  // sentences); fall back to the short reason.
                   const briefText = (raiPicks.reason_detail && String(raiPicks.reason_detail).trim())
                     || (raiPicks.reason
                         ? raiPicks.reason.replace(/^["'\u201c\u201d]|["'\u201c\u201d]$/g, "").replace(/\.$/, "") + "."
                         : "A quiet day — nothing flagging across your book.");
-                  // If the brief text already opens with the client's name,
-                  // don't double it — link that leading occurrence instead.
-                  const startsWithName = briefText.toLowerCase().startsWith(pickClient.name.toLowerCase());
+                  // ── Multi-client linkifier ──────────────────────────────
+                  // Rai mentions one or two clients in the brief. Every name
+                  // that matches a client in the user's roster becomes a
+                  // purple link with the same composer-seed affordance as
+                  // the anchor. Match longest names first so "Rose Babe"
+                  // wins over "Rose" if both exist. Possessive "'s" forms
+                  // are detected and kept as plain text after the link.
+                  // Case-insensitive matching; preserve the original casing
+                  // from the brief in the rendered link text.
+                  const briefSegments = (() => {
+                    const names = (clients || [])
+                      .map(c => c.name)
+                      .filter(n => n && typeof n === "string")
+                      .sort((a, b) => b.length - a.length); // longest first
+                    if (!names.length) return [{ type: "text", value: briefText }];
+                    // Escape regex specials so client names with punctuation
+                    // (e.g. "Smith & Co.") match literally.
+                    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                    // Build one alternation pattern; \b word-bounds keep us
+                    // from matching inside other words. (?:'s)? captures
+                    // possessive forms (will render as plain text alongside).
+                    const pattern = new RegExp(`\\b(${names.map(esc).join("|")})\\b`, "gi");
+                    const segs = [];
+                    let lastIdx = 0;
+                    let m;
+                    while ((m = pattern.exec(briefText)) !== null) {
+                      if (m.index > lastIdx) {
+                        segs.push({ type: "text", value: briefText.slice(lastIdx, m.index) });
+                      }
+                      // Resolve to the canonical client name (case-correct)
+                      // for the composer seed, but render the casing that
+                      // appeared in the brief.
+                      const matched = m[1];
+                      const canonical = names.find(n => n.toLowerCase() === matched.toLowerCase()) || matched;
+                      segs.push({ type: "client", value: matched, canonical });
+                      lastIdx = m.index + matched.length;
+                    }
+                    if (lastIdx < briefText.length) {
+                      segs.push({ type: "text", value: briefText.slice(lastIdx) });
+                    }
+                    return segs;
+                  })();
+                  // If Rai never named the anchor client in the brief prose
+                  // (rare — happens when the brief leads with a pronoun or
+                  // an indirect reference), prepend the anchor as a link so
+                  // the user still has a clickable handle to it.
+                  const anchorNamed = briefSegments.some(s =>
+                    s.type === "client" && s.canonical.toLowerCase() === pickClient.name.toLowerCase()
+                  );
                   return (
                     <div
                       className="rt-band-pick is-expanded"
@@ -10304,32 +10491,34 @@ export default function App({ user }) {
                       }}
                     >
                       {/* Rai's daily brief — one blurb, her read of the book.
-                          Same style throughout; the client name is the only
-                          clickable element. Reads the same regardless of the
-                          +Tasks toggle. */}
-                      {startsWithName ? (
+                          Every client name Rai mentions is a purple link
+                          that seeds the composer with that client. Same
+                          affordance for the anchor and any secondary
+                          clients in the prose. */}
+                      {!anchorNamed && (
                         <>
                           <span
                             className="rt-purple-link"
-                            onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
+                            onClick={(e) => { e.stopPropagation(); handleAddTaskFor(pickClient.name); }}
                             style={{ cursor: "pointer", paddingBottom: 1 }}
                           >
                             {pickClient.name}
                           </span>
-                          {briefText.slice(pickClient.name.length)}
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            className="rt-purple-link"
-                            onClick={(e) => { e.stopPropagation(); handleAddTask(); }}
-                            style={{ cursor: "pointer", paddingBottom: 1 }}
-                          >
-                            {pickClient.name}
-                          </span>
-                          {" "}&mdash;{" "}{briefText}
+                          {" "}&mdash;{" "}
                         </>
                       )}
+                      {briefSegments.map((seg, i) => seg.type === "client" ? (
+                        <span
+                          key={i}
+                          className="rt-purple-link"
+                          onClick={(e) => { e.stopPropagation(); handleAddTaskFor(seg.canonical); }}
+                          style={{ cursor: "pointer", paddingBottom: 1 }}
+                        >
+                          {seg.value}
+                        </span>
+                      ) : (
+                        <React.Fragment key={i}>{seg.value}</React.Fragment>
+                      ))}
                     </div>
                   );
                 })()}
@@ -11671,14 +11860,70 @@ export default function App({ user }) {
                                         onPointerUp={lpCancel}
                                         onPointerMove={lpCancel}
                                         onPointerLeave={lpCancel}
-                                        onClick={(e) => {
+                                        onClick={async (e) => {
                                           e.stopPropagation();
+                                          // Open chat with full client context preloaded — 14
+                                          // days of tasks + touchpoints + the why behind any
+                                          // AI suggestion + the most recent daily brief that
+                                          // mentioned this client. Cost is trivial (a few
+                                          // hundred input tokens per chat opened).
                                           setAiConvoId(null);
+                                          // Reset to a temporary "loading" greeting so the
+                                          // chat opens immediately instead of blocking on
+                                          // the fetch. The real greeting + context replace
+                                          // this once the data lands.
                                           setAiMessages([{
                                             role: "ai",
-                                            text: `You're looking at "${t.text}" for ${client.name}. What's the part you're chewing on?`,
+                                            text: `Pulling up what I know about ${client.name}…`,
                                           }]);
                                           setPage("coach");
+                                          // Fetch the per-client data we don't already have
+                                          // in component state. Touchpoints aren't kept in
+                                          // state (too volatile to memo); fetch per-client.
+                                          // The suggestion lookup is conditional — only AI
+                                          // tasks carry rai_suggestion_id.
+                                          let touchpointList = [];
+                                          let suggestion = null;
+                                          try {
+                                            const tpRes = await touchpointsDb.listForClient(client.id);
+                                            touchpointList = tpRes?.data || [];
+                                          } catch (err) {
+                                            console.warn("touchpoints fetch failed for chat preload:", err);
+                                          }
+                                          if (t.ai && t.rai_suggestion_id) {
+                                            try {
+                                              const { data: sug } = await supabase
+                                                .from("rai_suggestions")
+                                                .select("title, why, signal")
+                                                .eq("id", t.rai_suggestion_id)
+                                                .maybeSingle();
+                                              suggestion = sug || null;
+                                            } catch (err) {
+                                              console.warn("suggestion fetch failed for chat preload:", err);
+                                            }
+                                          }
+                                          // recentPick: only include if THIS client is the
+                                          // anchor of the most recent brief (avoid loading
+                                          // unrelated brief text into the chat).
+                                          const recentPick = (raiPicks && raiPicks.client_id === client.id)
+                                            ? raiPicks
+                                            : null;
+                                          const ctx = buildTaskDiscussionContext({
+                                            task: t,
+                                            client,
+                                            tasks,
+                                            touchpoints: touchpointList,
+                                            recentPick,
+                                            suggestion,
+                                          });
+                                          if (ctx) setObservationContext(ctx);
+                                          // Replace the loading greeting with the real one.
+                                          // Rai opens by acknowledging she has context, so
+                                          // the user knows they don't need to re-explain.
+                                          setAiMessages([{
+                                            role: "ai",
+                                            text: `I've got the file open on ${client.name} — last two weeks of tasks and touchpoints. What do you want to do with "${t.text}"?`,
+                                          }]);
                                         }}
                                         style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                       >
