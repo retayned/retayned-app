@@ -2422,6 +2422,37 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     return () => clearInterval(t);
   }, []);
 
+  // Re-render when the tab becomes visible (laptop wakes, user tabs back in,
+  // window refocuses). setInterval is throttled or paused while the tab is
+  // hidden / the machine sleeps, so on resume the captured render values
+  // (nowMs, day bounds) can be hours stale. A visibility-driven render
+  // refresh repairs the dial immediately on wake instead of waiting for the
+  // next setInterval tick (which may itself be late). Also catches the
+  // wall-clock-jump case where the OS sleeps without firing visibilitychange
+  // by detecting that Date.now() jumped more than expected since last tick.
+  useEffect(() => {
+    let lastTick = Date.now();
+    const refresh = () => { lastTick = Date.now(); force(n => n + 1); };
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    const onFocus = () => refresh();
+    // Poll for wall-clock jumps as a backstop. Every 5s, if more than 90s
+    // has passed since the last tick, the machine was likely asleep — force
+    // a refresh. (Normal cadence is 5s ± a few ms; 90s is the threshold for
+    // "something paused us.")
+    const jumpCheck = setInterval(() => {
+      const drift = Date.now() - lastTick;
+      if (drift > 90_000) refresh();
+      else lastTick = Date.now();
+    }, 5000);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      clearInterval(jumpCheck);
+    };
+  }, []);
+
   const now = new Date();
   const nowMs = now.getTime();
   const HALF_WINDOW_MS = 6 * 60 * 60 * 1000; // ±6h → 12h total
@@ -2479,68 +2510,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
   // clock time (top = window start, bottom = window end), so sampling the hour
   // at each gradient position makes the disc genuinely reflect the real time:
   // dark in the evening/early-morning halves, light through midday. ──
-  const skyColorForHour = (h) => {
-    h = ((h % 24) + 24) % 24;
-    // keyframes: [hour, r, g, b, alpha]
-    const keys = [
-      [0,  60, 70, 110, 0.26],   // midnight — deep indigo
-      [5,  120, 110, 150, 0.24], // pre-dawn — dim violet
-      [7,  190, 160, 175, 0.20], // dawn — lilac/peach
-      [9,  200, 215, 225, 0.16], // morning — cool light
-      [13, 255, 250, 235, 0.13], // midday — bright/pale
-      [17, 220, 200, 180, 0.16], // late afternoon — warming
-      [19, 224, 165, 135, 0.19], // dusk — amber
-      [21, 130, 110, 150, 0.22], // twilight — violet
-      [24, 60, 70, 110, 0.26],   // midnight wrap
-    ];
-    let a = keys[0], b = keys[keys.length - 1];
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (h >= keys[i][0] && h <= keys[i + 1][0]) { a = keys[i]; b = keys[i + 1]; break; }
-    }
-    const t = (h - a[0]) / (b[0] - a[0] || 1);
-    const lerp = (x, y) => Math.round(x + (y - x) * t);
-    const r = lerp(a[1], b[1]), g = lerp(a[2], b[2]), bl = lerp(a[3], b[3]);
-    const al = (a[4] + (b[4] - a[4]) * t).toFixed(3);
-    return `rgba(${r},${g},${bl},${al})`;
-  };
-  // Generate gradient stops by sampling the real hour across the window.
-  // IMPORTANT: on the arc, f=0 (windowStart, earliest) is at the BOTTOM of the
-  // circle and f=1 (windowEnd, latest) is at the TOP (angleOf: sin(90°)=+1=bottom,
-  // sin(270°)=−1=top). The SVG vertical gradient's offset 0 is the TOP, so the
-  // top of the gradient corresponds to the LATEST hour and the bottom to the
-  // earliest. Map accordingly so midday reads bright and night reads dark in
-  // the right places.
-  const windowEndHour = new Date(windowEnd).getHours() + new Date(windowEnd).getMinutes() / 60;
-  const gradStops = [];
-  for (let i = 0; i <= 12; i++) {
-    const off = i / 12;                       // 0 = top of gradient = latest time
-    const hourHere = windowEndHour - off * 12; // top→bottom = late→early
-    gradStops.push({ off, color: skyColorForHour(hourHere) });
-  }
-
-  // ── Time-of-day fill: warm cream sun by day, phasing to deep green ink at
-  // night. Driven by the dial's centered hour (so it follows the real time
-  // and also shifts as the dial is scrubbed toward evening). eveningT: 0 in
-  // full daylight → 1 deep night. Ramp: warm through ~17:00, crossing to
-  // night by ~21:00; pre-dawn (<6:00) is also night.
-  const centerHour = new Date(centerMs).getHours() + new Date(centerMs).getMinutes() / 60;
-  const eveningT = (() => {
-    const h = ((centerHour % 24) + 24) % 24;
-    if (h >= 6 && h <= 17) return 0;                       // day
-    if (h > 17 && h < 21) return (h - 17) / 4;             // dusk ramp 17→21
-    if (h >= 21 || h < 4) return 1;                        // night
-    // 4–6: pre-dawn easing back to day
-    return Math.max(0, (6 - h) / 2);
-  })();
-  // Warm sun RGB (255,240,214) → deep green ink (28,50,36) by eveningT.
-  const lerpC = (a, b, t) => Math.round(a + (b - a) * t);
-  const fillR = lerpC(255, 28, eveningT);
-  const fillG = lerpC(240, 50, eveningT);
-  const fillB = lerpC(214, 36, eveningT);
-  const fillRGB = `${fillR}, ${fillG}, ${fillB}`;
-  // Night reads a touch more present than the airy day glow, so alphas lift
-  // slightly as it darkens (keeps the evening disc from disappearing).
-  const aBoost = 1 + eveningT * 0.5;
+  // Static warm-cream fill for the disc radials. The previous implementation
+  // sampled a time-of-day "sky" gradient (indigo nights → lilac dawn → amber
+  // dusk → indigo) and ALSO shifted the base fill warm→deep-green-ink with
+  // an `eveningT` ramp, so the disc visibly darkened as the day progressed
+  // and as the user scrubbed toward evening. Both were removed — they read
+  // as a bug ("the dial gets dark when I scroll") more than a feature.
+  // The dial now reads as a single warm cream surface at every hour.
+  // Original sun RGB: (255, 240, 214). Alpha stops below preserved verbatim
+  // from the pre-shift state (i.e. with aBoost = 1).
+  const fillRGB = "255, 240, 214";
 
   // Hour ticks + labels across the window (every 2 hours, plus NOW).
   const ticks = [];
@@ -2596,8 +2575,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
     const step = (e.deltaY) * (30 * 60 * 1000) / 100;
     // Clamp scrub so center = now + scrub stays inside the day (window never
     // crosses midnight). Bounds derived from the day edges + the half-window.
-    const loScrub = (dayStartMs + HALF_WINDOW_MS) - nowMs;
-    const hiScrub = (dayEndMs - HALF_WINDOW_MS) - nowMs;
+    //
+    // IMPORTANT: read time at CALL time, not from closure. After laptop sleep,
+    // the captured nowMs/dayStartMs/dayEndMs from the last render can be hours
+    // stale — leading to clamp bounds that pin scrubMs to a dead value and
+    // make the dial appear frozen. Recomputing fresh on every wheel tick is
+    // cheap and guarantees the bounds match the actual clock.
+    const nowMsLive = Date.now();
+    const dayStartLive = new Date(nowMsLive).setHours(0, 0, 0, 0);
+    const dayEndLive = dayStartLive + 24 * 60 * 60 * 1000 - 1;
+    const loScrub = (dayStartLive + HALF_WINDOW_MS) - nowMsLive;
+    const hiScrub = (dayEndLive - HALF_WINDOW_MS) - nowMsLive;
     setScrubMs(prev => Math.max(loScrub, Math.min(hiScrub, prev + step)));
   };
   // Attach the wheel handler as a NON-passive native listener so preventDefault
@@ -2666,9 +2654,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               Dials: base stop-0 = overall warmth; bloom stop-0 = event-area punch;
               bloom cx/cy = where the light pools. */}
           <radialGradient id="rt-dial-sage" cx={CX} cy={CY} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor={`rgba(${fillRGB}, ${(0.42 * aBoost).toFixed(3)})`} />
-            <stop offset="0.45" stopColor={`rgba(${fillRGB}, ${(0.17 * aBoost).toFixed(3)})`} />
-            <stop offset="0.78" stopColor={`rgba(${fillRGB}, ${(0.05 * aBoost).toFixed(3)})`} />
+            <stop offset="0" stopColor={`rgba(${fillRGB}, 0.42)`} />
+            <stop offset="0.45" stopColor={`rgba(${fillRGB}, 0.17)`} />
+            <stop offset="0.78" stopColor={`rgba(${fillRGB}, 0.05)`} />
             <stop offset="1" stopColor={`rgba(${fillRGB}, 0)`} />
           </radialGradient>
           <radialGradient id="rt-dial-duo" cx={CX - 120} cy={CY + 130} r="320" gradientUnits="userSpaceOnUse">
@@ -2680,9 +2668,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               day so warmth sits at the current moment. Pulled toward the events
               side, dies before the rim. Dials: cx (how far in), r (spread). */}
           <radialGradient id="rt-dial-core" cx={CX - 150} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="215" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor={`rgba(${fillRGB}, ${(0.48 * aBoost).toFixed(3)})`} />
-            <stop offset="0.50" stopColor={`rgba(${fillRGB}, ${(0.20 * aBoost).toFixed(3)})`} />
-            <stop offset="0.82" stopColor={`rgba(${fillRGB}, ${(0.05 * aBoost).toFixed(3)})`} />
+            <stop offset="0" stopColor={`rgba(${fillRGB}, 0.48)`} />
+            <stop offset="0.50" stopColor={`rgba(${fillRGB}, 0.20)`} />
+            <stop offset="0.82" stopColor={`rgba(${fillRGB}, 0.05)`} />
             <stop offset="1" stopColor={`rgba(${fillRGB}, 0)`} />
           </radialGradient>
           {/* COMET-TAIL gradient — green tail led by the NOW dot, fading to grey
@@ -2809,16 +2797,30 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             }}
           >
             <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{p.isNext ? `Next · ${formatTimeLabel(p.e._start)}` : formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? C.primaryDeep : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
-              {p.e.client_name && (
-                <span style={{ fontSize: 10, color: "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
-              )}
-              {!p.isPast && p.e._prepCount > 0 && (
-                <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
-                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
-                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
-                </div>
+              {p.isNext ? (
+                // Next-up event: rail entry collapses to a single muted line.
+                // The hub (right-edge callout) already gives this event the
+                // big "NEXT · IN N MIN / 1:30pm / Call w/Lauren / client"
+                // treatment, so doubling it on the rail caused the original
+                // collision with the 2pm row. Single line = no collision,
+                // even with the prep pill chip stacked on the row above.
+                <span style={{ fontSize: 12, color: "#6B6B66", lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+                  {formatTimeLabel(p.e._start)} · {p.e.title}{p.e.client_name ? ` · ${p.e.client_name}` : ""}
+                </span>
+              ) : (
+                <>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+                  {p.e.client_name && (
+                    <span style={{ fontSize: 10, color: "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
+                  )}
+                  {!p.isPast && p.e._prepCount > 0 && (
+                    <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
+                      <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
+                      <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <span style={{ width: 30, height: 1, background: p.isNext ? "rgba(51,84,62,0.45)" : "rgba(28,50,36,0.18)", margin: "0 8px", flex: "0 0 30px" }} />
@@ -2834,28 +2836,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↓ {earlierCount} earlier</span>
         </div>
       )}
-      {/* Dial help (?) — explains the whole wheel, so it renders ALWAYS, not
-          gated on having "earlier" events. Anchored by top: (shares the SVG's
-          top:0 origin; the layer is viewport-tall so bottom: would mis-place it). */}
-      <div className="rt-dial-cs" style={{ position: "absolute", right: 270, top: 812, zIndex: 9, display: "flex", alignItems: "center", transformOrigin: "bottom right", pointerEvents: "auto" }}>
-          <span
-            className="rt-dial-help"
-            tabIndex={0}
-            style={{ position: "relative", width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", flex: "none" }}
-          >?
-            <span className="rt-dial-help-tip" style={{ position: "absolute", right: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500, fontFamily: "'Manrope', sans-serif", textAlign: "left" }}>
-              This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
-            </span>
+      {/* Later pocket + help (?). The help icon explains the whole wheel and
+          renders ALWAYS — pinned next to the "↑ N later" indicator at the top
+          of the dial (previously sat at the bottom near "earlier", where it
+          collided visually with the dial's lower arc geometry). */}
+      <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, display: "flex", alignItems: "center", gap: 8, transformOrigin: "bottom right", pointerEvents: "auto" }}>
+        {laterCount > 0 && (
+          <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted }}>↑ {laterCount} later</span>
+        )}
+        <span
+          className="rt-dial-help"
+          tabIndex={0}
+          style={{ position: "relative", width: 20, height: 20, borderRadius: "50%", background: "rgba(255,255,255,0.85)", boxShadow: "0 0 0 1px rgba(20,30,22,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: C.textMuted, cursor: "help", fontFamily: "inherit", flex: "none" }}
+        >?
+          <span className="rt-dial-help-tip" style={{ position: "absolute", right: 0, bottom: 26, width: 190, background: C.primaryDeep, color: "#fff", borderRadius: 9, padding: "9px 11px", fontSize: 11, lineHeight: 1.45, boxShadow: "0 6px 18px rgba(20,30,22,0.22)", pointerEvents: "none", opacity: 0, transform: "translateY(4px)", transition: "opacity .14s, transform .14s", fontWeight: 500, fontFamily: "'Manrope', sans-serif", textAlign: "left" }}>
+            This is your day at a glance, centered on now. Scroll over it to look earlier or later — tap <b>Now</b> to snap back.
           </span>
+        </span>
       </div>
-      {laterCount > 0 && (
-        <div className="rt-dial-cs" style={{ position: "absolute", right: "8%", bottom: 6, fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: 600, color: C.textMuted, transformOrigin: "bottom right" }}>↑ {laterCount} later</div>
-      )}
 
       {/* Hub content — the NEXT event (or selected), against the right edge.
           When SELECTED (clicked), expands into a detail drawer with prep tasks
           + action pills. When showing default NEXT, stays compact. */}
-      <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 260 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
+      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 260 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
         {hubEvent ? (
           <>
@@ -2879,7 +2882,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
                 </div>
               </>
             ) : (
-              <div>
+              <div className="rt-dial-hub-delete">
                 <button
                   onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
                   style={{ marginTop: 3, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", padding: 0 }}
@@ -8652,6 +8655,13 @@ export default function App({ user }) {
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
+        /* Hub delete link — hidden by default, fades in on hub hover or when
+           the delete button itself is focused (keyboard a11y). Destructive
+           action on the most prominent dial element shouldn't sit permanently
+           visible; revealing on intent (hover/focus) is the right register. */
+        .rt-dial-hub-delete { opacity: 0; transition: opacity 140ms var(--rt-ease-out); }
+        .rt-dial-hub:hover .rt-dial-hub-delete,
+        .rt-dial-hub-delete:focus-within { opacity: 1; }
         /* Dial event row — full strip is the click target. Subtle gray wash
            on hover. The "next" event already has a sage bg painted via inline
            styles so it stays visually distinct. */
@@ -19615,7 +19625,12 @@ function BucketCalToggle({ label, count, open, onToggle, C }) {
   return (
     <div onClick={onToggle}
       style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.primary }}>
-      <span style={{ fontSize: 13 }}>🗓</span>
+      {/* Calendar widget glyph — same duotone icon used at the TodayTimeline
+          calendar widget header. Replaces the prior 🗓 emoji which rendered
+          inconsistently across OS / font stack. Body color matches the
+          surrounding green text; accent is the deepest primary for the
+          binding-tab contrast. */}
+      <Icon name="due" size={16} color={C.primary} accent={C.primaryDeep} />
       <span>{label}</span>
       <span style={{ color: C.textMuted, fontWeight: 500 }}>· {count} event{count === 1 ? "" : "s"}</span>
       <span style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11, transform: open ? "none" : "rotate(-90deg)", transition: "transform .18s" }}>▾</span>
