@@ -2917,14 +2917,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           let topFade = 1;
           if (ryFrac < FADE_START) topFade = Math.max(0, (ryFrac - FADE_END) / (FADE_START - FADE_END));
           const baseOpacity = p.isPast ? 0.55 : 1;
-          // Tight-cluster detection: if the NEXT placement (later in time)
-          // starts within 30 minutes of THIS one, suppress the prep pill
-          // on this row. The pill chip is what was visually colliding with
-          // the next row's text — not the labels themselves. Placements are
-          // sorted ascending by start time, so placements[i+1] is whatever
-          // event comes after this in the timeline.
-          const next = placements[i + 1];
-          const hasCloseFollow = next && (next.e._start.getTime() - p.e._start.getTime()) < 30 * 60 * 1000;
           return (
           <div
             key={p.e.id || i}
@@ -2941,7 +2933,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               gap: 0,
               opacity: baseOpacity * topFade,
               pointerEvents: topFade < 0.5 ? "none" : "auto",
-              transition: "opacity 120ms var(--rt-ease-out), background 120ms var(--rt-ease-out)",
+              transition: "opacity 120ms var(--rt-ease-out)",
               width: 230,
               padding: "6px 4px 6px 14px",
               cursor: "pointer",
@@ -2959,16 +2951,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
               {p.e.client_name && (
                 <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
               )}
-              {/* Prep pill — hidden when an event is close behind (would
-                  visually overlap the next row's title). The next-up hub
-                  on the right side still shows the prep count under
-                  "Selected/Next" so the data isn't lost. */}
-              {!p.isPast && p.e._prepCount > 0 && !hasCloseFollow && (
-                <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
-                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
-                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
-                </div>
-              )}
+              {/* Prep pill REMOVED from the rail (June 2026). Prep count
+                  surfaces only in the right-side hub now ("Prep · N open /
+                  N open task for [client]"). The rail row was colliding
+                  with the next event's text when events were close in
+                  time, and the chip pulled visual weight away from the
+                  cleaner time/title/client treatment. */}
             </div>
             <span style={{ width: 30, height: 1, background: p.isNext ? "rgba(51,84,62,0.45)" : "rgba(28,50,36,0.18)", margin: "0 8px", flex: "0 0 30px" }} />
             <div style={{ width: 8, height: 8, borderRadius: "50%", flex: "0 0 8px", background: p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68"), boxShadow: p.isNext ? "0 0 0 3px #E6EFE9" : "none" }} />
@@ -8864,8 +8852,10 @@ export default function App({ user }) {
         /* Dial event row — full strip is the click target. Subtle gray wash
            on hover. The "next" event already has a sage bg painted via inline
            styles so it stays visually distinct. */
-        .rt-dial-event-row { transition: background 120ms var(--rt-ease-out); border-radius: 10px; }
-        .rt-dial-event-row:hover { background: rgba(20,30,22,0.04); }
+        .rt-dial-event-row { border-radius: 10px; }
+        /* No hover background — the row is a click target but doesn't paint
+           a translucent box on hover. The cursor change + the natural
+           visual hierarchy (time / title / client) carry the affordance. */
         /* Counter-scale utility: elements inside the dial layer (which is scaled
            by var(--dial-scale)) that should render at a CONSTANT on-screen size
            regardless of scale. Cancels out the parent transform by 1/scale.
@@ -16910,7 +16900,7 @@ export default function App({ user }) {
                       const messageRef = isLastUser ? aiUserRef : null;
                       return m.role === "user" ? (
                         <div key={i} ref={messageRef} className="r-chat-msg-user" style={{ marginBottom: 28, display: "flex", justifyContent: "flex-end" }}>
-                          <div style={{ maxWidth: "75%", background: C.surfaceWarm, borderRadius: 20, padding: "12px 18px", boxShadow: "var(--rt-sh-xs)" }}>
+                          <div style={{ maxWidth: "75%", background: "#EEEEE8", borderRadius: 12, padding: "11px 16px" }}>
                             {m.text.split("\n").map((l, j) => l.trim() === "" ? <div key={j} style={{ height: 8 }} /> : <p key={j} style={{ fontSize: 17, color: C.text, lineHeight: 1.5, margin: 0 }}>{l}</p>)}
                           </div>
                         </div>
