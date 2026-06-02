@@ -2781,6 +2781,64 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
+      {/* B2 scrub indicator — appears only when the dial is scrubbed off
+          live time. Sits in the upper-right area near the 6pm side of the
+          dial, with right-aligned text echoing the hub's visual rhythm.
+          Tap returns the dial to NOW. Three lines: where the scrub
+          started (SCRUBBED · <real-time>), what time is being shown, and
+          the return action. */}
+      {isScrubbed && (
+        <button
+          onClick={() => { setScrubMs(0); }}
+          aria-label="Return to now"
+          style={{
+            position: "absolute",
+            right: 290, top: 60,
+            zIndex: 8,
+            background: "transparent",
+            border: "none",
+            padding: "8px 12px",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            textAlign: "right",
+            transition: "background 120ms var(--rt-ease-out)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted }}>
+            Scrubbed{(() => {
+              // Show the actual real-time clock value at the moment they
+              // started scrubbing. We have nowMs (live) and scrubMs (offset);
+              // the dial currently displays nowMs + scrubMs. Showing live
+              // time here gives the user a fix point.
+              const liveNow = new Date(nowMs);
+              const h = liveNow.getHours();
+              const m = liveNow.getMinutes();
+              const ampm = h >= 12 ? "pm" : "am";
+              const h12 = ((h + 11) % 12) + 1;
+              const mm = String(m).padStart(2, "0");
+              return ` · ${h12}:${mm}${ampm}`;
+            })()}
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.1, marginTop: 2, letterSpacing: "-0.01em" }}>
+            {(() => {
+              // The time the dial is currently centered on.
+              const scrubbedT = new Date(nowMs + scrubMs);
+              const h = scrubbedT.getHours();
+              const m = scrubbedT.getMinutes();
+              const ampm = h >= 12 ? "pm" : "am";
+              const h12 = ((h + 11) % 12) + 1;
+              const mm = String(m).padStart(2, "0");
+              return `${h12}:${mm}${ampm}`;
+            })()}
+          </div>
+          <div style={{ fontSize: 10.5, color: "#7c5cf3", fontWeight: 700, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Return to now
+          </div>
+        </button>
+      )}
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
           size AND makes the HTML card overlay's %-of-box positioning line up
@@ -2998,59 +3056,45 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
       </div>
 
       {/* Hub content — the NEXT event by default (compact readout). When the
-          user clicks an event on the rail it becomes "SELECTED" and the
-          compact readout transforms into a unified card with three
-          sections: header (status + time + title + client), prep (actual
-          open task titles with interactive checkboxes), and actions
-          (Open client / Reschedule / Delete). Dismissal is implicit —
-          click the dial elsewhere, or hit the × in the card header. */}
-      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 280 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
+          user clicks an event on the rail it becomes SELECTED and the
+          readout expands into a richer version with prep tasks and three
+          actions (Open client / Reschedule / Delete). No card wrapper, no
+          border, no shadow — content floats on the dial backdrop like the
+          rest of the rail. Sections are separated by whitespace only.
+          Dismissal is implicit (click elsewhere on the dial) or via the
+          × in the upper corner of the SELECTED state. */}
+      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 240 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
         {hubEvent ? (
           selectedEvent ? (
-            // ═══ SELECTED EVENT CARD ═══
-            // Unified rounded card. Three sections separated by hairlines.
-            <div
-              style={{
-                background: C.card,
-                borderRadius: 12,
-                boxShadow: "0 1px 2px rgba(20,30,22,0.04), 0 8px 24px rgba(20,30,22,0.08), 0 0 0 0.5px rgba(20,30,22,0.06)",
-                overflow: "hidden",
-                textAlign: "left",
-              }}
-            >
-              {/* Header */}
-              <div style={{ padding: "14px 16px 12px", borderBottom: "0.5px solid rgba(20,30,22,0.08)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
-                    Selected{countdown ? ` · ${countdown}` : ""}
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {isScrubbed && (
-                      <button
-                        onClick={() => { setScrubMs(0); }}
-                        style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "3px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 0.5px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 4 }}
-                      >
-                        <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Now
-                      </button>
-                    )}
-                    <button
-                      onClick={() => { setSelectedId(null); setRescheduleEditing(false); }}
-                      aria-label="Dismiss"
-                      style={{ width: 22, height: 22, borderRadius: 999, border: "none", background: "transparent", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", padding: 0, fontFamily: "inherit" }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.1, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, marginTop: 3, lineHeight: 1.3 }}>{hubEvent.title}</div>
-                {hubEvent.client_name && <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
+            // ═══ SELECTED EVENT — V2: no card, whitespace separators ═══
+            <>
+              {/* Status row: SELECTED label on the left, × dismiss on the
+                  right. Now pill is GONE from here — it lives at the top
+                  of the dial workspace as its own B2-style indicator. */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
+                  Selected{countdown ? ` · ${countdown}` : ""}
+                </span>
+                <button
+                  onClick={() => { setSelectedId(null); setRescheduleEditing(false); }}
+                  aria-label="Dismiss"
+                  style={{ width: 18, height: 18, borderRadius: 999, border: "none", background: "transparent", color: C.textMuted, fontSize: 15, lineHeight: 1, cursor: "pointer", padding: 0, fontFamily: "inherit" }}
+                >
+                  ×
+                </button>
               </div>
+              {/* Time hero + title + client. Same hierarchy as before but
+                  with the bigger 24px hero time from the V2 mock. */}
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
+              {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
 
-              {/* Body — either prep section OR reschedule editor */}
+              {/* Body — either prep section OR reschedule editor. 22px
+                  vertical breathing room above replaces the hairline +
+                  card section that the V1 had. */}
               {rescheduleEditing ? (
-                <div style={{ padding: "12px 16px 14px" }}>
+                <div style={{ marginTop: 22, textAlign: "left" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: C.textMuted, marginBottom: 8 }}>Reschedule</div>
                   <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                     <input
@@ -3066,23 +3110,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       style={{ width: 90, fontSize: 12, padding: "6px 8px", border: "1px solid " + C.borderLight, borderRadius: 6, fontFamily: "inherit", background: C.bg, color: C.text }}
                     />
                   </div>
-                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                     <button
                       onClick={() => { setRescheduleEditing(false); }}
-                      style={{ background: "transparent", color: C.textMuted, border: "none", padding: "5px 10px", fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                      style={{ background: "transparent", color: C.textMuted, border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => {
                         if (!rescheduleDate || !rescheduleTime) return;
-                        // Build ISO from local datetime inputs. The same wall
-                        // clock the user sees: YYYY-MM-DDTHH:MM gets treated
-                        // as local time by Date constructor → ISO conversion.
                         const newStart = new Date(`${rescheduleDate}T${rescheduleTime}`);
                         if (isNaN(newStart.getTime())) return;
                         const newStartIso = newStart.toISOString();
-                        // Preserve duration if there was an end time.
                         let newEndIso = null;
                         if (hubEvent.ends_at) {
                           const originalStart = new Date(hubEvent.starts_at).getTime();
@@ -3096,15 +3136,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                         setRescheduleEditing(false);
                         setSelectedId(null);
                       }}
-                      style={{ background: C.primary, color: "#fff", border: "none", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                      style={{ background: "transparent", color: C.primary, border: "none", padding: 0, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
                     >
                       Save
                     </button>
                   </div>
                 </div>
               ) : (
-                <div style={{ padding: "11px 16px 12px" }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: C.textMuted, marginBottom: 6 }}>
+                <div style={{ marginTop: 22, textAlign: "right" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: C.textMuted, marginBottom: 4 }}>
                     Prep{(hubEvent._prepCount > 0) ? ` · ${hubEvent._prepCount} open` : ""}
                   </div>
                   {hubEvent._prepCount > 0 && Array.isArray(hubEvent._prepTasks) && hubEvent._prepTasks.length > 0 ? (
@@ -3112,11 +3152,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       {hubEvent._prepTasks.slice(0, 4).map(pt => (
                         <div
                           key={pt.id}
-                          style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 0", cursor: "pointer" }}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "3px 0", cursor: "pointer", justifyContent: "flex-end" }}
                           onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
                         >
-                          <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2, background: C.card }} />
-                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4 }}>{pt.text}</span>
+                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "right" }}>{pt.text}</span>
+                          <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
                         </div>
                       ))}
                       {hubEvent._prepTasks.length > 4 && (
@@ -3124,33 +3164,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       )}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+                    <div style={{ fontSize: 12.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", lineHeight: 1.4 }}>
                       Nothing to prep — you're set.
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Actions row — three equal-weight buttons. Hidden when the
-                  reschedule editor is open (the editor has its own Save/
-                  Cancel buttons). */}
+              {/* Action row — three equal-weight link-style buttons. Hidden
+                  when reschedule editor is open (it has its own Save/Cancel). */}
               {!rescheduleEditing && (
-                <div style={{ display: "flex", gap: 0, padding: "6px 8px 8px", borderTop: "0.5px solid rgba(20,30,22,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 14, marginTop: 22 }}>
                   <button
                     onClick={() => {
                       if (hubEvent.client_id && typeof onOpenClient === "function") onOpenClient(hubEvent.client_id);
                       setSelectedId(null);
                     }}
                     disabled={!hubEvent.client_id}
-                    style={{ flex: 1, background: "transparent", border: "none", padding: "8px 6px", fontSize: 11.5, color: hubEvent.client_id ? C.text : C.textMuted, fontWeight: 500, cursor: hubEvent.client_id ? "pointer" : "not-allowed", fontFamily: "inherit", borderRadius: 6 }}
+                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: hubEvent.client_id ? C.text : C.textMuted, cursor: hubEvent.client_id ? "pointer" : "not-allowed", fontFamily: "inherit" }}
                   >
                     Open client
                   </button>
                   <button
                     onClick={() => {
-                      // Pre-populate the date + time inputs from the existing
-                      // event's local-time representation so the user is
-                      // editing relative to where it is now, not from blank.
                       const d = hubEvent._start;
                       const yyyy = d.getFullYear();
                       const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -3161,32 +3197,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       setRescheduleTime(`${hh}:${mi}`);
                       setRescheduleEditing(true);
                     }}
-                    style={{ flex: 1, background: "transparent", border: "none", padding: "8px 6px", fontSize: 11.5, color: C.text, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
                   >
                     Reschedule
                   </button>
                   <button
                     onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
-                    style={{ flex: 1, background: "transparent", border: "none", padding: "8px 6px", fontSize: 11.5, color: "#A03422", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: "#A03422", cursor: "pointer", fontFamily: "inherit" }}
                   >
                     Delete
                   </button>
                 </div>
               )}
-            </div>
+            </>
           ) : (
             // ═══ COMPACT NEXT-EVENT READOUT (default state) ═══
-            // Same as before — minimal floating text on the right, with
-            // an optional Now pill above when scrubbed off live time.
+            // No Now pill here anymore — it lives as its own scrub
+            // indicator near the top of the dial workspace.
             <>
-              {isScrubbed && (
-                <button
-                  onClick={() => { setScrubMs(0); }}
-                  style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 7 }}
-                >
-                  <span style={{ fontSize: 12, lineHeight: 1 }}>↺</span> Now
-                </button>
-              )}
               <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
                 Next{countdown ? ` · ${countdown}` : ""}
               </div>
@@ -11523,7 +11551,7 @@ export default function App({ user }) {
                               style={{ ...optBase, padding: "6px 12px 6px 10px", ...(isRaiPlus ? activeStyle : {}) }}
                             >
                               <Star lit={isRaiPlus} />
-                              <span>Ranked<span style={{ marginLeft: 2, fontSize: 13, fontWeight: 700, color: isRaiPlus ? C.btnDeep : C.textMuted, transition: "color 140ms" }}>+</span></span>
+                              <span>Task &amp; Rank</span>
                             </button>
                             <button
                               className={"rt-rank-opt" + (isRaiOnly ? " is-active" : "")}
