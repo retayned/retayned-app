@@ -3155,8 +3155,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                           style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "3px 0", cursor: "pointer", justifyContent: "flex-end" }}
                           onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
                         >
-                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "right" }}>{pt.text}</span>
+                          {/* Checkbox first (left of text) — matches standard
+                              task-row convention used everywhere else in the
+                              app. The whole row remains right-aligned within
+                              the hub via justifyContent: flex-end, but the
+                              checkbox now leads the row content. */}
                           <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
+                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left" }}>{pt.text}</span>
                         </div>
                       ))}
                       {hubEvent._prepTasks.length > 4 && (
@@ -12669,9 +12674,19 @@ export default function App({ user }) {
                       };
                       const openByClient = {};
                       const tasksByClient = {}; // accumulate the actual open task list per client
+                      // AI-task visibility gate: when the user is in Ranked or
+                      // Manual view (not Task & Rank), Rai-suggested tasks are
+                      // hidden from the main task list. They should ALSO be
+                      // excluded from the dial's prep count and prep task list —
+                      // otherwise the user sees a count of tasks they can't
+                      // find anywhere else, and the selected-event hub shows
+                      // checkable items that don't exist in their visible
+                      // workspace. Mirrors the filter at the task-list level.
+                      const _aiTasksVisible = rankMode === "rai" && raiState?.ai_tasks_enabled !== false;
                       for (const t of (tasks || [])) {
                         if (!t || t.done || !t.client_id) continue;
                         if (!_countsToday(t)) continue;
+                        if (t.ai && !_aiTasksVisible) continue;
                         openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
                         if (!tasksByClient[t.client_id]) tasksByClient[t.client_id] = [];
                         tasksByClient[t.client_id].push({ id: t.id, text: t.text, done: t.done });
