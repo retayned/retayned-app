@@ -2382,7 +2382,16 @@ export const personalCalendar = {
   // for tz-safety; the UI filters to exact local days.
   listUpcoming: async (userId) => {
     const now = Date.now();
-    const startIso = new Date(now - 2 * 3600 * 1000).toISOString();
+    // Lower bound covers ALL of today, not just the last 2 hours. The old
+    // `now - 2h` floor dropped events earlier in the day, so by evening every
+    // already-passed event for today vanished and the dial read "No calls
+    // today" on a day that had calls. -26h guarantees local start-of-today is
+    // covered in any timezone; the UI filters each section to its exact local
+    // day (ymdInTz === todayYmd / tmrwYmd / later), so a wider DB span is a
+    // safe superset. Upper bound stays +8d so the Tomorrow strip and Later
+    // (days 2-6) columns, which read the SAME personalEvents array, still get
+    // their data.
+    const startIso = new Date(now - 26 * 3600 * 1000).toISOString();
     const endIso = new Date(now + 8 * 24 * 3600 * 1000).toISOString();
     const { data, error } = await supabase
       .from('personal_calendar_events')
