@@ -661,22 +661,29 @@ function retGradient(v) {
 // Adding verbs is cheap; removing them is painful once users get used
 // to the affordance. Start small, expand based on what users type.
 //
+// ORDER MATTERS: detectThinkingVerb returns the FIRST match. Composition
+// verbs come first because they're more action-specific — "Send Ardath
+// a note on what's planned" should match "send" (composition, produce
+// the note) NOT "plan" (deliberation). The earlier ordering produced a
+// bug where every task containing "plan" or "review" anywhere in the
+// sentence (e.g. "review what's planned") got routed to think-through
+// mode even when the actual verb of the task was composition.
+//
 // EXCLUDED on purpose: call, text, email (the verb — "email Ardath"),
 // log, file, finish, complete, do, follow up. These are execution
 // verbs — the user knows what to do, Rai can't help them do it faster.
 const THINKING_VERBS = [
-  // Deliberation
-  "decide", "figure out", "plan", "prep", "think through",
-  "strategize", "approach", "review", "read", "check",
-  "analyze", "assess", "evaluate",
-  // Composition (added v2.1, June 2026) — tasks that require the user
-  // to WRITE something or PROPOSE something where the substance is the
-  // work. Rai has client context that makes the draft faster.
+  // Composition — produce an artifact. Comes FIRST so verbs like "send"
+  // / "write" / "draft" / "recap" beat downstream deliberation matches.
   "write", "draft", "compose",
   "send", // covers "send a note", "send the recap" — composition tasks
   "prepare", "propose", "outline",
   "recap", "summarize", "brief",
   "pitch", "frame",
+  // Deliberation — think it through, no required artifact.
+  "decide", "figure out", "plan", "prep", "think through",
+  "strategize", "approach", "review", "read", "check",
+  "analyze", "assess", "evaluate",
 ];
 
 // Detect whether a task's text begins with (or prominently contains) a
@@ -828,7 +835,15 @@ function buildTaskDiscussionContext({ task, client, tasks, touchpoints, recentPi
   }
 
   lines.push("");
-  lines.push(`The user has clicked into this task to actually DO IT with your help. Your job: produce the artifact directly. If the task is a draft/note/email, write it. If it's analysis, do the analysis. If it's a decision, give them your read and a recommendation. Do not open with a greeting or ask what they want — they've already told you what the task is. You already have the context above; do not ask them to re-explain who the client is. After producing the artifact, you may add a short paragraph about your approach if useful, then ask if they want changes.`);
+  lines.push(`The user has clicked into this task to actually DO IT with your help. The very first thing in your response must be the ARTIFACT ITSELF — the draft, the analysis, the recommendation. Not framing, not reasoning, not "okay here's what I'm reading," not "let me think this through." If the task is a draft/note/email, the email comes FIRST. If it's analysis, the analysis comes first with the conclusion stated up front. If it's a decision, your recommendation comes first.
+
+After the artifact, you may add a short "Here's why I went this way" paragraph if there are real choices worth flagging (tone, length, what you left out). Keep it brief — 3-5 bullets max.
+
+FORBIDDEN openings (these are signs you're stalling): "Okay, here's what I'm reading", "Let me think this through", "Here's what I'd hit in the note", "A few things worth noting about the approach". The user can already see your reasoning by reading the artifact you produced. Do not pre-explain the artifact before producing it.
+
+FORBIDDEN closer: "Want me to draft something based on this?" — you should have ALREADY drafted it. The right closer if any is "Want me to adjust anything?" or just nothing — the artifact stands on its own.
+
+Do not ask the user to re-explain who the client is; the context above already covers it.`);
 
   return lines.join("\n");
 }
@@ -2759,20 +2774,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
-      {/* Now control — appears only when scrubbed off live time. Soft white pill
-          (not the heavy dark-green that fought the orb), tucked at the dial's
-          upper-left where there's natural space rather than floating above it.
-          Positioned by the SVG's own top-geometry (top:0, height 888). */}
-      <div style={{ position: "absolute", right: 300, top: 70, zIndex: 8, pointerEvents: "auto" }}>
-        {isScrubbed && (
-          <button
-            onClick={() => { setScrubMs(0); }}
-            style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "5px 13px", fontSize: 12, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 5 }}
-          >
-            <span style={{ fontSize: 13, lineHeight: 1 }}>↺</span> Now
-          </button>
-        )}
-      </div>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
           size AND makes the HTML card overlay's %-of-box positioning line up
@@ -2916,6 +2917,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           let topFade = 1;
           if (ryFrac < FADE_START) topFade = Math.max(0, (ryFrac - FADE_END) / (FADE_START - FADE_END));
           const baseOpacity = p.isPast ? 0.55 : 1;
+          // Tight-cluster detection: if the NEXT placement (later in time)
+          // starts within 30 minutes of THIS one, suppress the prep pill
+          // on this row. The pill chip is what was visually colliding with
+          // the next row's text — not the labels themselves. Placements are
+          // sorted ascending by start time, so placements[i+1] is whatever
+          // event comes after this in the timeline.
+          const next = placements[i + 1];
+          const hasCloseFollow = next && (next.e._start.getTime() - p.e._start.getTime()) < 30 * 60 * 1000;
           return (
           <div
             key={p.e.id || i}
@@ -2939,30 +2948,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
             }}
           >
             <div className="rt-dial-cs" style={{ transformOrigin: "top right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1, minWidth: 0 }}>
-              {p.isNext ? (
-                // Next-up event: rail entry collapses to a single muted line.
-                // The hub (right-edge callout) already gives this event the
-                // big "NEXT · IN N MIN / 1:30pm / Call w/Lauren / client"
-                // treatment, so doubling it on the rail caused the original
-                // collision with the 2pm row. Single line = no collision,
-                // even with the prep pill chip stacked on the row above.
-                <span style={{ fontSize: 12, color: "#6B6B66", lineHeight: 1.25, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
-                  {formatTimeLabel(p.e._start)} · {p.e.title}{p.e.client_name ? ` · ${p.e.client_name}` : ""}
-                </span>
-              ) : (
-                <>
-                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
-                  {p.e.client_name && (
-                    <span style={{ fontSize: 10, color: "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
-                  )}
-                  {!p.isPast && p.e._prepCount > 0 && (
-                    <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
-                      <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
-                      <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
-                    </div>
-                  )}
-                </>
+              {/* All events use the same two-line treatment (uppercase time /
+                  title / client). Next-up is conveyed by the GREEN RING on
+                  its dot (set below) plus slightly darker + bolder title
+                  text — subtle, not a different layout. Earlier attempt to
+                  collapse next-up to a single Fraunces italic line caused
+                  the visual disturbance you flagged; reverted. */}
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
+              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+              {p.e.client_name && (
+                <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
+              )}
+              {/* Prep pill — hidden when an event is close behind (would
+                  visually overlap the next row's title). The next-up hub
+                  on the right side still shows the prep count under
+                  "Selected/Next" so the data isn't lost. */}
+              {!p.isPast && p.e._prepCount > 0 && !hasCloseFollow && (
+                <div style={{ marginTop: 5, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: "3px 9px" }}>
+                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 800, lineHeight: 1 }}>☑</span>
+                  <span style={{ fontSize: 10, color: "#5346A5", fontWeight: 600 }}>{p.e._prepCount} task{p.e._prepCount === 1 ? "" : "s"} before</span>
+                </div>
               )}
             </div>
             <span style={{ width: 30, height: 1, background: p.isNext ? "rgba(51,84,62,0.45)" : "rgba(28,50,36,0.18)", margin: "0 8px", flex: "0 0 30px" }} />
@@ -3002,6 +3007,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
           + action pills. When showing default NEXT, stays compact. */}
       <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 260 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
+        {/* Now control — sits at the top of the hub block, paired with the
+            next-event readout. Only appears when scrubbed off live time;
+            tap returns the dial to NOW. Previously rendered as a floating
+            pill at fixed top-left coords (right: 300, top: 70), which
+            drifted away from the dial on wider viewports. */}
+        {isScrubbed && (
+          <button
+            onClick={() => { setScrubMs(0); }}
+            style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 7 }}
+          >
+            <span style={{ fontSize: 12, lineHeight: 1 }}>↺</span> Now
+          </button>
+        )}
         {hubEvent ? (
           <>
             <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
@@ -7525,6 +7543,18 @@ export default function App({ user }) {
         }
         input, textarea, select { font-size: 16px !important; }
         @media (min-width: 768px) { input, textarea, select { font-size: 14px !important; } }
+        /* Rai chat inputs (both surfaces — the welcome-screen composer and
+           the in-conversation "Reply to Rai" bar) opt out of the global
+           14px desktop input override. The global rule exists to prevent
+           iOS zoom-on-focus (which needs 16px+ on mobile) and to keep
+           dense forms tight on desktop; but the Rai surface is a writing
+           surface, not a form field — it should read at the same comfort
+           as a chat message, not a filter input. Selector specificity
+           (.r-rai-page descendant) beats the bare textarea selector
+           even with the !important on it, so this rule wins on desktop. */
+        @media (min-width: 768px) {
+          .r-rai-page textarea { font-size: 16px !important; }
+        }
         ::selection { background: #33543E; color: #fff; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: var(--rt-border); border-radius: 2px; }
@@ -8626,11 +8656,6 @@ export default function App({ user }) {
              text-decoration instead so each line gets struck through. */
           .rt-row.is-done .rt-task-title { text-decoration: line-through; }
           .rt-row .rt-task-title::after { display: none; }
-          /* Hide the +Tasks pill inside the Ranked button on mobile — it
-             pushed the button wide enough to force the segmented control
-             onto two lines on phone widths. Active state is still indicated
-             by the star icon's color + the button's active background. */
-          .rt-rank-tasks-pill { display: none !important; }
         }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
@@ -11345,7 +11370,7 @@ export default function App({ user }) {
                               style={{ ...optBase, padding: "6px 12px 6px 10px", ...(isRaiPlus ? activeStyle : {}) }}
                             >
                               <Star lit={isRaiPlus} />
-                              <span>Ranked<span className="rt-rank-tasks-pill" style={{ display: "inline-block", marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.01em", borderRadius: 6, padding: "2px 6px", background: isRaiPlus ? "rgba(124,92,243,0.14)" : C.surface, color: isRaiPlus ? C.btnDeep : C.textMuted, transition: "all 140ms" }}>+Tasks</span></span>
+                              <span>Ranked<span style={{ marginLeft: 2, fontSize: 13, fontWeight: 700, color: isRaiPlus ? C.btnDeep : C.textMuted, transition: "color 140ms" }}>+</span></span>
                             </button>
                             <button
                               className={"rt-rank-opt" + (isRaiOnly ? " is-active" : "")}
@@ -19520,13 +19545,13 @@ export default function App({ user }) {
             </div>
           );
         };
-        // Split into left-of-FAB and right-of-FAB groups. Each scrolls within
-        // its own half so items never slide UNDER the FAB. Half-bar width is
-        // (viewport / 2) - (FAB radius + breathing room ~30px). The two halves
-        // are flex children of the dock; the FAB is absolute-positioned.
-        const halfWay = Math.ceil(allItems.length / 2);
-        const leftItems = allItems.slice(0, halfWay);
-        const rightItems = allItems.slice(halfWay);
+        // Single scrollable strip with the FAB overlaid absolutely on top
+        // of the dock — the prior split-halves design rendered as two
+        // visually-separate strips, which broke the read of a unified nav.
+        // The strip has a centered "gap reservation" (an empty flex spacer
+        // matching the FAB's footprint) so items never permanently sit
+        // under the FAB at rest, but can scroll past it freely.
+        const halfCount = Math.ceil(allItems.length / 2);
         return (
           <div
             className="r-mob-bot-dock"
@@ -19539,69 +19564,59 @@ export default function App({ user }) {
               boxShadow: "0 -1px 2px rgba(20,30,22,0.04), 0 -6px 20px rgba(20,30,22,0.10)",
               padding: "8px 0 calc(12px + env(safe-area-inset-bottom, 0px))",
               zIndex: 50,
-              display: keyboardOpen ? "none" : "flex",
-              alignItems: "center",
-              gap: 0,
+              display: keyboardOpen ? "none" : "block",
             }}
           >
-            {/* Left scrollable strip — primary items live here */}
+            {/* Single horizontal scrollable strip containing every nav item.
+                A centered empty spacer (width = FAB diameter + breathing
+                room) reserves the slot the FAB sits over, so on first
+                paint items are evenly distributed and the FAB doesn't
+                land on any of them. As the user scrolls horizontally,
+                items pass behind the FAB but the FAB itself stays put. */}
             <div
               className="r-mob-nav-strip"
               style={{
-                flex: 1, minWidth: 0,
                 display: "flex", alignItems: "center",
                 overflowX: "auto", overflowY: "hidden",
-                paddingLeft: 8, paddingRight: 30,
+                paddingLeft: 8, paddingRight: 8,
                 scrollbarWidth: "none",
                 WebkitOverflowScrolling: "touch",
                 gap: 2,
               }}
             >
-              {leftItems.map(navItem)}
+              {/* First half of items */}
+              {allItems.slice(0, halfCount).map(navItem)}
+              {/* FAB gap reservation — empty flex spacer the FAB hovers over.
+                  Width ≈ FAB diameter (46) + breathing room (16). */}
+              <div style={{ flex: "0 0 62px", minWidth: 62, height: 1 }} aria-hidden="true" />
+              {/* Second half of items */}
+              {allItems.slice(halfCount).map(navItem)}
             </div>
-            {/* Center FAB — absolute-positioned within the dock so it stays
-                anchored while both strips scroll behind it. Width matches the
-                old in-flow FAB; padding on the strips above leaves the gap. */}
-            <div style={{ flex: "0 0 0", width: 0, position: "relative" }}>
-              <button
-                onClick={() => setQuickLogOpen(v => !v)}
-                aria-label="Quick log"
-                className="rt-mob-fab"
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: "50%",
-                  transform: (quickLogOpen ? "rotate(45deg) " : "") + "translate(-50%, -50%)",
-                  transformOrigin: "0 0",
-                  width: 46, height: 46, borderRadius: "50%", border: "none",
-                  background: "#7c5cf3", backgroundImage: "var(--rt-grad-btn)",
-                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                  boxShadow: "0 3px 10px rgba(124,92,243,0.35)",
-                  transition: "transform 180ms ease-out", padding: 0,
-                  marginTop: -10,
-                  zIndex: 2,
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                  <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-            {/* Right scrollable strip — overflow items live here */}
-            <div
-              className="r-mob-nav-strip"
+            {/* FAB — absolutely positioned to the dock, centered horizontally,
+                vertically aligned to the strip. Sits ABOVE the strip in z
+                order so it stays visible while items scroll behind. */}
+            <button
+              onClick={() => setQuickLogOpen(v => !v)}
+              aria-label="Quick log"
+              className="rt-mob-fab"
               style={{
-                flex: 1, minWidth: 0,
-                display: "flex", alignItems: "center",
-                overflowX: "auto", overflowY: "hidden",
-                paddingLeft: 30, paddingRight: 8,
-                scrollbarWidth: "none",
-                WebkitOverflowScrolling: "touch",
-                gap: 2,
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%, -50%)" + (quickLogOpen ? " rotate(45deg)" : ""),
+                marginTop: -6, // tug the visual center off the safe-area padding
+                width: 46, height: 46, borderRadius: "50%", border: "none",
+                background: "#7c5cf3", backgroundImage: "var(--rt-grad-btn)",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                boxShadow: "0 3px 10px rgba(124,92,243,0.35)",
+                transition: "transform 180ms ease-out", padding: 0,
+                zIndex: 2,
               }}
             >
-              {rightItems.map(navItem)}
-            </div>
+              <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
         );
       })()}
@@ -19908,13 +19923,11 @@ export default function App({ user }) {
 function BucketCalToggle({ label, count, open, onToggle, C }) {
   return (
     <div onClick={onToggle}
-      style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.primary }}>
-      {/* Calendar widget glyph — same duotone icon used at the TodayTimeline
-          calendar widget header. Replaces the prior 🗓 emoji which rendered
-          inconsistently across OS / font stack. Body color matches the
-          surrounding green text; accent is the deepest primary for the
-          binding-tab contrast. */}
-      <Icon name="due" size={16} color={C.primary} accent={C.primaryDeep} />
+      style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.text }}>
+      {/* Calendar widget glyph. Body + accent use standard dark text tones
+          so the "Calendar" label reads as a neutral toggle, not a brand
+          accent — earlier primary-green styling was too prominent. */}
+      <Icon name="due" size={16} color={C.text} accent={C.textSec} />
       <span>{label}</span>
       <span style={{ color: C.textMuted, fontWeight: 500 }}>· {count} event{count === 1 ? "" : "s"}</span>
       <span style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11, transform: open ? "none" : "rotate(-90deg)", transition: "transform .18s" }}>▾</span>
