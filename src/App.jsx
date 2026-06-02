@@ -828,7 +828,7 @@ function buildTaskDiscussionContext({ task, client, tasks, touchpoints, recentPi
   }
 
   lines.push("");
-  lines.push(`When the user replies, help them with the actual work — drafting, deciding, analyzing — using the context above. Don't ask them to re-explain who the client is; you already know.`);
+  lines.push(`The user has clicked into this task to actually DO IT with your help. Your job: produce the artifact directly. If the task is a draft/note/email, write it. If it's analysis, do the analysis. If it's a decision, give them your read and a recommendation. Do not open with a greeting or ask what they want — they've already told you what the task is. You already have the context above; do not ask them to re-explain who the client is. After producing the artifact, you may add a short paragraph about your approach if useful, then ask if they want changes.`);
 
   return lines.join("\n");
 }
@@ -7093,6 +7093,14 @@ export default function App({ user }) {
   // Sidebar list of past conversations (populated by loadData).
   const [raiConvoList, setRaiConvoList] = useState([]);
   const aiEndRef = useRef(null);
+  // When the task-discussion click handler pre-loads context and then wants
+  // Rai to immediately produce the artifact (a draft, an analysis, etc.)
+  // instead of asking what to do, it stashes the auto-fire text here. A
+  // useEffect picks it up AFTER aiMessages + observationContext have flushed
+  // through React state, so sendAi runs with a fresh closure that includes
+  // the new context. Without this two-step, the auto-send would close over
+  // the stale (pre-context) state and Rai would respond blind.
+  const pendingAutoSendRef = useRef(null);
   const aiUserRef = useRef(null);
   useEffect(() => {
     // Claude-style: when a new user message is sent, scroll that message to the top of the viewport
@@ -7349,6 +7357,20 @@ export default function App({ user }) {
     }
     setAiTyping(false);
   };
+
+  // Watches for a pending auto-send queued by the task-discussion click
+  // handler. Fires AFTER aiMessages + observationContext have been updated
+  // by React, so sendAi sees the fresh closure with the new context. The
+  // ref is consumed on first fire (cleared to null) to prevent re-trigger
+  // when aiMessages updates again during the streaming reply.
+  useEffect(() => {
+    if (!pendingAutoSendRef.current) return;
+    if (!observationContext) return; // context must have flushed
+    const text = pendingAutoSendRef.current;
+    pendingAutoSendRef.current = null;
+    sendAi(text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [observationContext, aiMessages]);
 
   // ─── Rai conversation handlers (sidebar) ──────────────────────────────
   // Start a fresh chat — clears messages + convo id so the next send creates
@@ -8373,6 +8395,9 @@ export default function App({ user }) {
            cascade order. */
         .r-desk { display: none !important; }
         .r-mob-bot-dock { display: flex; }
+        /* Hide WebKit scrollbars on the horizontal nav strips so the bar
+           reads as a clean dock. Firefox uses scrollbarWidth: none inline. */
+        .r-mob-nav-strip::-webkit-scrollbar { display: none; }
         /* Mobile-only Revenue-from-referrals card. The desktop version
            lives in the .rc-rail sticky column, which is display:none
            below 768px — so on phones the $ widget vanished entirely.
@@ -8582,23 +8607,30 @@ export default function App({ user }) {
            Single-line truncate hides too much content on phone widths where
            there's no hover-tooltip affordance. We override the inline styles
            via !important; row height becomes variable but readability wins.
-           Strikethrough-on-done still works because we use box-decoration-break
-           continuity on the span. */
+           NOTE: we deliberately AVOID -webkit-line-clamp here because WebKit
+           auto-appends an ellipsis when clamping, even with text-overflow:clip.
+           Instead we cap max-height at exactly 2 lines (line-height * 2) and
+           hide overflow — clean hard-clip, no trailing dots. */
         @media (max-width: 900px) {
           .rt-row .rt-task-title {
-            display: -webkit-box !important;
-            -webkit-box-orient: vertical;
-            -webkit-line-clamp: 2;
+            display: block !important;
             white-space: normal !important;
             overflow: hidden !important;
             text-overflow: clip !important;
             word-break: break-word;
+            max-height: 2.6em; /* line-height 1.3 × 2 lines */
+            line-height: 1.3;
           }
           /* On mobile the strikethrough ::after pseudo (which is a single
              positioned line) doesn't span both wrapped lines — use the native
              text-decoration instead so each line gets struck through. */
           .rt-row.is-done .rt-task-title { text-decoration: line-through; }
           .rt-row .rt-task-title::after { display: none; }
+          /* Hide the +Tasks pill inside the Ranked button on mobile — it
+             pushed the button wide enough to force the segmented control
+             onto two lines on phone widths. Active state is still indicated
+             by the star icon's color + the button's active background. */
+          .rt-rank-tasks-pill { display: none !important; }
         }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
@@ -11313,7 +11345,7 @@ export default function App({ user }) {
                               style={{ ...optBase, padding: "6px 12px 6px 10px", ...(isRaiPlus ? activeStyle : {}) }}
                             >
                               <Star lit={isRaiPlus} />
-                              <span>Ranked<span style={{ display: "inline-block", marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.01em", borderRadius: 6, padding: "2px 6px", background: isRaiPlus ? "rgba(124,92,243,0.14)" : C.surface, color: isRaiPlus ? C.btnDeep : C.textMuted, transition: "all 140ms" }}>+Tasks</span></span>
+                              <span>Ranked<span className="rt-rank-tasks-pill" style={{ display: "inline-block", marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.01em", borderRadius: 6, padding: "2px 6px", background: isRaiPlus ? "rgba(124,92,243,0.14)" : C.surface, color: isRaiPlus ? C.btnDeep : C.textMuted, transition: "all 140ms" }}>+Tasks</span></span>
                             </button>
                             <button
                               className={"rt-rank-opt" + (isRaiOnly ? " is-active" : "")}
@@ -11917,13 +11949,37 @@ export default function App({ user }) {
                                             suggestion,
                                           });
                                           if (ctx) setObservationContext(ctx);
-                                          // Replace the loading greeting with the real one.
-                                          // Rai opens by acknowledging she has context, so
-                                          // the user knows they don't need to re-explain.
-                                          setAiMessages([{
-                                            role: "ai",
-                                            text: `I've got the file open on ${client.name} — last two weeks of tasks and touchpoints. What do you want to do with "${t.text}"?`,
-                                          }]);
+                                          // Decide the auto-fire user message based on the verb
+                                          // family. Composition verbs (write/draft/send/recap)
+                                          // → ask Rai to produce the artifact. Analysis verbs
+                                          // (analyze/review/assess) → ask her to walk through.
+                                          // Deliberation verbs (decide/plan/strategize) → ask
+                                          // her to help decide. The detected verb already came
+                                          // from THINKING_VERBS up top; map it to an intent.
+                                          const verb = (detectThinkingVerb(t.text) || "").toLowerCase();
+                                          const COMPOSITION = new Set([
+                                            "write","draft","compose","send","prepare","propose",
+                                            "outline","recap","summarize","brief","pitch","frame","prep",
+                                          ]);
+                                          const ANALYSIS = new Set([
+                                            "analyze","assess","evaluate","review","read","check",
+                                          ]);
+                                          let autoMsg;
+                                          if (COMPOSITION.has(verb)) {
+                                            autoMsg = "Draft this for me.";
+                                          } else if (ANALYSIS.has(verb)) {
+                                            autoMsg = "Walk me through this.";
+                                          } else {
+                                            // Deliberation default: decide / figure out / plan /
+                                            // strategize / approach / think through
+                                            autoMsg = "Help me think this through.";
+                                          }
+                                          // Clear the loading bubble — we want Rai's response to
+                                          // arrive RIGHT AFTER the user's auto-fired message, not
+                                          // after the placeholder. The useEffect picks up the ref
+                                          // once observationContext + aiMessages have flushed.
+                                          setAiMessages([]);
+                                          pendingAutoSendRef.current = autoMsg;
                                         }}
                                         style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                       >
@@ -19427,24 +19483,19 @@ export default function App({ user }) {
       })()}
 
 
-      {/* MOBILE BOTTOM NAV — REBUILT. A rock-solid fixed bar: 4 primary
-          destinations flanking a center quick-capture FAB, with a "More" sheet
-          for overflow. position:fixed + bottom:0 + safe-area inset, NO
-          JavaScript positioning (no --app-h / visualViewport math) — so it
-          never lags or drifts on scroll, the failure mode of the old strip.
-          No horizontal scroll: a fixed set of equal-width items. */}
+      {/* MOBILE BOTTOM NAV — horizontally scrollable strip with a center-pinned
+          FAB. All destinations live inline in the strip (no More menu); users
+          swipe left/right to reach overflow items. The purple `+` FAB sits
+          absolutely-positioned at the geometric center of the dock and stays
+          put while the strip scrolls behind it. Strip has left/right padding
+          equal to half the FAB's footprint so the first/last items can scroll
+          fully into view without permanently sitting under the FAB. */}
       {(() => {
         const primary = tier === "enterprise" ? mobileNavEnterprisePrimary : mobileNavPrimary;
         const moreBase = tier === "enterprise" ? mobileNavEnterpriseMore : mobileNavMore;
-        // FAB sits dead-center, so the bar needs an EVEN number of nav slots
-        // split around it: 2 | FAB | 2. Left = first two primary; right = third
-        // primary + the More button. The 4th primary is folded into the More
-        // sheet (with the rest of the overflow) to keep the layout symmetric.
-        const left = primary.slice(0, 2);
-        const rightPrimary = primary.slice(2, 3); // one item; More is the other right slot
-        const more = [...primary.slice(3), ...moreBase];
-        const moreActive = more.some(m => m.id === page);
-        const moreHasDot = more.some(m => hasDot(m.id));
+        // All items inline now. Order matters: primary first (visible without
+        // scrolling on a typical phone), then overflow further right.
+        const allItems = [...primary, ...moreBase];
         const navItem = (n) => {
           const dot = hasDot(n.id);
           const active = page === n.id;
@@ -19454,116 +19505,104 @@ export default function App({ user }) {
               className={"nav-item-mobile" + (active ? " is-active" : "")}
               onClick={() => goTo(n.id)}
               style={{
-                flex: 1, minWidth: 0,
+                flex: "0 0 64px", minWidth: 64,
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
                 cursor: "pointer", padding: "6px 2px", borderRadius: 12,
                 background: active ? "rgba(85,139,104,0.12)" : "transparent",
                 position: "relative",
                 transition: "background 160ms var(--rt-ease-out)",
+                scrollSnapAlign: "center",
               }}
             >
               <Icon name={n.icon} size={23} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
               <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: "calc(50% - 18px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + (active ? "#EFE9DF" : C.sidebar) }} />}
+              {dot && <div style={{ position: "absolute", top: 2, right: 14, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar }} />}
             </div>
           );
         };
+        // Split into left-of-FAB and right-of-FAB groups. Each scrolls within
+        // its own half so items never slide UNDER the FAB. Half-bar width is
+        // (viewport / 2) - (FAB radius + breathing room ~30px). The two halves
+        // are flex children of the dock; the FAB is absolute-positioned.
+        const halfWay = Math.ceil(allItems.length / 2);
+        const leftItems = allItems.slice(0, halfWay);
+        const rightItems = allItems.slice(halfWay);
         return (
-          <>
-            {/* More overflow sheet — pops above the bar; tap scrim to dismiss. */}
-            {mobileMoreOpen && (
-              <div
-                className="rt-mob-more-scrim"
-                onClick={() => setMobileMoreOpen(false)}
-                style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(20,30,22,0.18)", display: keyboardOpen ? "none" : "block" }}
-              >
-                <div
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    position: "fixed", left: 10, right: 10,
-                    bottom: "calc(86px + env(safe-area-inset-bottom, 0px))",
-                    background: C.card, borderRadius: 16, boxShadow: "0 8px 30px rgba(20,30,22,0.18), 0 0 0 1px rgba(20,30,22,0.06)",
-                    padding: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4,
-                  }}
-                >
-                  {more.map(n => {
-                    const active = page === n.id;
-                    const dot = hasDot(n.id);
-                    return (
-                      <div key={n.id} className={"nav-item-mobile" + (active ? " is-active" : "")}
-                        onClick={() => { goTo(n.id); setMobileMoreOpen(false); }}
-                        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "13px 4px", borderRadius: 10, cursor: "pointer", position: "relative", background: active ? "rgba(85,139,104,0.12)" : "transparent" }}>
-                        <Icon name={n.icon} size={22} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
-                        <span style={{ fontSize: 10.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
-                        {dot && <div style={{ position: "absolute", top: 8, right: 14, width: 7, height: 7, borderRadius: "50%", background: C.danger }} />}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
+          <div
+            className="r-mob-bot-dock"
+            style={{
+              position: "fixed",
+              bottom: -2, left: 0, right: 0,
+              background: C.sidebar,
+              borderRadius: "18px 18px 0 0",
+              borderTop: "1px solid rgba(20,30,22,0.12)",
+              boxShadow: "0 -1px 2px rgba(20,30,22,0.04), 0 -6px 20px rgba(20,30,22,0.10)",
+              padding: "8px 0 calc(12px + env(safe-area-inset-bottom, 0px))",
+              zIndex: 50,
+              display: keyboardOpen ? "none" : "flex",
+              alignItems: "center",
+              gap: 0,
+            }}
+          >
+            {/* Left scrollable strip — primary items live here */}
             <div
-              className="r-mob-bot-dock"
+              className="r-mob-nav-strip"
               style={{
-                position: "fixed",
-                bottom: -2, left: 0, right: 0,
-                background: C.sidebar,
-                borderRadius: "18px 18px 0 0",
-                borderTop: "1px solid rgba(20,30,22,0.12)",
-                boxShadow: "0 -1px 2px rgba(20,30,22,0.04), 0 -6px 20px rgba(20,30,22,0.10)",
-                padding: "8px 8px calc(12px + env(safe-area-inset-bottom, 0px))",
-                zIndex: 50,
-                display: keyboardOpen ? "none" : "flex",
-                alignItems: "center",
+                flex: 1, minWidth: 0,
+                display: "flex", alignItems: "center",
+                overflowX: "auto", overflowY: "hidden",
+                paddingLeft: 8, paddingRight: 30,
+                scrollbarWidth: "none",
+                WebkitOverflowScrolling: "touch",
                 gap: 2,
               }}
             >
-              {left.map(navItem)}
-              {/* Center quick-capture FAB — part of the bar, not a floating
-                  sibling (which was fragile + caused the load-flash). */}
-              <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
-                <button
-                  onClick={() => setQuickLogOpen(v => !v)}
-                  aria-label="Quick log"
-                  className="rt-mob-fab"
-                  style={{
-                    width: 46, height: 46, borderRadius: "50%", border: "none",
-                    background: "#7c5cf3", backgroundImage: "var(--rt-grad-btn)",
-                    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                    boxShadow: "0 3px 10px rgba(124,92,243,0.35)",
-                    transform: quickLogOpen ? "rotate(45deg)" : "rotate(0)",
-                    transition: "transform 180ms ease-out", padding: 0, marginTop: -10,
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                    <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
-              </div>
-              {rightPrimary.map(navItem)}
-              {/* More — opens the overflow sheet. */}
-              <div
-                className={"nav-item-mobile" + (moreActive ? " is-active" : "")}
-                onClick={() => setMobileMoreOpen(v => !v)}
+              {leftItems.map(navItem)}
+            </div>
+            {/* Center FAB — absolute-positioned within the dock so it stays
+                anchored while both strips scroll behind it. Width matches the
+                old in-flow FAB; padding on the strips above leaves the gap. */}
+            <div style={{ flex: "0 0 0", width: 0, position: "relative" }}>
+              <button
+                onClick={() => setQuickLogOpen(v => !v)}
+                aria-label="Quick log"
+                className="rt-mob-fab"
                 style={{
-                  flex: 1, minWidth: 0,
-                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                  cursor: "pointer", padding: "6px 2px", borderRadius: 12,
-                  background: (moreActive || mobileMoreOpen) ? "rgba(85,139,104,0.12)" : "transparent",
-                  position: "relative",
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: (quickLogOpen ? "rotate(45deg) " : "") + "translate(-50%, -50%)",
+                  transformOrigin: "0 0",
+                  width: 46, height: 46, borderRadius: "50%", border: "none",
+                  background: "#7c5cf3", backgroundImage: "var(--rt-grad-btn)",
+                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                  boxShadow: "0 3px 10px rgba(124,92,243,0.35)",
+                  transition: "transform 180ms ease-out", padding: 0,
+                  marginTop: -10,
+                  zIndex: 2,
                 }}
               >
-                <svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ display: "block" }}>
-                  <circle cx="5" cy="12" r="2" fill={(moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec} />
-                  <circle cx="12" cy="12" r="2" fill={(moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec} />
-                  <circle cx="19" cy="12" r="2" fill={(moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec} />
+                <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                <span style={{ fontSize: 9.5, fontWeight: (moreActive || mobileMoreOpen) ? 700 : 600, color: (moreActive || mobileMoreOpen) ? C.primaryDeep : C.textSec }}>More</span>
-                {moreHasDot && <div style={{ position: "absolute", top: 2, right: "calc(50% - 18px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar }} />}
-              </div>
+              </button>
             </div>
-          </>
+            {/* Right scrollable strip — overflow items live here */}
+            <div
+              className="r-mob-nav-strip"
+              style={{
+                flex: 1, minWidth: 0,
+                display: "flex", alignItems: "center",
+                overflowX: "auto", overflowY: "hidden",
+                paddingLeft: 30, paddingRight: 8,
+                scrollbarWidth: "none",
+                WebkitOverflowScrolling: "touch",
+                gap: 2,
+              }}
+            >
+              {rightItems.map(navItem)}
+            </div>
+          </div>
         );
       })()}
 
