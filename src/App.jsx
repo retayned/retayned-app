@@ -2566,9 +2566,16 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {} }) {
+function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {} }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
+  // Reschedule editor state — when the user clicks Reschedule inside the
+  // selected-event card, we swap the prep section for two inline inputs
+  // (date + time) and Save/Cancel actions. Stored locally so dismissing
+  // the selection cleanly closes the editor.
+  const [rescheduleEditing, setRescheduleEditing] = useState(false);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
   // Scrub offset (ms) — how far the dial has been "turned" from live NOW.
   // Positive = into the future, negative = into the past. Drag the disc to
   // change it; the Now pill resets it to 0.
@@ -2990,46 +2997,202 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
         </span>
       </div>
 
-      {/* Hub content — the NEXT event (or selected), against the right edge.
-          When SELECTED (clicked), expands into a detail drawer with prep tasks
-          + action pills. When showing default NEXT, stays compact. */}
-      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 260 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
+      {/* Hub content — the NEXT event by default (compact readout). When the
+          user clicks an event on the rail it becomes "SELECTED" and the
+          compact readout transforms into a unified card with three
+          sections: header (status + time + title + client), prep (actual
+          open task titles with interactive checkboxes), and actions
+          (Open client / Reschedule / Delete). Dismissal is implicit —
+          click the dial elsewhere, or hit the × in the card header. */}
+      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 280 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
-        {/* Now control — sits at the top of the hub block, paired with the
-            next-event readout. Only appears when scrubbed off live time;
-            tap returns the dial to NOW. Previously rendered as a floating
-            pill at fixed top-left coords (right: 300, top: 70), which
-            drifted away from the dial on wider viewports. */}
-        {isScrubbed && (
-          <button
-            onClick={() => { setScrubMs(0); }}
-            style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 7 }}
-          >
-            <span style={{ fontSize: 12, lineHeight: 1 }}>↺</span> Now
-          </button>
-        )}
         {hubEvent ? (
-          <>
-            <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
-              {selectedEvent ? "Selected" : "Next"}{countdown ? ` · ${countdown}` : ""}
-            </div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: C.primaryDeep, marginTop: 1 }}>{formatTimeLabel(hubEvent._start)}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.2 }}>{hubEvent.title}</div>
-            {hubEvent.client_name && <div style={{ fontSize: 10.5, color: C.textSec }}>{hubEvent.client_name}</div>}
-            {selectedEvent ? (
-              <>
-                {hubEvent._prepCount > 0 && (
-                  <div style={{ marginTop: 10, padding: "8px 0 0", borderTop: "0.5px solid " + C.borderLight, textAlign: "left" }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: C.textMuted, marginBottom: 4 }}>Prep · {hubEvent._prepCount} open</div>
-                    <div style={{ fontSize: 11, color: C.textSec, lineHeight: 1.4 }}>{hubEvent._prepCount} open task{hubEvent._prepCount === 1 ? "" : "s"} for {hubEvent.client_name || "this client"}</div>
+          selectedEvent ? (
+            // ═══ SELECTED EVENT CARD ═══
+            // Unified rounded card. Three sections separated by hairlines.
+            <div
+              style={{
+                background: C.card,
+                borderRadius: 12,
+                boxShadow: "0 1px 2px rgba(20,30,22,0.04), 0 8px 24px rgba(20,30,22,0.08), 0 0 0 0.5px rgba(20,30,22,0.06)",
+                overflow: "hidden",
+                textAlign: "left",
+              }}
+            >
+              {/* Header */}
+              <div style={{ padding: "14px 16px 12px", borderBottom: "0.5px solid rgba(20,30,22,0.08)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
+                    Selected{countdown ? ` · ${countdown}` : ""}
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {isScrubbed && (
+                      <button
+                        onClick={() => { setScrubMs(0); }}
+                        style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "3px 9px", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 0.5px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Now
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setSelectedId(null); setRescheduleEditing(false); }}
+                      aria-label="Dismiss"
+                      style={{ width: 22, height: 22, borderRadius: 999, border: "none", background: "transparent", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", padding: 0, fontFamily: "inherit" }}
+                    >
+                      ×
+                    </button>
                   </div>
-                )}
-                <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "flex-end" }}>
-                  <button onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }} style={{ background: "rgba(196,67,43,0.10)", color: "#A03422", border: "none", borderRadius: 999, padding: "3px 10px", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
-                  <button onClick={() => setSelectedId(null)} style={{ background: "transparent", color: C.textMuted, border: "none", borderRadius: 999, padding: "3px 10px", fontSize: 10, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>← back</button>
                 </div>
-              </>
-            ) : (
+                <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.1, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, marginTop: 3, lineHeight: 1.3 }}>{hubEvent.title}</div>
+                {hubEvent.client_name && <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
+              </div>
+
+              {/* Body — either prep section OR reschedule editor */}
+              {rescheduleEditing ? (
+                <div style={{ padding: "12px 16px 14px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: C.textMuted, marginBottom: 8 }}>Reschedule</div>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                    <input
+                      type="date"
+                      value={rescheduleDate}
+                      onChange={e => setRescheduleDate(e.target.value)}
+                      style={{ flex: 1, minWidth: 0, fontSize: 12, padding: "6px 8px", border: "1px solid " + C.borderLight, borderRadius: 6, fontFamily: "inherit", background: C.bg, color: C.text }}
+                    />
+                    <input
+                      type="time"
+                      value={rescheduleTime}
+                      onChange={e => setRescheduleTime(e.target.value)}
+                      style={{ width: 90, fontSize: 12, padding: "6px 8px", border: "1px solid " + C.borderLight, borderRadius: 6, fontFamily: "inherit", background: C.bg, color: C.text }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <button
+                      onClick={() => { setRescheduleEditing(false); }}
+                      style={{ background: "transparent", color: C.textMuted, border: "none", padding: "5px 10px", fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!rescheduleDate || !rescheduleTime) return;
+                        // Build ISO from local datetime inputs. The same wall
+                        // clock the user sees: YYYY-MM-DDTHH:MM gets treated
+                        // as local time by Date constructor → ISO conversion.
+                        const newStart = new Date(`${rescheduleDate}T${rescheduleTime}`);
+                        if (isNaN(newStart.getTime())) return;
+                        const newStartIso = newStart.toISOString();
+                        // Preserve duration if there was an end time.
+                        let newEndIso = null;
+                        if (hubEvent.ends_at) {
+                          const originalStart = new Date(hubEvent.starts_at).getTime();
+                          const originalEnd = new Date(hubEvent.ends_at).getTime();
+                          const durMs = originalEnd - originalStart;
+                          if (durMs > 0) newEndIso = new Date(newStart.getTime() + durMs).toISOString();
+                        }
+                        if (typeof onRescheduleEvent === "function") {
+                          onRescheduleEvent(hubEvent.id, newStartIso, newEndIso);
+                        }
+                        setRescheduleEditing(false);
+                        setSelectedId(null);
+                      }}
+                      style={{ background: C.primary, color: "#fff", border: "none", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: "11px 16px 12px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: C.textMuted, marginBottom: 6 }}>
+                    Prep{(hubEvent._prepCount > 0) ? ` · ${hubEvent._prepCount} open` : ""}
+                  </div>
+                  {hubEvent._prepCount > 0 && Array.isArray(hubEvent._prepTasks) && hubEvent._prepTasks.length > 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {hubEvent._prepTasks.slice(0, 4).map(pt => (
+                        <div
+                          key={pt.id}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "4px 0", cursor: "pointer" }}
+                          onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
+                        >
+                          <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2, background: C.card }} />
+                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4 }}>{pt.text}</span>
+                        </div>
+                      ))}
+                      {hubEvent._prepTasks.length > 4 && (
+                        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>+ {hubEvent._prepTasks.length - 4} more</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+                      Nothing to prep — you're set.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Actions row — three equal-weight buttons. Hidden when the
+                  reschedule editor is open (the editor has its own Save/
+                  Cancel buttons). */}
+              {!rescheduleEditing && (
+                <div style={{ display: "flex", gap: 0, padding: "6px 8px 8px", borderTop: "0.5px solid rgba(20,30,22,0.06)" }}>
+                  <button
+                    onClick={() => {
+                      if (hubEvent.client_id && typeof onOpenClient === "function") onOpenClient(hubEvent.client_id);
+                      setSelectedId(null);
+                    }}
+                    disabled={!hubEvent.client_id}
+                    style={{ flex: 1, background: "transparent", border: "none", padding: "8px 6px", fontSize: 11.5, color: hubEvent.client_id ? C.text : C.textMuted, fontWeight: 500, cursor: hubEvent.client_id ? "pointer" : "not-allowed", fontFamily: "inherit", borderRadius: 6 }}
+                  >
+                    Open client
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Pre-populate the date + time inputs from the existing
+                      // event's local-time representation so the user is
+                      // editing relative to where it is now, not from blank.
+                      const d = hubEvent._start;
+                      const yyyy = d.getFullYear();
+                      const mm = String(d.getMonth() + 1).padStart(2, "0");
+                      const dd = String(d.getDate()).padStart(2, "0");
+                      const hh = String(d.getHours()).padStart(2, "0");
+                      const mi = String(d.getMinutes()).padStart(2, "0");
+                      setRescheduleDate(`${yyyy}-${mm}-${dd}`);
+                      setRescheduleTime(`${hh}:${mi}`);
+                      setRescheduleEditing(true);
+                    }}
+                    style={{ flex: 1, background: "transparent", border: "none", padding: "8px 6px", fontSize: 11.5, color: C.text, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                  >
+                    Reschedule
+                  </button>
+                  <button
+                    onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
+                    style={{ flex: 1, background: "transparent", border: "none", padding: "8px 6px", fontSize: 11.5, color: "#A03422", fontWeight: 500, cursor: "pointer", fontFamily: "inherit", borderRadius: 6 }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            // ═══ COMPACT NEXT-EVENT READOUT (default state) ═══
+            // Same as before — minimal floating text on the right, with
+            // an optional Now pill above when scrubbed off live time.
+            <>
+              {isScrubbed && (
+                <button
+                  onClick={() => { setScrubMs(0); }}
+                  style={{ background: "rgba(255,255,255,0.92)", color: C.primary, border: "none", borderRadius: 999, padding: "4px 11px", fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", cursor: "pointer", fontFamily: "inherit", boxShadow: "0 0 0 1px rgba(20,30,22,0.10), 0 2px 6px rgba(20,30,22,0.10)", display: "inline-flex", alignItems: "center", gap: 4, marginBottom: 7 }}
+                >
+                  <span style={{ fontSize: 12, lineHeight: 1 }}>↺</span> Now
+                </button>
+              )}
+              <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
+                Next{countdown ? ` · ${countdown}` : ""}
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.primaryDeep, marginTop: 1 }}>{formatTimeLabel(hubEvent._start)}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.2 }}>{hubEvent.title}</div>
+              {hubEvent.client_name && <div style={{ fontSize: 10.5, color: C.textSec }}>{hubEvent.client_name}</div>}
               <div className="rt-dial-hub-delete">
                 <button
                   onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
@@ -3038,8 +3201,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, scrubMs = 0, setScrubM
                   delete
                 </button>
               </div>
-            )}
-          </>
+            </>
+          )
         ) : (
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
@@ -12477,10 +12640,13 @@ export default function App({ user }) {
                         return String(t.due_date).slice(0, 10) <= _prepTodayYmd;
                       };
                       const openByClient = {};
+                      const tasksByClient = {}; // accumulate the actual open task list per client
                       for (const t of (tasks || [])) {
                         if (!t || t.done || !t.client_id) continue;
                         if (!_countsToday(t)) continue;
                         openByClient[t.client_id] = (openByClient[t.client_id] || 0) + 1;
+                        if (!tasksByClient[t.client_id]) tasksByClient[t.client_id] = [];
+                        tasksByClient[t.client_id].push({ id: t.id, text: t.text, done: t.done });
                       }
                       // The dial is a SINGLE DAY. Only today's events (in the
                       // user's timezone) belong on it — an event from yesterday
@@ -12493,6 +12659,7 @@ export default function App({ user }) {
                         .map(e => ({
                           ...e,
                           _prepCount: e && e.client_id ? (openByClient[e.client_id] || 0) : 0,
+                          _prepTasks: e && e.client_id ? (tasksByClient[e.client_id] || []) : [],
                         }));
                     })()}
                     C={C}
@@ -12504,6 +12671,22 @@ export default function App({ user }) {
                       setPersonalEvents(prev => (prev || []).filter(e => e.id !== id));
                       try { personalCalendarDb.remove(id); } catch (e) { console.warn("Event delete failed:", e); }
                     }}
+                    onOpenClient={(clientId) => {
+                      const c = (clients || []).find(x => x.id === clientId);
+                      if (c) { setSelectedClient(c); setClientTab && setClientTab("overview"); setPage("clients"); }
+                    }}
+                    onRescheduleEvent={async (id, newStartsAt, newEndsAt) => {
+                      // Optimistic update; revert on DB error.
+                      setPersonalEvents(prev => (prev || []).map(e =>
+                        e.id === id ? { ...e, starts_at: newStartsAt, ends_at: newEndsAt || e.ends_at } : e
+                      ));
+                      try {
+                        await personalCalendarDb.update(id, { starts_at: newStartsAt, ends_at: newEndsAt || null });
+                      } catch (err) {
+                        console.warn("Event reschedule failed:", err);
+                      }
+                    }}
+                    onTogglePrepTask={(taskId) => toggleTask(taskId)}
                   />
                 </div>
                 {/* (Top-fade overlay removed — it painted a visible C.bg band
@@ -19914,10 +20097,12 @@ function BucketCalToggle({ label, count, open, onToggle, C }) {
   return (
     <div onClick={onToggle}
       style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.text }}>
-      {/* Calendar widget glyph. Body + accent use standard dark text tones
-          so the "Calendar" label reads as a neutral toggle, not a brand
-          accent — earlier primary-green styling was too prominent. */}
-      <Icon name="due" size={16} color={C.text} accent={C.textSec} />
+      {/* Calendar widget glyph — body in sage (site brand light green) so
+          the icon picks up a soft brand accent, while the "Calendar" label
+          itself stays in standard dark text. Earlier the whole row was
+          primary-green which was too prominent; now just the icon carries
+          the color. */}
+      <Icon name="due" size={16} color={C.primaryLight} accent={C.primary} />
       <span>{label}</span>
       <span style={{ color: C.textMuted, fontWeight: 500 }}>· {count} event{count === 1 ? "" : "s"}</span>
       <span style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11, transform: open ? "none" : "rotate(-90deg)", transition: "transform .18s" }}>▾</span>
