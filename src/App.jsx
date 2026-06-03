@@ -5972,6 +5972,10 @@ export default function App({ user }) {
   // submit. Companion picker-open state controls the popover.
   const [composerTypeOverride, setComposerTypeOverride] = useState(null);
   const [typePickerOpen, setTypePickerOpen] = useState(false);
+  // Mode-selector dropdown in the Today section header. Controls the
+  // ranking-mode menu (Task & Rank / Ranked / Manual). Replaces the
+  // separate toolbar row that used to live between composer and tasks.
+  const [todayModeMenuOpen, setTodayModeMenuOpen] = useState(false);
   // Which task row's inline due-picker popover is open (desktop). Null = none.
   const [rowDuePickerId, setRowDuePickerId] = useState(null);
   // Screen-space anchor for the row due-picker. The popover renders in a
@@ -12011,118 +12015,10 @@ export default function App({ user }) {
 
               {/* TASKS COLUMN */}
               <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
-                  {/* Option #2 — icons-only segmented control. Two stars =
-                      Task & Rank (Rai picks + ranks). One star = Ranked
-                      (Rai ranks only). Three lines = Manual. Compact
-                      iconography keeps all three options visually equal-
-                      width (the lopsided "Task & Rank" label is gone).
-                      Tooltips carry the meaning for first-time discovery.
-                      Top margin + subtle top hairline visually separates
-                      this control row from the composer underline above. */}
-                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 4px 12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      {(() => {
-                        const aiTasksOn = raiState?.ai_tasks_enabled !== false;
-                        const isRaiPlus = rankMode === "rai" && aiTasksOn;
-                        const isRaiOnly = rankMode === "rai" && !aiTasksOn;
-                        const isManual = rankMode === "manual";
-                        const optBase = { borderRadius: 13, border: "none", fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" };
-                        const activeStyle = { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" };
-                        const Star = ({ lit, size = 12 }) => (
-                          <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block", transition: "opacity 120ms" }} aria-hidden="true">
-                            <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={lit ? C.btn : C.textMuted} opacity={lit ? 1 : 0.55} />
-                          </svg>
-                        );
-                        // Equal-width icon-only buttons. All three buttons
-                        // are 44px wide so the control is perfectly
-                        // symmetrical and reads as one unit.
-                        const optDims = { padding: 0, width: 44, height: 26 };
-                        return (
-                          <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, gap: 0 }}>
-                            <button
-                              className={"rt-rank-opt" + (isRaiPlus ? " is-active" : "")}
-                              onClick={() => { setRankMode("rai"); setAiTasks(true); }}
-                              title="Task & Rank — Rai ranks your list and adds suggested tasks each morning"
-                              style={{ ...optBase, ...optDims, gap: 2, ...(isRaiPlus ? activeStyle : {}) }}
-                              aria-label="Task and Rank mode"
-                            >
-                              <Star lit={isRaiPlus} />
-                              <Star lit={isRaiPlus} />
-                            </button>
-                            <button
-                              className={"rt-rank-opt" + (isRaiOnly ? " is-active" : "")}
-                              onClick={() => { setRankMode("rai"); setAiTasks(false); }}
-                              title="Ranked — Rai ranks your list but won't add tasks"
-                              style={{ ...optBase, ...optDims, ...(isRaiOnly ? activeStyle : {}) }}
-                              aria-label="Ranked mode"
-                            >
-                              <Star lit={isRaiOnly} />
-                            </button>
-                            <button
-                              className={"rt-rank-opt" + (isManual ? " is-active" : "")}
-                              onClick={() => { setRankMode("manual"); setAiTasks(false); }}
-                              title="Manual — your own order, no Rai"
-                              style={{ ...optBase, ...optDims, ...(isManual ? activeStyle : {}) }}
-                              aria-label="Manual order"
-                            >
-                              {/* ≡ glyph for manual ordering. Hand-drawn as
-                                  three even horizontal lines so the weight
-                                  matches the stars next to it. */}
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block" }} aria-hidden="true">
-                                <line x1="5" y1="8"  x2="19" y2="8"  stroke={isManual ? C.text : C.textMuted} strokeWidth="2" strokeLinecap="round" opacity={isManual ? 1 : 0.65}/>
-                                <line x1="5" y1="12" x2="19" y2="12" stroke={isManual ? C.text : C.textMuted} strokeWidth="2" strokeLinecap="round" opacity={isManual ? 1 : 0.65}/>
-                                <line x1="5" y1="16" x2="19" y2="16" stroke={isManual ? C.text : C.textMuted} strokeWidth="2" strokeLinecap="round" opacity={isManual ? 1 : 0.65}/>
-                              </svg>
-                            </button>
-                          </div>
-                        );
-                      })()}
-                      {/* Focus mode button — only enabled in Rai mode.
-                          Same outlined chrome as before; size matches the
-                          icon-only segmented control to its left. */}
-                      {rankMode === "rai" && (
-                        <button
-                          onClick={() => setFocusMode(!focusMode)}
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "6px 14px",
-                            borderRadius: 999,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            fontFamily: "inherit",
-                            cursor: "pointer",
-                            ...(focusMode
-                              ? {
-                                  background: "var(--rt-grad-green-deep)",
-                                  border: "none",
-                                  color: "#fff",
-                                  boxShadow: "var(--rt-sh-green-glow)",
-                                }
-                              : {}),
-                          }}
-                          className={"rt-focus-btn" + (focusMode ? " is-active" : "")}
-                        >
-                          {focusMode ? "Focusing" : "Focus"}
-                        </button>
-                      )}
-                      {debugScores && (
-                        <span style={{
-                          fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "3px 8px",
-                          borderRadius: 999,
-                          background: "#FEF3C7",
-                          color: "#7C2D12",
-                          letterSpacing: "0.05em",
-                          textTransform: "uppercase",
-                        }}>
-                          Debug · ⌘⇧D
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  {/* (Removed: rt-toolbar — the segmented control + Focus
+                      button row. Mode selector and Focus link moved INTO
+                      the "Today" bucket header per option #5 of the
+                      segmented-control redesign.) */}
 
                   {/* (Removed: legacy rt-mob-cal-trigger button — display:none,
                       replaced by the band-level trigger above.) */}
@@ -12918,6 +12814,16 @@ export default function App({ user }) {
                       const isToday = name === "Today";
                       const dotColor = isToday ? C.primary : C.ink300;
                       const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
+                      // For the Today header only, render mode selector +
+                      // Focus link inline on the right side (option #5 from
+                      // the segmented-control redesign). Replaces the
+                      // separate toolbar row that used to sit between the
+                      // composer and the task list.
+                      const aiTasksOn = raiState?.ai_tasks_enabled !== false;
+                      const isRaiPlus = rankMode === "rai" && aiTasksOn;
+                      const isRaiOnly = rankMode === "rai" && !aiTasksOn;
+                      const isManual = rankMode === "manual";
+                      const modeLabel = isRaiPlus ? "Task & Rank" : isRaiOnly ? "Ranked" : "Manual";
                       return (
                         <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
@@ -12928,7 +12834,120 @@ export default function App({ user }) {
                               Transparent at the label, fading INTO border tone
                               and back to transparent at the edge — the line
                               looks like ink fading out across the page. */}
-                          <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${C.borderLight}, transparent)` }} />
+                          <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${C.borderLight}, transparent 70%)` }} />
+                          {isToday && (
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                              {/* Mode selector — quiet text label with caret,
+                                  click to open dropdown with three options. */}
+                              <div style={{ position: "relative" }}>
+                                <button
+                                  onClick={() => setTodayModeMenuOpen(!todayModeMenuOpen)}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    padding: "3px 8px",
+                                    border: "none",
+                                    background: "transparent",
+                                    fontFamily: "inherit",
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: C.textSec,
+                                    cursor: "pointer",
+                                    borderRadius: 6,
+                                    letterSpacing: "0.02em",
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = "rgba(20,30,22,0.04)"}
+                                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                  title="Change ranking mode"
+                                >
+                                  {(isRaiPlus || isRaiOnly) && (
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block" }} aria-hidden="true">
+                                      <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+                                    </svg>
+                                  )}
+                                  <span>{modeLabel}</span>
+                                  <span style={{ color: C.textMuted, fontSize: 9, marginLeft: 1 }}>▾</span>
+                                </button>
+                                {todayModeMenuOpen && (
+                                  <>
+                                    <div onClick={() => setTodayModeMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }} />
+                                    <div className="rt-picker-panel" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: 220, zIndex: 50 }}>
+                                      {[
+                                        { value: "raiPlus", label: "Task & Rank", hint: "Rai ranks + adds suggested tasks", onClick: () => { setRankMode("rai"); setAiTasks(true); } },
+                                        { value: "raiOnly", label: "Ranked",      hint: "Rai ranks your list only",         onClick: () => { setRankMode("rai"); setAiTasks(false); } },
+                                        { value: "manual",  label: "Manual",      hint: "Your own order, no Rai",           onClick: () => { setRankMode("manual"); setAiTasks(false); } },
+                                      ].map(opt => {
+                                        const active = (opt.value === "raiPlus" && isRaiPlus) || (opt.value === "raiOnly" && isRaiOnly) || (opt.value === "manual" && isManual);
+                                        return (
+                                          <button
+                                            key={opt.value}
+                                            onClick={() => { opt.onClick(); setTodayModeMenuOpen(false); }}
+                                            style={{
+                                              display: "flex", alignItems: "center", justifyContent: "space-between",
+                                              width: "100%", padding: "8px 10px",
+                                              border: "none",
+                                              background: active ? C.surfaceWarm : "transparent",
+                                              borderRadius: 6, cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.text,
+                                            }}
+                                            onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
+                                            onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
+                                          >
+                                            <div>
+                                              <div style={{ fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                                                {(opt.value === "raiPlus" || opt.value === "raiOnly") && (
+                                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                    <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+                                                  </svg>
+                                                )}
+                                                {opt.label}
+                                              </div>
+                                              <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{opt.hint}</div>
+                                            </div>
+                                            {active && <Icon name="check" size={13} simple color={C.primary} />}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              {/* Focus link — only shown in Rai mode. */}
+                              {rankMode === "rai" && (
+                                <button
+                                  onClick={() => setFocusMode(!focusMode)}
+                                  style={{
+                                    display: "inline-flex", alignItems: "center", gap: 4,
+                                    padding: "3px 8px",
+                                    border: "none",
+                                    background: focusMode ? C.primarySoft : "transparent",
+                                    fontFamily: "inherit",
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: focusMode ? C.primaryDark : C.textSec,
+                                    cursor: "pointer",
+                                    borderRadius: 6,
+                                    letterSpacing: "0.02em",
+                                  }}
+                                  onMouseEnter={e => { if (!focusMode) e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
+                                  onMouseLeave={e => { if (!focusMode) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  {focusMode ? "Focusing" : "Focus"}
+                                  {!focusMode && <span style={{ color: C.textMuted, fontSize: 10 }}>→</span>}
+                                </button>
+                              )}
+                              {/* Debug pill preserved so ⌘⇧D still works. */}
+                              {debugScores && (
+                                <span style={{
+                                  fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                  fontSize: 9, fontWeight: 700,
+                                  padding: "2px 7px", borderRadius: 999,
+                                  background: "#FEF3C7", color: "#7C2D12",
+                                  letterSpacing: "0.05em", textTransform: "uppercase",
+                                }}>Debug · ⌘⇧D</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     };
