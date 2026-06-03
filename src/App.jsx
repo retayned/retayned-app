@@ -9036,6 +9036,30 @@ export default function App({ user }) {
         .rt-today-v4 > .rt-composer {
           max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 120px);
         }
+        /* ── HERO SURFACE (Concept 2) ──────────────────────────────────────
+           The band (greeting + brief + meta row) gets a soft warm-cream
+           tint with rounded top corners and squared-off bottom. The
+           composer below it sits FLUSH against the band — same width,
+           no gap. Result: the composer reads as the bottom half of a
+           larger command-center zone, not as an island floating alone
+           on the page.
+           Implementation note: the composer keeps its own white-card
+           inline styling. Only the BAND gets surface treatment, and
+           the visual connection comes from the band's bottom edge
+           butting up against the composer's top edge with no gap. */
+        .rt-today-v4 > .rt-band {
+          background: rgba(255, 250, 238, 0.62);
+          border-radius: 14px 14px 0 0;
+          padding: 22px 22px 18px !important;
+          border-bottom: none !important;
+          margin-bottom: 0;
+        }
+        /* Restore the composer-to-tasks gap (grid gap is now 0 so that
+           the band sits flush against the composer — which makes them
+           read as one continuous hero surface). The composer's own
+           margin-bottom recreates the 20px breathing room between the
+           composer card and the segmented control / task list below. */
+        .rt-today-v4 > .rt-composer { margin-bottom: 20px; }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Hub delete link — hidden by default, fades in on hub hover or when
@@ -10545,7 +10569,7 @@ export default function App({ user }) {
                 if (t && t.closest && t.closest("[data-focus-keep]")) return;
                 setFocusMode(false);
               } : undefined}
-              style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
+              style={{ width: "100%", display: "grid", gap: 0, alignItems: "start", position: "relative" }}>
               {/* Focus-mode exit scrim — a full-viewport tap target behind the
                   focused task. The dimmed rows/areas have pointer-events:none,
                   so on mobile taps never reached the grid wrapper's onClick;
