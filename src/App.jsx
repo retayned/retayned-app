@@ -2788,46 +2788,31 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           started (SCRUBBED · <real-time>), what time is being shown, and
           the return action. */}
       {isScrubbed && (
-        <>
-          {/* Dial-echo arc — a single faint curved line that mirrors the
-              dial's outer rim at a smaller radius, sitting behind the
-              scrub indicator. Visually anchors the indicator to the dial
-              without enclosing it in a card. Same forest-sage color as
-              the dial's arc, lower opacity. */}
-          <svg
-            style={{
-              position: "absolute",
-              right: 235, top: 36,
-              width: 240, height: 130,
-              zIndex: 7,
-              pointerEvents: "none",
-            }}
-            viewBox="0 0 240 130"
-            aria-hidden="true"
-          >
-            {/* Curve mirrors the dial's outer arc. Sweeps left-to-right
-                across the area behind the indicator, then curls up-and-
-                rightward to feel like a concentric ring of the dial. */}
-            <path
-              d="M 10 95 Q 110 -10 240 55"
-              stroke="rgba(85,139,104,0.22)"
-              strokeWidth="1"
-              fill="none"
-            />
-          </svg>
-          <button
-            onClick={() => { setScrubMs(0); }}
-            aria-label="Return to now"
-            style={{
-              position: "absolute",
-              right: 290, top: 60,
-              zIndex: 8,
-              background: "transparent",
-              border: "none",
-              padding: "8px 12px",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontFamily: "inherit",
+        <button
+          onClick={() => { setScrubMs(0); }}
+          aria-label="Return to now"
+          style={{
+            position: "absolute",
+            right: 290, top: 60,
+            zIndex: 8,
+            background: "transparent",
+            border: "none",
+            padding: "10px 14px",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            textAlign: "right",
+            transition: "background 120ms var(--rt-ease-out)",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = "rgba(20,30,22,0.03)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+        >
+          {/* Corner brackets — top-left and bottom-right L-marks at 22%
+              opacity. Defines the indicator's region without enclosing
+              it in a card. Reads as "snippet of content" not as a UI
+              element. Quietest possible "this is a thing" treatment. */}
+          <span style={{ position: "absolute", left: 0, top: 0, width: 8, height: 8, borderLeft: "1px solid rgba(20,30,22,0.22)", borderTop: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
+          <span style={{ position: "absolute", right: 0, bottom: 0, width: 8, height: 8, borderRight: "1px solid rgba(20,30,22,0.22)", borderBottom: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
               textAlign: "right",
               transition: "background 120ms var(--rt-ease-out)",
             }}
@@ -2865,7 +2850,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Return to now
           </div>
         </button>
-        </>
       )}
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
@@ -6245,22 +6229,18 @@ export default function App({ user }) {
     if (cadenceRes?.data) setAllTouchpoints(cadenceRes.data);
     if (completionHistRes?.data) setAllCompletions(completionHistRes.data);
     if (observerRes?.data) {
-      // Only reset the "seen" flag when the observation is GENUINELY NEW —
-      // i.e. its id differs from whatever observation was last in state.
-      // Without this guard, every loadData() refresh (which can run on
-      // mount, on focus, on realtime events) re-flagged the dot as unseen
-      // even though the user had already viewed the same observation
-      // earlier in the day. Symptom: dot clears on Health visit then
-      // returns minutes later. Fix: capture prior id, compare against
-      // incoming, only reset when ids differ. Same observation reloaded
-      // → preserve existing healthObsSeen state.
+      // viewed_at on the observation row is now the authoritative
+      // "seen" marker — set when the user navigates to Health, persists
+      // across refreshes (DB-backed). loadData just trusts what comes
+      // back; no in-session flag manipulation here. The healthDot
+      // computation derives from observation.viewed_at directly.
+      // Reset mobile-expanded only for genuinely new observations
+      // (different ID from prior). Avoids collapsing a manually-opened
+      // card just because realtime triggered a reload.
       setObservation(prev => {
         const incoming = observerRes.data;
         const isNewObservation = !prev || prev.id !== incoming.id;
-        if (isNewObservation) {
-          setObsMobileExpanded(false);
-          setHealthObsSeen(false);
-        }
+        if (isNewObservation) setObsMobileExpanded(false);
         return incoming;
       });
     }
@@ -7726,7 +7706,32 @@ export default function App({ user }) {
 
 
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
-  const goTo = (id) => { if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); } if (id === "retros") setRolodexRemindersSeen(true); if (id === "health") setHealthObsSeen(true); setPage(id); };
+  const goTo = (id) => {
+    if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); }
+    if (id === "retros") setRolodexRemindersSeen(true);
+    if (id === "health") {
+      // Persist observation-viewed state to DB so the red dot doesn't
+      // resurrect on page refresh. Updates viewed_at = NOW() on the
+      // current observation row. Best-effort: if the write fails the
+      // in-session healthObsSeen still hides the dot for this tab.
+      setHealthObsSeen(true);
+      if (observation && observation.id) {
+        observationsDb.markViewed(observation.id)
+          .then(({ data, error }) => {
+            if (error) {
+              console.warn("Failed to mark observation viewed:", error);
+              return;
+            }
+            // Mirror the persisted timestamp into local state so the
+            // healthDot computation below recognizes it as viewed
+            // without needing a full data reload.
+            if (data) setObservation(prev => prev ? { ...prev, viewed_at: data.viewed_at } : prev);
+          })
+          .catch(err => console.warn("markViewed threw:", err));
+      }
+    }
+    setPage(id);
+  };
   const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
@@ -7734,7 +7739,18 @@ export default function App({ user }) {
   const totalRefRev = refs.filter(r => r.status === "converted" || r.converted).reduce((a, r) => a + (r.revenue || 0), 0);
 
   const todayDot = tasksDone < tasksTotal;
-  const hasNewObservation = !!observation && observation.status !== "unpacked" && observation.status !== "dropped";
+  // An observation is considered "new" only if (a) it exists in an
+  // active status, AND (b) it has not been viewed yet — viewed_at IS
+  // NULL in the DB. Once the user visits the Health page, viewed_at
+  // is written and the dot stays off permanently for that observation,
+  // surviving page refreshes (the previous in-memory-only fix did not).
+  // healthObsSeen is kept as a same-session optimistic flag so the dot
+  // hides immediately on Health visit without waiting for the DB round-
+  // trip; the persisted viewed_at then makes it stick across refreshes.
+  const hasNewObservation = !!observation
+    && observation.status !== "unpacked"
+    && observation.status !== "dropped"
+    && !observation.viewed_at;
   const healthDot = overdueChecks > 0 || (hasNewObservation && !healthObsSeen && page !== "health");
   // Rolodex check-in dot: lit when any contact has a reminder due (today or
   // earlier) and the user hasn't opened Rolodex since. Clears on visiting the
