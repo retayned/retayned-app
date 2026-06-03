@@ -7364,6 +7364,11 @@ export default function App({ user }) {
   const [confidantTyping, setConfidantTyping] = useState(false);
   const [confidantConvoId, setConfidantConvoId] = useState(null);
   const [confidantLoadingThread, setConfidantLoadingThread] = useState(false);
+  // Timestamp of the last activity in the loaded thread — used to
+  // render "Last spoke X days ago" in the Confidant eyebrow. Pulled
+  // from the row's updated_at when the thread is loaded. Null when
+  // there's no prior history (fresh thread).
+  const [confidantLastActivity, setConfidantLastActivity] = useState(null);
   // ID of the client whose thread is currently loaded — used to guard
   // against stale loads when the user navigates between clients quickly.
   const confidantLoadedClientRef = useRef(null);
@@ -7700,6 +7705,7 @@ export default function App({ user }) {
       if (!data) {
         setConfidantMessages([]);
         setConfidantConvoId(null);
+        setConfidantLastActivity(null);
         return;
       }
       // Normalize message shape from {role, text, attachments, timestamp}
@@ -7710,10 +7716,15 @@ export default function App({ user }) {
       }));
       setConfidantMessages(messages);
       setConfidantConvoId(data.id);
+      // Only set last-activity if there's prior history. A fresh row
+      // from getOrCreate (just created, empty messages) gets null so
+      // we don't render "Last spoke just now" for a brand-new thread.
+      setConfidantLastActivity(messages.length > 0 ? data.updated_at : null);
     } catch (err) {
       console.warn("Confidant thread load failed:", err);
       setConfidantMessages([]);
       setConfidantConvoId(null);
+      setConfidantLastActivity(null);
     } finally {
       setConfidantLoadingThread(false);
     }
@@ -7815,17 +7826,21 @@ export default function App({ user }) {
         { role: "ai", text: accumulated },
       ];
       if (confidantConvoId) {
+        const nowIso = new Date().toISOString();
         await supabase
           .from("rai_conversations")
           .update({
             messages: fullMessages.map(m => ({
               role: m.role === "ai" ? "assistant" : m.role,
               text: m.text,
-              timestamp: new Date().toISOString(),
+              timestamp: nowIso,
             })),
-            updated_at: new Date().toISOString(),
+            updated_at: nowIso,
           })
           .eq("id", confidantConvoId);
+        // Update the local "last activity" display so the eyebrow
+        // re-reads "Last spoke just now" without waiting for a refetch.
+        setConfidantLastActivity(nowIso);
       }
     } catch (err) {
       console.error("Confidant send failed:", err);
@@ -7855,9 +7870,41 @@ export default function App({ user }) {
     setConfidantMessages([]);
     setConfidantConvoId(null);
     setConfidantInput("");
+    setConfidantLastActivity(null);
     loadConfidantThread(selectedClient.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientTab, selectedClient?.id]);
+
+  // ─── GLOBAL RAI CHAT: auto-resume most recent thread on page open ─
+  // Without this, the user opens the Rai page and starts a blank chat
+  // every time — even though their previous thread is one click away
+  // in the sidebar. Confusing. This effect auto-loads the most recent
+  // non-Confidant thread (client_id IS NULL) on page entry, IF the
+  // user hasn't already manually picked a chat. The ref guard ensures
+  // we only fire once per visit — re-renders while on the page won't
+  // re-trigger after the user opens a different chat.
+  const autoResumedRef = useRef(false);
+  useEffect(() => {
+    if (page !== "coach") {
+      // Reset the guard so a future Rai-page visit auto-resumes again.
+      autoResumedRef.current = false;
+      return;
+    }
+    if (autoResumedRef.current) return;
+    if (aiConvoId) return; // user has a chat loaded (manual or fresh)
+    if (aiMessages.length > 0) return; // mid-conversation, don't clobber
+    if (raiConvoList.length === 0) return; // no past chats to resume
+    // Pick the most-recently-updated GLOBAL chat (client_id null).
+    // Confidant threads live on client profiles and shouldn't surface
+    // here — D=No call from the spec discussion.
+    const globalChats = raiConvoList
+      .filter(c => !c.client_id)
+      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+    if (globalChats.length === 0) return;
+    autoResumedRef.current = true;
+    openRaiChat(globalChats[0].id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, raiConvoList.length]);
 
   // Autoscroll to bottom of Confidant chat when messages update.
   useEffect(() => {
@@ -19906,7 +19953,34 @@ export default function App({ user }) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{sc.name}</div>
                         <div style={{ fontSize: 11, color: C.textMuted, fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}>
-                          A private thread with Rai. She remembers everything.
+                          {(() => {
+                            // Subtitle has two modes: "fresh thread" shows
+                            // the explainer ("She remembers everything"),
+                            // "thread with history" shows when the last
+                            // exchange happened. Reading "Last spoke 3d
+                            // ago" is the moment the persistence becomes
+                            // visible to the user — without it, the
+                            // memory feature is invisible.
+                            if (!confidantLastActivity || confidantMessages.length === 0) {
+                              return "A private thread with Rai. She remembers everything.";
+                            }
+                            const diffMs = Date.now() - new Date(confidantLastActivity).getTime();
+                            const hours = Math.floor(diffMs / (60 * 60 * 1000));
+                            let when;
+                            if (hours < 1) when = "just now";
+                            else if (hours < 24) when = hours + "h ago";
+                            else {
+                              const days = Math.floor(hours / 24);
+                              if (days === 1) when = "yesterday";
+                              else if (days < 30) when = days + "d ago";
+                              else {
+                                const months = Math.floor(days / 30);
+                                when = months + "mo ago";
+                              }
+                            }
+                            const exchangeCount = Math.floor(confidantMessages.length / 2);
+                            return `Last spoke ${when} · ${exchangeCount} exchange${exchangeCount === 1 ? "" : "s"} on file`;
+                          })()}
                         </div>
                       </div>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
