@@ -2793,7 +2793,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           aria-label="Return to now"
           style={{
             position: "absolute",
-            right: 290, top: 60,
+            // Scale-compensated position: `right` lives in the SCALED
+            // dial coordinate space, so a raw `right: 290px` shrinks to
+            // ~215px at scale 0.74 and the indicator slides INTO the
+            // arc on smaller viewports. Dividing by the scale keeps the
+            // on-screen offset from the right edge constant — the
+            // indicator stays in the same visual position relative to
+            // the dial arc at every scale.
+            right: "calc(290px / var(--dial-scale, 1))",
+            top: "calc(60px / var(--dial-scale, 1))",
             zIndex: 8,
             background: "transparent",
             border: "none",
@@ -12004,9 +12012,10 @@ export default function App({ user }) {
                     }}>
                       <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", color: "#8A8F8A" }}>Becomes</span>
                       <span>→ {kindNoun}{clientPart}{datePart}</span>
-                      {newTask.trim() && (
-                        <span style={{ marginLeft: "auto", color: "#7c5cf3", fontWeight: 600, fontSize: 11 }}>⏎ {readout.actionLabel}</span>
-                      )}
+                      {/* (Removed: "⏎ Add" hint that used to live here.
+                          Redundant with the main Add button in the chips
+                          row directly above the readout — same affordance,
+                          same keyboard shortcut, visible at the same time.) */}
                     </div>
                   );
                 })()}
@@ -12823,7 +12832,7 @@ export default function App({ user }) {
                       const isRaiPlus = rankMode === "rai" && aiTasksOn;
                       const isRaiOnly = rankMode === "rai" && !aiTasksOn;
                       const isManual = rankMode === "manual";
-                      const modeLabel = isRaiPlus ? "Task & Rank" : isRaiOnly ? "Ranked" : "Manual";
+                      const modeLabel = isRaiPlus ? "Task & Rank" : isRaiOnly ? "Rai Rank" : "Manual";
                       return (
                         <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
@@ -12861,13 +12870,19 @@ export default function App({ user }) {
                                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                                   title="Change ranking mode"
                                 >
-                                  {(isRaiPlus || isRaiOnly) && (
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block" }} aria-hidden="true">
-                                      <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
-                                    </svg>
-                                  )}
+                                  {(isRaiPlus || isRaiOnly) && (() => {
+                                    const Star = () => (
+                                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block" }} aria-hidden="true">
+                                        <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+                                      </svg>
+                                    );
+                                    // Task & Rank gets TWO stars (Rai picks
+                                    // AND ranks). Rai Rank gets ONE (ranks
+                                    // only). Manual gets zero.
+                                    return isRaiPlus ? <span style={{ display: "inline-flex", gap: 1 }}><Star /><Star /></span> : <Star />;
+                                  })()}
                                   <span>{modeLabel}</span>
-                                  <span style={{ color: C.textMuted, fontSize: 9, marginLeft: 1 }}>▾</span>
+                                  <span style={{ color: C.textMuted, fontSize: 11, marginLeft: 2, lineHeight: 1 }}>▾</span>
                                 </button>
                                 {todayModeMenuOpen && (
                                   <>
@@ -12875,7 +12890,7 @@ export default function App({ user }) {
                                     <div className="rt-picker-panel" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: 220, zIndex: 50 }}>
                                       {[
                                         { value: "raiPlus", label: "Task & Rank", hint: "Rai ranks + adds suggested tasks", onClick: () => { setRankMode("rai"); setAiTasks(true); } },
-                                        { value: "raiOnly", label: "Ranked",      hint: "Rai ranks your list only",         onClick: () => { setRankMode("rai"); setAiTasks(false); } },
+                                        { value: "raiOnly", label: "Rai Rank",   hint: "Rai ranks your list only",         onClick: () => { setRankMode("rai"); setAiTasks(false); } },
                                         { value: "manual",  label: "Manual",      hint: "Your own order, no Rai",           onClick: () => { setRankMode("manual"); setAiTasks(false); } },
                                       ].map(opt => {
                                         const active = (opt.value === "raiPlus" && isRaiPlus) || (opt.value === "raiOnly" && isRaiOnly) || (opt.value === "manual" && isManual);
@@ -12895,11 +12910,14 @@ export default function App({ user }) {
                                           >
                                             <div>
                                               <div style={{ fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                                                {(opt.value === "raiPlus" || opt.value === "raiOnly") && (
-                                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                                    <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
-                                                  </svg>
-                                                )}
+                                                {(opt.value === "raiPlus" || opt.value === "raiOnly") && (() => {
+                                                  const MenuStar = () => (
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                      <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+                                                    </svg>
+                                                  );
+                                                  return opt.value === "raiPlus" ? <span style={{ display: "inline-flex", gap: 1 }}><MenuStar /><MenuStar /></span> : <MenuStar />;
+                                                })()}
                                                 {opt.label}
                                               </div>
                                               <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{opt.hint}</div>
@@ -12932,8 +12950,17 @@ export default function App({ user }) {
                                   onMouseEnter={e => { if (!focusMode) e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
                                   onMouseLeave={e => { if (!focusMode) e.currentTarget.style.background = "transparent"; }}
                                 >
+                                  {/* Lightning bolt — replaces the previous
+                                      "→" arrow. Reads as "energy / focus
+                                      moment" rather than the throwaway
+                                      arrow. Stays visible in both states
+                                      (idle and Focusing), color follows
+                                      the text color so it integrates with
+                                      the button rather than fighting it. */}
+                                  <svg width="11" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, display: "block" }}>
+                                    <path d="M13 2L3 14h7l-1 8 11-14h-7l1-6z" fill={focusMode ? C.primaryDark : C.textSec} stroke="none" strokeLinejoin="round" />
+                                  </svg>
                                   {focusMode ? "Focusing" : "Focus"}
-                                  {!focusMode && <span style={{ color: C.textMuted, fontSize: 10 }}>→</span>}
                                 </button>
                               )}
                               {/* Debug pill preserved so ⌘⇧D still works. */}
@@ -12957,7 +12984,7 @@ export default function App({ user }) {
                       <>
                         {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
-                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
+                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={12} />
                         {_todayBucket.length > 0 && (
                           <div className={"rt-today-breakout" + (justPromoted ? " rt-today-breakout-animate" : "")}>
                             {renderRow(_todayBucket[0], "today")}
