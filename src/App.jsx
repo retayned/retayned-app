@@ -8431,17 +8431,16 @@ export default function App({ user }) {
                       0 1px 2px rgba(20,30,22,0.04),
                       0 2px 10px rgba(124,92,243,0.10) !important;
         }
-        /* (1) The TASK composer (inside the Today page) is an underline-
-           style input, not a card. On focus, we don't want a card-shaped
-           halo — we want the existing 1.5px hairline at the bottom to
-           thicken and darken, like a serious text input. Overrides the
-           parent rule's box-shadow for the Today composer only. */
+        /* (1) The TASK composer (inside the Today page) is an inset well,
+           not a card. On focus, the inner shadow deepens slightly so the
+           "type INTO this" affordance becomes more pronounced — like
+           pressing into the surface. No card-shaped halo. */
         .rt-today-v4 .rt-composer {
-          transition: border-bottom-color 140ms var(--rt-ease-out);
+          transition: box-shadow 140ms var(--rt-ease-out), background 140ms var(--rt-ease-out);
         }
         .rt-today-v4 .rt-composer:focus-within {
-          box-shadow: none !important;
-          border-bottom-color: rgba(20,30,22,0.40) !important;
+          box-shadow: inset 0 1px 3px rgba(20,30,22,0.08), inset 0 0 0 1px rgba(20,30,22,0.10) !important;
+          background: #E5E0D5 !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
@@ -10876,7 +10875,15 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: "transparent", borderRadius: 0, boxShadow: "none", borderBottom: "1.5px solid rgba(20,30,22,0.16)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              {/* 1B (inset well) — the composer sits in a slightly darker
+                  warm-grey region than the page, with an inner shadow that
+                  makes it feel recessed. Reads as "type INTO this" rather
+                  than "this floats ON the page" (the previous card
+                  treatment) or "this is just text on the page" (the A2
+                  underline treatment). Solves the floating problem by
+                  giving the composer a region with tactile presence
+                  without the card's heavy chrome. */}
+              <div className="rt-composer" style={{ gridArea: "composer", background: "#EAE6DD", borderRadius: 10, boxShadow: "inset 0 1px 2px rgba(20,30,22,0.04)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
