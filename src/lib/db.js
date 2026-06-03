@@ -1964,6 +1964,23 @@ export const observations = {
     return { data, error };
   },
 
+  // Mark an observation as viewed by the user. Writes viewed_at = NOW()
+  // to the observation row. Drives the persistent Health-page red dot:
+  // the dot turns off when viewed_at is set, and stays off across page
+  // refreshes (the previous in-memory-only flag reset on every reload).
+  // Idempotent — safe to call repeatedly; later calls just refresh the
+  // timestamp.
+  markViewed: async (observationId) => {
+    if (!observationId) return { data: null, error: null };
+    const { data, error } = await supabase
+      .from('observations')
+      .update({ viewed_at: new Date().toISOString() })
+      .eq('id', observationId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
   // Get prior observations for the Mirrors archive page
   listAll: async (userId, limit = 50) => {
     const { data, error } = await supabase
