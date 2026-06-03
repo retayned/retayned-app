@@ -2813,12 +2813,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               element. Quietest possible "this is a thing" treatment. */}
           <span style={{ position: "absolute", left: 0, top: 0, width: 8, height: 8, borderLeft: "1px solid rgba(20,30,22,0.22)", borderTop: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
           <span style={{ position: "absolute", right: 0, bottom: 0, width: 8, height: 8, borderRight: "1px solid rgba(20,30,22,0.22)", borderBottom: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
-              textAlign: "right",
-              transition: "background 120ms var(--rt-ease-out)",
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(20,30,22,0.03)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-          >
           <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted }}>
             Scrubbed{(() => {
               // Show the actual real-time clock value at the moment they
