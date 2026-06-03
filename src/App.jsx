@@ -5966,6 +5966,12 @@ export default function App({ user }) {
   };
   // Date picker popover state — opens when Due chip is clicked
   const [duePickerOpen, setDuePickerOpen] = useState(false);
+  // Type override — lets the user manually pick task/touchpoint/event when
+  // the parser's heuristics would route them somewhere else. `null` means
+  // "auto-detect via parser"; otherwise it's the chosen type. Reset on
+  // submit. Companion picker-open state controls the popover.
+  const [composerTypeOverride, setComposerTypeOverride] = useState(null);
+  const [typePickerOpen, setTypePickerOpen] = useState(false);
   // Which task row's inline due-picker popover is open (desktop). Null = none.
   const [rowDuePickerId, setRowDuePickerId] = useState(null);
   // Screen-space anchor for the row due-picker. The popover renders in a
@@ -10505,54 +10511,61 @@ export default function App({ user }) {
             // the joined word read as "SprintRay").
             return matches[0].name.slice(last.length);
           };
+          // ─── V5 effective-type helper ─────────────────────────────────
+          // Compute which type the composer will produce — task, touchpoint,
+          // or event. Honors composerTypeOverride if the user has manually
+          // set it via the Type chip; otherwise falls back to parser-driven
+          // detection (the same routing logic submitComposer uses).
+          // Returns one of "task" | "touchpoint" | "event", or null when
+          // there's not enough signal to commit to a type yet.
+          const computeEffectiveType = (input, opts = {}) => {
+            const { ignoreOverride = false } = opts;
+            if (!ignoreOverride && composerTypeOverride) return composerTypeOverride;
+            if (!input || !input.trim()) return null;
+            const lowerC = input.toLowerCase();
+            const parsed = parseComposer(input, clients, workersList);
+            const client = parsed.matchedClient || (composerClient ? clients.find(c => c.name === composerClient) : null);
+            // Event: time present after stripping the matched client name.
+            let calText = input;
+            if (client && client.name) {
+              calText = calText.replace(new RegExp(client.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ").replace(/\s+/g, " ").trim();
+            }
+            const calEntry = parseCalendarEntry(calText, new Date(), clients);
+            if (calEntry) return "event";
+            // Touchpoint: past-tense / comm-noun + matched client.
+            const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
+            const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
+            if ((isCommNoun || isPastTouch) && client) return "touchpoint";
+            return "task";
+          };
+          // Auto-detected type (ignoring override) — used for displaying
+          // the chip label when no override is set. When user hasn't typed
+          // anything, returns null.
+          const autoDetectedType = computeEffectiveType(newTask, { ignoreOverride: true });
           // ─── V5 readout summary ────────────────────────────────────────
           // Returns a {label, action, detail} object describing what the
           // composer will produce from the current input, or null when
           // there's nothing useful to show (empty input, no entities
           // parsed). Mirrors the routing logic in submitComposer at a
           // preview level: time present → event, past-tense + client →
-          // touchpoint, otherwise task.
+          // touchpoint, otherwise task. Honors the manual type override
+          // via computeEffectiveType.
           const computeComposerReadout = (input) => {
             if (!input || !input.trim()) return null;
-            const lowerC = input.toLowerCase();
             const parsed = parseComposer(input, clients, workersList);
             const client = parsed.matchedClient || (composerClient ? clients.find(c => c.name === composerClient) : null);
-            // Need at least one parsed signal to be worth showing a readout.
-            if (!client && !parsed.matchedDate && !parsed.matchedWorker && !parsed.matchedRecurrence) return null;
-            // Detect calendar event (time present, not stripped from a
-            // client name). Mirrors submitComposer's ROUTE 0.
-            let calText = input;
-            if (client && client.name) {
-              calText = calText.replace(new RegExp(client.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ").replace(/\s+/g, " ").trim();
-            }
-            const calEntry = parseCalendarEntry(calText, new Date(), clients);
-            if (calEntry) {
-              return {
-                kind: "event",
-                client,
-                date: parsed.matchedDate,
-                actionLabel: "Add",
-              };
-            }
-            // Touchpoint detection: past-tense verb OR communication noun
-            // PLUS a matched client. Mirrors submitComposer's ROUTE 1.
-            const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
-            const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
-            if ((isCommNoun || isPastTouch) && client) {
-              return {
-                kind: "touchpoint",
-                client,
-                date: parsed.matchedDate, // typically "today" if implied
-                actionLabel: "Log",
-              };
-            }
-            // Default: task.
+            // Need at least one parsed signal — OR a manual type override —
+            // to be worth showing a readout.
+            if (!client && !parsed.matchedDate && !parsed.matchedWorker && !parsed.matchedRecurrence && !composerTypeOverride) return null;
+            const kind = computeEffectiveType(input);
+            if (!kind) return null;
             return {
-              kind: "task",
+              kind,
               client,
               date: parsed.matchedDate,
               recurrence: parsed.matchedRecurrence,
-              actionLabel: "Add",
+              actionLabel: kind === "touchpoint" ? "Log" : "Add",
+              isManuallyTyped: !!composerTypeOverride,
             };
           };
           const clientMatches = composerQuery.trim()
@@ -10579,7 +10592,16 @@ export default function App({ user }) {
             // 8pm event. Only a MANUAL date pick (newTaskDueDate present AND not
             // the value the parser set itself) counts as explicit task intent.
             const dueIsManual = !!newTaskDueDate && newTaskDueDate !== parserSetDueDateRef.current;
-            const explicitTask = newTaskRecurring || !!newTaskWorkerId || dueIsManual;
+            // Manual Type override — when the user clicks the Type chip and
+            // picks task/touchpoint/event, treat that as authoritative:
+            //   - "task"       → force ROUTE 2 (skip auto-detect entirely)
+            //   - "touchpoint" → skip ROUTE 0 (event), let ROUTE 1 run (still
+            //                    requires a matched client; falls to task if not)
+            //   - "event"      → only ROUTE 0 attempts; if no time parsed,
+            //                    fall through to task with a console warn
+            // The override is set via the Type chip in the composer row.
+            const typeOverride = composerTypeOverride; // null | "task" | "touchpoint" | "event"
+            const explicitTask = newTaskRecurring || !!newTaskWorkerId || dueIsManual || typeOverride === "task";
 
             if (!explicitTask) {
               // ─── ROUTE 0: CALENDAR EVENT (a time is present). ───────────
@@ -10587,6 +10609,9 @@ export default function App({ user }) {
               // a time, so a numeric client name (e.g. a client literally named
               // "1620") can't be reinterpreted as a time-of-day (16:20). A
               // called-out / matched client token is claimed — never a time.
+              // Skipped when typeOverride is "touchpoint" — user has
+              // explicitly chosen a different type.
+              if (typeOverride !== "touchpoint") {
               const matchedClientForCal = finalParse.matchedClient || clientObj || null;
               let calText = rawComposer;
               if (matchedClientForCal?.name) {
@@ -10618,19 +10643,24 @@ export default function App({ user }) {
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
                 setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
                 setComposerMenuOpen(false); parserSetRecurrenceRef.current = null;
-                setComposerGhost(""); setComposerInPause(false);
+                setComposerGhost(""); setComposerInPause(false); setComposerTypeOverride(null); setTypePickerOpen(false);
                 if (composerPauseTimerRef.current) { clearTimeout(composerPauseTimerRef.current); composerPauseTimerRef.current = null; }
                 return;
               }
+              } // end if (typeOverride !== "touchpoint")
 
               // ─── ROUTE 1: TOUCHPOINT (past-tense / "call with X" + client). ─
               // Same intent rules as the QuickLog FAB, but the inline composer
               // DEFAULTS TO TASK — only explicit touchpoint phrasing routes here.
+              // When typeOverride is "touchpoint", we force this route to run
+              // as long as a client is matched (skipping the past-tense /
+              // comm-noun gate). Falls through to ROUTE 2 task if no client.
               const lowerC = rawComposer.toLowerCase();
               const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
               const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
               const matchedClientC = finalParse.matchedClient || clientObj || null;
-              if ((isCommNoun || isPastTouch) && matchedClientC) {
+              const forceTouchpoint = typeOverride === "touchpoint" && matchedClientC;
+              if ((forceTouchpoint || ((isCommNoun || isPastTouch) && matchedClientC))) {
                 let ch = "note";
                 if (/\bcall|\bspoke|got off|\brang|phone/i.test(lowerC)) ch = "call";
                 else if (/\bemail/i.test(lowerC)) ch = "email";
@@ -10651,7 +10681,7 @@ export default function App({ user }) {
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
                 setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
                 setComposerMenuOpen(false); parserSetRecurrenceRef.current = null;
-                setComposerGhost(""); setComposerInPause(false);
+                setComposerGhost(""); setComposerInPause(false); setComposerTypeOverride(null); setTypePickerOpen(false);
                 if (composerPauseTimerRef.current) { clearTimeout(composerPauseTimerRef.current); composerPauseTimerRef.current = null; }
                 return;
               }
@@ -10720,6 +10750,9 @@ export default function App({ user }) {
             // timer so the readout doesn't fade in over an empty composer.
             setComposerGhost("");
             setComposerInPause(false);
+            // Clear manual type override + close picker.
+            setComposerTypeOverride(null);
+            setTypePickerOpen(false);
             if (composerPauseTimerRef.current) {
               clearTimeout(composerPauseTimerRef.current);
               composerPauseTimerRef.current = null;
@@ -10989,7 +11022,7 @@ export default function App({ user }) {
               {/* COMPOSER — A2 underline-input treatment. No card, no
                   background, no shadow. The 1.5px hairline at the bottom
                   defines the input region; on focus it thickens/darkens. */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: "transparent", borderRadius: 0, boxShadow: "none", borderBottom: "1.5px solid rgba(20,30,22,0.16)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: "transparent", borderRadius: 0, boxShadow: "none", borderBottom: "1.5px solid rgba(20,30,22,0.16)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen || typePickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -11745,6 +11778,151 @@ export default function App({ user }) {
                             );
                           })()}
                         </div>
+                        </>
+                      )}
+                    </div>
+                    {/* Type chip — manual override for task/touchpoint/event.
+                        Lets the user override the parser's auto-detection
+                        when it would miss-fire. Shows the auto-detected
+                        type as the label when there's input but no
+                        override; when overridden, shows the chosen type
+                        with a ✓ to indicate "manually set." */}
+                    <div ref={null} style={{ position: "relative", flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => setTypePickerOpen(!typePickerOpen)}
+                        className={"rt-composer-pill" + ((composerTypeOverride || autoDetectedType) ? " is-filled" : "")}
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                          padding: "0 10px",
+                          height: 28,
+                          border: "none",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          color: (composerTypeOverride || autoDetectedType) ? C.text : C.textSec,
+                          background: C.card,
+                          cursor: "pointer", fontFamily: "inherit",
+                          fontWeight: (composerTypeOverride || autoDetectedType) ? 600 : 500,
+                        }}
+                      >
+                        {(composerTypeOverride || autoDetectedType) && (
+                          <Icon name={
+                            (composerTypeOverride || autoDetectedType) === "event" ? "due" :
+                            (composerTypeOverride || autoDetectedType) === "touchpoint" ? "phone" :
+                            "check"
+                          } size={14} simple color={C.text} />
+                        )}
+                        <span>{
+                          composerTypeOverride === "task" ? "Task" :
+                          composerTypeOverride === "touchpoint" ? "Touchpoint" :
+                          composerTypeOverride === "event" ? "Event" :
+                          autoDetectedType === "task" ? "Task" :
+                          autoDetectedType === "touchpoint" ? "Touchpoint" :
+                          autoDetectedType === "event" ? "Event" :
+                          "Type"
+                        }</span>
+                      </button>
+                      {composerTypeOverride && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setComposerTypeOverride(null); }}
+                          style={{
+                            position: "absolute",
+                            top: -3, right: -3,
+                            width: 16, height: 16,
+                            borderRadius: 8,
+                            background: C.card,
+                            color: C.textMuted,
+                            cursor: "pointer",
+                            display: "grid", placeItems: "center",
+                            padding: 0,
+                            zIndex: 1,
+                          }}
+                          aria-label="Clear type override"
+                          title="Auto-detect type"
+                        >
+                          <Icon name="x" size={9} />
+                        </button>
+                      )}
+                      {typePickerOpen && (
+                        <>
+                          <div
+                            onClick={() => setTypePickerOpen(false)}
+                            style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }}
+                          />
+                          <div className="rt-picker-panel" style={{
+                            position: "absolute",
+                            top: "calc(100% + 6px)",
+                            right: 0,
+                            background: C.card,
+                            border: "1px solid " + C.borderLight,
+                            borderRadius: 10,
+                            boxShadow: "var(--rt-sh-card)",
+                            padding: 4,
+                            minWidth: 180,
+                            zIndex: 50,
+                          }}>
+                            {[
+                              { value: "task",       label: "Task",       hint: "Something to do" },
+                              { value: "touchpoint", label: "Touchpoint", hint: "Past contact, log it" },
+                              { value: "event",      label: "Event",      hint: "Scheduled time" },
+                            ].map(opt => {
+                              const isActive = composerTypeOverride === opt.value;
+                              return (
+                                <button
+                                  key={opt.value}
+                                  onClick={() => { setComposerTypeOverride(opt.value); setTypePickerOpen(false); }}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    width: "100%",
+                                    padding: "8px 10px",
+                                    border: "none",
+                                    background: isActive ? C.surfaceWarm : "transparent",
+                                    borderRadius: 6,
+                                    cursor: "pointer",
+                                    fontFamily: "inherit",
+                                    textAlign: "left",
+                                    color: C.text,
+                                  }}
+                                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
+                                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>{opt.label}</div>
+                                    <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{opt.hint}</div>
+                                  </div>
+                                  {isActive && <Icon name="check" size={13} simple color={C.primary} />}
+                                </button>
+                              );
+                            })}
+                            {composerTypeOverride && (
+                              <>
+                                <div style={{ height: 1, background: C.borderLight, margin: "4px 0" }} />
+                                <button
+                                  onClick={() => { setComposerTypeOverride(null); setTypePickerOpen(false); }}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    width: "100%",
+                                    padding: "7px 10px",
+                                    border: "none",
+                                    background: "transparent",
+                                    borderRadius: 6,
+                                    cursor: "pointer",
+                                    fontFamily: "inherit",
+                                    fontSize: 12,
+                                    color: C.textMuted,
+                                    textAlign: "left",
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = "rgba(20,30,22,0.04)"}
+                                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                >
+                                  Auto-detect type
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
