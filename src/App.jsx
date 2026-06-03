@@ -12019,7 +12019,7 @@ export default function App({ user }) {
                       Tooltips carry the meaning for first-time discovery.
                       Top margin + subtle top hairline visually separates
                       this control row from the composer underline above. */}
-                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 4px 14px", marginTop: 8, borderTop: "1px solid " + C.borderLight }}>
+                  <div className="rt-toolbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 4px 14px", marginTop: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {(() => {
                         const aiTasksOn = raiState?.ai_tasks_enabled !== false;
