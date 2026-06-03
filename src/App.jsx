@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb } from "./lib/db";
+import { clients as clientsDb, tasks as tasksDb, healthChecks as hcDb, rolodex as rolodexDb, referrals as referralsDb, raiConversations as convoDb, touchpoints as touchpointsDb, observations as observationsDb, daybook as daybookDb, profile as profileDb, workers as workersDb, raiUserState as raiUserStateDb, raiPicks as raiPicksDb, realtime as realtimeDb, revenueHistoryDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, personalCalendar as personalCalendarDb, clientEngagementPausesDb, clientAddons as clientAddonsDb } from "./lib/db";
 import WorkerDashboard from "./WorkerDashboard";
 // d3-force for the live, physics-driven referral network. We import only
 // the force functions we use (not the full d3 bundle) — keeps the chunk
@@ -5113,6 +5113,17 @@ export default function App({ user }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [clientTab, setClientTab] = useState("overview");
   const [clientBilling, setClientBilling] = useState({});
+  // Client addons (ad-hoc revenue) — keyed by client_id, array of
+  // addon rows. Populated at hydration and refetched when the
+  // Billing tab opens (so just-added rows show without a full
+  // reload). One row per ad-hoc payment.
+  const [clientAddons, setClientAddons] = useState({});
+  // Local form state for the "Add addon" row at the bottom of the
+  // Billing tab. Reset to defaults after each successful save.
+  const [newAddon, setNewAddon] = useState({ amount: "", description: "", charged_at: "" });
+  // Track which addon is being edited (null = no edit mode).
+  const [editingAddonId, setEditingAddonId] = useState(null);
+  const [editingAddon, setEditingAddon] = useState({ amount: "", description: "", charged_at: "" });
   // QuickLog — global FAB composer for fast personal-task capture.
   // Shell v1 (May 2026): plain task creation, no parsing. v2 will add
   // client matching + tense detection (past = touchpoint, future = task).
@@ -6632,10 +6643,43 @@ export default function App({ user }) {
         .then(r => { if (r?.data) setBillingTerms(r.data); })
         .catch(e => console.warn("billing terms hydrate failed:", e));
     }
+    // Ad-hoc revenue (addons) — bulk fetch grouped by client_id.
+    // Same lazy timing as billing data: only visible on the Billing
+    // tab, so we don't block initial paint with it.
+    if (typeof clientAddonsDb?.listAllByClient === "function") {
+      clientAddonsDb.listAllByClient(uid)
+        .then(r => { if (r?.data) setClientAddons(r.data); })
+        .catch(e => console.warn("addons hydrate failed:", e));
+    }
   }, [user, userTimezone]);
 
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ─── LTV addon adjustment ─────────────────────────────────────
+  // The main clients hydration computes LTV from retainer history
+  // only (lifetime_revenue_at_entry + monthly_rate × months). Addons
+  // load separately (lazy fetch on the Billing tab path). When they
+  // arrive, patch each client's LTV to include their addon sum so
+  // every downstream consumer (network map, profile-score math,
+  // referral-adjusted LTV) sees the complete number.
+  //
+  // The base LTV (retainer-only) is stashed on `ltv_retainer` so we
+  // can recompute the total cleanly whenever addons change — avoids
+  // double-adding if this effect fires multiple times.
+  useEffect(() => {
+    if (!clients || clients.length === 0) return;
+    setClients(prev => prev.map(c => {
+      const base = c.ltv_retainer != null ? c.ltv_retainer : Number(c.ltv || 0);
+      const addonSum = (clientAddons[c.id] || []).reduce((s, a) => s + Number(a.amount || 0), 0);
+      return {
+        ...c,
+        ltv_retainer: base,
+        ltv: base + addonSum,
+      };
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientAddons]);
 
   // ─── Realtime task sync ─────────────────────────────────────
   // Subscribe to all tasks-table changes for this user. Primary use:
@@ -19847,6 +19891,280 @@ export default function App({ user }) {
                           })}
                         </div>
                       )}
+
+                      {/* ─── AD-HOC REVENUE (client_addons) ─────────── */}
+                      {/* Section for one-time payments outside the monthly
+                          rate — setup fees, project bonuses, annual
+                          prepays, late fees, anything not on the retainer.
+                          Each addon = one DB row, listed newest-first.
+                          Saving updates client_addons, which feeds into
+                          LTV calc + Rai's context payload. */}
+                      <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid " + C.borderLight }}>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: C.text }}>
+                            Ad-hoc revenue
+                          </div>
+                          {(() => {
+                            const addons = clientAddons[sc.id] || [];
+                            if (addons.length === 0) return null;
+                            const total = addons.reduce((s, a) => s + Number(a.amount || 0), 0);
+                            return (
+                              <div style={{ fontSize: 12, color: C.textMuted, fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace" }}>
+                                {addons.length} {addons.length === 1 ? "entry" : "entries"} · ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                        <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 16, lineHeight: 1.5 }}>
+                          One-time payments outside the monthly rate — setup fees, project bonuses, lump sums. These count toward LTV.
+                        </div>
+
+                        {/* Existing addons list */}
+                        {(clientAddons[sc.id] || []).length > 0 && (
+                          <div style={{ marginBottom: 16 }}>
+                            {(clientAddons[sc.id] || []).map(a => {
+                              const isEditing = editingAddonId === a.id;
+                              return (
+                                <div key={a.id} style={{
+                                  display: "flex", alignItems: "center", gap: 10,
+                                  padding: "10px 12px",
+                                  borderBottom: "1px solid " + C.borderLight,
+                                  fontSize: 13,
+                                }}>
+                                  {isEditing ? (
+                                    <>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={editingAddon.amount}
+                                        onChange={e => setEditingAddon(p => ({ ...p, amount: e.target.value }))}
+                                        placeholder="0.00"
+                                        style={{
+                                          width: 100, padding: "6px 8px",
+                                          border: "1px solid " + C.borderLight, borderRadius: 6,
+                                          fontFamily: "inherit", fontSize: 13,
+                                        }}
+                                      />
+                                      <input
+                                        type="date"
+                                        value={editingAddon.charged_at}
+                                        onChange={e => setEditingAddon(p => ({ ...p, charged_at: e.target.value }))}
+                                        style={{
+                                          padding: "6px 8px",
+                                          border: "1px solid " + C.borderLight, borderRadius: 6,
+                                          fontFamily: "inherit", fontSize: 13,
+                                        }}
+                                      />
+                                      <input
+                                        type="text"
+                                        value={editingAddon.description}
+                                        onChange={e => setEditingAddon(p => ({ ...p, description: e.target.value }))}
+                                        placeholder="Description"
+                                        style={{
+                                          flex: 1, padding: "6px 8px",
+                                          border: "1px solid " + C.borderLight, borderRadius: 6,
+                                          fontFamily: "inherit", fontSize: 13,
+                                        }}
+                                      />
+                                      <button
+                                        onClick={async () => {
+                                          const amt = parseFloat(editingAddon.amount);
+                                          if (!isFinite(amt) || amt <= 0) return;
+                                          // Optimistic update
+                                          const patch = {
+                                            amount: amt,
+                                            charged_at: editingAddon.charged_at,
+                                            description: editingAddon.description.trim() || null,
+                                          };
+                                          setClientAddons(prev => ({
+                                            ...prev,
+                                            [sc.id]: (prev[sc.id] || []).map(x => x.id === a.id ? { ...x, ...patch } : x),
+                                          }));
+                                          setEditingAddonId(null);
+                                          try {
+                                            await clientAddonsDb.update(a.id, patch);
+                                          } catch (e) {
+                                            console.warn("addon update failed:", e);
+                                          }
+                                        }}
+                                        style={{
+                                          padding: "6px 12px", border: "none", borderRadius: 6,
+                                          background: C.btn, color: "#fff", fontSize: 12, fontWeight: 600,
+                                          cursor: "pointer", fontFamily: "inherit",
+                                        }}
+                                      >Save</button>
+                                      <button
+                                        onClick={() => setEditingAddonId(null)}
+                                        style={{
+                                          padding: "6px 10px", border: "none", borderRadius: 6,
+                                          background: "transparent", color: C.textMuted, fontSize: 12,
+                                          cursor: "pointer", fontFamily: "inherit",
+                                        }}
+                                      >Cancel</button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div style={{
+                                        fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                        fontWeight: 600, fontSize: 13,
+                                        width: 100, textAlign: "right",
+                                        color: C.text,
+                                      }}>
+                                        ${Number(a.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </div>
+                                      <div style={{
+                                        fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
+                                        fontSize: 11.5, color: C.textMuted,
+                                        width: 90, flexShrink: 0,
+                                      }}>
+                                        {a.charged_at}
+                                      </div>
+                                      <div style={{ flex: 1, color: a.description ? C.text : C.textMuted, fontStyle: a.description ? "normal" : "italic" }}>
+                                        {a.description || "(no description)"}
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          setEditingAddonId(a.id);
+                                          setEditingAddon({
+                                            amount: String(a.amount),
+                                            charged_at: a.charged_at,
+                                            description: a.description || "",
+                                          });
+                                        }}
+                                        style={{
+                                          padding: "4px 10px", border: "none", borderRadius: 6,
+                                          background: "transparent", color: C.textSec, fontSize: 12,
+                                          cursor: "pointer", fontFamily: "inherit",
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.background = "rgba(20,30,22,0.04)"}
+                                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                      >Edit</button>
+                                      <button
+                                        onClick={async () => {
+                                          if (!confirm("Delete this addon?")) return;
+                                          setClientAddons(prev => ({
+                                            ...prev,
+                                            [sc.id]: (prev[sc.id] || []).filter(x => x.id !== a.id),
+                                          }));
+                                          try {
+                                            await clientAddonsDb.delete(a.id);
+                                          } catch (e) {
+                                            console.warn("addon delete failed:", e);
+                                          }
+                                        }}
+                                        style={{
+                                          padding: "4px 10px", border: "none", borderRadius: 6,
+                                          background: "transparent", color: C.danger, fontSize: 12,
+                                          cursor: "pointer", fontFamily: "inherit",
+                                        }}
+                                        onMouseEnter={e => e.currentTarget.style.background = "rgba(196,67,43,0.06)"}
+                                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                                      >Delete</button>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Add new addon row */}
+                        <div style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "12px 12px",
+                          background: C.surface,
+                          borderRadius: 10,
+                        }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={newAddon.amount}
+                            onChange={e => setNewAddon(p => ({ ...p, amount: e.target.value }))}
+                            placeholder="0.00"
+                            style={{
+                              width: 100, padding: "8px 10px",
+                              border: "1px solid " + C.borderLight, borderRadius: 6,
+                              fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace", fontSize: 13,
+                              background: C.card,
+                            }}
+                          />
+                          <input
+                            type="date"
+                            value={newAddon.charged_at || new Date().toISOString().slice(0, 10)}
+                            onChange={e => setNewAddon(p => ({ ...p, charged_at: e.target.value }))}
+                            style={{
+                              padding: "8px 10px",
+                              border: "1px solid " + C.borderLight, borderRadius: 6,
+                              fontFamily: "inherit", fontSize: 13,
+                              background: C.card,
+                            }}
+                          />
+                          <input
+                            type="text"
+                            value={newAddon.description}
+                            onChange={e => setNewAddon(p => ({ ...p, description: e.target.value }))}
+                            placeholder="What was this for? (setup fee, project bonus, annual prepay…)"
+                            onKeyDown={async e => {
+                              if (e.key !== "Enter") return;
+                              const amt = parseFloat(newAddon.amount);
+                              if (!isFinite(amt) || amt <= 0) return;
+                              const charged = newAddon.charged_at || new Date().toISOString().slice(0, 10);
+                              const desc = newAddon.description.trim() || null;
+                              try {
+                                const { data } = await clientAddonsDb.add(user.id, sc.id, { amount: amt, charged_at: charged, description: desc });
+                                if (data) {
+                                  setClientAddons(prev => ({
+                                    ...prev,
+                                    [sc.id]: [data, ...(prev[sc.id] || [])],
+                                  }));
+                                  setNewAddon({ amount: "", description: "", charged_at: "" });
+                                }
+                              } catch (err) {
+                                console.warn("addon add failed:", err);
+                              }
+                            }}
+                            style={{
+                              flex: 1, padding: "8px 10px",
+                              border: "1px solid " + C.borderLight, borderRadius: 6,
+                              fontFamily: "inherit", fontSize: 13,
+                              background: C.card,
+                            }}
+                          />
+                          <button
+                            onClick={async () => {
+                              const amt = parseFloat(newAddon.amount);
+                              if (!isFinite(amt) || amt <= 0) return;
+                              const charged = newAddon.charged_at || new Date().toISOString().slice(0, 10);
+                              const desc = newAddon.description.trim() || null;
+                              try {
+                                const { data } = await clientAddonsDb.add(user.id, sc.id, { amount: amt, charged_at: charged, description: desc });
+                                if (data) {
+                                  setClientAddons(prev => ({
+                                    ...prev,
+                                    [sc.id]: [data, ...(prev[sc.id] || [])],
+                                  }));
+                                  setNewAddon({ amount: "", description: "", charged_at: "" });
+                                }
+                              } catch (err) {
+                                console.warn("addon add failed:", err);
+                              }
+                            }}
+                            disabled={!newAddon.amount || parseFloat(newAddon.amount) <= 0}
+                            style={{
+                              padding: "8px 16px", border: "none", borderRadius: 8,
+                              background: (!newAddon.amount || parseFloat(newAddon.amount) <= 0) ? C.surface : "var(--rt-grad-purple)",
+                              color: (!newAddon.amount || parseFloat(newAddon.amount) <= 0) ? C.textMuted : "#fff",
+                              fontSize: 13, fontWeight: 700,
+                              cursor: (!newAddon.amount || parseFloat(newAddon.amount) <= 0) ? "default" : "pointer",
+                              fontFamily: "inherit",
+                              flexShrink: 0,
+                            }}
+                          >Add</button>
+                        </div>
+                      </div>
+
                     </div>
                   );
                 })()}
