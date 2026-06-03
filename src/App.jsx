@@ -2793,15 +2793,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           aria-label="Return to now"
           style={{
             position: "absolute",
-            // Scale-compensated position: `right` lives in the SCALED
-            // dial coordinate space, so a raw `right: 290px` shrinks to
-            // ~215px at scale 0.74 and the indicator slides INTO the
-            // arc on smaller viewports. Dividing by the scale keeps the
-            // on-screen offset from the right edge constant — the
-            // indicator stays in the same visual position relative to
-            // the dial arc at every scale.
-            right: "calc(290px / var(--dial-scale, 1))",
-            top: "calc(60px / var(--dial-scale, 1))",
+            // Position: upper-inner dial area, well clear of both the
+            // arc curve AND the left-side rail of event labels. Previous
+            // position (right: 290 / top: 60) landed ON the noon-area
+            // rail events at smaller dial scales — labels and indicator
+            // visually collided. Pushing further right + slightly down
+            // keeps the indicator inside the arc curve but above all
+            // event rows. Scale-compensated so on-screen offset stays
+            // consistent across dial-scale breakpoints.
+            right: "calc(180px / var(--dial-scale, 1))",
+            top: "calc(40px / var(--dial-scale, 1))",
             zIndex: 8,
             background: "transparent",
             border: "none",
@@ -7354,6 +7355,19 @@ export default function App({ user }) {
   // Sidebar list of past conversations (populated by loadData).
   const [raiConvoList, setRaiConvoList] = useState([]);
   const aiEndRef = useRef(null);
+  // ─── CONFIDANT STATE (per-client Rai chat on client profile) ─────
+  // Separate from global Rai chat state — the Confidant lives on the
+  // client profile's "Rai" tab and threads conversations per (user_id,
+  // client_id). Opening the same client later resumes the same thread.
+  const [confidantMessages, setConfidantMessages] = useState([]);
+  const [confidantInput, setConfidantInput] = useState("");
+  const [confidantTyping, setConfidantTyping] = useState(false);
+  const [confidantConvoId, setConfidantConvoId] = useState(null);
+  const [confidantLoadingThread, setConfidantLoadingThread] = useState(false);
+  // ID of the client whose thread is currently loaded — used to guard
+  // against stale loads when the user navigates between clients quickly.
+  const confidantLoadedClientRef = useRef(null);
+  const confidantEndRef = useRef(null);
   // When the task-discussion click handler pre-loads context and then wants
   // Rai to immediately produce the artifact (a draft, an analysis, etc.)
   // instead of asking what to do, it stashes the auto-fire text here. A
@@ -7438,8 +7452,11 @@ export default function App({ user }) {
     setAiTyping(true);
 
     try {
-      // Conversation history — last 10 messages in Anthropic format
-      const history = aiMessages.slice(-10).map(m => ({
+      // Conversation history — last 30 messages in Anthropic format.
+      // Cap raised from 10 to 30 alongside the Confidant launch — deep
+      // CRM conversations regularly span more than 5 turns and Rai
+      // forgetting recent context felt jarring. 30 messages ≈ 15 turns.
+      const history = aiMessages.slice(-30).map(m => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text
       }));
@@ -7664,9 +7681,192 @@ export default function App({ user }) {
     setObservationContext(null);
   };
 
+  // ─── CONFIDANT: load thread for a specific client ────────────────
+  // Called when the user opens the "Rai" tab on a client profile.
+  // Uses convoDb.getOrCreate(userId, clientId) to find an existing
+  // thread for this (user, client) pair, or creates a fresh one.
+  // Populates confidantMessages from the row's messages JSONB array.
+  const loadConfidantThread = async (clientId) => {
+    if (!user || !clientId) return;
+    // Guard against stale loads: if the user clicks across clients
+    // quickly, we use a ref to track which client we're loading FOR,
+    // and discard the result if the user has moved on.
+    confidantLoadedClientRef.current = clientId;
+    setConfidantLoadingThread(true);
+    try {
+      const { data } = await convoDb.getOrCreate(user.id, clientId);
+      // If user navigated to a different client mid-load, abort.
+      if (confidantLoadedClientRef.current !== clientId) return;
+      if (!data) {
+        setConfidantMessages([]);
+        setConfidantConvoId(null);
+        return;
+      }
+      // Normalize message shape from {role, text, attachments, timestamp}
+      // to the chat UI's {role: "user"|"ai", text} format.
+      const messages = (data.messages || []).map(m => ({
+        role: m.role === "assistant" ? "ai" : m.role,
+        text: m.text || "",
+      }));
+      setConfidantMessages(messages);
+      setConfidantConvoId(data.id);
+    } catch (err) {
+      console.warn("Confidant thread load failed:", err);
+      setConfidantMessages([]);
+      setConfidantConvoId(null);
+    } finally {
+      setConfidantLoadingThread(false);
+    }
+  };
+
+  // ─── CONFIDANT: send message to Rai (per-client thread) ──────────
+  // Mirrors sendAi but: passes focused_client_id, uses confidant
+  // state instead of global aiMessages state, persists to the
+  // pre-loaded confidantConvoId thread. Same 30-message cap, same
+  // streaming Edge Function call.
+  const sendConfidantMessage = async (text, clientId) => {
+    const q = (text || "").trim();
+    if (!q || !clientId || !user) return;
+    setConfidantMessages(prev => [...prev, { role: "user", text: q }]);
+    setConfidantInput("");
+    setConfidantTyping(true);
+    try {
+      // Build the same Anthropic-format history as the global chat.
+      const history = confidantMessages.slice(-30).map(m => ({
+        role: m.role === "ai" ? "assistant" : "user",
+        content: m.text,
+      }));
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/rai-chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "Accept": "text/event-stream",
+        },
+        body: JSON.stringify({
+          message: q,
+          history,
+          focused_client_id: clientId,
+          stream: true,
+        }),
+      });
+      if (!response.ok) {
+        // Match the global chat's error UX — show a single AI bubble
+        // explaining the failure rather than throwing.
+        if (response.status === 429) {
+          const errData = await response.json().catch(() => ({}));
+          setConfidantMessages(prev => [...prev, {
+            role: "ai",
+            text: errData.message || "You've hit your daily message limit. Try again tomorrow.",
+          }]);
+        } else {
+          setConfidantMessages(prev => [...prev, {
+            role: "ai",
+            text: "I'm having trouble thinking right now. Try again in a moment.",
+          }]);
+        }
+        return;
+      }
+      // Stream parsing — Anthropic SSE format. Accumulate text deltas
+      // into a single AI bubble that grows as the stream progresses.
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      setConfidantMessages(prev => [...prev, { role: "ai", text: "" }]);
+      let buffer = "";
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(payload);
+            if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+              accumulated += evt.delta.text;
+              setConfidantMessages(prev => {
+                const next = [...prev];
+                if (next.length > 0 && next[next.length - 1].role === "ai") {
+                  next[next.length - 1] = { role: "ai", text: accumulated };
+                }
+                return next;
+              });
+            }
+          } catch {
+            // Swallow malformed SSE frames — Anthropic occasionally
+            // sends keepalive comments that aren't valid JSON.
+          }
+        }
+      }
+      // Persist the full exchange to the conversation row. The thread
+      // already exists (loadConfidantThread runs first); we just
+      // overwrite its messages array with the new full transcript.
+      // Lazy guard in case the load never completed.
+      const fullMessages = [
+        ...confidantMessages,
+        { role: "user", text: q },
+        { role: "ai", text: accumulated },
+      ];
+      if (confidantConvoId) {
+        await supabase
+          .from("rai_conversations")
+          .update({
+            messages: fullMessages.map(m => ({
+              role: m.role === "ai" ? "assistant" : m.role,
+              text: m.text,
+              timestamp: new Date().toISOString(),
+            })),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", confidantConvoId);
+      }
+    } catch (err) {
+      console.error("Confidant send failed:", err);
+      setConfidantMessages(prev => [...prev, {
+        role: "ai",
+        text: "Something went wrong connecting to Rai. Check your connection and try again.",
+      }]);
+    } finally {
+      setConfidantTyping(false);
+    }
+  };
+
   // Toggle star. Optimistic update — flip local state first, then persist.
   // If the DB write fails, revert. Keeps the sidebar snappy.
   // Dismiss the "Connect Google Calendar" nudge on the Today page.
+  // ─── CONFIDANT: load thread when user opens "Rai" tab on a client ─
+  // Fires when (a) the user switches to the Rai tab, AND (b) a client
+  // is selected. Also fires when the user navigates between clients
+  // while the Rai tab is already open. Loads / creates the (user,
+  // client) thread and populates confidantMessages.
+  useEffect(() => {
+    if (clientTab !== "rai") return;
+    if (!selectedClient?.id) return;
+    if (confidantLoadedClientRef.current === selectedClient.id) return; // already loaded
+    // Clear stale state from a previous client immediately so the
+    // user doesn't briefly see the wrong conversation.
+    setConfidantMessages([]);
+    setConfidantConvoId(null);
+    setConfidantInput("");
+    loadConfidantThread(selectedClient.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientTab, selectedClient?.id]);
+
+  // Autoscroll to bottom of Confidant chat when messages update.
+  useEffect(() => {
+    if (clientTab !== "rai") return;
+    if (confidantEndRef.current) {
+      confidantEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [confidantMessages, confidantTyping, clientTab]);
+
   // Optimistic: hide immediately, persist to profile. On failure we
   // revert so the prompt reappears (better the user sees it again than
   // thinks they dismissed it and it silently comes back next session).
@@ -12023,7 +12223,7 @@ export default function App({ user }) {
               </div>
 
               {/* TASKS COLUMN */}
-              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0 }}>
+              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0, paddingTop: 12 }}>
                   {/* (Removed: rt-toolbar — the segmented control + Focus
                       button row. Mode selector and Focus link moved INTO
                       the "Today" bucket header per option #5 of the
@@ -12984,7 +13184,7 @@ export default function App({ user }) {
                       <>
                         {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
-                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={12} />
+                        <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
                         {_todayBucket.length > 0 && (
                           <div className={"rt-today-breakout" + (justPromoted ? " rt-today-breakout-animate" : "")}>
                             {renderRow(_todayBucket[0], "today")}
@@ -18263,7 +18463,7 @@ export default function App({ user }) {
 
               <div style={{ padding: "16px 20px 0" }}>
                 <div style={{ display: "flex", gap: 0, background: C.surface, borderRadius: 10, padding: 3 }}>
-                  {["Overview", "Profile", "Billing", "Flags"].map(t => {
+                  {["Overview", "Profile", "Billing", "Flags", "Rai"].map(t => {
                     const isActive = clientTab === t.toLowerCase();
                     return (
                       <button key={t} onClick={() => setClientTab(t.toLowerCase())} style={{
@@ -19662,6 +19862,201 @@ export default function App({ user }) {
                         </div>
                       );
                     })()}
+                  </div>
+                )}
+
+                {/* ─── CONFIDANT TAB — per-client Rai chat ─────────── */}
+                {/* Threading model: one persistent conversation per
+                    (user, client) pair, loaded via convoDb.getOrCreate
+                    on tab open. Edge Function gets focused_client_id
+                    set so Rai sees the full 30-day relationship history
+                    (touchpoints, completions, calendar, observations).
+                    Messages cap at 30 in active context, but full
+                    history persists in DB. */}
+                {clientTab === "rai" && (
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "calc(100vh - 280px)",
+                    minHeight: 480,
+                    background: "linear-gradient(180deg, " + C.surfaceWarm + "00, " + C.primaryGhost + "60)",
+                    borderRadius: 12,
+                    border: "1px solid " + C.borderLight,
+                    overflow: "hidden",
+                  }}>
+                    {/* Eyebrow — client avatar + "Talking with Rai about [client]" */}
+                    <div style={{
+                      padding: "12px 16px",
+                      borderBottom: "1px solid " + C.borderLight,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      background: C.card,
+                    }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: "50%",
+                        background: sc.color || C.primary,
+                        color: "#fff",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, fontWeight: 700,
+                        flexShrink: 0,
+                      }}>
+                        {(sc.name || "?").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{sc.name}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}>
+                          A private thread with Rai. She remembers everything.
+                        </div>
+                      </div>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+                      </svg>
+                    </div>
+
+                    {/* Message list */}
+                    <div style={{
+                      flex: 1,
+                      overflowY: "auto",
+                      padding: "16px 16px 4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}>
+                      {confidantLoadingThread ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: C.textMuted, fontSize: 13 }}>
+                          Loading conversation…
+                        </div>
+                      ) : confidantMessages.length === 0 ? (
+                        <div style={{
+                          margin: "auto",
+                          textAlign: "center",
+                          maxWidth: 360,
+                          padding: "32px 24px",
+                        }}>
+                          <div style={{
+                            fontFamily: "'Fraunces', Georgia, serif",
+                            fontStyle: "italic",
+                            fontSize: 22,
+                            color: C.text,
+                            letterSpacing: "-0.015em",
+                            marginBottom: 10,
+                            lineHeight: 1.25,
+                          }}>
+                            Hi. What's on your mind about {sc.name}?
+                          </div>
+                          <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.55 }}>
+                            I have their last 30 days in mind — touchpoints, completed work, what's coming up. Ask me anything.
+                          </div>
+                        </div>
+                      ) : (
+                        confidantMessages.map((m, i) => (
+                          <div key={i} style={{
+                            display: "flex",
+                            justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                          }}>
+                            <div style={{
+                              maxWidth: "78%",
+                              padding: "10px 14px",
+                              borderRadius: 14,
+                              background: m.role === "user" ? C.text : C.card,
+                              color: m.role === "user" ? "#fff" : C.text,
+                              fontSize: 13.5,
+                              lineHeight: 1.5,
+                              boxShadow: m.role === "ai" ? "var(--rt-sh-xs)" : "none",
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                            }}>
+                              {m.text || (m.role === "ai" ? (
+                                <span style={{ color: C.textMuted }}>…</span>
+                              ) : null)}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {confidantTyping && confidantMessages.length > 0 && confidantMessages[confidantMessages.length - 1]?.role !== "ai" && (
+                        <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                          <div style={{
+                            padding: "10px 14px",
+                            borderRadius: 14,
+                            background: C.card,
+                            color: C.textMuted,
+                            fontSize: 13.5,
+                            boxShadow: "var(--rt-sh-xs)",
+                          }}>
+                            …
+                          </div>
+                        </div>
+                      )}
+                      <div ref={confidantEndRef} />
+                    </div>
+
+                    {/* Input bar */}
+                    <div style={{
+                      padding: "12px 16px",
+                      borderTop: "1px solid " + C.borderLight,
+                      background: C.card,
+                      display: "flex",
+                      alignItems: "flex-end",
+                      gap: 10,
+                    }}>
+                      <textarea
+                        value={confidantInput}
+                        onChange={e => setConfidantInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            if (confidantInput.trim() && !confidantTyping) {
+                              sendConfidantMessage(confidantInput, sc.id);
+                            }
+                          }
+                        }}
+                        placeholder={`Ask Rai about ${sc.name}…`}
+                        rows={1}
+                        style={{
+                          flex: 1,
+                          border: "1px solid " + C.borderLight,
+                          borderRadius: 10,
+                          padding: "10px 12px",
+                          fontSize: 13.5,
+                          fontFamily: "inherit",
+                          background: C.bg,
+                          color: C.text,
+                          resize: "none",
+                          minHeight: 38,
+                          maxHeight: 160,
+                          outline: "none",
+                          lineHeight: 1.4,
+                        }}
+                        disabled={confidantTyping || confidantLoadingThread}
+                      />
+                      <button
+                        onClick={() => {
+                          if (confidantInput.trim() && !confidantTyping) {
+                            sendConfidantMessage(confidantInput, sc.id);
+                          }
+                        }}
+                        disabled={!confidantInput.trim() || confidantTyping || confidantLoadingThread}
+                        style={{
+                          padding: "10px 16px",
+                          borderRadius: 10,
+                          border: "none",
+                          background: confidantInput.trim() && !confidantTyping ? "var(--rt-grad-purple)" : C.surface,
+                          color: confidantInput.trim() && !confidantTyping ? "#fff" : C.textMuted,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: confidantInput.trim() && !confidantTyping ? "pointer" : "default",
+                          fontFamily: "inherit",
+                          flexShrink: 0,
+                          height: 38,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {confidantTyping ? "Thinking…" : "Send"}
+                      </button>
+                    </div>
                   </div>
                 )}
 
