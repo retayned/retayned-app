@@ -9036,30 +9036,50 @@ export default function App({ user }) {
         .rt-today-v4 > .rt-composer {
           max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 120px);
         }
-        /* ── HERO SURFACE (Concept 2) ──────────────────────────────────────
-           The band (greeting + brief + meta row) gets a soft warm-cream
-           tint with rounded top corners and squared-off bottom. The
-           composer below it sits FLUSH against the band — same width,
-           no gap. Result: the composer reads as the bottom half of a
-           larger command-center zone, not as an island floating alone
-           on the page.
-           Implementation note: the composer keeps its own white-card
-           inline styling. Only the BAND gets surface treatment, and
-           the visual connection comes from the band's bottom edge
-           butting up against the composer's top edge with no gap. */
-        .rt-today-v4 > .rt-band {
-          background: rgba(255, 250, 238, 0.62);
-          border-radius: 14px 14px 0 0;
-          padding: 22px 22px 18px !important;
-          border-bottom: none !important;
-          margin-bottom: 0;
+        /* ── FUSED CONTROL PANEL (Concept 4) ─────────────────────────────
+           The composer card and the segmented control (Task & Rank /
+           Ranked / Manual / Focus) read as ONE unified "controls panel"
+           with two zones separated by a hairline. The composer is no
+           longer alone — it shares its card with the view-mode toggles
+           directly beneath it.
+           Approach: keep DOM as-is. Use CSS to render the toolbar (which
+           lives at the top of .rt-tasks-col) as if it's the bottom zone
+           of the composer card. Specifically: composer keeps its white
+           card but with rounded TOP corners only; toolbar gets a matching
+           cream tint, rounded BOTTOM corners, hairline above, and
+           negative top margin to butt flush against the composer. The
+           hairline replaces the grid gap that used to separate them. */
+        /* Composer: rounded top corners only, no bottom rounding (the
+           toolbar finishes the card below). Existing inline white bg
+           and shadow continue to work. */
+        .rt-today-v4 > .rt-composer {
+          border-radius: 14px 14px 0 0 !important;
+          /* The fused card's shadow needs to wrap the whole structure
+             (composer + toolbar). The composer's own shadow is reduced
+             to vertical-only since the toolbar adds the bottom shadow. */
+          box-shadow: 0 -1px 2px rgba(20,30,22,0.02), 0 1px 0 rgba(20,30,22,0.06), -1px 0 0 rgba(20,30,22,0.04), 1px 0 0 rgba(20,30,22,0.04) !important;
         }
-        /* Restore the composer-to-tasks gap (grid gap is now 0 so that
-           the band sits flush against the composer — which makes them
-           read as one continuous hero surface). The composer's own
-           margin-bottom recreates the 20px breathing room between the
-           composer card and the segmented control / task list below. */
-        .rt-today-v4 > .rt-composer { margin-bottom: 20px; }
+        /* Toolbar: butted up against the bottom of the composer, styled
+           as the card's footer. Uses a hairline divider above instead of
+           a gap. Slightly warmer-cream tint (subtle) to mark it as a
+           different functional region within the same card. */
+        .rt-tasks-col > .rt-toolbar {
+          background: #FBFAF6;
+          border-radius: 0 0 14px 14px;
+          border-top: 1px solid rgba(20,30,22,0.08);
+          padding: 10px 14px !important;
+          margin-top: 0;
+          margin-bottom: 20px;
+          box-shadow: 0 1px 2px rgba(20,30,22,0.04), 0 2px 8px rgba(20,30,22,0.04), -1px 0 0 rgba(20,30,22,0.04), 1px 0 0 rgba(20,30,22,0.04);
+        }
+        /* Pull the entire tasks column UP by the grid gap (20px) so its
+           first child — the toolbar — sits flush against the composer
+           above it. The toolbar's own margin-bottom recreates the 20px
+           breathing room between it and the first task row below.
+           Without this pull, the grid gap leaves a strip of empty
+           cream-page space between composer and toolbar that would
+           defeat the "one fused card" effect. */
+        .rt-today-v4 > .rt-tasks-col { margin-top: -20px; }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Hub delete link — hidden by default, fades in on hub hover or when
@@ -10569,7 +10589,7 @@ export default function App({ user }) {
                 if (t && t.closest && t.closest("[data-focus-keep]")) return;
                 setFocusMode(false);
               } : undefined}
-              style={{ width: "100%", display: "grid", gap: 0, alignItems: "start", position: "relative" }}>
+              style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
               {/* Focus-mode exit scrim — a full-viewport tap target behind the
                   focused task. The dimmed rows/areas have pointer-events:none,
                   so on mobile taps never reached the grid wrapper's onClick;
