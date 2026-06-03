@@ -11805,13 +11805,19 @@ export default function App({ user }) {
                           fontWeight: (composerTypeOverride || autoDetectedType) ? 600 : 500,
                         }}
                       >
-                        {(composerTypeOverride || autoDetectedType) && (
-                          <Icon name={
-                            (composerTypeOverride || autoDetectedType) === "event" ? "due" :
-                            (composerTypeOverride || autoDetectedType) === "touchpoint" ? "phone" :
-                            "check"
-                          } size={14} simple color={C.text} />
-                        )}
+                        {/* Always render an icon — matches the chrome of
+                            the other chips (Client / Worker / Date) which
+                            never hide their icon. When a type is set or
+                            auto-detected, the icon swaps to the matching
+                            shape (check / phone / calendar). Otherwise
+                            `bento` (a 2×2 grid) reads as a neutral
+                            category marker. */}
+                        <Icon name={
+                          (composerTypeOverride || autoDetectedType) === "event" ? "due" :
+                          (composerTypeOverride || autoDetectedType) === "touchpoint" ? "phone" :
+                          (composerTypeOverride || autoDetectedType) === "task" ? "check" :
+                          "bento"
+                        } size={14} simple color={(composerTypeOverride || autoDetectedType) ? C.text : C.textMuted} />
                         <span>{
                           composerTypeOverride === "task" ? "Task" :
                           composerTypeOverride === "touchpoint" ? "Touchpoint" :
@@ -11853,11 +11859,6 @@ export default function App({ user }) {
                             position: "absolute",
                             top: "calc(100% + 6px)",
                             right: 0,
-                            background: C.card,
-                            border: "1px solid " + C.borderLight,
-                            borderRadius: 10,
-                            boxShadow: "var(--rt-sh-card)",
-                            padding: 4,
                             minWidth: 180,
                             zIndex: 50,
                           }}>
