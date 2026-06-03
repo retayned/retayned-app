@@ -2788,34 +2788,52 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           started (SCRUBBED · <real-time>), what time is being shown, and
           the return action. */}
       {isScrubbed && (
-        <button
-          onClick={() => { setScrubMs(0); }}
-          aria-label="Return to now"
-          style={{
-            position: "absolute",
-            right: 290, top: 60,
-            zIndex: 8,
-            // Ambient backdrop — a soft radial glow in the same warm-
-            // cream tone as the dial's interior, fading to transparent at
-            // the edges. Reads as if the indicator is made of the same
-            // material as the dial, not floating apart from it. Hover
-            // intensifies the center to give the click affordance.
-            background: "radial-gradient(ellipse 120% 90% at 70% 50%, rgba(255,245,225,0.55) 0%, rgba(255,245,225,0.32) 45%, transparent 80%)",
-            border: "none",
-            padding: "10px 16px 10px 24px",
-            borderRadius: 14,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            textAlign: "right",
-            transition: "background 160ms var(--rt-ease-out), filter 160ms var(--rt-ease-out)",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = "radial-gradient(ellipse 120% 90% at 70% 50%, rgba(255,245,225,0.75) 0%, rgba(255,245,225,0.45) 45%, transparent 80%)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = "radial-gradient(ellipse 120% 90% at 70% 50%, rgba(255,245,225,0.55) 0%, rgba(255,245,225,0.32) 45%, transparent 80%)";
-          }}
-        >
+        <>
+          {/* Dial-echo arc — a single faint curved line that mirrors the
+              dial's outer rim at a smaller radius, sitting behind the
+              scrub indicator. Visually anchors the indicator to the dial
+              without enclosing it in a card. Same forest-sage color as
+              the dial's arc, lower opacity. */}
+          <svg
+            style={{
+              position: "absolute",
+              right: 235, top: 36,
+              width: 240, height: 130,
+              zIndex: 7,
+              pointerEvents: "none",
+            }}
+            viewBox="0 0 240 130"
+            aria-hidden="true"
+          >
+            {/* Curve mirrors the dial's outer arc. Sweeps left-to-right
+                across the area behind the indicator, then curls up-and-
+                rightward to feel like a concentric ring of the dial. */}
+            <path
+              d="M 10 95 Q 110 -10 240 55"
+              stroke="rgba(85,139,104,0.22)"
+              strokeWidth="1"
+              fill="none"
+            />
+          </svg>
+          <button
+            onClick={() => { setScrubMs(0); }}
+            aria-label="Return to now"
+            style={{
+              position: "absolute",
+              right: 290, top: 60,
+              zIndex: 8,
+              background: "transparent",
+              border: "none",
+              padding: "8px 12px",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              textAlign: "right",
+              transition: "background 120ms var(--rt-ease-out)",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(20,30,22,0.03)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+          >
           <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted }}>
             Scrubbed{(() => {
               // Show the actual real-time clock value at the moment they
@@ -2847,6 +2865,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Return to now
           </div>
         </button>
+        </>
       )}
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
@@ -3078,54 +3097,43 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           selectedEvent ? (
             // ═══ SELECTED EVENT — V2: no card, whitespace separators ═══
             <>
-              {/* Nav row: prev event ← | next event → on the left, dismiss
-                  × on the right. The old "Selected · in N min" label was
-                  redundant (the user clicked the event; selection is
-                  obvious from context, and the time/countdown is already
-                  shown below in the time hero). Replaced with navigation
-                  arrows that step through the day's events without
-                  having to close the card and click another rim dot. */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  {(() => {
-                    // Find current event's index in the all-events list
-                    // (sorted ascending by start time). Compute the
-                    // previous and next neighbours; disable the arrow if
-                    // we're at an end.
-                    const idx = all.findIndex(e => e.id === selectedEvent.id);
-                    const prev = idx > 0 ? all[idx - 1] : null;
-                    const next = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null;
-                    return (
-                      <>
-                        <button
-                          onClick={() => { if (prev) setSelectedId(prev.id); }}
-                          disabled={!prev}
-                          aria-label="Previous event"
-                          title={prev ? `${formatTimeLabel(prev._start)} · ${prev.title}` : "No earlier event"}
-                          style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: prev ? C.text : C.textMuted, fontSize: 14, lineHeight: 1, cursor: prev ? "pointer" : "not-allowed", padding: 0, fontFamily: "inherit", opacity: prev ? 1 : 0.4 }}
-                        >
-                          ←
-                        </button>
-                        <button
-                          onClick={() => { if (next) setSelectedId(next.id); }}
-                          disabled={!next}
-                          aria-label="Next event"
-                          title={next ? `${formatTimeLabel(next._start)} · ${next.title}` : "No later event"}
-                          style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: next ? C.text : C.textMuted, fontSize: 14, lineHeight: 1, cursor: next ? "pointer" : "not-allowed", padding: 0, fontFamily: "inherit", opacity: next ? 1 : 0.4 }}
-                        >
-                          →
-                        </button>
-                      </>
-                    );
-                  })()}
-                </div>
-                <button
-                  onClick={() => { setSelectedId(null); setRescheduleEditing(false); }}
-                  aria-label="Dismiss"
-                  style={{ width: 18, height: 18, borderRadius: 999, border: "none", background: "transparent", color: C.textMuted, fontSize: 15, lineHeight: 1, cursor: "pointer", padding: 0, fontFamily: "inherit" }}
-                >
-                  ×
-                </button>
+              {/* Nav row: prev ← / next → arrows on the right side, where
+                  the dismiss × used to live. The × is gone — dismissal
+                  happens implicitly when the user clicks elsewhere on
+                  the dial. The arrows step through the day's events in
+                  chronological order without having to close the card
+                  and click another rim dot. */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2, marginBottom: 8 }}>
+                {(() => {
+                  // Find current event's index in the all-events list
+                  // (sorted ascending by start time). Compute prev/next
+                  // neighbours; disable the arrow at either end.
+                  const idx = all.findIndex(e => e.id === selectedEvent.id);
+                  const prev = idx > 0 ? all[idx - 1] : null;
+                  const next = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null;
+                  return (
+                    <>
+                      <button
+                        onClick={() => { if (prev) setSelectedId(prev.id); }}
+                        disabled={!prev}
+                        aria-label="Previous event"
+                        title={prev ? `${formatTimeLabel(prev._start)} · ${prev.title}` : "No earlier event"}
+                        style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: prev ? C.text : C.textMuted, fontSize: 14, lineHeight: 1, cursor: prev ? "pointer" : "not-allowed", padding: 0, fontFamily: "inherit", opacity: prev ? 1 : 0.4 }}
+                      >
+                        ←
+                      </button>
+                      <button
+                        onClick={() => { if (next) setSelectedId(next.id); }}
+                        disabled={!next}
+                        aria-label="Next event"
+                        title={next ? `${formatTimeLabel(next._start)} · ${next.title}` : "No later event"}
+                        style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: next ? C.text : C.textMuted, fontSize: 14, lineHeight: 1, cursor: next ? "pointer" : "not-allowed", padding: 0, fontFamily: "inherit", opacity: next ? 1 : 0.4 }}
+                      >
+                        →
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
               {/* Time hero + title + client. Same hierarchy as before but
                   with the bigger 24px hero time from the V2 mock. */}
