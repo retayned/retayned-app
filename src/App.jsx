@@ -8431,15 +8431,17 @@ export default function App({ user }) {
                       0 1px 2px rgba(20,30,22,0.04),
                       0 2px 10px rgba(124,92,243,0.10) !important;
         }
-        /* (1) The TASK composer (inside the Today page) gets the SITE-STANDARD
-           grey focus instead of purple — purple is reserved for Rai surfaces.
-           This overrides the shared purple rule above for the Today composer
-           only; the initial Rai chat input (also .rt-composer, but NOT inside
-           .rt-today-v4) keeps its purple focus. */
+        /* (1) The TASK composer (inside the Today page) is an underline-
+           style input, not a card. On focus, we don't want a card-shaped
+           halo — we want the existing 1.5px hairline at the bottom to
+           thicken and darken, like a serious text input. Overrides the
+           parent rule's box-shadow for the Today composer only. */
+        .rt-today-v4 .rt-composer {
+          transition: border-bottom-color 140ms var(--rt-ease-out);
+        }
         .rt-today-v4 .rt-composer:focus-within {
-          box-shadow: 0 0 0 1px rgba(20,30,22,0.18),
-                      0 1px 2px rgba(20,30,22,0.05),
-                      0 2px 10px rgba(20,30,22,0.07) !important;
+          box-shadow: none !important;
+          border-bottom-color: rgba(20,30,22,0.40) !important;
         }
 
         /* ── CHECKBOX ────────────────────────────────────── */
@@ -9062,6 +9064,16 @@ export default function App({ user }) {
            toggle button isn't an .rt-row and the wrapper isn't a direct
            grid child, so without this it stays bright. */
         .rt-focus-on .rt-completed-log {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
+        /* Dim the Tomorrow / Later bucket calendar widgets in focus mode.
+           Wraps the Calendar toggle pill + its expanded event grid as a
+           single unit, so the whole calendar surface fades together
+           instead of leaving the toggle icon visible while the events
+           hide. */
+        .rt-focus-on .rt-bucket-cal {
           opacity: 0.06 !important;
           pointer-events: none !important;
           transition: opacity 280ms ease;
@@ -10864,7 +10876,7 @@ export default function App({ user }) {
               </div>
 
               {/* COMPOSER */}
-              <div className="rt-composer" style={{ gridArea: "composer", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
+              <div className="rt-composer" style={{ gridArea: "composer", background: "transparent", borderRadius: 0, boxShadow: "none", borderBottom: "1.5px solid rgba(20,30,22,0.16)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
                   <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -12578,13 +12590,18 @@ export default function App({ user }) {
                             ) : (
                               <div style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks tomorrow.</div>
                             )}
-                            {/* Calendar toggle — always present. Label per #5: just "Calendar". */}
-                            <BucketCalToggle label="Calendar" count={tmrwEvents.length} open={tomorrowCalOpen} onToggle={() => setTomorrowCalOpen(o => !o)} C={C} />
-                            {tomorrowCalOpen && (
-                              tmrwEvents.length > 0
-                                ? <BucketCalendarTomorrow events={tmrwEvents} C={C} />
-                                : <div style={{ background: C.primaryGhost, borderRadius: 12, padding: "16px", margin: "8px 6px 4px", fontFamily: "'Manrope', sans-serif", fontSize: 12, color: C.textMuted, fontStyle: "italic", textAlign: "center" }}>Nothing on the calendar tomorrow.</div>
-                            )}
+                            {/* Calendar toggle + content — wrapped in
+                                .rt-bucket-cal so focus-mode CSS can dim
+                                the whole calendar surface as a unit
+                                (toggle pill + expanded events). */}
+                            <div className="rt-bucket-cal">
+                              <BucketCalToggle label="Calendar" count={tmrwEvents.length} open={tomorrowCalOpen} onToggle={() => setTomorrowCalOpen(o => !o)} C={C} />
+                              {tomorrowCalOpen && (
+                                tmrwEvents.length > 0
+                                  ? <BucketCalendarTomorrow events={tmrwEvents} C={C} />
+                                  : <div style={{ background: C.primaryGhost, borderRadius: 12, padding: "16px", margin: "8px 6px 4px", fontFamily: "'Manrope', sans-serif", fontSize: 12, color: C.textMuted, fontStyle: "italic", textAlign: "center" }}>Nothing on the calendar tomorrow.</div>
+                              )}
+                            </div>
                           </>);
                         })()}
 
@@ -12620,11 +12637,13 @@ export default function App({ user }) {
                             ) : (
                               <div style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks scheduled.</div>
                             )}
-                            {/* Calendar toggle — always present. The 5-day grid
-                                shows "clear" per empty day, so it reads fine even
-                                with no events; this is the upcoming-week view. */}
-                            <BucketCalToggle label="Calendar" count={total} open={laterCalOpen} onToggle={() => setLaterCalOpen(o => !o)} C={C} />
-                            {laterCalOpen && <BucketCalendarLater days={days} C={C} />}
+                            {/* Calendar toggle + content — wrapped in
+                                .rt-bucket-cal so focus-mode CSS can dim
+                                the whole calendar surface as a unit. */}
+                            <div className="rt-bucket-cal">
+                              <BucketCalToggle label="Calendar" count={total} open={laterCalOpen} onToggle={() => setLaterCalOpen(o => !o)} C={C} />
+                              {laterCalOpen && <BucketCalendarLater days={days} C={C} />}
+                            </div>
                           </>);
                         })()}
 
