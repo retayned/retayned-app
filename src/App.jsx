@@ -2795,17 +2795,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             position: "absolute",
             right: 290, top: 60,
             zIndex: 8,
-            background: "transparent",
+            // Ambient backdrop — a soft radial glow in the same warm-
+            // cream tone as the dial's interior, fading to transparent at
+            // the edges. Reads as if the indicator is made of the same
+            // material as the dial, not floating apart from it. Hover
+            // intensifies the center to give the click affordance.
+            background: "radial-gradient(ellipse 120% 90% at 70% 50%, rgba(255,245,225,0.55) 0%, rgba(255,245,225,0.32) 45%, transparent 80%)",
             border: "none",
-            padding: "8px 12px",
-            borderRadius: 8,
+            padding: "10px 16px 10px 24px",
+            borderRadius: 14,
             cursor: "pointer",
             fontFamily: "inherit",
             textAlign: "right",
-            transition: "background 120ms var(--rt-ease-out)",
+            transition: "background 160ms var(--rt-ease-out), filter 160ms var(--rt-ease-out)",
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = "radial-gradient(ellipse 120% 90% at 70% 50%, rgba(255,245,225,0.75) 0%, rgba(255,245,225,0.45) 45%, transparent 80%)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = "radial-gradient(ellipse 120% 90% at 70% 50%, rgba(255,245,225,0.55) 0%, rgba(255,245,225,0.32) 45%, transparent 80%)";
+          }}
         >
           <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted }}>
             Scrubbed{(() => {
@@ -3069,13 +3078,47 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           selectedEvent ? (
             // ═══ SELECTED EVENT — V2: no card, whitespace separators ═══
             <>
-              {/* Status row: SELECTED label on the left, × dismiss on the
-                  right. Now pill is GONE from here — it lives at the top
-                  of the dial workspace as its own B2-style indicator. */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
-                  Selected{countdown ? ` · ${countdown}` : ""}
-                </span>
+              {/* Nav row: prev event ← | next event → on the left, dismiss
+                  × on the right. The old "Selected · in N min" label was
+                  redundant (the user clicked the event; selection is
+                  obvious from context, and the time/countdown is already
+                  shown below in the time hero). Replaced with navigation
+                  arrows that step through the day's events without
+                  having to close the card and click another rim dot. */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  {(() => {
+                    // Find current event's index in the all-events list
+                    // (sorted ascending by start time). Compute the
+                    // previous and next neighbours; disable the arrow if
+                    // we're at an end.
+                    const idx = all.findIndex(e => e.id === selectedEvent.id);
+                    const prev = idx > 0 ? all[idx - 1] : null;
+                    const next = idx >= 0 && idx < all.length - 1 ? all[idx + 1] : null;
+                    return (
+                      <>
+                        <button
+                          onClick={() => { if (prev) setSelectedId(prev.id); }}
+                          disabled={!prev}
+                          aria-label="Previous event"
+                          title={prev ? `${formatTimeLabel(prev._start)} · ${prev.title}` : "No earlier event"}
+                          style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: prev ? C.text : C.textMuted, fontSize: 14, lineHeight: 1, cursor: prev ? "pointer" : "not-allowed", padding: 0, fontFamily: "inherit", opacity: prev ? 1 : 0.4 }}
+                        >
+                          ←
+                        </button>
+                        <button
+                          onClick={() => { if (next) setSelectedId(next.id); }}
+                          disabled={!next}
+                          aria-label="Next event"
+                          title={next ? `${formatTimeLabel(next._start)} · ${next.title}` : "No later event"}
+                          style={{ width: 22, height: 22, borderRadius: 6, border: "none", background: "transparent", color: next ? C.text : C.textMuted, fontSize: 14, lineHeight: 1, cursor: next ? "pointer" : "not-allowed", padding: 0, fontFamily: "inherit", opacity: next ? 1 : 0.4 }}
+                        >
+                          →
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
                 <button
                   onClick={() => { setSelectedId(null); setRescheduleEditing(false); }}
                   aria-label="Dismiss"
@@ -3176,20 +3219,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                 </div>
               )}
 
-              {/* Action row — three equal-weight link-style buttons. Hidden
-                  when reschedule editor is open (it has its own Save/Cancel). */}
+              {/* Action row — link-style buttons. Hidden when reschedule
+                  editor is open (it has its own Save/Cancel). */}
               {!rescheduleEditing && (
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 14, marginTop: 22 }}>
-                  <button
-                    onClick={() => {
-                      if (hubEvent.client_id && typeof onOpenClient === "function") onOpenClient(hubEvent.client_id);
-                      setSelectedId(null);
-                    }}
-                    disabled={!hubEvent.client_id}
-                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: hubEvent.client_id ? C.text : C.textMuted, cursor: hubEvent.client_id ? "pointer" : "not-allowed", fontFamily: "inherit" }}
-                  >
-                    Open client
-                  </button>
                   <button
                     onClick={() => {
                       const d = hubEvent._start;
@@ -6204,11 +6237,24 @@ export default function App({ user }) {
     if (cadenceRes?.data) setAllTouchpoints(cadenceRes.data);
     if (completionHistRes?.data) setAllCompletions(completionHistRes.data);
     if (observerRes?.data) {
-      setObservation(observerRes.data);
-      setObsMobileExpanded(false);
-      // A freshly loaded observation hasn't been seen on the Health page yet —
-      // reset so the nav dot shows until the user opens Health.
-      setHealthObsSeen(false);
+      // Only reset the "seen" flag when the observation is GENUINELY NEW —
+      // i.e. its id differs from whatever observation was last in state.
+      // Without this guard, every loadData() refresh (which can run on
+      // mount, on focus, on realtime events) re-flagged the dot as unseen
+      // even though the user had already viewed the same observation
+      // earlier in the day. Symptom: dot clears on Health visit then
+      // returns minutes later. Fix: capture prior id, compare against
+      // incoming, only reset when ids differ. Same observation reloaded
+      // → preserve existing healthObsSeen state.
+      setObservation(prev => {
+        const incoming = observerRes.data;
+        const isNewObservation = !prev || prev.id !== incoming.id;
+        if (isNewObservation) {
+          setObsMobileExpanded(false);
+          setHealthObsSeen(false);
+        }
+        return incoming;
+      });
     }
     // Daybook hydration removed — RaiBriefPanel reads raiPicks/clients directly.
 
@@ -9036,50 +9082,6 @@ export default function App({ user }) {
         .rt-today-v4 > .rt-composer {
           max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 120px);
         }
-        /* ── FUSED CONTROL PANEL (Concept 4) ─────────────────────────────
-           The composer card and the segmented control (Task & Rank /
-           Ranked / Manual / Focus) read as ONE unified "controls panel"
-           with two zones separated by a hairline. The composer is no
-           longer alone — it shares its card with the view-mode toggles
-           directly beneath it.
-           Approach: keep DOM as-is. Use CSS to render the toolbar (which
-           lives at the top of .rt-tasks-col) as if it's the bottom zone
-           of the composer card. Specifically: composer keeps its white
-           card but with rounded TOP corners only; toolbar gets a matching
-           cream tint, rounded BOTTOM corners, hairline above, and
-           negative top margin to butt flush against the composer. The
-           hairline replaces the grid gap that used to separate them. */
-        /* Composer: rounded top corners only, no bottom rounding (the
-           toolbar finishes the card below). Existing inline white bg
-           and shadow continue to work. */
-        .rt-today-v4 > .rt-composer {
-          border-radius: 14px 14px 0 0 !important;
-          /* The fused card's shadow needs to wrap the whole structure
-             (composer + toolbar). The composer's own shadow is reduced
-             to vertical-only since the toolbar adds the bottom shadow. */
-          box-shadow: 0 -1px 2px rgba(20,30,22,0.02), 0 1px 0 rgba(20,30,22,0.06), -1px 0 0 rgba(20,30,22,0.04), 1px 0 0 rgba(20,30,22,0.04) !important;
-        }
-        /* Toolbar: butted up against the bottom of the composer, styled
-           as the card's footer. Uses a hairline divider above instead of
-           a gap. Slightly warmer-cream tint (subtle) to mark it as a
-           different functional region within the same card. */
-        .rt-tasks-col > .rt-toolbar {
-          background: #FBFAF6;
-          border-radius: 0 0 14px 14px;
-          border-top: 1px solid rgba(20,30,22,0.08);
-          padding: 10px 14px !important;
-          margin-top: 0;
-          margin-bottom: 20px;
-          box-shadow: 0 1px 2px rgba(20,30,22,0.04), 0 2px 8px rgba(20,30,22,0.04), -1px 0 0 rgba(20,30,22,0.04), 1px 0 0 rgba(20,30,22,0.04);
-        }
-        /* Pull the entire tasks column UP by the grid gap (20px) so its
-           first child — the toolbar — sits flush against the composer
-           above it. The toolbar's own margin-bottom recreates the 20px
-           breathing room between it and the first task row below.
-           Without this pull, the grid gap leaves a strip of empty
-           cream-page space between composer and toolbar that would
-           defeat the "one fused card" effect. */
-        .rt-today-v4 > .rt-tasks-col { margin-top: -20px; }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
         /* Hub delete link — hidden by default, fades in on hub hover or when
@@ -9092,7 +9094,12 @@ export default function App({ user }) {
         /* Dial event row — full strip is the click target. Subtle gray wash
            on hover. The "next" event already has a sage bg painted via inline
            styles so it stays visually distinct. */
-        .rt-dial-event-row { border-radius: 10px; }
+        /* Rail event row — full strip is the click target. Subtle grey
+           wash on hover, matching the scrubbed-state indicator's hover
+           treatment for consistency. Padding + border-radius give the
+           hover a defined shape rather than bleeding to the rail edges. */
+        .rt-dial-event-row { border-radius: 10px; transition: background 120ms var(--rt-ease-out); }
+        .rt-dial-event-row:hover { background: rgba(20,30,22,0.04); }
         /* No hover background — the row is a click target but doesn't paint
            a translucent box on hover. The cursor change + the natural
            visual hierarchy (time / title / client) carry the affordance. */
