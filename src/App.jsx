@@ -5940,6 +5940,19 @@ export default function App({ user }) {
   // alone. null = parser hasn't set anything (any current state is manual).
   const parserSetRecurrenceRef = useRef(null); // last pattern the parser set
   const parserSetDueDateRef = useRef(null);    // last YMD the parser set
+  // ─── V5 ghost-autocomplete + readout state ─────────────────────────
+  // Ghost: a string of text appended visually (in muted grey) after the
+  // user's typed content, showing the suggested completion. Press Tab to
+  // accept. Updated on every keystroke; cleared when the user types past
+  // the suggestion or backs out of it.
+  const [composerGhost, setComposerGhost] = useState("");
+  // Readout: a one-line Fraunces italic summary below the input showing
+  // what Rai will create from the current input. Appears only after the
+  // user pauses typing for COMPOSER_PAUSE_MS — gives "smart silence"
+  // (ghost during active typing, readout during pause; they never both
+  // show at once).
+  const [composerInPause, setComposerInPause] = useState(false);
+  const composerPauseTimerRef = useRef(null);
   // Pulse-chip state: the most recent chip auto-filled by parseComposer.
   // Triggers a one-shot CSS pulse on the chip button so the user gets a
   // visible confirmation when the parser catches something they typed.
@@ -8441,6 +8454,12 @@ export default function App({ user }) {
           box-shadow: none !important;
           border-bottom-color: rgba(20,30,22,0.40) !important;
         }
+        /* V5 readout fade-in: when the user pauses typing for 400ms, the
+           readout line below the composer fades in. Subtle and quick. */
+        @keyframes rt-readout-fade-in {
+          from { opacity: 0; transform: translateY(-2px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
 
         /* ── CHECKBOX ────────────────────────────────────── */
         .rt-row .rt-check {
@@ -10454,6 +10473,88 @@ export default function App({ user }) {
           };
 
           // ─── COMPOSER helpers ────────────────────────────────────────────
+          // ─── V5 ghost-autocomplete computation ──────────────────────────
+          // Returns the suggested completion string for the user's current
+          // input, or "" if no suggestion applies. Strategy (V3-conservative):
+          // look at the last token in the input. If it could be the prefix
+          // of EXACTLY ONE client name (case-insensitive, ≥2 chars), the
+          // ghost is the remainder. Skipped if the input ends with whitespace
+          // (user is moving on), or the last token is too short, or any
+          // client is already matched by the parser (don't ghost over an
+          // existing match), or the token matches a complete client.
+          const computeComposerGhost = (input) => {
+            if (!input || /\s$/.test(input)) return "";
+            const tokens = input.split(/\s+/);
+            const last = tokens[tokens.length - 1];
+            if (!last || last.length < 2) return "";
+            // Skip if a client has already been parsed from this input —
+            // the user has already specified one; don't suggest a second.
+            const parsed = parseComposer(input, clients, workersList);
+            if (parsed.matchedClient) return "";
+            const lastLower = last.toLowerCase();
+            // Find clients whose name starts with the last token (case-
+            // insensitive). If exactly one match AND the token isn't
+            // already the full name, ghost the remainder.
+            const matches = (clients || []).filter(c => {
+              const n = c && c.name ? c.name.toLowerCase() : "";
+              return n.startsWith(lastLower) && n.length > lastLower.length;
+            });
+            if (matches.length !== 1) return "";
+            // Ghost = remainder of client name, preserving original case
+            // from the client record (so "Sprin" → ghosts "tRay" to make
+            // the joined word read as "SprintRay").
+            return matches[0].name.slice(last.length);
+          };
+          // ─── V5 readout summary ────────────────────────────────────────
+          // Returns a {label, action, detail} object describing what the
+          // composer will produce from the current input, or null when
+          // there's nothing useful to show (empty input, no entities
+          // parsed). Mirrors the routing logic in submitComposer at a
+          // preview level: time present → event, past-tense + client →
+          // touchpoint, otherwise task.
+          const computeComposerReadout = (input) => {
+            if (!input || !input.trim()) return null;
+            const lowerC = input.toLowerCase();
+            const parsed = parseComposer(input, clients, workersList);
+            const client = parsed.matchedClient || (composerClient ? clients.find(c => c.name === composerClient) : null);
+            // Need at least one parsed signal to be worth showing a readout.
+            if (!client && !parsed.matchedDate && !parsed.matchedWorker && !parsed.matchedRecurrence) return null;
+            // Detect calendar event (time present, not stripped from a
+            // client name). Mirrors submitComposer's ROUTE 0.
+            let calText = input;
+            if (client && client.name) {
+              calText = calText.replace(new RegExp(client.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ").replace(/\s+/g, " ").trim();
+            }
+            const calEntry = parseCalendarEntry(calText, new Date(), clients);
+            if (calEntry) {
+              return {
+                kind: "event",
+                client,
+                date: parsed.matchedDate,
+                actionLabel: "Add",
+              };
+            }
+            // Touchpoint detection: past-tense verb OR communication noun
+            // PLUS a matched client. Mirrors submitComposer's ROUTE 1.
+            const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
+            const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
+            if ((isCommNoun || isPastTouch) && client) {
+              return {
+                kind: "touchpoint",
+                client,
+                date: parsed.matchedDate, // typically "today" if implied
+                actionLabel: "Log",
+              };
+            }
+            // Default: task.
+            return {
+              kind: "task",
+              client,
+              date: parsed.matchedDate,
+              recurrence: parsed.matchedRecurrence,
+              actionLabel: "Add",
+            };
+          };
           const clientMatches = composerQuery.trim()
             ? clients.filter(c => c.name.toLowerCase().includes(composerQuery.trim().toLowerCase()))
             : clients;
@@ -10517,6 +10618,8 @@ export default function App({ user }) {
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
                 setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
                 setComposerMenuOpen(false); parserSetRecurrenceRef.current = null;
+                setComposerGhost(""); setComposerInPause(false);
+                if (composerPauseTimerRef.current) { clearTimeout(composerPauseTimerRef.current); composerPauseTimerRef.current = null; }
                 return;
               }
 
@@ -10548,6 +10651,8 @@ export default function App({ user }) {
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
                 setNewTaskWorkerId(null); setDuePickerOpen(false); setWorkerPickerOpen(false);
                 setComposerMenuOpen(false); parserSetRecurrenceRef.current = null;
+                setComposerGhost(""); setComposerInPause(false);
+                if (composerPauseTimerRef.current) { clearTimeout(composerPauseTimerRef.current); composerPauseTimerRef.current = null; }
                 return;
               }
             }
@@ -10611,6 +10716,14 @@ export default function App({ user }) {
             // Clear parser provenance — next task starts fresh.
             parserSetRecurrenceRef.current = null;
             parserSetDueDateRef.current = null;
+            // V5: clear ghost + readout state. Cancel any pending pause
+            // timer so the readout doesn't fade in over an empty composer.
+            setComposerGhost("");
+            setComposerInPause(false);
+            if (composerPauseTimerRef.current) {
+              clearTimeout(composerPauseTimerRef.current);
+              composerPauseTimerRef.current = null;
+            }
           };
 
           // ─── RENDER ──────────────────────────────────────────────────────
@@ -10888,12 +11001,58 @@ export default function App({ user }) {
                         - lights up Client / Worker / Date chips below
                       Manual chip clicks still override parser output.
                     */}
+                    {/* V5 ghost-autocomplete: input + ghost overlay live in
+                        a relative-positioned wrapper. The ghost is rendered
+                        as an absolutely-positioned span containing a
+                        visibility:hidden copy of the typed text (which
+                        takes up its rendered width), followed by the ghost
+                        characters in muted grey. This makes the ghost flow
+                        naturally after the typed text without needing JS
+                        measurement. The input itself is rendered after,
+                        sized to flex:1, on top of the overlay (so its
+                        caret + selection remain native). */}
+                    <span style={{ position: "relative", flex: 1, minWidth: 100, display: "inline-flex", alignItems: "center" }}>
+                      {composerGhost && !composerInPause && (
+                        <span aria-hidden="true" style={{
+                          position: "absolute",
+                          left: 0, top: "50%",
+                          transform: "translateY(-50%)",
+                          whiteSpace: "pre",
+                          pointerEvents: "none",
+                          color: "#B7B7AE",
+                          fontSize: 14.5,
+                          fontFamily: "inherit",
+                          fontStyle: "normal",
+                          maxWidth: "100%",
+                          overflow: "hidden",
+                          zIndex: 0,
+                        }}>
+                          {/* Invisible spacer — takes the width of the
+                              typed text so the ghost starts at the right
+                              offset. */}
+                          <span style={{ visibility: "hidden" }}>{newTask}</span>
+                          {composerGhost}
+                        </span>
+                      )}
                     <input
                       id="rt-composer-input"
                       value={newTask}
                       onChange={e => {
                         const v = e.target.value;
                         setNewTask(v);
+                        // ─── V5 ghost-autocomplete + pause-timer ──────────
+                        // Active typing: hide readout, recompute ghost. The
+                        // 400ms pause timer fires "smart silence" — readout
+                        // appears, ghost dims. Cleared on every keystroke
+                        // so it only fires after the user STOPS typing.
+                        setComposerInPause(false);
+                        setComposerGhost(computeComposerGhost(v));
+                        if (composerPauseTimerRef.current) {
+                          clearTimeout(composerPauseTimerRef.current);
+                        }
+                        composerPauseTimerRef.current = setTimeout(() => {
+                          setComposerInPause(true);
+                        }, 400);
                         const parsed = parseComposer(v, clients, workersList);
                         if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
                           setComposerClient(parsed.matchedClient.name);
@@ -10953,6 +11112,27 @@ export default function App({ user }) {
                         }
                       }}
                       onKeyDown={e => {
+                        // Tab accepts the ghost autocomplete (V5). Only
+                        // intercepts when ghost is non-empty — otherwise
+                        // Tab keeps its default behavior (focus advance).
+                        if (e.key === "Tab" && composerGhost) {
+                          e.preventDefault();
+                          const accepted = newTask + composerGhost;
+                          setNewTask(accepted);
+                          setComposerGhost("");
+                          // Re-run parser on the accepted text so chips
+                          // light up immediately (mirrors onChange logic).
+                          const parsed = parseComposer(accepted, clients, workersList);
+                          if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
+                            setComposerClient(parsed.matchedClient.name);
+                            triggerChipPulse("client");
+                          }
+                          // Restart the pause timer so the readout appears
+                          // shortly after acceptance.
+                          if (composerPauseTimerRef.current) clearTimeout(composerPauseTimerRef.current);
+                          composerPauseTimerRef.current = setTimeout(() => setComposerInPause(true), 400);
+                          return;
+                        }
                         if (e.key === "Enter" && newTask.trim()) { e.preventDefault(); submitComposer(); }
                         else if (e.key === "Escape") { setComposerMenuOpen(false); }
                       }}
@@ -10963,8 +11143,14 @@ export default function App({ user }) {
                         fontSize: 14.5, padding: "4px 0", fontFamily: "inherit",
                         color: C.text,
                         fontStyle: newTask ? "normal" : "italic",
+                        // V5: input sits ABOVE the absolutely-positioned
+                        // ghost overlay span. Caret and selection are
+                        // native to the input; the ghost shows behind.
+                        position: "relative",
+                        zIndex: 1,
                       }}
                     />
+                    </span>
                   </div>
                 </div>
 
@@ -11602,7 +11788,49 @@ export default function App({ user }) {
                   </div>
                 </div>
 
-
+                {/* V5 readout — appears AFTER user pauses typing for 400ms,
+                    only when the parser has detected at least one entity.
+                    Smart-silence pairing with the ghost: ghost during
+                    typing, readout during pause; they never both show.
+                    Echoes Rai's voice via Fraunces italic. */}
+                {(() => {
+                  if (!composerInPause) return null;
+                  const readout = computeComposerReadout(newTask);
+                  if (!readout) return null;
+                  const kindNoun = readout.kind === "event" ? "an event"
+                    : readout.kind === "touchpoint" ? "a touchpoint"
+                    : "a task";
+                  const clientPart = readout.client ? (
+                    <> for <strong style={{ color: "#2E6B4F", fontWeight: 600 }}>{readout.client.name}</strong></>
+                  ) : null;
+                  let datePart = null;
+                  if (readout.recurrence) {
+                    datePart = <>, <strong style={{ color: "#8A5C2A", fontWeight: 600 }}>recurring</strong></>;
+                  } else if (readout.date && readout.date.date) {
+                    const dYmd = dateToYmd(readout.date.date);
+                    const dLabel = formatDueLabel(dYmd, _todayStr, _tomorrowStr);
+                    datePart = <>, <strong style={{ color: "#8A5C2A", fontWeight: 600 }}>{readout.kind === "touchpoint" ? dLabel.toLowerCase() : ("due " + dLabel.toLowerCase())}</strong></>;
+                  } else if (readout.kind === "task" || readout.kind === "event") {
+                    datePart = <>, <span style={{ color: "#A8A89A", fontStyle: "italic" }}>no date yet</span></>;
+                  }
+                  return (
+                    <div style={{
+                      padding: "6px 16px 12px 54px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontSize: 12,
+                      color: "#6B6B66",
+                      animation: "rt-readout-fade-in 180ms var(--rt-ease-out)",
+                    }}>
+                      <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", color: "#8A8F8A" }}>Becomes</span>
+                      <span>→ {kindNoun}{clientPart}{datePart}</span>
+                      {newTask.trim() && (
+                        <span style={{ marginLeft: "auto", color: "#7c5cf3", fontWeight: 600, fontSize: 11 }}>⏎ {readout.actionLabel}</span>
+                      )}
+                    </div>
+                  );
+                })()}
 
               </div>
 
