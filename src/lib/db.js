@@ -998,6 +998,82 @@ export const referrals = {
 
 
 // ============================================================
+// CLIENT ADDONS — ad-hoc revenue (setup fees, bonuses, lump sums)
+// ============================================================
+// One row per payment. Lives outside the monthly rate so LTV math
+// can include both retainer history AND one-off charges without
+// confusion. Sums roll up into the client's adjusted revenue
+// totals at hydration time.
+
+export const clientAddons = {
+  // List addons for a single client, newest charged_at first.
+  listForClient: async (clientId) => {
+    const { data, error } = await supabase
+      .from('client_addons')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('charged_at', { ascending: false });
+    return { data: data || [], error };
+  },
+
+  // Bulk fetch for hydration — all addons across all clients for
+  // this user, returned as a map keyed by client_id. Used at app
+  // load to compute LTV totals without N+1 queries.
+  listAllByClient: async (userId) => {
+    const { data, error } = await supabase
+      .from('client_addons')
+      .select('*')
+      .eq('user_id', userId)
+      .order('charged_at', { ascending: false });
+    if (error) return { data: {}, error };
+    const byClient = {};
+    for (const a of data || []) {
+      if (!byClient[a.client_id]) byClient[a.client_id] = [];
+      byClient[a.client_id].push(a);
+    }
+    return { data: byClient, error: null };
+  },
+
+  add: async (userId, clientId, { amount, charged_at, description }) => {
+    const { data, error } = await supabase
+      .from('client_addons')
+      .insert({
+        user_id: userId,
+        client_id: clientId,
+        amount,
+        charged_at: charged_at || new Date().toISOString().slice(0, 10),
+        description: description || null,
+      })
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  update: async (addonId, { amount, charged_at, description }) => {
+    const patch = {};
+    if (amount !== undefined) patch.amount = amount;
+    if (charged_at !== undefined) patch.charged_at = charged_at;
+    if (description !== undefined) patch.description = description;
+    const { data, error } = await supabase
+      .from('client_addons')
+      .update(patch)
+      .eq('id', addonId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
+  delete: async (addonId) => {
+    const { error } = await supabase
+      .from('client_addons')
+      .delete()
+      .eq('id', addonId);
+    return { error };
+  },
+};
+
+
+// ============================================================
 // RAI CONVERSATIONS
 // ============================================================
 
