@@ -18,7 +18,7 @@ import {
 } from "d3-force";
 import { zoom as d3zoom, zoomIdentity } from "d3-zoom";
 import { select as d3select } from "d3-selection";
- 
+
 // ============================================================
 // PALETTE
 // ============================================================
@@ -8715,14 +8715,15 @@ export default function App({ user }) {
         }
         .rt-today-breakout .rt-row .rt-task-title { font-size: 14.5px; font-weight: 500; }
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
-        /* When the break-out top task is ALSO a Rai task, layer the purple
-           ring + inset bar over the break-out's lifted shadow (more-specific
-           rule so the lift doesn't clobber the purple annotation). */
+        /* When the break-out top task is ALSO a Rai task, the lift's
+           shadow stays in place. The Rai signal lives entirely in the
+           inline star + 1px hairline border now — no extra shadow
+           layering on top of the breakout's elevation. */
         .rt-today-breakout .rt-row.rt-rai-boost {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.30), inset 2px 0 0 0 #7c5cf3, 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(20,30,22,0.09) !important;
+          box-shadow: var(--rt-sh-row-lifted), 0 0 0 1px rgba(124,92,243,0.35) !important;
         }
         .rt-today-breakout .rt-row.rt-rai-boost:hover:not(.is-done) {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.30), inset 2px 0 0 0 #7c5cf3, 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(20,30,22,0.10) !important;
+          box-shadow: var(--rt-sh-row-lifted-hover, var(--rt-sh-row-lifted)), 0 0 0 1px rgba(124,92,243,0.35) !important;
         }
         /* The rest — plain stack, no thread (break-out carries emphasis). */
         .rt-today-rest { position: relative; }
@@ -8795,71 +8796,30 @@ export default function App({ user }) {
         }
         .rt-row.is-done .rt-check svg { opacity: 1; transform: scale(1); }
 
-        /* ── RAI CLIENT-OF-THE-DAY RAIL ──────────────────── */
-        /* Applied via class .rt-rai-boost to Rai-marked tasks. The purple edge
-           ring + inset left bar + bobbing ✦ medallion signal "Rai" from the
-           row's edge and corner — no right-side pill competing for space. */
+        /* ── RAI TASK MARKER ──────────────────────────────────────
+           Rai-suggested tasks get TWO signals, both minimal:
+             1. A 1px purple hairline border around the row (replaces
+                the previous purple ring + inset bar + glow + bobbing
+                medallion combo).
+             2. An inline purple star icon BEFORE the task title text
+                inside the row content (rendered in JSX, not CSS).
+           No outer shadow, no extra shading, no animation. Reads as
+           typographic attribution, not as AI-marker chrome — the
+           "purple-glow AI row" pattern has become a template
+           fingerprint we're explicitly avoiding. The hairline says
+           "this row belongs to Rai" quietly. The star says it once.
+           Done. */
         .rt-rai-boost {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025) !important;
-          position: relative;
+          box-shadow: var(--rt-sh-row), 0 0 0 1px rgba(124,92,243,0.35) !important;
         }
         .rt-rai-boost:hover:not(.is-done) {
-          box-shadow: 0 0 0 1px rgba(124,92,243,0.28), inset 2px 0 0 0 #7c5cf3, 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06) !important;
+          box-shadow: var(--rt-sh-row-hover), 0 0 0 1px rgba(124,92,243,0.35) !important;
         }
-        /* When the Rai-marked task is checked off, drop both the purple
-           inset bar AND the ✦ medallion. Completed tasks should read as
-           done — leaving the Rai indicators on would imply they still
-           need attention. */
+        /* When checked off, drop the hairline — completed tasks
+           shouldn't read as still-needing-attention. The inline star
+           remains in the title, but greyed via .is-done .text rules. */
         .rt-rai-boost.is-done {
           box-shadow: var(--rt-sh-row) !important;
-        }
-        .rt-rai-boost.is-done::before {
-          display: none !important;
-        }
-        .rt-rai-boost::before {
-          content: '✦';
-          position: absolute;
-          /* Upper-left placement: tucked just outside the row's top-left
-             corner instead of vertically centered. Reads as a small
-             marker rather than a centered medallion. */
-          left: -6px;
-          top: 6px;
-          /* Shrunk from 18×18 to 14×14 for a less heavy presence — Adam
-             wants the star to be a quiet, restless marker, not the focal
-             element of the row. */
-          width: 14px;
-          height: 14px;
-          background: var(--rt-grad-btn);
-          color: #fff;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 7.5px;
-          line-height: 1;
-          font-weight: 700;
-          box-shadow: var(--rt-sh-purple);
-          z-index: 2;
-          pointer-events: none;
-          /* "Like it's being touched" — gentle bob + micro-rotation on a
-             slow infinite loop. Visible enough to feel alive, quiet
-             enough to read as a marker, not a notification. */
-          animation: rtRaiBoostBreathe 2.6s ease-in-out infinite;
-          transform-origin: center center;
-          will-change: transform;
-        }
-        @keyframes rtRaiBoostBreathe {
-          0%   { transform: translateY(0) rotate(-2deg) scale(1); }
-          25%  { transform: translateY(-1.5px) rotate(2deg) scale(1.04); }
-          50%  { transform: translateY(0) rotate(-1.5deg) scale(1); }
-          75%  { transform: translateY(-1px) rotate(2deg) scale(1.03); }
-          100% { transform: translateY(0) rotate(-2deg) scale(1); }
-        }
-        /* Respect the reduced-motion accessibility preference — users
-           who've opted out of motion shouldn't see the bob. The mark
-           stays put. */
-        @media (prefers-reduced-motion: reduce) {
-          .rt-rai-boost::before { animation: none; }
         }
 
         /* Calendar composer (G) — idle is the flush hairline-divider
@@ -10857,16 +10817,40 @@ export default function App({ user }) {
             if (!input || !input.trim()) return null;
             const parsed = parseComposer(input, clients, workersList);
             const client = parsed.matchedClient || (composerClient ? clients.find(c => c.name === composerClient) : null);
+            // Date resolution: prefer the parser's matchedDate (typed word
+            // like "tomorrow"), but fall back to the Date chip state. Both
+            // are legitimate ways for the user to set a date — the readout
+            // was previously blind to the chip path, so picking a date
+            // from the menu would render as "no date yet" even though the
+            // chip clearly showed a date set. Recurrence chip takes
+            // priority (handled below in render).
+            let resolvedDate = parsed.matchedDate;
+            if (!resolvedDate && newTaskDueDate && !newTaskRecurring) {
+              // Build a date-shaped object matching the parser's output so
+              // the render path doesn't care which source it came from.
+              // newTaskDueDate is a YYYY-MM-DD string; construct a noon
+              // local Date so formatDueLabel reads it as "today/tomorrow"
+              // correctly without timezone slippage.
+              const [yy, mm, dd] = newTaskDueDate.split("-").map(n => parseInt(n, 10));
+              if (yy && mm && dd) {
+                const d = new Date(yy, mm - 1, dd, 12, 0, 0, 0);
+                resolvedDate = { date: d, kind: "manual" };
+              }
+            }
+            // Recurrence resolution: parser's matchedRecurrence wins, fall
+            // back to the chip's recurring state. Same rationale.
+            const resolvedRecurrence = parsed.matchedRecurrence
+              || (newTaskRecurring ? { pattern: newTaskRecurrencePattern } : null);
             // Need at least one parsed signal — OR a manual type override —
             // to be worth showing a readout.
-            if (!client && !parsed.matchedDate && !parsed.matchedWorker && !parsed.matchedRecurrence && !composerTypeOverride) return null;
+            if (!client && !resolvedDate && !parsed.matchedWorker && !resolvedRecurrence && !composerTypeOverride) return null;
             const kind = computeEffectiveType(input);
             if (!kind) return null;
             return {
               kind,
               client,
-              date: parsed.matchedDate,
-              recurrence: parsed.matchedRecurrence,
+              date: resolvedDate,
+              recurrence: resolvedRecurrence,
               actionLabel: kind === "touchpoint" ? "Log" : "Add",
               isManuallyTyped: !!composerTypeOverride,
             };
@@ -12755,6 +12739,37 @@ export default function App({ user }) {
                                 </div>
                               )}
                               <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden" }}>
+                                {/* Inline Rai star — sits immediately before
+                                    the task title text on AI-suggested rows.
+                                    Replaces the previous bobbing-medallion
+                                    treatment (which read as "AI chrome"). The
+                                    star is a typographic mark, not a UI
+                                    decoration: same SVG as the Task & Rank
+                                    label so the symbol carries consistent
+                                    meaning across the app. Drops to muted
+                                    grey when the task is done so completed
+                                    rows don't visually demand attention. */}
+                                {t.ai && (
+                                  <svg
+                                    width="13"
+                                    height="13"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    aria-label="Suggested by Rai"
+                                    style={{
+                                      display: "inline-block",
+                                      verticalAlign: "middle",
+                                      marginRight: 6,
+                                      marginTop: -2,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    <path
+                                      d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z"
+                                      fill={isDone ? C.textMuted : "#7c5cf3"}
+                                    />
+                                  </svg>
+                                )}
                                 {(() => {
                                   // Title is interactive when the text contains a thinking
                                   // verb AND has a client tag AND task isn't done. Click
@@ -13102,41 +13117,48 @@ export default function App({ user }) {
 
                     // Bucket header component (inline).
                     const BucketHeader = ({ name, dimmed, count, topGap }) => {
-                      // Polish layer: each bucket gets a tiny color-coded dot
-                      // with a soft halo. Green-light for today (the active surface),
-                      // muted ink for tomorrow/later. Same primary palette.
-                      // Section dividers now use two gradient hairlines fading
-                      // out on either side of the label (vs a solid line below).
-                      // Editorial typography move — section is centered between
-                      // two fades, calmer than a hard line.
-                      // Today is the active surface — its dot is "on" (brand
-                      // green with a soft sage halo). Tomorrow/later stay muted.
+                      // Variant B — editorial divider. The bucket label is
+                      // rendered as lowercase Fraunces italic ("today",
+                      // "tomorrow", "later"), with the hairline passing
+                      // BEHIND both the label and the right-side controls.
+                      // Both flanking blocks paint the page background so
+                      // the line tucks under them cleanly — reads as one
+                      // continuous section break, like a centered chapter
+                      // divider in a book.
+                      //
+                      // No dot (was generic AI-design chrome). The italic
+                      // typography carries the editorial voice; dimmed
+                      // future buckets get a muted color but keep the same
+                      // typography so the whole stack reads as one family.
                       const isToday = name === "Today";
-                      const dotColor = isToday ? C.primary : C.ink300;
-                      const dotHalo = isToday ? C.primarySoft : C.surfaceWarm;
-                      // For the Today header only, render mode selector +
-                      // Focus link inline on the right side (option #5 from
-                      // the segmented-control redesign). Replaces the
-                      // separate toolbar row that used to sit between the
-                      // composer and the task list.
                       const aiTasksOn = raiState?.ai_tasks_enabled !== false;
                       const isRaiPlus = rankMode === "rai" && aiTasksOn;
                       const isRaiOnly = rankMode === "rai" && !aiTasksOn;
                       const isManual = rankMode === "manual";
                       const modeLabel = isRaiPlus ? "Task & Rank" : isRaiOnly ? "Rai Rank" : "Manual";
                       return (
-                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 12, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: dimmed ? C.textMuted : C.text, flexShrink: 0 }}>
-                            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: dotColor, boxShadow: "0 0 0 3px " + dotHalo }} />
-                            {name}
-                          </div>
-                          {/* Gradient fade hairline to the right of the label.
-                              Transparent at the label, fading INTO border tone
-                              and back to transparent at the edge — the line
-                              looks like ink fading out across the page. */}
-                          <span style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${C.borderLight}, transparent 70%)` }} />
+                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 0, margin: (topGap != null ? topGap : 20) + "px 4px 10px", position: "relative" }}>
+                          <span style={{
+                            fontFamily: "'Fraunces', Georgia, serif",
+                            fontStyle: "italic",
+                            fontSize: 18,
+                            fontWeight: 500,
+                            letterSpacing: "-0.01em",
+                            color: dimmed ? C.textMuted : C.text,
+                            lineHeight: 1,
+                            flexShrink: 0,
+                            background: C.bg,
+                            paddingRight: 14,
+                            position: "relative",
+                            zIndex: 1,
+                          }}>{name.toLowerCase()}</span>
+                          {/* Hairline runs through the entire row; the
+                              flanking blocks (label + controls) paint over
+                              it with bg color so it appears to pass
+                              behind them. */}
+                          <span style={{ flex: 1, height: 1, background: C.borderLight, position: "relative", zIndex: 0 }} />
                           {isToday && (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 14, flexShrink: 0, background: C.bg, paddingLeft: 14, position: "relative", zIndex: 1 }}>
                               {/* Mode selector — quiet text label with caret,
                                   click to open dropdown with three options. */}
                               <div style={{ position: "relative" }}>
@@ -17966,12 +17988,12 @@ export default function App({ user }) {
                       return m.role === "user" ? (
                         <div key={i} ref={messageRef} className="r-chat-msg-user" style={{ marginBottom: 28, display: "flex", justifyContent: "flex-end" }}>
                           <div style={{ maxWidth: "75%", background: "#EEEEE8", borderRadius: 12, padding: "11px 16px" }}>
-                            {m.text.split("\n").map((l, j) => l.trim() === "" ? <div key={j} style={{ height: 8 }} /> : <p key={j} style={{ fontSize: 17, color: C.text, lineHeight: 1.5, margin: 0 }}>{l}</p>)}
+                            {m.text.split("\n").map((l, j) => l.trim() === "" ? <div key={j} style={{ height: 8 }} /> : <p key={j} style={{ fontSize: 16, color: C.text, lineHeight: 1.5, margin: 0 }}>{l}</p>)}
                           </div>
                         </div>
                       ) : (
                         <div key={i} style={{ marginBottom: 28 }}>
-                          <RaiMarkdown text={m.text} size={17} lineHeight={1.55} />
+                          <RaiMarkdown text={m.text} size={16} lineHeight={1.55} />
                         </div>
                       );
                     })}
@@ -17999,7 +18021,7 @@ export default function App({ user }) {
                         ))}
                       </div>
                     )}
-                    <textarea value={aiInput} onChange={e => { setAiInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} placeholder="Reply to Rai…" rows={1} style={{ width: "100%", padding: "4px 0", border: "none", fontSize: 17, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, overflowY: "auto" }} />
+                    <textarea value={aiInput} onChange={e => { setAiInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} placeholder="Reply to Rai…" rows={1} style={{ width: "100%", padding: "4px 0", border: "none", fontSize: 16, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, overflowY: "auto" }} />
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
                       <label title="Attach a file (PDF or image, max 10MB)" style={{ width: 32, height: 32, borderRadius: 8, background: C.card, color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                         <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onChange={e => { handleFilePick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
@@ -20353,7 +20375,7 @@ export default function App({ user }) {
                               borderRadius: 14,
                               background: m.role === "user" ? C.text : C.card,
                               color: m.role === "user" ? "#fff" : C.text,
-                              fontSize: 13.5,
+                              fontSize: 16,
                               lineHeight: 1.5,
                               boxShadow: m.role === "ai" ? "var(--rt-sh-xs)" : "none",
                               whiteSpace: "pre-wrap",
@@ -20373,7 +20395,7 @@ export default function App({ user }) {
                             borderRadius: 14,
                             background: C.card,
                             color: C.textMuted,
-                            fontSize: 13.5,
+                            fontSize: 16,
                             boxShadow: "var(--rt-sh-xs)",
                           }}>
                             …
@@ -20410,7 +20432,7 @@ export default function App({ user }) {
                           border: "1px solid " + C.borderLight,
                           borderRadius: 10,
                           padding: "10px 12px",
-                          fontSize: 13.5,
+                          fontSize: 16,
                           fontFamily: "inherit",
                           background: C.bg,
                           color: C.text,
