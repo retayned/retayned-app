@@ -3204,7 +3204,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                               the hub via justifyContent: flex-end, but the
                               checkbox now leads the row content. */}
                           <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text}</span>
+                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text.length > 25 ? pt.text.slice(0, 25).trimEnd() + "…" : pt.text}</span>
                         </div>
                       ))}
                       {hubEvent._prepTasks.length > 1 && (
@@ -3286,7 +3286,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                         onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
                       >
                         <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
-                        <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text}</span>
+                        <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text.length > 25 ? pt.text.slice(0, 25).trimEnd() + "…" : pt.text}</span>
                       </div>
                     ))}
                     {hubEvent._prepTasks.length > 1 && (
