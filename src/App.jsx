@@ -13137,7 +13137,7 @@ export default function App({ user }) {
                       const isManual = rankMode === "manual";
                       const modeLabel = isRaiPlus ? "Task & Rank" : isRaiOnly ? "Rai Rank" : "Manual";
                       return (
-                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 0, margin: (topGap != null ? topGap : 20) + "px 4px 10px", position: "relative" }}>
+                        <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 14, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
                           <span style={{
                             fontFamily: "'Fraunces', Georgia, serif",
                             fontStyle: "italic",
@@ -13147,18 +13147,10 @@ export default function App({ user }) {
                             color: dimmed ? C.textMuted : C.text,
                             lineHeight: 1,
                             flexShrink: 0,
-                            background: C.bg,
-                            paddingRight: 14,
-                            position: "relative",
-                            zIndex: 1,
                           }}>{name.toLowerCase()}</span>
-                          {/* Hairline runs through the entire row; the
-                              flanking blocks (label + controls) paint over
-                              it with bg color so it appears to pass
-                              behind them. */}
-                          <span style={{ flex: 1, height: 1, background: C.borderLight, position: "relative", zIndex: 0 }} />
+                          <span style={{ flex: 1, height: 1, background: C.borderLight }} />
                           {isToday && (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: 14, flexShrink: 0, background: C.bg, paddingLeft: 14, position: "relative", zIndex: 1 }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
                               {/* Mode selector — quiet text label with caret,
                                   click to open dropdown with three options. */}
                               <div style={{ position: "relative" }}>
