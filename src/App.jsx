@@ -13141,7 +13141,7 @@ export default function App({ user }) {
                           <span style={{
                             fontFamily: "'Fraunces', Georgia, serif",
                             fontStyle: "italic",
-                            fontSize: 18,
+                            fontSize: 14,
                             fontWeight: 500,
                             letterSpacing: "-0.01em",
                             color: dimmed ? C.textMuted : C.text,
