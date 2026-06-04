@@ -13187,12 +13187,6 @@ export default function App({ user }) {
                                     return isRaiPlus ? <span style={{ display: "inline-flex", gap: 1 }}><Star /><Star /></span> : <Star />;
                                   })()}
                                   <span>{modeLabel}</span>
-                                  {/* Fraunces italic right-pointing angle.
-                                      Typographic mark, not a UI chrome
-                                      glyph — matches the editorial voice
-                                      of the Fraunces italic section
-                                      labels. */}
-                                  <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", color: C.textMuted, fontSize: 13, lineHeight: 1, marginLeft: 3, flexShrink: 0 }}>›</span>
                                 </button>
                                 {todayModeMenuOpen && (
                                   <>
