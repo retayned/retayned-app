@@ -3078,7 +3078,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           rest of the rail. Sections are separated by whitespace only.
           Dismissal is implicit (click elsewhere on the dial) or via the
           × in the upper corner of the SELECTED state. */}
-      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: selectedEvent ? 240 : 150, textAlign: "right", zIndex: 6, transition: "width 200ms var(--rt-ease-out)" }}>
+      <div className="rt-dial-hub" style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", width: 240, textAlign: "right", zIndex: 6 }}>
        <div className="rt-dial-cs" style={{ transformOrigin: "right center" }}>
         {hubEvent ? (
           selectedEvent ? (
@@ -3244,24 +3244,20 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               )}
             </>
           ) : (
-            // ═══ COMPACT NEXT-EVENT READOUT (default state) ═══
-            // No Now pill here anymore — it lives as its own scrub
-            // indicator near the top of the dial workspace.
+            // ═══ NEXT-EVENT READOUT — V2: matches the selected-event ═══
+            // hierarchy (24px hero time, 14px title, 12px client) so the
+            // hub looks consistent whether the user has selected an
+            // event or is just looking at "what's next." Eyebrow above
+            // the time identifies this as the upcoming meeting and
+            // shows the countdown. No prep/action row here — those
+            // belong to the explicit-selection state.
             <>
-              <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: imminent ? C.primary : C.textMuted, marginBottom: 4 }}>
                 Next{countdown ? ` · ${countdown}` : ""}
               </div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.primaryDeep, marginTop: 1 }}>{formatTimeLabel(hubEvent._start)}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.2 }}>{hubEvent.title}</div>
-              {hubEvent.client_name && <div style={{ fontSize: 10.5, color: C.textSec }}>{hubEvent.client_name}</div>}
-              <div className="rt-dial-hub-delete">
-                <button
-                  onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
-                  style={{ marginTop: 3, background: "transparent", border: "none", color: C.textMuted, fontSize: 9.5, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", padding: 0 }}
-                >
-                  delete
-                </button>
-              </div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
+              {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
             </>
           )
         ) : (
@@ -9156,7 +9152,15 @@ export default function App({ user }) {
         /* (rt-check rules consolidated above in DESIGN LANGUAGE block) */
         .rt-row .rt-task-title {
           position: relative;
-          display: inline-block;
+          /* 2-line wrap with hard-clip — no hover tooltip needed. Same
+             behavior across desktop + mobile so users never have to
+             hover to read a task. line-height × 2 = max-height. */
+          display: block;
+          white-space: normal;
+          overflow: hidden;
+          text-overflow: clip;
+          word-break: break-word;
+          max-height: 2.6em;
           font-size: 14px;
           font-weight: 500;
           line-height: 1.3;
@@ -9169,30 +9173,11 @@ export default function App({ user }) {
         }
         .rt-row.is-done .rt-task-title { color: ${C.textMuted}; }
         .rt-row.is-done .rt-task-title::after { width: 100%; }
-        /* Mobile: long task titles get 2 lines instead of single-line ellipsis.
-           Single-line truncate hides too much content on phone widths where
-           there's no hover-tooltip affordance. We override the inline styles
-           via !important; row height becomes variable but readability wins.
-           NOTE: we deliberately AVOID -webkit-line-clamp here because WebKit
-           auto-appends an ellipsis when clamping, even with text-overflow:clip.
-           Instead we cap max-height at exactly 2 lines (line-height * 2) and
-           hide overflow — clean hard-clip, no trailing dots. */
-        @media (max-width: 900px) {
-          .rt-row .rt-task-title {
-            display: block !important;
-            white-space: normal !important;
-            overflow: hidden !important;
-            text-overflow: clip !important;
-            word-break: break-word;
-            max-height: 2.6em; /* line-height 1.3 × 2 lines */
-            line-height: 1.3;
-          }
-          /* On mobile the strikethrough ::after pseudo (which is a single
-             positioned line) doesn't span both wrapped lines — use the native
-             text-decoration instead so each line gets struck through. */
-          .rt-row.is-done .rt-task-title { text-decoration: line-through; }
-          .rt-row .rt-task-title::after { display: none; }
-        }
+        /* When the title wraps to 2 lines, the absolutely-positioned
+           strikethrough ::after only covers one line. Fall back to
+           native text-decoration so each line gets struck through. */
+        .rt-row.is-done .rt-task-title { text-decoration: line-through; }
+        .rt-row .rt-task-title::after { display: none; }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
 
@@ -9414,11 +9399,12 @@ export default function App({ user }) {
            wash on hover, matching the scrubbed-state indicator's hover
            treatment for consistency. Padding + border-radius give the
            hover a defined shape rather than bleeding to the rail edges. */
-        .rt-dial-event-row { border-radius: 10px; transition: background 120ms var(--rt-ease-out); }
-        .rt-dial-event-row:hover { background: rgba(20,30,22,0.04); }
-        /* No hover background — the row is a click target but doesn't paint
-           a translucent box on hover. The cursor change + the natural
-           visual hierarchy (time / title / client) carry the affordance. */
+        .rt-dial-event-row { transition: background 120ms var(--rt-ease-out); }
+        /* No hover background — the wide container extends well past the
+           visible text content (230px wide vs ~140px of actual text), so
+           painting bg on the container shows a misaligned rectangle to
+           the left of the event. The cursor change + slight title color
+           shift on hover (set inline below) carry the click affordance. */
         /* Counter-scale utility: elements inside the dial layer (which is scaled
            by var(--dial-scale)) that should render at a CONSTANT on-screen size
            regardless of scale. Cancels out the parent transform by 1/scale.
@@ -12738,7 +12724,7 @@ export default function App({ user }) {
                                   Rai's pick
                                 </div>
                               )}
-                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden" }}>
+                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden", display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                                 {/* Inline Rai star — sits immediately before
                                     the task title text on AI-suggested rows.
                                     Replaces the previous bobbing-medallion
@@ -12757,10 +12743,7 @@ export default function App({ user }) {
                                     fill="none"
                                     aria-label="Suggested by Rai"
                                     style={{
-                                      display: "inline-block",
-                                      verticalAlign: "middle",
-                                      marginRight: 6,
-                                      marginTop: -2,
+                                      display: "block",
                                       flexShrink: 0,
                                     }}
                                   >
