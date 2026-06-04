@@ -13135,7 +13135,7 @@ export default function App({ user }) {
                       const isRaiPlus = rankMode === "rai" && aiTasksOn;
                       const isRaiOnly = rankMode === "rai" && !aiTasksOn;
                       const isManual = rankMode === "manual";
-                      const modeLabel = isRaiPlus ? "Task & Rank" : isRaiOnly ? "Rai Rank" : "Manual";
+                      const modeLabel = isRaiPlus ? "Rai Task & Rank" : isRaiOnly ? "Rai Rank" : "Manual";
                       return (
                         <div className="rt-bucket-head" style={{ display: "flex", alignItems: "center", gap: 14, margin: (topGap != null ? topGap : 20) + "px 4px 10px" }}>
                           <span style={{
@@ -13187,16 +13187,21 @@ export default function App({ user }) {
                                     return isRaiPlus ? <span style={{ display: "inline-flex", gap: 1 }}><Star /><Star /></span> : <Star />;
                                   })()}
                                   <span>{modeLabel}</span>
-                                  <span style={{ color: C.textMuted, fontSize: 11, marginLeft: 2, lineHeight: 1 }}>▾</span>
+                                  {/* Stroke chevron — same visual family as
+                                      the lightning bolt next to Focus.
+                                      Replaces the form-default ▾. */}
+                                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginLeft: 2 }}>
+                                    <path d="M6 9l6 6 6-6" stroke={C.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
                                 </button>
                                 {todayModeMenuOpen && (
                                   <>
                                     <div onClick={() => setTodayModeMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }} />
                                     <div className="rt-picker-panel" style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: 220, zIndex: 50 }}>
                                       {[
-                                        { value: "raiPlus", label: "Task & Rank", hint: "Rai ranks + adds suggested tasks", onClick: () => { setRankMode("rai"); setAiTasks(true); } },
-                                        { value: "raiOnly", label: "Rai Rank",   hint: "Rai ranks your list only",         onClick: () => { setRankMode("rai"); setAiTasks(false); } },
-                                        { value: "manual",  label: "Manual",      hint: "Your own order, no Rai",           onClick: () => { setRankMode("manual"); setAiTasks(false); } },
+                                        { value: "raiPlus", label: "Rai Task & Rank", hint: "Rai ranks + adds suggested tasks.", onClick: () => { setRankMode("rai"); setAiTasks(true); } },
+                                        { value: "raiOnly", label: "Rai Rank",        hint: "Rai ranks your task list.",         onClick: () => { setRankMode("rai"); setAiTasks(false); } },
+                                        { value: "manual",  label: "Manual",          hint: "Your tasks, your way. No Rai.",     onClick: () => { setRankMode("manual"); setAiTasks(false); } },
                                       ].map(opt => {
                                         const active = (opt.value === "raiPlus" && isRaiPlus) || (opt.value === "raiOnly" && isRaiOnly) || (opt.value === "manual" && isManual);
                                         return (
@@ -13207,7 +13212,7 @@ export default function App({ user }) {
                                               display: "flex", alignItems: "center", justifyContent: "space-between",
                                               width: "100%", padding: "8px 10px",
                                               border: "none",
-                                              background: active ? C.surfaceWarm : "transparent",
+                                              background: active ? C.surface : "transparent",
                                               borderRadius: 6, cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.text,
                                             }}
                                             onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(20,30,22,0.04)"; }}
