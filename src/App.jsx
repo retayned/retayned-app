@@ -3204,7 +3204,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                               the hub via justifyContent: flex-end, but the
                               checkbox now leads the row content. */}
                           <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text.length > 25 ? pt.text.slice(0, 25).trimEnd() + "…" : pt.text}</span>
+                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text.length > 26 ? pt.text.slice(0, 25).trimEnd() + "…" : pt.text}</span>
                         </div>
                       ))}
                       {hubEvent._prepTasks.length > 1 && (
@@ -3286,7 +3286,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                         onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
                       >
                         <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
-                        <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text.length > 25 ? pt.text.slice(0, 25).trimEnd() + "…" : pt.text}</span>
+                        <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text.length > 26 ? pt.text.slice(0, 25).trimEnd() + "…" : pt.text}</span>
                       </div>
                     ))}
                     {hubEvent._prepTasks.length > 1 && (
@@ -5354,6 +5354,25 @@ export default function App({ user }) {
   // the device (that's how the Eastern-vs-Denver drift bug happened pre-fix).
   // null means "not loaded yet"; effects that depend on it must guard.
   const [userTimezone, setUserTimezone] = useState(null);
+  // ─── Google Calendar integration state ──────────────────────────
+  // Reflects google_oauth_tokens row for this user (active connection
+  // only). Loaded once on auth-ready and refreshed after connect/
+  // disconnect actions. `googleConnected` is the boolean the UI reads;
+  // `googleEmail` is the address Google reported (so we can show
+  // "Connected as adam@retayned.com" in Settings).
+  // `googleConnectPromptDismissed` is local-only (sessionStorage) — once
+  // the user dismisses the Today-page banner, it stays gone for the
+  // session, but the Settings row is always available.
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState(null);
+  const [googleConnectPromptDismissed, setGoogleConnectPromptDismissed] = useState(() => {
+    try { return sessionStorage.getItem("rt_gcal_prompt_dismissed") === "1"; } catch { return false; }
+  });
+  // Connection-flow status — non-null while we're showing a toast about
+  // the result of the most recent OAuth round-trip. Values match the
+  // `?google_calendar=...` query param the callback function returns:
+  // 'connected', 'denied', 'error', 'expired', 'no_refresh_token'.
+  const [googleConnectStatus, setGoogleConnectStatus] = useState(null);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -5431,6 +5450,133 @@ export default function App({ user }) {
         });
     }
   };
+  // ─── Google Calendar OAuth handlers ────────────────────────────
+  // connect: calls google-oauth-start, gets Google's consent URL,
+  // sends the browser to it. After consent, Google redirects to the
+  // callback edge function, which stores the refresh token and bounces
+  // the user back to /settings?google_calendar=connected. The query
+  // param is read on next mount to show a toast + refresh state.
+  const connectGoogleCalendar = async () => {
+    if (!user?.id) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        console.error('No session token for OAuth start');
+        return;
+      }
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-oauth-start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!resp.ok) {
+        console.error('OAuth start failed:', resp.status, await resp.text());
+        setGoogleConnectStatus('error');
+        return;
+      }
+      const { url } = await resp.json();
+      if (!url) {
+        console.error('OAuth start returned no URL');
+        setGoogleConnectStatus('error');
+        return;
+      }
+      // Top-level navigation to Google's consent page. NOT window.open —
+      // popup blockers will eat it, and the redirect-back flow needs a
+      // full page nav anyway.
+      window.location.assign(url);
+    } catch (err) {
+      console.error('connectGoogleCalendar threw:', err);
+      setGoogleConnectStatus('error');
+    }
+  };
+  // disconnect: calls google-oauth-disconnect, which revokes the token
+  // with Google + soft-deletes the row + purges cached events. Refreshes
+  // local state on success.
+  const disconnectGoogleCalendar = async () => {
+    if (!user?.id || !googleConnected) return;
+    if (!window.confirm('Disconnect Google Calendar? Your synced events will be removed from Retayned.')) return;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) return;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-oauth-disconnect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+      if (!resp.ok) {
+        console.error('Disconnect failed:', resp.status, await resp.text());
+        return;
+      }
+      setGoogleConnected(false);
+      setGoogleEmail(null);
+      setGoogleConnectStatus('disconnected');
+      // Re-show the Today-page banner so the user can reconnect easily.
+      try { sessionStorage.removeItem("rt_gcal_prompt_dismissed"); } catch {}
+      setGoogleConnectPromptDismissed(false);
+    } catch (err) {
+      console.error('disconnectGoogleCalendar threw:', err);
+    }
+  };
+  // Dismisses the Today-page connect nudge for this session. Settings
+  // row still has the connect button so they can come back to it.
+  const dismissGoogleConnectPrompt = () => {
+    try { sessionStorage.setItem("rt_gcal_prompt_dismissed", "1"); } catch {}
+    setGoogleConnectPromptDismissed(true);
+  };
+  // On mount, check the URL for ?google_calendar=... — set by our
+  // OAuth callback when it bounces the user back to Retayned. Values:
+  //   connected: success, refresh token stored
+  //   denied: user clicked Cancel at Google's consent screen
+  //   error: token exchange failed or state token invalid
+  //   expired: state token expired (>10 min between start and callback)
+  //   no_refresh_token: Google didn't return refresh_token (rare —
+  //     happens if user revoked then reconnected without consent prompt)
+  // We pop a toast for each, then strip the param from the URL so it
+  // doesn't fire again on subsequent renders. (Uses replaceState so
+  // history isn't polluted.)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("google_calendar");
+    if (!status) return;
+    setGoogleConnectStatus(status);
+    // Strip the param from the URL.
+    params.delete("google_calendar");
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+    window.history.replaceState({}, "", newUrl);
+    // On successful connect, also refresh the connection row from DB —
+    // by this point the callback has written it, but our state was
+    // loaded BEFORE the OAuth round-trip, so it's stale.
+    if (status === "connected" && user?.id) {
+      supabase
+        .from("google_oauth_tokens")
+        .select("google_email, disconnected_at")
+        .eq("user_id", user.id)
+        .eq("provider", "google_calendar")
+        .is("disconnected_at", null)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setGoogleConnected(true);
+            setGoogleEmail(data.google_email);
+          }
+        });
+    }
+    // Auto-clear the toast after 5 seconds (sooner for success since
+    // it's celebratory and unobtrusive).
+    const t = setTimeout(() => setGoogleConnectStatus(null), status === "connected" ? 4000 : 6000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   const [manualTaskOrder, _setManualTaskOrder] = useState(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -6312,6 +6458,32 @@ export default function App({ user }) {
     ]);
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
+
+    // ── Google Calendar connection status ──────────────────────────
+    // Cheap side-fetch — checks the user's row in google_oauth_tokens
+    // and lights up googleConnected + googleEmail for the UI. Runs
+    // outside the main Promise.all (above) because it's recent code
+    // and that batch is fragile to add to (positional destructuring of
+    // a 20+ item tuple). Failure is non-fatal — the UI just shows
+    // "not connected" and the user can connect from Settings.
+    try {
+      const { data: gcalRow } = await supabase
+        .from('google_oauth_tokens')
+        .select('google_email, disconnected_at')
+        .eq('user_id', uid)
+        .eq('provider', 'google_calendar')
+        .is('disconnected_at', null)
+        .maybeSingle();
+      if (gcalRow) {
+        setGoogleConnected(true);
+        setGoogleEmail(gcalRow.google_email);
+      } else {
+        setGoogleConnected(false);
+        setGoogleEmail(null);
+      }
+    } catch (err) {
+      console.warn('google_oauth_tokens fetch failed (non-fatal):', err);
+    }
 
     // Build per-client revenue history map: client_id → [history rows]
     const revHistoryByClient = {};
@@ -9613,25 +9785,38 @@ export default function App({ user }) {
            inline precedence; on .is-filled it gets a purple-tinted shadow
            so the filled state reads as polished too. */
         .rt-composer-pill {
-          background: var(--rt-card);
-          box-shadow: var(--rt-sh-xs);
-          transition: box-shadow 200ms var(--rt-ease-out),
-                      transform 200ms var(--rt-ease-out),
-                      color 200ms var(--rt-ease-out);
+          /* Path C — outlined, flat. The chips don't elevate (no shadow,
+             no card-bg), they're defined by their edge. Lives confidently
+             on the flat page without needing a container to be lifted
+             from. Fully rounded (pill shape, borderRadius 999) reinforces
+             that they're discrete affordances, not embedded form fields.
+             The !important overrides the inline borderRadius:8 / border:
+             none that the four chip buttons set individually — cheaper
+             than patching all four call sites. */
+          background: transparent !important;
+          box-shadow: none !important;
+          border: 1px solid rgba(20,30,22,0.12) !important;
+          border-radius: 999px !important;
+          transition: background 160ms var(--rt-ease-out),
+                      border-color 160ms var(--rt-ease-out),
+                      color 160ms var(--rt-ease-out);
         }
         .rt-composer-pill:hover {
-          box-shadow: 0 1px 2px rgba(20,30,22,0.05), 0 2px 6px rgba(20,30,22,0.06) !important;
-          transform: translateY(-1px);
+          background: rgba(20,30,22,0.03) !important;
+          border-color: rgba(20,30,22,0.20) !important;
+          box-shadow: none !important;
+          transform: none !important;
           color: var(--rt-text);
         }
         .rt-composer-pill:active {
-          transform: translateY(0) scale(0.97);
+          transform: scale(0.98);
           transition: transform 80ms var(--rt-ease-press);
         }
         .rt-composer-pill.is-filled {
-          /* Filled state uses the same neutral chip language as Worker/Due —
-             the client avatar carries the visual personality, not the chip
-             surface. Purple was Rai-territory; this is user-selection. */
+          /* Filled state — slightly stronger border to indicate selection
+             without going back to a filled bg (which would clash with the
+             flat treatment). The avatar / value text carries the personality. */
+          border-color: rgba(20,30,22,0.25) !important;
         }
         /* Recurring frequency chips inside the Due picker — share the
            composer-pill motion language (idle xs-shadow, hover lift,
@@ -10235,6 +10420,52 @@ export default function App({ user }) {
             the same way it wraps real content, so there's no layout
             shift when the swap happens. */}
         {!dataLoaded && <SkeletonPage />}
+
+        {/* ─── Google Calendar OAuth result toast ─────────────────────
+            Fixed-position, top-center, auto-clears via the effect that
+            sets googleConnectStatus. Shown after the user returns from
+            the OAuth round-trip and we've read the ?google_calendar
+            query param. Five status values map to five short messages.
+            Click X to dismiss early; otherwise it auto-closes via the
+            timeout set in the param-handler effect. */}
+        {googleConnectStatus && (
+          <div style={{
+            position: "fixed",
+            top: 18,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            background: googleConnectStatus === "connected" ? "#1F3D2A" : "#2A1414",
+            color: "#fff",
+            padding: "10px 16px",
+            borderRadius: 10,
+            fontSize: 13,
+            fontWeight: 500,
+            boxShadow: "0 4px 16px rgba(20,30,22,0.15), 0 2px 4px rgba(20,30,22,0.10)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            maxWidth: "92vw",
+            fontFamily: "inherit",
+            animation: "rt-toast-in 220ms var(--rt-ease-out, cubic-bezier(.2,.6,.2,1))",
+          }}>
+            <span>
+              {googleConnectStatus === "connected" && (googleEmail ? `Google Calendar connected — ${googleEmail}` : "Google Calendar connected.")}
+              {googleConnectStatus === "disconnected" && "Google Calendar disconnected."}
+              {googleConnectStatus === "denied" && "Google Calendar not connected — you cancelled the consent."}
+              {googleConnectStatus === "error" && "Couldn't connect to Google Calendar. Try again."}
+              {googleConnectStatus === "expired" && "Connection took too long and expired. Try again."}
+              {googleConnectStatus === "no_refresh_token" && "Google didn't issue a refresh token. Disconnect at myaccount.google.com → Security, then try again."}
+            </span>
+            <button
+              onClick={() => setGoogleConnectStatus(null)}
+              style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", padding: 0, fontSize: 16, lineHeight: 1, fontFamily: "inherit" }}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* ═══ TODAY — TASK MANAGER ═══ */}
         {dataLoaded && page === "today" && (() => {
@@ -12313,7 +12544,7 @@ export default function App({ user }) {
                         gap: 8,
                         padding: "0 14px",
                         height: 28,
-                        borderRadius: 8,
+                        borderRadius: 999,
                         border: "none",
                         fontSize: 12,
                         fontWeight: 600,
@@ -13394,6 +13625,63 @@ export default function App({ user }) {
                         {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
+                        {/* Connect Google Calendar nudge. Only renders when
+                            (a) the user hasn't connected yet, (b) the
+                            session-scoped dismissal flag is off, and
+                            (c) we have a handler to call. Sits just below
+                            the "today" header so it's visible without
+                            crowding the first task. Dismissing hides for
+                            the session; Settings → Integrations still
+                            offers Connect, so dismissal isn't permanent. */}
+                        {!googleConnected && !googleConnectPromptDismissed && (
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "6px 4px 10px",
+                            fontSize: 12,
+                            color: C.textMuted,
+                          }}>
+                            <Icon name="calendar" size={12} color={C.textMuted} />
+                            <button
+                              type="button"
+                              onClick={connectGoogleCalendar}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
+                                color: C.btn,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                textDecoration: "underline",
+                                textUnderlineOffset: 2,
+                                textDecorationColor: "rgba(124,92,243,0.4)",
+                              }}
+                            >
+                              Connect Google Calendar
+                            </button>
+                            <span style={{ color: C.textMuted }}>to see your meetings here</span>
+                            <span style={{ flex: 1 }} />
+                            <button
+                              type="button"
+                              onClick={dismissGoogleConnectPrompt}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                padding: "2px 6px",
+                                color: C.textMuted,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                fontSize: 11,
+                              }}
+                              aria-label="Dismiss"
+                            >
+                              Not now
+                            </button>
+                          </div>
+                        )}
                         {_todayBucket.length > 0 && (
                           <div className={"rt-today-breakout" + (justPromoted ? " rt-today-breakout-animate" : "")}>
                             {renderRow(_todayBucket[0], "today")}
@@ -18191,26 +18479,32 @@ export default function App({ user }) {
             {/* Integrations — real, all-tiers. Currently just Google
                 Calendar. This is the permanent home for the connection:
                 the Today-page nudge can be dismissed, but this row is
-                always here. When real Google OAuth ships (TODO I), the
-                Connect button + connected state light up from the same
-                googleConnected source the Today page reads. */}
+                always here. */}
             <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Integrations</div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <Icon name="calendar" size={16} color={C.textSec} />
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>Google Calendar</div>
-                    <div style={{ fontSize: 12, color: C.textMuted }}>Show your events alongside tasks on the Today page</div>
+                    {googleConnected ? (
+                      <div style={{ fontSize: 12, color: C.textMuted, marginTop: 1 }}>
+                        Connected as <span style={{ color: C.text, fontWeight: 500 }}>{googleEmail || "your Google account"}</span>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: C.textMuted, marginTop: 1 }}>
+                        Show your events alongside tasks on the Today page
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button
-                  onClick={() => { /* TODO I: real Google OAuth flow */ }}
+                  onClick={googleConnected ? disconnectGoogleCalendar : connectGoogleCalendar}
                   style={{
                     padding: "6px 14px",
-                    background: C.btn,
-                    color: "#fff",
-                    border: "none",
+                    background: googleConnected ? "transparent" : C.btn,
+                    color: googleConnected ? C.textSec : "#fff",
+                    border: googleConnected ? "1px solid " + C.borderLight : "none",
                     borderRadius: 7,
                     fontSize: 12,
                     fontWeight: 600,
@@ -18219,7 +18513,7 @@ export default function App({ user }) {
                     flexShrink: 0,
                   }}
                 >
-                  Connect
+                  {googleConnected ? "Disconnect" : "Connect"}
                 </button>
               </div>
             </div>
