@@ -8711,15 +8711,17 @@ export default function App({ user }) {
         }
         .rt-today-breakout .rt-row .rt-task-title { font-size: 14.5px; font-weight: 500; }
         .rt-today-breakout .rt-row .rt-check { width: 24px; height: 24px; }
-        /* When the break-out top task is ALSO a Rai task, the lift's
-           shadow stays in place. The Rai signal lives entirely in the
-           inline star + 1px hairline border now — no extra shadow
-           layering on top of the breakout's elevation. */
+        /* When the break-out top task is ALSO a Rai task, layer the
+           1px purple ring + soft purple halo OVER the breakout's
+           lifted shadow. Per Adam's spec: in this position, the Rai
+           hairline gets a little shading too — the breakout already
+           carries elevation, so a faint purple glow ties the
+           authorship signal into the lift. */
         .rt-today-breakout .rt-row.rt-rai-boost {
-          box-shadow: var(--rt-sh-row-lifted), 0 0 0 1px rgba(124,92,243,0.35) !important;
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.45), 0 3px 8px rgba(20,30,22,0.07), 0 12px 30px rgba(124,92,243,0.10) !important;
         }
         .rt-today-breakout .rt-row.rt-rai-boost:hover:not(.is-done) {
-          box-shadow: var(--rt-sh-row-lifted-hover, var(--rt-sh-row-lifted)), 0 0 0 1px rgba(124,92,243,0.35) !important;
+          box-shadow: 0 0 0 1px rgba(124,92,243,0.45), 0 4px 10px rgba(20,30,22,0.08), 0 14px 34px rgba(124,92,243,0.13) !important;
         }
         /* The rest — plain stack, no thread (break-out carries emphasis). */
         .rt-today-rest { position: relative; }
@@ -12895,7 +12897,6 @@ export default function App({ user }) {
                                     onPointerUp={lpCancel}
                                     onPointerMove={lpCancel}
                                     onPointerLeave={lpCancel}
-                                    style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                   >{t.text}</span>;
                                 })()}
                               </div>
