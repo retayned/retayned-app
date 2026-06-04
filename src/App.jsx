@@ -3187,10 +3187,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                   </div>
                   {hubEvent._prepCount > 0 && Array.isArray(hubEvent._prepTasks) && hubEvent._prepTasks.length > 0 ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      {hubEvent._prepTasks.slice(0, 4).map(pt => (
+                      {/* Only the highest-ranked prep task shows here.
+                          Earlier we showed up to 4, which blew the hub
+                          up vertically and competed with the event's own
+                          metadata. The "+ N more" hint below still
+                          communicates additional load when present. */}
+                      {hubEvent._prepTasks.slice(0, 1).map(pt => (
                         <div
                           key={pt.id}
-                          style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "3px 0", cursor: "pointer", justifyContent: "flex-end" }}
+                          style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "3px 0", cursor: "pointer", justifyContent: "flex-end", minWidth: 0 }}
                           onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
                         >
                           {/* Checkbox first (left of text) — matches standard
@@ -3199,11 +3204,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                               the hub via justifyContent: flex-end, but the
                               checkbox now leads the row content. */}
                           <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
-                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left" }}>{pt.text}</span>
+                          <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text}</span>
                         </div>
                       ))}
-                      {hubEvent._prepTasks.length > 4 && (
-                        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>+ {hubEvent._prepTasks.length - 4} more</div>
+                      {hubEvent._prepTasks.length > 1 && (
+                        <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>+ {hubEvent._prepTasks.length - 1} more</div>
                       )}
                     </div>
                   ) : (
@@ -3244,13 +3249,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               )}
             </>
           ) : (
-            // ═══ NEXT-EVENT READOUT — V2: matches the selected-event ═══
-            // hierarchy (24px hero time, 14px title, 12px client) so the
-            // hub looks consistent whether the user has selected an
-            // event or is just looking at "what's next." Eyebrow above
-            // the time identifies this as the upcoming meeting and
-            // shows the countdown. No prep/action row here — those
-            // belong to the explicit-selection state.
+            // ═══ NEXT-EVENT READOUT — DEFAULT STATE ═════════════════
+            // Shown when no event is selected (e.g. page refresh, or
+            // user has scrubbed back to "now"). Mirrors the selected-
+            // event state's typography (24px hero time, 14px title,
+            // 12px client) AND its prep section + action row — the
+            // default state needs the same affordances as the selected
+            // state so the user can act on the upcoming meeting without
+            // first having to click the rim dot to "select" it.
+            //
+            // Nav arrows are intentionally omitted here — they belong
+            // to the explicit-selection state where the user has chosen
+            // an event to inspect.
             <>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: imminent ? C.primary : C.textMuted, marginBottom: 4 }}>
                 Next{countdown ? ` · ${countdown}` : ""}
@@ -3258,6 +3268,70 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
               {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
+
+              {/* Prep section — copied from the selected-event branch
+                  so the default state offers the same context. Shows
+                  only the top-ranked task; "+ N more" hints at deeper
+                  prep load without expanding the hub. */}
+              <div style={{ marginTop: 22, textAlign: "right" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.0, textTransform: "uppercase", color: C.textMuted, marginBottom: 4 }}>
+                  Prep{(hubEvent._prepCount > 0) ? ` · ${hubEvent._prepCount} open` : ""}
+                </div>
+                {hubEvent._prepCount > 0 && Array.isArray(hubEvent._prepTasks) && hubEvent._prepTasks.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {hubEvent._prepTasks.slice(0, 1).map(pt => (
+                      <div
+                        key={pt.id}
+                        style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "3px 0", cursor: "pointer", justifyContent: "flex-end", minWidth: 0 }}
+                        onClick={() => { if (typeof onTogglePrepTask === "function") onTogglePrepTask(pt.id); }}
+                      >
+                        <div style={{ width: 13, height: 13, borderRadius: 4, border: "1.5px solid " + C.border, flexShrink: 0, marginTop: 2 }} />
+                        <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.4, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, flex: "0 1 auto" }} title={pt.text}>{pt.text}</span>
+                      </div>
+                    ))}
+                    {hubEvent._prepTasks.length > 1 && (
+                      <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>+ {hubEvent._prepTasks.length - 1} more</div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", lineHeight: 1.4 }}>
+                    Nothing to prep — you're set.
+                  </div>
+                )}
+              </div>
+
+              {/* Action row — same Reschedule + Delete as the selected
+                  state. Reschedule clicking promotes the event to the
+                  selected state and opens the reschedule editor there
+                  (the editor lives in the selected branch). */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 14, marginTop: 22 }}>
+                <button
+                  onClick={() => {
+                    // Promote this event to "selected" so the reschedule
+                    // editor (which lives in the selected branch) can
+                    // open, pre-populated with this event's date/time.
+                    setSelectedId(hubEvent.id);
+                    const d = hubEvent._start;
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, "0");
+                    const dd = String(d.getDate()).padStart(2, "0");
+                    const hh = String(d.getHours()).padStart(2, "0");
+                    const mi = String(d.getMinutes()).padStart(2, "0");
+                    setRescheduleDate(`${yyyy}-${mm}-${dd}`);
+                    setRescheduleTime(`${hh}:${mi}`);
+                    setRescheduleEditing(true);
+                  }}
+                  style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Reschedule
+                </button>
+                <button
+                  onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); }}
+                  style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: "#A03422", cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Delete
+                </button>
+              </div>
             </>
           )
         ) : (
@@ -9154,15 +9228,19 @@ export default function App({ user }) {
         /* (rt-check rules consolidated above in DESIGN LANGUAGE block) */
         .rt-row .rt-task-title {
           position: relative;
-          /* 2-line wrap with hard-clip — no hover tooltip needed. Same
-             behavior across desktop + mobile so users never have to
-             hover to read a task. line-height × 2 = max-height. */
-          display: block;
-          white-space: normal;
+          /* Single-line truncation with ellipsis. Tasks are capped at 75
+             chars at save time (both user-typed and Rai-generated), and
+             75 chars at 14px Manrope fits one line on desktop and just
+             under two lines on mobile. This style ensures legacy tasks
+             written before the cap (or any future overrun) display
+             cleanly without exploding row height. The full text is
+             reachable via the title tooltip + the edit affordance. */
+          display: inline-block;
+          max-width: 100%;
           overflow: hidden;
-          text-overflow: clip;
-          word-break: break-word;
-          max-height: 2.6em;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          vertical-align: bottom;
           font-size: 14px;
           font-weight: 500;
           line-height: 1.3;
@@ -9175,11 +9253,6 @@ export default function App({ user }) {
         }
         .rt-row.is-done .rt-task-title { color: ${C.textMuted}; }
         .rt-row.is-done .rt-task-title::after { width: 100%; }
-        /* When the title wraps to 2 lines, the absolutely-positioned
-           strikethrough ::after only covers one line. Fall back to
-           native text-decoration so each line gets struck through. */
-        .rt-row.is-done .rt-task-title { text-decoration: line-through; }
-        .rt-row .rt-task-title::after { display: none; }
         .rt-row.is-done .rt-row-meta { opacity: 0.55; color: ${C.textMuted}; transition: opacity 320ms ease, color 320ms ease; }
         .rt-row.is-done .rt-task-avatar { opacity: 0.4; filter: grayscale(1); transition: opacity 320ms ease, filter 320ms ease; }
 
@@ -10970,8 +11043,17 @@ export default function App({ user }) {
               ? null
               : (newTaskDueDate || _todayStr);
             const recurrencePatternForCreate = newTaskRecurring ? newTaskRecurrencePattern : null;
+            // 75-char hard cap on task titles. Two-line mobile is ~68 chars;
+            // 75 leaves ~7 chars past the cutoff before ellipsis — small
+            // enough that the elided portion isn't meaningful content.
+            // Applies to both user-typed and Rai-suggested tasks (the
+            // ranker prompt has the same rule). Trailing whitespace from
+            // the substring is trimmed; we DON'T append an ellipsis to
+            // the stored text — display layers handle truncation visually.
+            const TITLE_CAP = 75;
+            const cappedText = text.length > TITLE_CAP ? text.slice(0, TITLE_CAP).trimEnd() : text;
             const { data: created } = await tasksDb.create(user.id, {
-              text,
+              text: cappedText,
               client_name: clientName,
               client_id: clientObj?.id || null,
               is_recurring: newTaskRecurring,
@@ -10981,7 +11063,7 @@ export default function App({ user }) {
             });
             const task = {
               id: created?.id || "u" + Date.now(),
-              text,
+              text: cappedText,
               client: clientName || null,
               done: false, ai: false,
               recurring: newTaskRecurring,
@@ -11179,18 +11261,41 @@ export default function App({ user }) {
                   // Case-insensitive matching; preserve the original casing
                   // from the brief in the rendered link text.
                   const briefSegments = (() => {
-                    const names = (clients || [])
-                      .map(c => c.name)
-                      .filter(n => n && typeof n === "string")
+                    // Build an alias map: each client gets its full name + the
+                    // first-word abbreviation (e.g. "Ardath Watches" → also
+                    // match "Ardath"). Rai often uses short forms in prose.
+                    // We map every alias back to the canonical client name so
+                    // clicks always seed the right client. Longest first so
+                    // "Ardath Watches" wins over "Ardath" when both appear.
+                    const aliasToCanonical = new Map();
+                    for (const c of (clients || [])) {
+                      const n = c && c.name;
+                      if (!n || typeof n !== "string") continue;
+                      aliasToCanonical.set(n.toLowerCase(), n);
+                      // First-word alias for multi-word names. Skip if the
+                      // first word is too short to be unambiguous (e.g.
+                      // "The Motley Fool" — "The" should NOT be a link).
+                      // Skip leading articles, and require ≥3 chars.
+                      const ARTICLES = new Set(["the", "a", "an"]);
+                      const words = n.split(/\s+/);
+                      let firstWord = words[0];
+                      if (words.length > 1 && firstWord && ARTICLES.has(firstWord.toLowerCase())) {
+                        firstWord = words[1];
+                      }
+                      if (
+                        words.length > 1 &&
+                        firstWord &&
+                        firstWord.length >= 3 &&
+                        !aliasToCanonical.has(firstWord.toLowerCase())
+                      ) {
+                        aliasToCanonical.set(firstWord.toLowerCase(), n);
+                      }
+                    }
+                    const aliases = Array.from(aliasToCanonical.keys())
                       .sort((a, b) => b.length - a.length); // longest first
-                    if (!names.length) return [{ type: "text", value: briefText }];
-                    // Escape regex specials so client names with punctuation
-                    // (e.g. "Smith & Co.") match literally.
+                    if (!aliases.length) return [{ type: "text", value: briefText }];
                     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-                    // Build one alternation pattern; \b word-bounds keep us
-                    // from matching inside other words. (?:'s)? captures
-                    // possessive forms (will render as plain text alongside).
-                    const pattern = new RegExp(`\\b(${names.map(esc).join("|")})\\b`, "gi");
+                    const pattern = new RegExp(`\\b(${aliases.map(esc).join("|")})\\b`, "gi");
                     const segs = [];
                     let lastIdx = 0;
                     let m;
@@ -11198,11 +11303,8 @@ export default function App({ user }) {
                       if (m.index > lastIdx) {
                         segs.push({ type: "text", value: briefText.slice(lastIdx, m.index) });
                       }
-                      // Resolve to the canonical client name (case-correct)
-                      // for the composer seed, but render the casing that
-                      // appeared in the brief.
                       const matched = m[1];
-                      const canonical = names.find(n => n.toLowerCase() === matched.toLowerCase()) || matched;
+                      const canonical = aliasToCanonical.get(matched.toLowerCase()) || matched;
                       segs.push({ type: "client", value: matched, canonical });
                       lastIdx = m.index + matched.length;
                     }
@@ -12263,6 +12365,23 @@ export default function App({ user }) {
                   } else if (readout.kind === "task" || readout.kind === "event") {
                     datePart = <>, <span style={{ color: "#A8A89A", fontStyle: "italic" }}>no date yet</span></>;
                   }
+                  // Character counter — reflects the PARSED title length
+                  // (what actually saves), not the raw input. So typing
+                  // "@SprintRay tomorrow" doesn't burn 19 chars when the
+                  // saved title is empty. Cap is 75; counter turns muted
+                  // amber over 60 and red at the cap.
+                  const TITLE_CAP = 75;
+                  const parsedForCount = parseComposer(newTask, clients, workersList);
+                  const savedTitle = (parsedForCount.title || newTask).trim();
+                  const charsLeft = TITLE_CAP - savedTitle.length;
+                  const counterColor = charsLeft < 0
+                    ? "#A03422"
+                    : charsLeft <= 15
+                      ? "#8A5C2A"
+                      : "#A8A89A";
+                  // Only render the counter for TASK kind. Events and
+                  // touchpoints aren't subject to the same length cap.
+                  const showCounter = readout.kind === "task";
                   return (
                     <div style={{
                       padding: "6px 16px 12px 54px",
@@ -12275,10 +12394,11 @@ export default function App({ user }) {
                     }}>
                       <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", color: "#8A8F8A" }}>Becomes</span>
                       <span>→ {kindNoun}{clientPart}{datePart}</span>
-                      {/* (Removed: "⏎ Add" hint that used to live here.
-                          Redundant with the main Add button in the chips
-                          row directly above the readout — same affordance,
-                          same keyboard shortcut, visible at the same time.) */}
+                      {showCounter && (
+                        <span style={{ marginLeft: "auto", fontSize: 11, color: counterColor, fontVariantNumeric: "tabular-nums" }}>
+                          {savedTitle.length}/{TITLE_CAP}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}
@@ -12897,6 +13017,7 @@ export default function App({ user }) {
                                     onPointerUp={lpCancel}
                                     onPointerMove={lpCancel}
                                     onPointerLeave={lpCancel}
+                                    style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                   >{t.text}</span>;
                                 })()}
                               </div>
