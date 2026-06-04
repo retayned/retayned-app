@@ -9671,6 +9671,15 @@ export default function App({ user }) {
         @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.72; } }
         @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.62; } }
         @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.52; } }
+        /* Connect Google Calendar nudge — dotted underline on rest,
+           solid on hover. The hover swap is the affordance: dotted
+           reads as "tentative / suggestion," solid reads as "you're
+           about to act." Matches the editorial voice of the rest of
+           the surface. */
+        .rt-gcal-connect-link:hover {
+          text-decoration-style: solid !important;
+          text-decoration-color: #7c5cf3 !important;
+        }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
           .rt-dial-controls { display: none !important; }
@@ -13625,63 +13634,6 @@ export default function App({ user }) {
                         {/* TODAY bucket — break-out top task (B) */}
                         <div className="rt-today-canvas">
                         <BucketHeader name="Today" dimmed={false} count={_todayBucket.length} topGap={6} />
-                        {/* Connect Google Calendar nudge. Only renders when
-                            (a) the user hasn't connected yet, (b) the
-                            session-scoped dismissal flag is off, and
-                            (c) we have a handler to call. Sits just below
-                            the "today" header so it's visible without
-                            crowding the first task. Dismissing hides for
-                            the session; Settings → Integrations still
-                            offers Connect, so dismissal isn't permanent. */}
-                        {!googleConnected && !googleConnectPromptDismissed && (
-                          <div style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "6px 4px 10px",
-                            fontSize: 12,
-                            color: C.textMuted,
-                          }}>
-                            <Icon name="calendar" size={12} color={C.textMuted} />
-                            <button
-                              type="button"
-                              onClick={connectGoogleCalendar}
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                padding: 0,
-                                color: C.btn,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                fontSize: 12,
-                                fontWeight: 600,
-                                textDecoration: "underline",
-                                textUnderlineOffset: 2,
-                                textDecorationColor: "rgba(124,92,243,0.4)",
-                              }}
-                            >
-                              Connect Google Calendar
-                            </button>
-                            <span style={{ color: C.textMuted }}>to see your meetings here</span>
-                            <span style={{ flex: 1 }} />
-                            <button
-                              type="button"
-                              onClick={dismissGoogleConnectPrompt}
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                padding: "2px 6px",
-                                color: C.textMuted,
-                                cursor: "pointer",
-                                fontFamily: "inherit",
-                                fontSize: 11,
-                              }}
-                              aria-label="Dismiss"
-                            >
-                              Not now
-                            </button>
-                          </div>
-                        )}
                         {_todayBucket.length > 0 && (
                           <div className={"rt-today-breakout" + (justPromoted ? " rt-today-breakout-animate" : "")}>
                             {renderRow(_todayBucket[0], "today")}
@@ -13894,6 +13846,76 @@ export default function App({ user }) {
                 className="rt-dial-layer"
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
+                {/* Connect Google Calendar nudge — overlays the dial
+                    area at top-left. Pointer-events scoped to just the
+                    affordance so dial scrub/click pass through.
+                    Visible only when not connected and not dismissed.
+                    Dotted purple underline → solid on hover; reads as
+                    an editorial link, not UI chrome. */}
+                {!googleConnected && !googleConnectPromptDismissed && (
+                  <div style={{
+                    position: "absolute",
+                    top: 28,
+                    left: 36,
+                    maxWidth: 360,
+                    pointerEvents: "auto",
+                    zIndex: 4,
+                    fontFamily: "inherit",
+                  }}>
+                    <div style={{
+                      fontFamily: "'Fraunces', Georgia, serif",
+                      fontStyle: "italic",
+                      fontSize: 14,
+                      fontWeight: 500,
+                      color: C.textMuted,
+                      letterSpacing: "-0.005em",
+                      lineHeight: 1.5,
+                    }}>
+                      <button
+                        type="button"
+                        onClick={connectGoogleCalendar}
+                        className="rt-gcal-connect-link"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          padding: 0,
+                          fontFamily: "inherit",
+                          fontStyle: "italic",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "#7c5cf3",
+                          cursor: "pointer",
+                          textDecoration: "underline dotted",
+                          textDecorationColor: "rgba(124,92,243,0.55)",
+                          textUnderlineOffset: 4,
+                          textDecorationThickness: 1.5,
+                          transition: "text-decoration-style 120ms ease",
+                        }}
+                      >
+                        Connect Google Calendar
+                      </button>
+                      <span> to see your meetings on the dial.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={dismissGoogleConnectPrompt}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        padding: "2px 0 0",
+                        marginTop: 4,
+                        color: C.textMuted,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        fontSize: 11,
+                        fontStyle: "italic",
+                      }}
+                      aria-label="Dismiss"
+                    >
+                      not now
+                    </button>
+                  </div>
+                )}
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
                     events={(() => {
