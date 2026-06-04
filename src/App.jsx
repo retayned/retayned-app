@@ -13187,12 +13187,12 @@ export default function App({ user }) {
                                     return isRaiPlus ? <span style={{ display: "inline-flex", gap: 1 }}><Star /><Star /></span> : <Star />;
                                   })()}
                                   <span>{modeLabel}</span>
-                                  {/* Stroke chevron — same visual family as
-                                      the lightning bolt next to Focus.
-                                      Replaces the form-default ▾. */}
-                                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginLeft: 2 }}>
-                                    <path d="M6 9l6 6 6-6" stroke={C.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
+                                  {/* Fraunces italic right-pointing angle.
+                                      Typographic mark, not a UI chrome
+                                      glyph — matches the editorial voice
+                                      of the Fraunces italic section
+                                      labels. */}
+                                  <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", color: C.textMuted, fontSize: 13, lineHeight: 1, marginLeft: 3, flexShrink: 0 }}>›</span>
                                 </button>
                                 {todayModeMenuOpen && (
                                   <>
@@ -21502,7 +21502,15 @@ function BucketCalToggle({ label, count, open, onToggle, C }) {
       <Icon name="due" size={16} color={C.primaryLight} accent={C.primary} />
       <span>{label}</span>
       <span style={{ color: C.textMuted, fontWeight: 500 }}>· {count} event{count === 1 ? "" : "s"}</span>
-      <span style={{ marginLeft: "auto", color: C.textMuted, fontSize: 11, transform: open ? "none" : "rotate(-90deg)", transition: "transform .18s" }}>▾</span>
+      <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", color: C.textMuted, transform: open ? "rotate(90deg)" : "none", transition: "transform .18s" }}>
+        {/* Stroke chevron — replaces a filled ▾ glyph. Points right when
+            collapsed, rotates 90° to point down when open. Matches the
+            visual family of the lightning bolt next to Focus + other
+            stroke icons. */}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M9 6l6 6-6 6" stroke={C.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
     </div>
   );
 }
