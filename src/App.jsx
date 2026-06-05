@@ -18736,7 +18736,7 @@ export default function App({ user }) {
                     Calendar · attribution queue
                   </div>
                   <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12 }}>
-                    {needLinking.length} {needLinking.length === 1 ? "event" : "events"} synced from Google but not yet linked to a client or prospect. Linking remembers — future events with the same names will auto-match.
+                    {needLinking.length} {needLinking.length === 1 ? "event" : "events"} synced from Google but not yet linked to a client or prospect. Link each one below. <span style={{ fontStyle: "italic" }}>Tip: to make future events auto-match, add the person's name to that client's <strong>Contact</strong> field in the Clients tab.</span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {needLinking.slice(0, 20).map(ev => {
