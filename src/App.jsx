@@ -5373,6 +5373,12 @@ export default function App({ user }) {
   // `?google_calendar=...` query param the callback function returns:
   // 'connected', 'denied', 'error', 'expired', 'no_refresh_token'.
   const [googleConnectStatus, setGoogleConnectStatus] = useState(null);
+  // Sync state for the "Sync now" affordance in Settings → Integrations.
+  // googleSyncing is true while a manual sync request is in flight (so
+  // the button can spinner / disable). googleLastSyncedAt updates after
+  // a successful sync so the UI can show "last synced 2 min ago".
+  const [googleSyncing, setGoogleSyncing] = useState(false);
+  const [googleLastSyncedAt, setGoogleLastSyncedAt] = useState(null);
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -5525,6 +5531,62 @@ export default function App({ user }) {
       console.error('disconnectGoogleCalendar threw:', err);
     }
   };
+  // Pulls events from Google Calendar into personal_calendar_events.
+  // Called automatically right after a successful connect (so the user
+  // immediately sees events on the dial), and from a "Sync now" button
+  // in Settings → Integrations. Returns { ok, fetched, upserted, deleted }
+  // for the UI to display. Failures (e.g., revoked token) propagate by
+  // way of toast status.
+  const syncGoogleCalendar = async ({ silent = false } = {}) => {
+    if (!user?.id) return null;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) return null;
+      if (!silent) setGoogleSyncing(true);
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        console.error('Calendar sync failed:', resp.status, data);
+        // If the token was revoked server-side, the function flagged
+        // the connection as disconnected. Reflect that locally so the
+        // UI prompts to reconnect.
+        if (data?.error === 'token_revoked') {
+          setGoogleConnected(false);
+          setGoogleEmail(null);
+          if (!silent) setGoogleConnectStatus('expired');
+        } else if (!silent) {
+          setGoogleConnectStatus('error');
+        }
+        return null;
+      }
+      // Refetch personal calendar events so the dial updates.
+      try {
+        const { data: refreshed } = await supabase
+          .from('personal_calendar_events')
+          .select('*')
+          .eq('user_id', user.id);
+        if (Array.isArray(refreshed)) setPersonalEvents(refreshed);
+      } catch (e) {
+        console.warn('Failed to refetch personal_calendar_events after sync:', e);
+      }
+      setGoogleLastSyncedAt(new Date().toISOString());
+      return data;
+    } catch (err) {
+      console.error('syncGoogleCalendar threw:', err);
+      if (!silent) setGoogleConnectStatus('error');
+      return null;
+    } finally {
+      if (!silent) setGoogleSyncing(false);
+    }
+  };
   // Dismisses the Today-page connect nudge for this session. Settings
   // row still has the connect button so they can come back to it.
   const dismissGoogleConnectPrompt = () => {
@@ -5548,6 +5610,17 @@ export default function App({ user }) {
     const status = params.get("google_calendar");
     if (!status) return;
     setGoogleConnectStatus(status);
+    // ALWAYS navigate to the Settings page when returning from OAuth.
+    // The user clicked Connect from EITHER the Today-page banner or the
+    // Settings page itself — and either way, Settings → Integrations is
+    // the canonical home for the connection. Putting them there lets
+    // them immediately see the connected-state confirmation, the email
+    // it bound to, and the Disconnect option. This also resolves a
+    // routing confusion: the callback redirects to /?... (the app root
+    // — no real /settings route exists in this SPA), and historically
+    // we relied on page state defaulting to "today" which made the
+    // OAuth round-trip feel like nothing happened.
+    setPage("settings");
     // Strip the param from the URL.
     params.delete("google_calendar");
     const newSearch = params.toString();
@@ -5559,7 +5632,7 @@ export default function App({ user }) {
     if (status === "connected" && user?.id) {
       supabase
         .from("google_oauth_tokens")
-        .select("google_email, disconnected_at")
+        .select("google_email, disconnected_at, last_synced_at")
         .eq("user_id", user.id)
         .eq("provider", "google_calendar")
         .is("disconnected_at", null)
@@ -5568,6 +5641,11 @@ export default function App({ user }) {
           if (data) {
             setGoogleConnected(true);
             setGoogleEmail(data.google_email);
+            setGoogleLastSyncedAt(data.last_synced_at || null);
+            // Immediately pull events so the dial populates without
+            // requiring a manual "Sync now" click. Silent: false so any
+            // failure surfaces via the toast (with a sensible message).
+            syncGoogleCalendar({ silent: false });
           }
         });
     }
@@ -6469,7 +6547,7 @@ export default function App({ user }) {
     try {
       const { data: gcalRow } = await supabase
         .from('google_oauth_tokens')
-        .select('google_email, disconnected_at')
+        .select('google_email, disconnected_at, last_synced_at')
         .eq('user_id', uid)
         .eq('provider', 'google_calendar')
         .is('disconnected_at', null)
@@ -6477,9 +6555,11 @@ export default function App({ user }) {
       if (gcalRow) {
         setGoogleConnected(true);
         setGoogleEmail(gcalRow.google_email);
+        setGoogleLastSyncedAt(gcalRow.last_synced_at || null);
       } else {
         setGoogleConnected(false);
         setGoogleEmail(null);
+        setGoogleLastSyncedAt(null);
       }
     } catch (err) {
       console.warn('google_oauth_tokens fetch failed (non-fatal):', err);
@@ -18512,6 +18592,13 @@ export default function App({ user }) {
                     {googleConnected ? (
                       <div style={{ fontSize: 12, color: C.textMuted, marginTop: 1 }}>
                         Connected as <span style={{ color: C.text, fontWeight: 500 }}>{googleEmail || "your Google account"}</span>
+                        {googleLastSyncedAt && (() => {
+                          const ms = Date.now() - new Date(googleLastSyncedAt).getTime();
+                          const mins = Math.floor(ms / 60000);
+                          const hrs = Math.floor(mins / 60);
+                          const label = mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`;
+                          return <> · last synced {label}</>;
+                        })()}
                       </div>
                     ) : (
                       <div style={{ fontSize: 12, color: C.textMuted, marginTop: 1 }}>
@@ -18520,23 +18607,44 @@ export default function App({ user }) {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={googleConnected ? disconnectGoogleCalendar : connectGoogleCalendar}
-                  style={{
-                    padding: "6px 14px",
-                    background: googleConnected ? "transparent" : C.btn,
-                    color: googleConnected ? C.textSec : "#fff",
-                    border: googleConnected ? "1px solid " + C.borderLight : "none",
-                    borderRadius: 7,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    flexShrink: 0,
-                  }}
-                >
-                  {googleConnected ? "Disconnect" : "Connect"}
-                </button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                  {googleConnected && (
+                    <button
+                      onClick={() => syncGoogleCalendar({ silent: false })}
+                      disabled={googleSyncing}
+                      style={{
+                        padding: "6px 12px",
+                        background: "transparent",
+                        color: C.textSec,
+                        border: "1px solid " + C.borderLight,
+                        borderRadius: 7,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        cursor: googleSyncing ? "wait" : "pointer",
+                        opacity: googleSyncing ? 0.6 : 1,
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {googleSyncing ? "Syncing…" : "Sync now"}
+                    </button>
+                  )}
+                  <button
+                    onClick={googleConnected ? disconnectGoogleCalendar : connectGoogleCalendar}
+                    style={{
+                      padding: "6px 14px",
+                      background: googleConnected ? "transparent" : C.btn,
+                      color: googleConnected ? C.textSec : "#fff",
+                      border: googleConnected ? "1px solid " + C.borderLight : "none",
+                      borderRadius: 7,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {googleConnected ? "Disconnect" : "Connect"}
+                  </button>
+                </div>
               </div>
             </div>
 
