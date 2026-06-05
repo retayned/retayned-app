@@ -3027,9 +3027,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                   collapse next-up to a single Fraunces italic line caused
                   the visual disturbance you flagged; reverted. */}
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.title}</span>
+              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.title}</span>
               {p.e.client_name && (
-                <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 188, textAlign: "right" }}>{p.e.client_name}</span>
+                <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.client_name}</span>
               )}
               {/* Prep pill REMOVED from the rail (June 2026). Prep count
                   surfaces only in the right-side hub now ("Prep · N open /
@@ -22095,21 +22095,21 @@ function BucketCalendarTomorrow({ events, C }) {
 }
 function BucketCalendarLater({ days, C }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, margin: "8px 6px 4px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 8, margin: "8px 6px 4px" }}>
       {days.map((d) => {
         const has = d.events.length > 0;
         return (
-          <div key={d.ymd} style={{ background: C.card, borderRadius: 10, boxShadow: "var(--rt-sh-row)", padding: 10, minHeight: 96 }}>
+          <div key={d.ymd} style={{ background: C.card, borderRadius: 10, boxShadow: "var(--rt-sh-row)", padding: 10, minHeight: 96, minWidth: 0, overflow: "hidden" }}>
             <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: has ? C.text : C.textMuted }}>{d.label}</div>
             <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 500, color: C.textMuted, marginTop: 3 }}>{d.dateLabel}</div>
             {has ? (
-              <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 5 }}>
+              <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
                 {d.events.slice(0, 3).map((e, i) => {
                   const _t = e.starts_at ? new Date(e.starts_at) : null;
                   const _timeLabel = _t ? _t.toLocaleTimeString("en-US", { hour: "numeric", minute: _t.getMinutes() ? "2-digit" : undefined }).replace(":00", "") : "";
                   return (
                   <div key={e.id || i} title={(_timeLabel ? _timeLabel + " · " : "") + e.title + (e.client_name ? " · " + e.client_name : "")}
-                    style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, lineHeight: 1.2, color: C.primary, background: C.primaryGhost, borderRadius: 5, padding: "4px 6px", borderLeft: "2px solid " + C.primaryLight, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, lineHeight: 1.2, color: C.primary, background: C.primaryGhost, borderRadius: 5, padding: "4px 6px", borderLeft: "2px solid " + C.primaryLight, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, maxWidth: "100%" }}>
                     {_timeLabel && <span style={{ fontWeight: 700, marginRight: 4 }}>{_timeLabel}</span>}{e.title}
                   </div>
                   );
