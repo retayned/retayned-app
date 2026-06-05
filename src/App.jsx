@@ -3028,9 +3028,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                   the visual disturbance you flagged; reverted. */}
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
               <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.title}</span>
-              {p.e.client_name && (
+              {p.e.client_name ? (
                 <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.client_name}</span>
-              )}
+              ) : (p.e.needs_link && !p.e.link_dismissed) ? (
+                // Subtle "no client linked" hint. Not a picker (cramped on
+                // the dial); the linking UI lives in Settings → Calendar
+                // queue. Cursor change + tooltip is the hover affordance.
+                <span title="No client linked — set one in Settings" style={{ fontSize: 10, color: "#A8A89A", marginTop: 1, lineHeight: 1.2, fontStyle: "italic", textAlign: "right", cursor: "help" }}>· needs client</span>
+              ) : null}
               {/* Prep pill REMOVED from the rail (June 2026). Prep count
                   surfaces only in the right-side hub now ("Prep · N open /
                   N open task for [client]"). The rail row was colliding
@@ -5592,6 +5597,58 @@ export default function App({ user }) {
   const dismissGoogleConnectPrompt = () => {
     try { sessionStorage.setItem("rt_gcal_prompt_dismissed", "1"); } catch {}
     setGoogleConnectPromptDismissed(true);
+  };
+  // Link an unmatched calendar event to a client or rolodex entry.
+  // Calls link-calendar-event edge function which also learns aliases
+  // from the title and retro-links any other matching unmatched events.
+  // Updates local personalEvents state on success.
+  const linkCalendarEvent = async ({ eventId, clientId = null, rolodexId = null }) => {
+    if (!user?.id || !eventId) return null;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) return null;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/link-calendar-event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ action: 'link', event_id: eventId, client_id: clientId, rolodex_id: rolodexId }),
+      });
+      if (!resp.ok) {
+        console.error('linkCalendarEvent failed:', resp.status, await resp.text());
+        return null;
+      }
+      const data = await resp.json();
+      // Refetch events so we pick up retro-linked changes too.
+      try {
+        const { data: refreshed } = await supabase.from('personal_calendar_events').select('*').eq('user_id', user.id);
+        if (Array.isArray(refreshed)) setPersonalEvents(refreshed);
+      } catch (e) { console.warn('refetch after link failed:', e); }
+      return data;
+    } catch (err) {
+      console.error('linkCalendarEvent threw:', err);
+      return null;
+    }
+  };
+  // Mark an event as "no client/prospect, don't ask again."
+  const dismissCalendarEventLink = async (eventId) => {
+    if (!user?.id || !eventId) return null;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) return null;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/link-calendar-event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ action: 'dismiss', event_id: eventId }),
+      });
+      if (!resp.ok) return null;
+      // Optimistic local update — flip needs_link off
+      setPersonalEvents(prev => (prev || []).map(e => e.id === eventId ? { ...e, needs_link: false, link_dismissed: true } : e));
+      return await resp.json();
+    } catch (err) {
+      console.error('dismissCalendarEventLink threw:', err);
+      return null;
+    }
   };
   // On mount, check the URL for ?google_calendar=... — set by our
   // OAuth callback when it bounces the user back to Retayned. Values:
@@ -18656,6 +18713,104 @@ export default function App({ user }) {
                 </div>
               </div>
             </div>
+
+            {/* Calendar attribution queue. When Google sync runs, events
+                whose titles don't match a known client/rolodex name get
+                flagged as needs_link. Here we show them as a list with
+                quick pickers so the user can attribute them in one pass.
+                Linking learns aliases — future events with the same
+                tokens auto-match. Only renders when there are queued
+                events AND Google is connected; hidden otherwise. */}
+            {googleConnected && (() => {
+              const needLinking = (personalEvents || []).filter(e =>
+                e && e.source === 'google' && e.needs_link && !e.link_dismissed
+                && !e.client_id && !e.rolodex_id
+              );
+              if (needLinking.length === 0) return null;
+              // Sort by start time ascending so the most imminent events
+              // are at the top of the queue.
+              needLinking.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+              return (
+                <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 4 }}>
+                    Calendar · attribution queue
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 12 }}>
+                    {needLinking.length} {needLinking.length === 1 ? "event" : "events"} synced from Google but not yet linked to a client or prospect. Linking remembers — future events with the same names will auto-match.
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {needLinking.slice(0, 20).map(ev => {
+                      const startMs = new Date(ev.starts_at).getTime();
+                      const dayLabel = new Date(ev.starts_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                      const timeLabel = new Date(ev.starts_at).toLocaleTimeString("en-US", { hour: "numeric", minute: new Date(ev.starts_at).getMinutes() ? "2-digit" : undefined }).replace(":00", "");
+                      return (
+                        <div key={ev.id} style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "10px 12px",
+                          background: C.surfaceWarm || "#FAF6EE",
+                          borderRadius: 8,
+                          border: "1px solid " + C.borderLight,
+                        }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ev.title}</div>
+                            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{dayLabel} · {timeLabel}</div>
+                          </div>
+                          <select
+                            defaultValue=""
+                            onChange={async (e) => {
+                              const val = e.target.value;
+                              if (!val) return;
+                              const [kind, id] = val.split(":");
+                              if (kind === "client") {
+                                await linkCalendarEvent({ eventId: ev.id, clientId: id });
+                              } else if (kind === "rolodex") {
+                                await linkCalendarEvent({ eventId: ev.id, rolodexId: id });
+                              } else if (kind === "dismiss") {
+                                await dismissCalendarEventLink(ev.id);
+                              }
+                              e.target.value = "";
+                            }}
+                            style={{
+                              fontFamily: "inherit",
+                              fontSize: 12,
+                              padding: "6px 10px",
+                              border: "1px solid " + C.borderLight,
+                              borderRadius: 6,
+                              background: "#fff",
+                              color: C.text,
+                              cursor: "pointer",
+                              minWidth: 180,
+                            }}
+                          >
+                            <option value="">Link to…</option>
+                            <optgroup label="Clients">
+                              {(clients || []).filter(c => c.is_active !== false).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(c => (
+                                <option key={c.id} value={`client:${c.id}`}>{c.name}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Rolodex (prospects)">
+                              {(rolodex || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(r => (
+                                <option key={r.id} value={`rolodex:${r.id}`}>{r.name}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Other">
+                              <option value="dismiss">Not a client — ignore</option>
+                            </optgroup>
+                          </select>
+                        </div>
+                      );
+                    })}
+                    {needLinking.length > 20 && (
+                      <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", padding: "4px 12px" }}>
+                        + {needLinking.length - 20} more — link the visible ones first, the rest will surface as you work through them.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
               <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
