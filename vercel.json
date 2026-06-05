@@ -1,5 +1,6 @@
 {
   "rewrites": [
-    { "source": "/w/:token*", "destination": "/index.html" }
+    { "source": "/w/:token*", "destination": "/index.html" },
+    { "source": "/((?!api|assets|favicon|robots|sitemap|.*\\.).*)", "destination": "/index.html" }
   ]
 }
