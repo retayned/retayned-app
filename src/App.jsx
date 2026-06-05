@@ -5609,6 +5609,13 @@ export default function App({ user }) {
     const params = new URLSearchParams(window.location.search);
     const status = params.get("google_calendar");
     if (!status) return;
+    // If user is still loading, BAIL early without stripping the URL.
+    // This effect re-runs when user.id resolves, and we want to still
+    // see the param on that second pass. Stripping the URL prematurely
+    // means the second pass returns at the !status check and the sync
+    // never fires — the bug that left users with the connection in DB
+    // but no events synced.
+    if (status === "connected" && !user?.id) return;
     setGoogleConnectStatus(status);
     // ALWAYS navigate to the Settings page when returning from OAuth.
     // The user clicked Connect from EITHER the Today-page banner or the
@@ -5621,11 +5628,6 @@ export default function App({ user }) {
     // we relied on page state defaulting to "today" which made the
     // OAuth round-trip feel like nothing happened.
     setPage("settings");
-    // Strip the param from the URL.
-    params.delete("google_calendar");
-    const newSearch = params.toString();
-    const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
-    window.history.replaceState({}, "", newUrl);
     // On successful connect, also refresh the connection row from DB —
     // by this point the callback has written it, but our state was
     // loaded BEFORE the OAuth round-trip, so it's stale.
@@ -5649,6 +5651,13 @@ export default function App({ user }) {
           }
         });
     }
+    // Strip the param from the URL AFTER all sync work has been
+    // initiated (the .then above closes over the param value, but
+    // since we've already kicked off the request, the strip is safe).
+    params.delete("google_calendar");
+    const newSearch = params.toString();
+    const newUrl = window.location.pathname + (newSearch ? "?" + newSearch : "") + window.location.hash;
+    window.history.replaceState({}, "", newUrl);
     // Auto-clear the toast after 5 seconds (sooner for success since
     // it's celebratory and unobtrusive).
     const t = setTimeout(() => setGoogleConnectStatus(null), status === "connected" ? 4000 : 6000);
