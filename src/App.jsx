@@ -2566,7 +2566,7 @@ function RaiMarkdown({ text, size = 16, lineHeight = 1.65 }) {
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {} }) {
+function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {}, onRequestLink = null }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Reschedule editor state — when the user clicks Reschedule inside the
@@ -3031,10 +3031,39 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               {p.e.client_name ? (
                 <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.client_name}</span>
               ) : (p.e.needs_link && !p.e.link_dismissed) ? (
-                // Subtle "no client linked" hint. Not a picker (cramped on
-                // the dial); the linking UI lives in Settings → Calendar
-                // queue. Cursor change + tooltip is the hover affordance.
-                <span title="No client linked — set one in Settings" style={{ fontSize: 10, color: "#A8A89A", marginTop: 1, lineHeight: 1.2, fontStyle: "italic", textAlign: "right", cursor: "help" }}>· needs client</span>
+                // "Needs client" — clickable. Opens a floating picker
+                // positioned at click coordinates. The dial layer is
+                // CSS-scaled, so we render the picker at page-root
+                // (via the onRequestLink callback) to avoid scale
+                // compensation issues. stopPropagation so the click
+                // doesn't also fire the row's setSelectedId.
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (typeof onRequestLink === "function") {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      onRequestLink({ eventId: p.e.id, anchorRect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+                    }
+                  }}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    padding: "1px 0",
+                    marginTop: 1,
+                    fontSize: 10,
+                    fontFamily: "inherit",
+                    fontStyle: "italic",
+                    color: "#A8A89A",
+                    cursor: "pointer",
+                    lineHeight: 1.2,
+                    textAlign: "right",
+                    textDecoration: "underline dotted",
+                    textUnderlineOffset: 2,
+                    textDecorationColor: "rgba(168,168,154,0.6)",
+                  }}
+                  title="Link this event to a client or prospect"
+                >· needs client</button>
               ) : null}
               {/* Prep pill REMOVED from the rail (June 2026). Prep count
                   surfaces only in the right-side hub now ("Prep · N open /
@@ -5384,6 +5413,14 @@ export default function App({ user }) {
   // a successful sync so the UI can show "last synced 2 min ago".
   const [googleSyncing, setGoogleSyncing] = useState(false);
   const [googleLastSyncedAt, setGoogleLastSyncedAt] = useState(null);
+  // Link-picker state for the inline "needs client" affordance on the
+  // Today dial. When a user clicks "needs client" on a dial event row,
+  // TimeDial calls onRequestLink with the event id + anchor coordinates,
+  // we open a floating picker at those coordinates. Closed by Escape,
+  // outside-click, or successful pick/dismiss.
+  // Shape: { eventId, anchor: { left, top, right, bottom } } | null
+  const [linkPicker, setLinkPicker] = useState(null);
+  const [linkPickerSearch, setLinkPickerSearch] = useState("");
   // Burst tracker — per-client timestamp of most recent task creation.
   // Used by the 60s burst rule (with 5-min hard cap) to keep the "Rai's pick"
   // badge from flickering while the user is rapidly creating tasks for a
@@ -10622,6 +10659,188 @@ export default function App({ user }) {
           </div>
         )}
 
+        {/* ─── Calendar event link picker (inline from dial) ──────────
+            Renders when the user clicks "needs client" on a dial event.
+            Floating panel anchored to the click point. Lets them pick a
+            client, a rolodex entry, or dismiss the prompt. Picked entity
+            calls linkCalendarEvent; dismiss calls dismissCalendarEventLink.
+            Closes on Escape, outside click, or after a pick.  */}
+        {linkPicker && (() => {
+          const anchor = linkPicker.anchor;
+          // Anchor below the click point if there's room; otherwise above.
+          // 320px panel width, ~360px max height.
+          const PANEL_W = 320;
+          const PANEL_MAX_H = 380;
+          const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+          const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+          // Prefer right-aligned to the anchor (since the click point is
+          // on the right side of the dial). Bound to viewport.
+          let leftPx = (anchor?.right || vw / 2) - PANEL_W;
+          if (leftPx < 12) leftPx = 12;
+          if (leftPx + PANEL_W > vw - 12) leftPx = vw - 12 - PANEL_W;
+          // Position vertically — prefer below the click. Fall back above.
+          let topPx = (anchor?.bottom || vh / 2) + 6;
+          if (topPx + PANEL_MAX_H > vh - 12) {
+            topPx = Math.max(12, (anchor?.top || vh / 2) - PANEL_MAX_H - 6);
+          }
+          // Filtered lists by search term
+          const q = linkPickerSearch.trim().toLowerCase();
+          const filterFn = (n) => !q || (n || "").toLowerCase().includes(q);
+          const visibleClients = (clients || []).filter(c => c.is_active !== false && filterFn(c.name)).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+          const visibleRolodex = (rolodex || []).filter(r => filterFn(r.name)).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+          const doPick = async (kind, id) => {
+            if (kind === "client") await linkCalendarEvent({ eventId: linkPicker.eventId, clientId: id });
+            else if (kind === "rolodex") await linkCalendarEvent({ eventId: linkPicker.eventId, rolodexId: id });
+            else if (kind === "dismiss") await dismissCalendarEventLink(linkPicker.eventId);
+            setLinkPicker(null);
+            setLinkPickerSearch("");
+          };
+          return (
+            <>
+              {/* Click-catcher backdrop. Transparent — full-viewport so
+                  any click outside the panel closes the picker. */}
+              <div
+                onClick={() => { setLinkPicker(null); setLinkPickerSearch(""); }}
+                style={{ position: "fixed", inset: 0, zIndex: 9998, background: "transparent" }}
+              />
+              <div
+                role="dialog"
+                aria-label="Link calendar event to client"
+                onKeyDown={(e) => { if (e.key === "Escape") { setLinkPicker(null); setLinkPickerSearch(""); } }}
+                style={{
+                  position: "fixed",
+                  left: leftPx,
+                  top: topPx,
+                  width: PANEL_W,
+                  maxHeight: PANEL_MAX_H,
+                  zIndex: 9999,
+                  background: "#fff",
+                  border: "1px solid " + C.borderLight,
+                  borderRadius: 10,
+                  boxShadow: "0 8px 24px rgba(20,30,22,0.12), 0 2px 6px rgba(20,30,22,0.08)",
+                  display: "flex",
+                  flexDirection: "column",
+                  overflow: "hidden",
+                  fontFamily: "inherit",
+                  animation: "rt-toast-in 160ms var(--rt-ease-out, cubic-bezier(.2,.6,.2,1))",
+                }}
+              >
+                <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid " + C.borderLight }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>
+                    Link to
+                  </div>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={linkPickerSearch}
+                    onChange={(e) => setLinkPickerSearch(e.target.value)}
+                    placeholder="Search clients or prospects…"
+                    style={{
+                      width: "100%",
+                      padding: "6px 8px",
+                      border: "1px solid " + C.borderLight,
+                      borderRadius: 6,
+                      fontSize: 13,
+                      fontFamily: "inherit",
+                      color: C.text,
+                      background: C.surfaceWarm || "#FAF6EE",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                </div>
+                <div style={{ overflowY: "auto", flex: 1, padding: "4px 0" }}>
+                  {visibleClients.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 12px 4px" }}>Clients</div>
+                      {visibleClients.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => doPick("client", c.id)}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            textAlign: "left",
+                            background: "transparent",
+                            border: "none",
+                            padding: "8px 12px",
+                            fontSize: 13,
+                            color: C.text,
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = C.surfaceWarm || "#FAF6EE"; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {c.name}
+                          {c.contact && <span style={{ marginLeft: 6, fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>· {c.contact}</span>}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {visibleRolodex.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase", padding: "8px 12px 4px" }}>Rolodex (prospects)</div>
+                      {visibleRolodex.map(r => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => doPick("rolodex", r.id)}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            textAlign: "left",
+                            background: "transparent",
+                            border: "none",
+                            padding: "8px 12px",
+                            fontSize: 13,
+                            color: C.text,
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                          }}
+                          onMouseOver={(e) => { e.currentTarget.style.background = C.surfaceWarm || "#FAF6EE"; }}
+                          onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          {r.name}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {visibleClients.length === 0 && visibleRolodex.length === 0 && (
+                    <div style={{ padding: "12px", fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>
+                      No matches.
+                    </div>
+                  )}
+                </div>
+                <div style={{ borderTop: "1px solid " + C.borderLight, padding: "6px 8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => doPick("dismiss")}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      background: "transparent",
+                      border: "none",
+                      fontSize: 12,
+                      color: C.textMuted,
+                      fontStyle: "italic",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      borderRadius: 6,
+                      fontFamily: "inherit",
+                    }}
+                    onMouseOver={(e) => { e.currentTarget.style.background = C.surfaceWarm || "#FAF6EE"; }}
+                    onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    Not a client — ignore this event
+                  </button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+
         {/* ═══ TODAY — TASK MANAGER ═══ */}
         {dataLoaded && page === "today" && (() => {
           // ─── LOCAL ALIASES ───────────────────────────────────────────────
@@ -14143,6 +14362,10 @@ export default function App({ user }) {
                       }
                     }}
                     onTogglePrepTask={(taskId) => toggleTask(taskId)}
+                    onRequestLink={({ eventId, anchorRect }) => {
+                      setLinkPicker({ eventId, anchor: anchorRect });
+                      setLinkPickerSearch("");
+                    }}
                   />
                 </div>
                 {/* (Top-fade overlay removed — it painted a visible C.bg band
