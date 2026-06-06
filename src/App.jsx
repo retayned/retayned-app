@@ -7252,110 +7252,11 @@ export default function App({ user }) {
     };
   }, [user?.id]);
 
-  // ─── BADGE STATE MANAGER ──────────────────────────────────────────
-  // Manages rai_user_state.todays_badged_task_id (the source of truth for
-  // which task currently carries the "Rai's pick" badge).
-  //
-  // Three things happen here:
-  //
-  // (A) Auto-clear: if the badge is set on a task that's now completed,
-  //     dismissed, deleted, moved out of today, or no longer visible,
-  //     clear the badge state. Once cleared, badge is done for the day.
-  //
-  // (B) 60s settle: if badge state is null (Rai chose to wait), watch for
-  //     tasks that exist for any picked client AND have been in the list
-  //     for at least 60 seconds. When that's true, set the badge and mark
-  //     that pick was_annotated = true. First-come-first-served across
-  //     ranks (no rank-priority override; once the badge lands, it stays).
-  //
-  // (C) The check is debounced with a 5-second timer so we don't spam
-  //     supabase on every tasks/clients change.
-  // ─── BADGE STATE MANAGER ──────────────────────────────────────────
-  // Manages rai_user_state.todays_badged_task_id. Three rules, locked:
-  //
-  //   1. Once the badge lands, it stays on that task forever — through
-  //      completion, even if the task gets dismissed or moved. The badge
-  //      is permanent for the day.
-  //   2. Tomorrow / Later tasks NEVER get the badge. Annotation is a
-  //      today-only event.
-  //   3. The badge is single-use per day. If `todays_badge_set_at` is
-  //      already set, the day is over — we never write a new badge.
-  //
-  // The effect only writes a badge when ALL of these are true:
-  //   - rankMode === "rai"
-  //   - raiState exists and todays_badge_set_at is null (never been set today)
-  //   - At least one picked client has a TODAY task that has settled >60s
-  //
-  // After the badge is written, the effect becomes a no-op for the rest
-  // of the day. The DB FK (ON DELETE SET NULL) is the ONLY mechanism
-  // that can clear todays_badged_task_id — and only when the user
-  // outright deletes the task row, which removes the badge alongside it.
-  useEffect(() => {
-    if (!user) return;
-    if (rankMode !== "rai") return;
-    if (!raiState) return; // not loaded yet
-    if (!raiPicks) return; // no pick today (raiPicks is a single object or null)
-
-    // Day is over: badge has been set at some point today. Never re-badge.
-    if (raiState.todays_badge_set_at) return;
-    if (raiState.todays_badged_task_id) return;
-
-    let timeoutId;
-
-    const evaluate = async () => {
-      const SETTLE_MS = 60 * 1000;
-      const now = Date.now();
-      const todayIso = localYmd();
-
-      // raiPicks is a single pick row (or null, gated above). The original
-      // code was written as if multiple picks could land at once; the
-      // current sweep writes exactly one row per user per day and
-      // raiPicksDb.getCurrent returns it via maybeSingle(). Treat as one.
-      const pick = raiPicks;
-      const c = clients.find(x => x.id === pick.client_id);
-      if (!c) return;
-
-      // Only TODAY tasks are eligible. Tomorrow / Later never get badged.
-      const clientTodayTasks = tasks.filter(t => {
-        if (t.done) return false;
-        if (todayDismissed[t.id]) return false;
-        if (t.client !== c.name) return false;
-        // Only today's bucket: due_date is today (recurring tasks count
-        // as today by convention since they have no due_date but render
-        // in the today bucket).
-        if (t.recurring) return true;
-        if (!t.due_date) return false;
-        return String(t.due_date).slice(0, 10) === todayIso;
-      });
-      if (clientTodayTasks.length === 0) return;
-
-      // Eligible = at least one of these tasks has settled >60s
-      const settled = clientTodayTasks.filter(t => (now - (t.created_at || 0)) >= SETTLE_MS);
-      if (settled.length === 0) return;
-
-      // Pick highest-priority among settled
-      const sorted = [...settled].sort((a, b) => {
-        const psA = getProfileSortScore(a.client, a.raiPriority);
-        const psB = getProfileSortScore(b.client, b.raiPriority);
-        if (psA !== psB) return psB - psA;
-        if (a.alert !== b.alert) return a.alert ? -1 : 1;
-        if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
-        return (b.created_at || 0) - (a.created_at || 0);
-      });
-      const winnerId = sorted[0].id;
-      try {
-        await raiUserStateDb.setBadgeTask(user.id, winnerId);
-        await raiPicksDb.markAnnotated(user.id, c.id);
-      } catch (e) {
-        console.warn("Failed to write badge state:", e);
-      }
-    };
-
-    // Debounce: re-evaluate after 5 seconds of no changes
-    timeoutId = setTimeout(evaluate, 5000);
-    return () => { clearTimeout(timeoutId); };
-  }, [user, rankMode, raiState, raiPicks, tasks, clients, todayDismissed]);
-
+  // [Removed Jun 2026] BADGE STATE MANAGER — the "Rai's pick" per-task badge
+  // (purple dot on whichever task carried the daily pick) has been deprecated
+  // in favor of client-level picks only. The rai_user_state table never had
+  // the `todays_badged_task_id` column added to match the App.jsx writer, so
+  // every write was a 400. Removing the effect, the readers, and the renderers.
 
   // Hydrate profile-derived state: timezone, Google Cal prompt dismissal.
   //
@@ -10899,32 +10800,10 @@ export default function App({ user }) {
             && !(t.client_id && !liveClientIds.has(t.client_id))
           );
 
-          // ─── RAI'S ACTIVE PICKED TASK ────────────────────────────────────
-          // Resolve which task carries the "Rai's pick" badge today.
-          //
-          // Source of truth: rai_user_state.todays_badged_task_id. Once set
-          // for the day, this NEVER changes — through completion, dismissal,
-          // or moves. The badge is permanent for the day on whatever task
-          // it landed on. The only way it clears is if the user outright
-          // deletes the task row (FK ON DELETE SET NULL handles that).
-          //
-          // Tomorrow / Later tasks are never badged. The settle effect that
-          // writes the badge gates on due_date == today.
-          const activeBadgeTaskId = (rankMode === "rai" && raiState?.todays_badged_task_id) || null;
-          // raiPicks is a single pick row (or null). Match it against the
-          // badged task's client; return the pick if they match, else null.
-          // Original code used .find() as if raiPicks were an array; it
-          // never has been since the sweep writes one row and getCurrent
-          // returns it via maybeSingle.
-          const activeBadgePick = (() => {
-            if (!activeBadgeTaskId) return null;
-            if (!raiPicks || !raiPicks.client_id) return null;
-            const t = tasks.find(x => x.id === activeBadgeTaskId);
-            if (!t) return null;
-            const c = clients.find(x => x.name === t.client);
-            if (!c) return null;
-            return raiPicks.client_id === c.id ? raiPicks : null;
-          })();
+          // [Removed Jun 2026] The per-task "Rai's pick" badge resolution
+          // (activeBadgeTaskId / activeBadgePick) lived here. Picks are now
+          // client-level only — no individual task carries the badge. The
+          // surface that previously rendered the badge has been removed.
 
           // Sort comparator for Rai mode. Layered final score:
           //   priority_score (deterministic, with soft clamp inside)
@@ -11366,19 +11245,13 @@ export default function App({ user }) {
             const wasAssigned = !!currentTask?.assigned_worker_id;
             const dateChanged = String(oldDateStr || "").slice(0,10) !== String(newDateStr || "").slice(0,10);
 
-            // If this task is currently the active Rai badge AND it's being
-            // pushed off today (tomorrow / later), clear the badge. The badge
-            // is for ONE day — when the user defers a badged task, they're
-            // deciding "not today," and the crown should not follow it forward.
-            // Also clears the task's is_rai_priority flag so it doesn't return
-            // tomorrow still labeled as a priority.
-            const isBadged = raiState?.todays_badged_task_id === taskId;
+            // If a deferred task carried the is_rai_priority flag, clear it so
+            // it doesn't return tomorrow still labeled as a priority. (Previous
+            // code also cleared a per-task "Rai badge" — deprecated Jun 2026
+            // along with the rest of the badge machinery.)
             const newDateIsTodayOrEarlier = newDateStr ? String(newDateStr).slice(0, 10) <= _todayStr : true;
-            if (isBadged && !newDateIsTodayOrEarlier) {
-              try {
-                await raiUserStateDb.setBadgeTask(user.id, null);
-                setRaiState(prev => prev ? { ...prev, todays_badged_task_id: null, todays_badge_set_at: null } : prev);
-              } catch (e) { console.warn("Failed to clear badge:", e); }
+            const currentIsRaiPriority = !!(currentTask?.raiPriority);
+            if (currentIsRaiPriority && !newDateIsTodayOrEarlier) {
               try {
                 await supabase.from("tasks").update({ is_rai_priority: false }).eq("id", taskId);
               } catch (e) { console.warn("Failed to clear is_rai_priority:", e); }
@@ -13444,32 +13317,9 @@ export default function App({ user }) {
                             </button>
   
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              {/* Rai's pick badge — daily annotation. The system selects which
-                                  task gets the badge from Rai's ranked client picks (primary,
-                                  backup1, backup2) using priority_score + the 60s burst rule.
-                                  Reason renders inline below the badge so users see Rai's
-                                  rationale without needing to hover (also works on mobile).
-                                  Disappears in Manual mode (activeBadgeTaskId is null there). */}
-                              {activeBadgeTaskId === t.id && activeBadgePick && (
-                                <div
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 4,
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.04em",
-                                    textTransform: "uppercase",
-                                    color: C.btn,
-                                    marginBottom: 3,
-                                  }}
-                                >
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                    <path d="M12 0l2.5 7.5L22 10l-7.5 2.5L12 20l-2.5-7.5L2 10l7.5-2.5L12 0z" />
-                                  </svg>
-                                  Rai's pick
-                                </div>
-                              )}
+                              {/* [Removed Jun 2026] "Rai's pick" per-task badge —
+                                  deprecated alongside the badge state manager. Picks
+                                  are now client-level only. */}
                               <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden", display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                                 {/* Inline Rai star — sits immediately before
                                     the task title text on AI-suggested rows.
@@ -13684,48 +13534,9 @@ export default function App({ user }) {
                                   );
                                 })()}
                               </div>
-                              {/* Rai's reason renders at the bottom of the tile, below the
-                                  client name. Italic Fraunces. We strip a leading "ClientName: "
-                                  prefix from the reason because the client name is already shown
-                                  in the meta row above — repeating it is noise. */}
-                              {activeBadgeTaskId === t.id && activeBadgePick && activeBadgePick.reason && (
-                                <div
-                                  style={{
-                                    fontFamily: "'Fraunces', Georgia, serif",
-                                    fontStyle: "italic",
-                                    fontSize: 13,
-                                    lineHeight: 1.4,
-                                    color: C.textSec,
-                                    marginTop: 6,
-                                    whiteSpace: "normal",
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {(() => {
-                                    let reason = activeBadgePick.reason;
-                                    // Strip leading "ClientName: " or "ClientName — " or "ClientName, " prefix
-                                    if (client && client.name) {
-                                      const prefixes = [
-                                        client.name + ": ",
-                                        client.name + " — ",
-                                        client.name + " - ",
-                                        client.name + ", ",
-                                        client.name + ". ",
-                                      ];
-                                      for (const p of prefixes) {
-                                        if (reason.startsWith(p)) {
-                                          reason = reason.slice(p.length);
-                                          if (reason.length > 0) {
-                                            reason = reason.charAt(0).toUpperCase() + reason.slice(1);
-                                          }
-                                          break;
-                                        }
-                                      }
-                                    }
-                                    return reason;
-                                  })()}
-                                </div>
-                              )}
+                              {/* [Removed Jun 2026] "Rai's pick" reason text — deprecated
+                                  alongside the per-task badge. Pick reasons still render
+                                  at the client level via the daily brief surface. */}
                             </div>
 
                             {/* Worker assignment badge — only renders if task is assigned. */}
