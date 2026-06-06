@@ -2918,29 +2918,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* VARIANT 10 — DEBOSSED dome gradients:
-              - inner shadow (top-left): darker, simulates light depression
-              - highlight (bottom-right): lighter, simulates curved interior
-              - filter for raised NOW marker drop-shadow */}
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
-            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
-          </radialGradient>
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.85)" />
-            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.25)" />
-            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
-          </radialGradient>
-          <radialGradient id="rt-dial-deboss-tint" cx={CX - 180} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="240" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(51, 84, 62, 0.10)" />
-            <stop offset="0.65" stopColor="rgba(51, 84, 62, 0.03)" />
-            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
-          </radialGradient>
-          <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
-            <feOffset dx="1.5" dy="3" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.40" />
+          {/* VARIANT 10B — FROSTED GLASS dome gradients:
+              - main fill: diagonal glass tone, white→ghost-green→cool-grey
+              - rim edge: vertical gradient (bright top + bottom, dim middle) for etched look
+              - embedded NOW: drop-shadow that reads as "underneath the glass" */}
+          <linearGradient id="rt-dial-glass-fill" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.78)" />
+            <stop offset="50%" stopColor="rgba(243,248,245,0.50)" />
+            <stop offset="100%" stopColor="rgba(220,224,220,0.36)" />
+          </linearGradient>
+          <linearGradient id="rt-dial-glass-edge" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+            <stop offset="50%" stopColor="rgba(255,255,255,0.4)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.95)" />
+          </linearGradient>
+          <filter id="rt-dial-glass-embed" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
+            <feOffset dx="0" dy="1.5" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.30" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2948,76 +2943,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 2B: CHRONOGRAPH RIBBON ──────────────────────────────
-            Thick monochrome ribbon (elapsed green / future grey) layered
-            with watch-face details: hour ticks INSIDE the ribbon, minute
-            marks on a faint inner ring, event dots embedded in the band.
-            Reads as a precision timepiece. */}
-        {(() => {
-          const [gx0, gy0] = ptAt(0, R);
-          const [gx1, gy1] = ptAt(1, R);
-          const fullArc = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
-          if (!nowInWindow) {
-            return <path d={fullArc} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />;
-          }
-          const headF = Math.min(1, Math.max(0, nowFrac));
-          const [hx, hy] = ptAt(headF, R);
-          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${hx.toFixed(1)} ${hy.toFixed(1)}`;
-          const future = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
-          return <>
-            <path d={future} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />
-            <path d={elapsed} fill="none" stroke="#33543E" strokeWidth="18" strokeLinecap="round" />
-          </>;
-        })()}
-        {/* Hour ticks WITHIN the ribbon — small white marks at each labeled hour.
-            Sit on top of the green/grey ribbon as chronograph index marks. */}
-        {tickLabels.map((tl, i) => {
-          // Each tick position — derive the rim point from the tick's f position
-          // (we already have tl.x, tl.y which are at R-30; recompute at R to get rim,
-          // then a short outward-pointing segment 6px long inside the 18px ribbon).
-          // The tick marks already-computed angle: we use atan2 from (CX,CY).
-          const dx = tl.x - CX, dy = tl.y - CY;
-          const len = Math.hypot(dx, dy) || 1;
-          const ux = dx / len, uy = dy / len;
-          // Inner end of the in-band tick: at R - 8 (inside the 18px band)
-          // Outer end of the in-band tick: at R - 2 (just inside outer rim)
-          const ix = CX + ux * (R - 8), iy = CY + uy * (R - 8);
-          const ox = CX + ux * (R - 2), oy = CY + uy * (R - 2);
-          return (
-            <line key={`band-tick-${i}`}
-              x1={ix.toFixed(1)} y1={iy.toFixed(1)}
-              x2={ox.toFixed(1)} y2={oy.toFixed(1)}
-              stroke="rgba(255,255,255,0.65)" strokeWidth="1.5" strokeLinecap="round" />
-          );
-        })}
-        {/* Minute ring — faint inner arc with small marks every 30 minutes.
-            Reads as the seconds/minutes scale on a chronograph subdial. */}
-        {(() => {
-          const minR = R - 38;
-          const marks = [];
-          // Every 30 minutes within the window. windowStart/End give the bounds.
-          const halfHour = 30 * 60 * 1000;
-          const startM = new Date(windowStart);
-          startM.setMinutes(0, 0, 0);
-          for (let t = startM.getTime(); t <= windowEnd; t += halfHour) {
-            const f = fracOf(t);
-            if (f < 0 || f > 1) continue;
-            const a = angleOf(f);
-            // Inner and outer endpoints of a tiny radial tick
-            const [x1, y1] = [CX + (minR - 3) * Math.cos(a), CY + (minR - 3) * Math.sin(a)];
-            const [x2, y2] = [CX + minR * Math.cos(a), CY + minR * Math.sin(a)];
-            marks.push({ x1, y1, x2, y2 });
-          }
-          return (
-            <g stroke="rgba(28,50,36,0.20)" strokeWidth="0.75" strokeLinecap="round">
-              {marks.map((m, i) => (
-                <line key={`min-${i}`}
-                  x1={m.x1.toFixed(1)} y1={m.y1.toFixed(1)}
-                  x2={m.x2.toFixed(1)} y2={m.y2.toFixed(1)} />
-              ))}
-            </g>
-          );
-        })()}
+        {/* ── VARIANT 10B: FROSTED GLASS DOME ──────────────────────────────
+            The dial reads as a piece of frosted glass set into the page.
+            Translucent diagonal fill, etched ridge at the rim, interior
+            reflections, NOW embedded just under the glass surface. */}
+        {/* Main glass fill */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-glass-fill)" />
+        {/* Etched rim — bright edge gradient */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="url(#rt-dial-glass-edge)" strokeWidth="2" />
+        {/* Darker hairline just inside for the inset look */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.18)" strokeWidth="0.5" />
+        {/* Interior surface highlights — two soft ellipses simulating reflections on curved glass */}
+        <ellipse cx={CX - 240} cy={CY - 200} rx="180" ry="40" fill="rgba(255,255,255,0.42)" opacity="0.7" />
+        <ellipse cx={CX - 280} cy={CY + 180} rx="100" ry="22" fill="rgba(255,255,255,0.32)" opacity="0.55" />
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
             the arc at the positions the tickLabels array already computes (R−30).
             Muted so they read as a quiet scale under the events + tail. */}
@@ -3034,29 +2972,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
             stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
         ))}
-        {/* Event rim dots — small white pips embedded in the chronograph ribbon
-            (like jeweled hour indices on a watch). Past = grey, next-up = green
-            with white center, others = white on the green band. */}
+        {/* Event rim dots — embedded under the frosted glass surface.
+            Soft tint dots with a tiny highlight pip for the "under glass" feel. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="11" fill="none" stroke="#33543E" strokeOpacity="0.35" strokeWidth="1.5" />}
-            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="5" fill={p.isPast ? "#9A9A93" : (p.isNext ? "#33543E" : "#FFFFFF")} />
-            {!p.isPast && !p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="2" fill="#33543E" />}
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="2" fill="#FFFFFF" />}
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
+            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
+            {/* Tiny highlight pip — sells the under-glass feel */}
+            <ellipse cx={(p.rx - 1.3).toFixed(1)} cy={(p.ry - 1.3).toFixed(1)} rx="1.6" ry="0.9" fill="rgba(255,255,255,0.55)" />
           </g>
         ))}
-        {/* NOW marker — chronograph-style: white disc with green stroke ring
-            and green core, anchored at the live moment on the ribbon.
-            Variant 2B: chronograph ribbon. */}
-        {nowInWindow && <>
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="#FFFFFF" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeWidth="2.5" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="7" fill="#33543E" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="24" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
-          <animate attributeName="r" values="24;32;24" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        {/* NOW marker — embedded just under the frosted glass surface.
+            Drop-shadow filter for the "underneath" feel + a tiny highlight
+            ellipse for the glass reflection. Variant 10B: frosted glass. */}
+        {nowInWindow && <g filter="url(#rt-dial-glass-embed)">
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3" fill="#FFFFFF" />
+        </g>}
+        {/* Glass reflection on NOW dot */}
+        {nowInWindow && <ellipse cx={(nowX - 2.5).toFixed(1)} cy={(nowY - 2.5).toFixed(1)} rx="3.2" ry="1.8" fill="rgba(255,255,255,0.55)" />}
+        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
+          <animate attributeName="r" values="16;22;16" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
           <animate attributeName="stroke-opacity" values="0.26;0.04;0.26" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-        </circle>
-        </>}
+        </circle>}
       </svg>
 
       {/* Event RAIL — events live OUTSIDE the disc now, in a vertical list to
