@@ -5165,6 +5165,20 @@ export default function App({ user }) {
   useEffect(() => {
     document.querySelectorAll(".r-main, .r-rai-scroll").forEach(el => { el.scrollTop = 0; });
   }, [page]);
+
+  // ─── TODAY-PAGE REDESIGN BODY CLASS TOGGLER (Jun 6 2026) ──────────
+  // Adds .rt-today-redesign to <body> only when on the Today page,
+  // gating the redesign CSS block in the THEME <style>. Safe revert:
+  // delete this useEffect + the CSS block, no other changes needed.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (page === "today") {
+      document.body.classList.add("rt-today-redesign");
+    } else {
+      document.body.classList.remove("rt-today-redesign");
+    }
+    return () => { document.body.classList.remove("rt-today-redesign"); };
+  }, [page]);
   // iOS Safari viewport fix — when the address bar collapses/expands, 100vh doesn't update,
   // leaving fixed-positioned elements (like the bottom nav) anchored to the wrong bottom.
   // visualViewport API tracks the actual visible viewport. We write its height to a CSS var
@@ -8521,6 +8535,153 @@ export default function App({ user }) {
       />
       <style>{`
         ${THEME_CSS}
+
+        /* ═══════════════════════════════════════════════════════════════
+           TODAY-PAGE REDESIGN (Jun 6 2026 — Adam direction)
+           ───────────────────────────────────────────────────────────────
+           Scope: ONLY when body has class .rt-today-redesign (set when
+           page === 'today'). Other pages untouched.
+
+           To revert: delete this entire block. Then remove the
+           useEffect that adds the body class. That's it — no other
+           file changes needed.
+
+           Changes:
+           1. Sidebar → primary forest green, flush-left, no card chrome
+           2. Logo → white
+           3. Nav items recolored for dark bg
+           4. Page bg → #FAFBFA
+           5. Cards/tiles stay white
+           6. Client-name underlines → green (override on the Today
+              page lede only — global links elsewhere untouched)
+           7. + buttons (composer plus, FAB) → green
+           8. Composer Add button → green when triggered
+           9. Dial now-dot → forest green (was purple)
+           ═══════════════════════════════════════════════════════════════ */
+
+        body.rt-today-redesign {
+          background: #FAFBFA !important;
+        }
+
+        /* Sidebar — flush left, primary green, no float chrome */
+        body.rt-today-redesign .r-desk {
+          background: #33543E !important;
+          background-image: none !important;
+          top: 0 !important;
+          left: 0 !important;
+          bottom: 0 !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          width: 240px !important;
+        }
+        body.rt-today-redesign .r-desk.is-collapsed {
+          width: 64px !important;
+        }
+
+        /* Logo — white */
+        body.rt-today-redesign .r-desk > div:first-child span {
+          color: #FFFFFF !important;
+        }
+
+        /* Nav items — readable on dark green */
+        body.rt-today-redesign .r-desk .nav-item {
+          color: rgba(255,255,255,0.78) !important;
+          background: transparent !important;
+        }
+        body.rt-today-redesign .r-desk .nav-item:hover {
+          background: rgba(255,255,255,0.06) !important;
+          color: #FFFFFF !important;
+        }
+        body.rt-today-redesign .r-desk .nav-item.is-active {
+          background: rgba(255,255,255,0.10) !important;
+          color: #FFFFFF !important;
+          box-shadow: none !important;
+        }
+        body.rt-today-redesign .r-desk .nav-item svg {
+          stroke: currentColor !important;
+        }
+
+        /* Stamp/Caveat text — slightly muted on dark */
+        body.rt-today-redesign .r-desk .caveat,
+        body.rt-today-redesign .r-desk [style*="Caveat"] {
+          color: rgba(255,255,255,0.55) !important;
+        }
+
+        /* User chip + divider lines inside sidebar */
+        body.rt-today-redesign .r-desk .rt-user-chip {
+          color: rgba(255,255,255,0.88) !important;
+        }
+        body.rt-today-redesign .r-desk hr,
+        body.rt-today-redesign .r-desk [style*="border-top"] {
+          border-color: rgba(255,255,255,0.08) !important;
+        }
+
+        /* Toggle button between sidebar and content — restyle for dark */
+        body.rt-today-redesign .rt-sidebar-toggle {
+          background: #33543E !important;
+          color: #FFFFFF !important;
+          border: 1px solid rgba(255,255,255,0.12) !important;
+          box-shadow: 0 1px 4px rgba(20,30,22,0.18) !important;
+        }
+
+        /* Main content shift — sidebar is now flush-left (no 14px inset)
+           so the main content's left padding should account for new width */
+        body.rt-today-redesign .r-mainwrap {
+          padding-left: 0 !important;
+        }
+
+        /* Client-name underline color — was purple (.lede a is the styled link).
+           Override to forest green for any anchor within the today page. */
+        body.rt-today-redesign .rt-today-lede a,
+        body.rt-today-redesign .rt-today-lede a:visited {
+          color: #33543E !important;
+          text-decoration-color: rgba(51,84,62,0.45) !important;
+        }
+
+        /* Composer plus button → green (was already green in some places,
+           ensure consistency on Today only). */
+        body.rt-today-redesign .rt-composer-plus,
+        body.rt-today-redesign .rt-fab {
+          background: #33543E !important;
+        }
+        body.rt-today-redesign .rt-composer-plus:hover,
+        body.rt-today-redesign .rt-fab:hover {
+          background: #2D4A37 !important;
+        }
+        /* Icon inside the plus puck — make it white so it reads on the green */
+        body.rt-today-redesign .rt-composer-plus svg,
+        body.rt-today-redesign .rt-composer-plus svg * {
+          color: #FFFFFF !important;
+          stroke: #FFFFFF !important;
+          fill: #FFFFFF !important;
+        }
+
+        /* Composer Add button — green when armed (button only shows the
+           gradient when newTask.trim() is truthy; we override that armed
+           state to forest green on the Today page). */
+        body.rt-today-redesign .rt-add-task-btn:not(:disabled) {
+          background: #33543E !important;
+          background-image: none !important;
+          color: #FFFFFF !important;
+          box-shadow: 0 1px 2px rgba(20,30,22,0.10), 0 2px 6px rgba(51,84,62,0.25) !important;
+        }
+        body.rt-today-redesign .rt-add-task-btn:not(:disabled):hover {
+          background: #2D4A37 !important;
+        }
+
+        /* Dial now-marker — was purple; switch to forest green */
+        body.rt-today-redesign .rt-dial-now-dot,
+        body.rt-today-redesign .rt-dial-now circle {
+          fill: #33543E !important;
+        }
+        body.rt-today-redesign .rt-dial-now-ring {
+          stroke: #33543E !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           END TODAY-PAGE REDESIGN
+           ═══════════════════════════════════════════════════════════════ */
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         /* Paper grain — barely-perceptible noise texture on the cream
            substrate. Eight 1px radial dots tiled at 220px gives the
@@ -11985,7 +12146,7 @@ export default function App({ user }) {
               <div className="rt-composer" style={{ gridArea: "composer", background: "transparent", borderRadius: 0, boxShadow: "none", borderBottom: "1.5px solid rgba(20,30,22,0.16)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen || typePickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div className="rt-composer-plus" style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <Icon name="plus" size={14} color={C.btn} />
                   </div>
                   <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
