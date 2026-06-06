@@ -8610,11 +8610,13 @@ export default function App({ user }) {
           background-image: none !important;
         }
 
-        /* Kill the .rt-today-canvas cream gradient — the beige wash that
-           sat behind the today's task list. Flat #FAFBFA instead. */
+        /* Today canvas backdrop — Variant B primaryGhost wash.
+           A whisper of green behind the task list. Reads as "today's
+           zone" without competing with the tiles. Gradient fades from
+           65% opacity at the top to 5% at the bottom. */
         body.rt-today-redesign .rt-today-canvas {
-          background: transparent !important;
-          background-image: none !important;
+          background: linear-gradient(180deg, rgba(243,248,245,0.65), rgba(243,248,245,0.05)) !important;
+          background-image: linear-gradient(180deg, rgba(243,248,245,0.65), rgba(243,248,245,0.05)) !important;
         }
 
         /* Sidebar — flush left, primaryDeep green, no float chrome.
@@ -8714,15 +8716,13 @@ export default function App({ user }) {
           text-decoration-color: rgba(28,50,36,0.5) !important;
         }
 
-        /* Composer plus button → primaryGhost background with green center.
-           Reads as a soft "add" affordance, not a heavy CTA. */
+        /* Composer plus button → primarySoft (the hover state) locked as
+           the default. No separate hover treatment — the soft green stays
+           regardless. */
         body.rt-today-redesign .rt-composer-plus {
-          background: #F3F8F5 !important;
-        }
-        body.rt-today-redesign .rt-composer-plus:hover {
           background: #E6EFE9 !important;
         }
-        /* Icon inside the plus puck — primary green on the ghost bg */
+        /* Icon inside the plus puck — primary green on the soft bg */
         body.rt-today-redesign .rt-composer-plus svg,
         body.rt-today-redesign .rt-composer-plus svg * {
           color: #33543E !important;
