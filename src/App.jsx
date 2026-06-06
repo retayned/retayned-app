@@ -7815,6 +7815,14 @@ export default function App({ user }) {
   // full context here so Rai's API calls include what "this" refers to (archetype,
   // clients, metrics). Cleared when a fresh conversation starts.
   const [observationContext, setObservationContext] = useState(null);
+  // Focused task ID — when the user clicks "Discuss with Rai" on a task,
+  // this captures the task ID and ships it to the edge function. The edge
+  // function then fetches the task + 30d activity signature + workflow
+  // profile + suggestion server-side. This replaces the old
+  // buildTaskDiscussionContext + observationContext hack where 14 days of
+  // truncated frontend-state data was stuffed into chat history as a forged
+  // assistant message. Cleared when a fresh conversation starts.
+  const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [aiTyping, setAiTyping] = useState(false);
   // Attachments staged for next send. Shape: { id, name, type (image|document), media_type, data (base64), size }
   const [aiAttachments, setAiAttachments] = useState([]);
@@ -7956,6 +7964,12 @@ export default function App({ user }) {
           message: q,
           history,
           focused_client_id: null,
+          // focused_task_id is set when the user opened this chat by clicking
+          // a discussable task. The edge function uses it to fetch the task +
+          // 30d activity signature + workflow profile + suggestion + recent
+          // pick server-side, then injects them as a structured focused_task
+          // block in the system context. Null for all other chat entry points.
+          focused_task_id: focusedTaskId,
           stream: true,
           // Attachments travel separately from message text; the Edge Function
           // merges them into the current user message's content array.
@@ -8133,6 +8147,7 @@ export default function App({ user }) {
     setAiAttachments([]);
     setAiConvoId(null);
     setObservationContext(null);
+    setFocusedTaskId(null);
   };
 
   // Load a past conversation into the chat pane. Fetches the full row (list
@@ -8153,6 +8168,8 @@ export default function App({ user }) {
     setAiInput("");
     setAiAttachments([]);
     setObservationContext(null);
+    // Loading a different past conversation = no longer focused on a task
+    setFocusedTaskId(null);
   };
 
   // ─── CONFIDANT: load thread for a specific client ────────────────
@@ -8433,6 +8450,7 @@ export default function App({ user }) {
       setAiMessages([]);
       setAiConvoId(null);
       setObservationContext(null);
+      setFocusedTaskId(null);
     }
     if (convoDb.delete) {
       await convoDb.delete(convoId);
@@ -10687,7 +10705,7 @@ export default function App({ user }) {
           const q = linkPickerSearch.trim().toLowerCase();
           const filterFn = (n) => !q || (n || "").toLowerCase().includes(q);
           const visibleClients = (clients || []).filter(c => c.is_active !== false && filterFn(c.name)).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-          const visibleRolodex = (rolodex || []).filter(r => filterFn(r.name)).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+          const visibleRolodex = (rolodex || []).filter(r => filterFn(r.client || r.name)).slice().sort((a, b) => ((a.client || a.name) || "").localeCompare((b.client || b.name) || ""));
           const doPick = async (kind, id) => {
             if (kind === "client") await linkCalendarEvent({ eventId: linkPicker.eventId, clientId: id });
             else if (kind === "rolodex") await linkCalendarEvent({ eventId: linkPicker.eventId, rolodexId: id });
@@ -10802,7 +10820,8 @@ export default function App({ user }) {
                           onMouseOver={(e) => { e.currentTarget.style.background = C.surfaceWarm || "#FAF6EE"; }}
                           onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; }}
                         >
-                          {r.name}
+                          {r.client || r.name}
+                          {r.contact && <span style={{ marginLeft: 6, fontSize: 11, color: C.textMuted, fontStyle: "italic" }}>· {r.contact}</span>}
                         </button>
                       ))}
                     </>
@@ -13567,15 +13586,22 @@ export default function App({ user }) {
                                           const recentPick = (raiPicks && raiPicks.client_id === client.id)
                                             ? raiPicks
                                             : null;
-                                          const ctx = buildTaskDiscussionContext({
-                                            task: t,
-                                            client,
-                                            tasks,
-                                            touchpoints: touchpointList,
-                                            recentPick,
-                                            suggestion,
-                                          });
-                                          if (ctx) setObservationContext(ctx);
+                                          // Architectural fix (Jun 6 2026): we no longer
+                                          // build a frontend-side observationContext string
+                                          // and forge it into chat history. Instead, set
+                                          // focusedTaskId — the edge function fetches the
+                                          // task + 30d activity signature + workflow profile
+                                          // + suggestion + recent pick server-side and
+                                          // injects them as a structured context block.
+                                          // The old buildTaskDiscussionContext was capped at
+                                          // 14d + 20 tasks + 15 touchpoints from frontend
+                                          // state (touchpoints-and-tasks only — no calendar,
+                                          // observations, health checks). The server-side
+                                          // fetch reads the full picture.
+                                          void touchpointList;
+                                          void suggestion;
+                                          void recentPick;
+                                          setFocusedTaskId(t.id);
                                           // Decide the auto-fire user message based on the verb
                                           // family. Composition verbs (write/draft/send/recap)
                                           // → ask Rai to produce the artifact. Analysis verbs
@@ -19014,8 +19040,8 @@ export default function App({ user }) {
                               ))}
                             </optgroup>
                             <optgroup label="Rolodex (prospects)">
-                              {(rolodex || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || "")).map(r => (
-                                <option key={r.id} value={`rolodex:${r.id}`}>{r.name}</option>
+                              {(rolodex || []).slice().sort((a, b) => ((a.client || a.name) || "").localeCompare((b.client || b.name) || "")).map(r => (
+                                <option key={r.id} value={`rolodex:${r.id}`}>{r.client || r.name}</option>
                               ))}
                             </optgroup>
                             <optgroup label="Other">
