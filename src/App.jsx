@@ -8560,12 +8560,16 @@ export default function App({ user }) {
            ═══════════════════════════════════════════════════════════════ */
 
         body.rt-today-redesign {
-          background: #FAFBFA !important;
+          background: #F3F5F2 !important;
         }
 
-        /* Sidebar — flush left, primary green, no float chrome */
-        body.rt-today-redesign .r-desk {
-          background: #33543E !important;
+        /* Sidebar — flush left, DARK primary green, no float chrome.
+           Uses primaryDeep (#1C3224), not primary (#33543E). Selector
+           uses html prefix to outrank the inline style attribute on
+           the .r-desk element. */
+        html body.rt-today-redesign .r-desk,
+        html body.rt-today-redesign div.r-desk {
+          background: #1C3224 !important;
           background-image: none !important;
           top: 0 !important;
           left: 0 !important;
@@ -8574,7 +8578,8 @@ export default function App({ user }) {
           box-shadow: none !important;
           width: 240px !important;
         }
-        body.rt-today-redesign .r-desk.is-collapsed {
+        html body.rt-today-redesign .r-desk.is-collapsed,
+        html body.rt-today-redesign div.r-desk.is-collapsed {
           width: 64px !important;
         }
 
