@@ -2655,7 +2655,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   // arc-edge dots aren't clipped. The left half-circle is drawn. Time fraction
   // f∈[0,1] (0 = window start / top, 0.5 = now / left-most, 1 = window end /
   // bottom) maps to angle 90°→270°. ──
-  const R = 420;
+  const R = 480;
   const DIAL_PAD = 24; // breathing room so arc-edge dots (NOW dot, edge events,
                        // top/bottom ticks) aren't clipped at the viewBox edges
   const VB_W = R + DIAL_PAD, VB_H = 2 * R + 2 * DIAL_PAD, CX = VB_W, CY = VB_H / 2;
@@ -2689,24 +2689,28 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   const fillRGB = "220, 226, 220";
   const nowCoreRGB = "51, 84, 62"; // primary #33543E for the NOW-pool
 
-  // Hour ticks + labels across the window (every 2 hours, plus NOW).
+  // Hour ticks + labels across the window (every 1 hour for denser rim,
+  // plus NOW). Cool-migration scale-up: more presence, more granularity.
   const ticks = [];
   const tickLabels = [];
-  // Start at the first whole even hour ≥ windowStart.
+  // Start at the first whole hour ≥ windowStart.
   const startHour = new Date(windowStart);
   startHour.setMinutes(0, 0, 0);
-  if (startHour.getHours() % 2 !== 0) startHour.setHours(startHour.getHours() + 1);
-  for (let t = startHour.getTime(); t <= windowEnd; t += 2 * 60 * 60 * 1000) {
+  for (let t = startHour.getTime(); t <= windowEnd; t += 1 * 60 * 60 * 1000) {
     const f = fracOf(t);
     if (f < 0 || f > 1) continue;
     const [x, y] = ptAt(f, R);
     const a = angleOf(f);
     const [ix, iy] = [x - 14 * Math.cos(a), y - 14 * Math.sin(a)];
     ticks.push(`M ${x.toFixed(1)} ${y.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`);
-    const [lx, ly] = ptAt(f, R - 30);
+    // Only label even hours so the rim doesn't feel cluttered with text;
+    // the in-between ticks render as bare lines (rhythm marker only).
     const d = new Date(t);
-    const lbl = formatTimeLabel(d).replace(":00", "");
-    tickLabels.push({ x: lx, y: ly, lbl });
+    if (d.getHours() % 2 === 0) {
+      const [lx, ly] = ptAt(f, R - 30);
+      const lbl = formatTimeLabel(d).replace(":00", "");
+      tickLabels.push({ x: lx, y: ly, lbl });
+    }
   }
 
   // NOW marker — at the REAL now's position in the (possibly scrubbed) window.
