@@ -8610,13 +8610,13 @@ export default function App({ user }) {
           background-image: none !important;
         }
 
-        /* Today canvas backdrop — Variant B primaryGhost wash.
-           A whisper of green behind the task list. Reads as "today's
-           zone" without competing with the tiles. Gradient fades from
-           65% opacity at the top to 5% at the bottom. */
+        /* Today canvas backdrop — Variant A border-cool-strong wash.
+           A soft cool-grey zone behind the task list. Direct cool-palette
+           translation of the original cream gradient. Fades from 42%
+           opacity at the top to 2% at the bottom. */
         body.rt-today-redesign .rt-today-canvas {
-          background: linear-gradient(180deg, rgba(243,248,245,0.65), rgba(243,248,245,0.05)) !important;
-          background-image: linear-gradient(180deg, rgba(243,248,245,0.65), rgba(243,248,245,0.05)) !important;
+          background: linear-gradient(180deg, rgba(220,224,220,0.42), rgba(220,224,220,0.02)) !important;
+          background-image: linear-gradient(180deg, rgba(220,224,220,0.42), rgba(220,224,220,0.02)) !important;
         }
 
         /* Sidebar — flush left, primaryDeep green, no float chrome.
