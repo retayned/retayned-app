@@ -8560,7 +8560,19 @@ export default function App({ user }) {
            ═══════════════════════════════════════════════════════════════ */
 
         body.rt-today-redesign {
-          background: #F3F5F2 !important;
+          background: #FAFBFA !important;
+        }
+        /* Content scroll container — force same bg as body so the
+           area right of the sidebar reads as a single continuous surface.
+           Without this, .r-main keeps its own paint (--rt-bg #FAFAF7
+           cream) which contrasts with our #FAFBFA body. */
+        body.rt-today-redesign .r-main {
+          background: #FAFBFA !important;
+        }
+        /* Also kill the paper-grain dots on body when redesign is active —
+           we want a clean flat SaaS canvas, not the warm-paper texture. */
+        body.rt-today-redesign {
+          background-image: none !important;
         }
 
         /* Sidebar — flush left, DARK primary green, no float chrome.
