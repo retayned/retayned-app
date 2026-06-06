@@ -2942,7 +2942,48 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
+          {/* ATMOSPHERE A — ambient fill: soft primaryLight radial pooled
+              across the dome interior. Brings back OG warm-paper dome character
+              in the cool palette. */}
+          <radialGradient id="rt-dial-atm-fill" cx={CX} cy={CY - 30} r={R - 9} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(86, 139, 104, 0.06)" />
+            <stop offset="0.5" stopColor="rgba(86, 139, 104, 0.02)" />
+            <stop offset="1" stopColor="rgba(86, 139, 104, 0)" />
+          </radialGradient>
+          {/* ATMOSPHERE B — inner-edge shadow: thin dark feather hugging the
+              inside of the rim. Reads as "the dome interior recedes." */}
+          <radialGradient id="rt-dial-atm-shadow" cx={CX} cy={CY - 30} r={R - 9} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0)" />
+            <stop offset="0.78" stopColor="rgba(20, 30, 22, 0)" />
+            <stop offset="0.92" stopColor="rgba(20, 30, 22, 0.04)" />
+            <stop offset="1" stopColor="rgba(20, 30, 22, 0.10)" />
+          </radialGradient>
+          {/* ATMOSPHERE C — localized NOW glow: primary green radial pooled
+              at the live moment. Rides nowY so it slides with NOW as the day
+              progresses. Clipped to dome so it can't overflow the right edge. */}
+          <radialGradient id="rt-dial-atm-now" cx={(CX - 280).toFixed(1)} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="220" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(51, 84, 62, 0.12)" />
+            <stop offset="0.5" stopColor="rgba(51, 84, 62, 0.04)" />
+            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
+          </radialGradient>
+          {/* clipPath matching the half-disc INTERIOR (R-9 to stay inside the
+              ribbon stroke). Contains the NOW glow so it can't bleed past
+              the right edge of the SVG viewport. */}
+          <clipPath id="rt-dial-dome-clip">
+            <path d={`M ${CX} ${CY - (R - 9)} A ${R - 9} ${R - 9} 0 0 0 ${CX} ${CY + (R - 9)} Z`} />
+          </clipPath>
         </defs>
+        {/* ── ATMOSPHERIC INTERIOR (A + B + C) ───────────────────────────
+            Three low-intensity layers stacked inside the dome (R-9), under
+            the ribbon. Drawn order:
+              A. ambient primaryLight fill across the dome
+              B. inner-edge dark shadow (depth)
+              C. localized primary green glow at NOW (clipped) */}
+        <path d={`M ${CX} ${CY - (R - 9)} A ${R - 9} ${R - 9} 0 0 0 ${CX} ${CY + (R - 9)} Z`} fill="url(#rt-dial-atm-fill)" />
+        <path d={`M ${CX} ${CY - (R - 9)} A ${R - 9} ${R - 9} 0 0 0 ${CX} ${CY + (R - 9)} Z`} fill="url(#rt-dial-atm-shadow)" />
+        <g clipPath="url(#rt-dial-dome-clip)">
+          <path d={`M ${CX} ${CY - (R - 9)} A ${R - 9} ${R - 9} 0 0 0 ${CX} ${CY + (R - 9)} Z`} fill="url(#rt-dial-atm-now)" />
+        </g>
         {/* ── VARIANT 2 FORWARD-LOOKING RIBBON + E4 INSET ────────────────
             Green = what's coming. Grey = what's behind. Gradient runs from
             vivid primary at NOW (most imminent) to softer primaryLight at
