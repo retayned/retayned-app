@@ -2918,24 +2918,33 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* VARIANT 10B — FROSTED GLASS dome gradients:
-              - main fill: diagonal glass tone, white→ghost-green→cool-grey
-              - rim edge: vertical gradient (bright top + bottom, dim middle) for etched look
-              - embedded NOW: drop-shadow that reads as "underneath the glass" */}
-          <linearGradient id="rt-dial-glass-fill" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.78)" />
-            <stop offset="50%" stopColor="rgba(243,248,245,0.50)" />
-            <stop offset="100%" stopColor="rgba(220,224,220,0.36)" />
-          </linearGradient>
-          <linearGradient id="rt-dial-glass-edge" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
-            <stop offset="50%" stopColor="rgba(255,255,255,0.4)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0.95)" />
-          </linearGradient>
-          <filter id="rt-dial-glass-embed" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
-            <feOffset dx="0" dy="1.5" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.30" />
+          {/* VARIANT 10C — LIT-FROM-WITHIN debossed dome:
+              - inner shadow (top-left): the depression
+              - highlight (bottom-right): catches ambient
+              - lit-glow: strong primary-green radial centered at NOW, rises with the day
+              - filter: raised marker drop-shadow */}
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.20)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.08)" />
+            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
+          </radialGradient>
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.15)" />
+            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+          </radialGradient>
+          {/* The lit-from-within glow — strong primary green radial centered at the
+              live NOW position. As NOW climbs through the day, the glow rises with it. */}
+          <radialGradient id="rt-dial-lit-glow" cx={nowX.toFixed(1)} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="320" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(51, 84, 62, 0.55)" />
+            <stop offset="0.22" stopColor="rgba(51, 84, 62, 0.28)" />
+            <stop offset="0.55" stopColor="rgba(51, 84, 62, 0.08)" />
+            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
+          </radialGradient>
+          <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
+            <feOffset dx="1.5" dy="3" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.40" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2943,19 +2952,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 10B: FROSTED GLASS DOME ──────────────────────────────
-            The dial reads as a piece of frosted glass set into the page.
-            Translucent diagonal fill, etched ridge at the rim, interior
-            reflections, NOW embedded just under the glass surface. */}
-        {/* Main glass fill */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-glass-fill)" />
-        {/* Etched rim — bright edge gradient */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="url(#rt-dial-glass-edge)" strokeWidth="2" />
-        {/* Darker hairline just inside for the inset look */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.18)" strokeWidth="0.5" />
-        {/* Interior surface highlights — two soft ellipses simulating reflections on curved glass */}
-        <ellipse cx={CX - 240} cy={CY - 200} rx="180" ry="40" fill="rgba(255,255,255,0.42)" opacity="0.7" />
-        <ellipse cx={CX - 280} cy={CY + 180} rx="100" ry="22" fill="rgba(255,255,255,0.32)" opacity="0.55" />
+        {/* ── VARIANT 10C: LIT-FROM-WITHIN DEBOSSED DOME ─────────────────
+            The dome is carved INTO the page (inner shadow + highlight) AND
+            simultaneously lit from behind by a green light source at NOW.
+            The brand color seeps through the depression like firelight inside
+            an alabaster lamp. Carving gives gravitas; glow gives heartbeat. */}
+        {/* Carved depression: inner shadow */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
+        {/* Curved interior catching ambient */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
+        {/* The internal green light — strongest at NOW, falls off radially */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-lit-glow)" />
+        {/* Concentric green halos AROUND NOW — the light source rendered explicitly */}
+        {nowInWindow && <>
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="56" fill="rgba(51, 84, 62, 0.08)" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="36" fill="rgba(51, 84, 62, 0.14)" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="22" fill="rgba(51, 84, 62, 0.22)" />
+        </>}
+        {/* Engraved rim — dark stroke + light highlight just inside */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.32)" strokeWidth="1" />
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.65)" strokeWidth="0.5" />
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
             the arc at the positions the tickLabels array already computes (R−30).
             Muted so they read as a quiet scale under the events + tail. */}
@@ -2972,28 +2988,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
             stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
         ))}
-        {/* Event rim dots — embedded under the frosted glass surface.
-            Soft tint dots with a tiny highlight pip for the "under glass" feel. */}
+        {/* Event rim dots — embedded in the stone. Tiny shadow casts give them
+            inset depth; the next-up event picks up a halo from the internal glow. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="10" fill="none" stroke="#33543E" strokeOpacity="0.35" strokeWidth="1.5" />}
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
-            {/* Tiny highlight pip — sells the under-glass feel */}
-            <ellipse cx={(p.rx - 1.3).toFixed(1)} cy={(p.ry - 1.3).toFixed(1)} rx="1.6" ry="0.9" fill="rgba(255,255,255,0.55)" />
           </g>
         ))}
-        {/* NOW marker — embedded just under the frosted glass surface.
-            Drop-shadow filter for the "underneath" feel + a tiny highlight
-            ellipse for the glass reflection. Variant 10B: frosted glass. */}
-        {nowInWindow && <g filter="url(#rt-dial-glass-embed)">
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3" fill="#FFFFFF" />
+        {/* NOW marker — RAISED above the carved dome AND the source of the
+            internal light. Three-layer: dark green base + white pip + bright
+            green inner core (the actual "flame"). Drop-shadow filter for the
+            raised feel. Variant 10C: lit-from-within. */}
+        {nowInWindow && <g filter="url(#rt-dial-now-raised)">
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="10" fill="#33543E" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="4" fill="#FFFFFF" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="2" fill="#558B68" />
         </g>}
-        {/* Glass reflection on NOW dot */}
-        {nowInWindow && <ellipse cx={(nowX - 2.5).toFixed(1)} cy={(nowY - 2.5).toFixed(1)} rx="3.2" ry="1.8" fill="rgba(255,255,255,0.55)" />}
-        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
-          <animate attributeName="r" values="16;22;16" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-          <animate attributeName="stroke-opacity" values="0.26;0.04;0.26" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.30" strokeWidth="1.5">
+          <animate attributeName="r" values="18;26;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.34;0.06;0.34" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
         </circle>}
       </svg>
 
