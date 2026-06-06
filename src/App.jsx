@@ -2918,13 +2918,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* VARIANT 2 FORWARD — gradient + outer halo (E3):
+          {/* VARIANT 2 FORWARD — gradient + inset reflection (E4):
               Geometry: f=0 (windowStart, earlier) renders at BOTTOM,
                         f=1 (windowEnd, later) renders at TOP.
               So time ABOVE NOW = upcoming → GREEN.
                   time BELOW NOW = elapsed → GREY.
               Green gradient: vivid primary at NOW → softer primaryLight at EOD.
-              E3 halo: blurred green ghost copy underneath for outer glow. */}
+              E4 inset: thin pale highlight on inner edge + faint dark outer edge
+              gives the ribbon a polished-metal cross-section depth. */}
           {(() => {
             // Gradient is computed in user-space along the line from NOW (top)
             // to windowEnd point (top of dial). As nowFrac changes, the gradient
@@ -2941,37 +2942,50 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          <filter id="rt-arc-fwd-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="12" />
-          </filter>
         </defs>
-        {/* ── VARIANT 2 FORWARD-LOOKING RIBBON ───────────────────────────
+        {/* ── VARIANT 2 FORWARD-LOOKING RIBBON + E4 INSET ────────────────
             Green = what's coming. Grey = what's behind. Gradient runs from
             vivid primary at NOW (most imminent) to softer primaryLight at
-            EOD (winding down). Outer Gaussian-blurred halo (E3) under the
-            green path gives the future a soft glow without the skeuomorphic
-            inset-reflection feel. */}
+            EOD (winding down). E4 inset reflection: a thin pale highlight
+            running along the inner edge of the upcoming ribbon + a faint
+            dark hairline just outside, giving the band a polished-metal
+            cross-section depth without going skeuomorphic. */}
         {(() => {
           const [gx0, gy0] = ptAt(0, R);    // window start point (BOTTOM)
           const [gx1, gy1] = ptAt(1, R);    // window end point (TOP)
           const fullArc = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
           if (!nowInWindow) {
-            // NOW outside window — paint the whole arc grey.
             return <path d={fullArc} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />;
           }
           const headF = Math.min(1, Math.max(0, nowFrac));
-          const [hx, hy] = ptAt(headF, R);  // NOW point on rim
-          // Elapsed = windowStart → NOW (BOTTOM-up to the NOW position): grey
+          const [hx, hy] = ptAt(headF, R);
+          // Elapsed = windowStart → NOW: grey ribbon
           const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${hx.toFixed(1)} ${hy.toFixed(1)}`;
-          // Upcoming = NOW → windowEnd (NOW position up to TOP): green gradient
+          // Upcoming = NOW → windowEnd: green-gradient ribbon
           const upcoming = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          // E4 INSET — derive inner/outer parallel paths to the upcoming arc.
+          // Inner reflection sits 8px INSIDE the main band (smaller radius);
+          // outer dark hairline sits 9px OUTSIDE (larger radius).
+          // Using the same start/end angles so the parallel arcs share rotation.
+          // To preserve the start/end angles, compute the same fractional points
+          // along the inner/outer radii.
+          const innerR = R - 8;
+          const outerR = R + 9;
+          const [ihx, ihy] = ptAt(headF, innerR);
+          const [igx1, igy1] = ptAt(1, innerR);
+          const [ohx, ohy] = ptAt(headF, outerR);
+          const [ogx1, ogy1] = ptAt(1, outerR);
+          const innerReflection = `M ${ihx.toFixed(1)} ${ihy.toFixed(1)} A ${innerR} ${innerR} 0 0 1 ${igx1.toFixed(1)} ${igy1.toFixed(1)}`;
+          const outerEdge = `M ${ohx.toFixed(1)} ${ohy.toFixed(1)} A ${outerR} ${outerR} 0 0 1 ${ogx1.toFixed(1)} ${ogy1.toFixed(1)}`;
           return <>
-            {/* E3 OUTER HALO — blurred green ghost copy under the upcoming path */}
-            <path d={upcoming} fill="none" stroke="url(#rt-arc-fwd)" strokeWidth="32" strokeLinecap="round" opacity="0.45" filter="url(#rt-arc-fwd-glow)" />
             {/* Elapsed: grey ribbon */}
             <path d={elapsed} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />
             {/* Upcoming: green-gradient ribbon */}
             <path d={upcoming} fill="none" stroke="url(#rt-arc-fwd)" strokeWidth="18" strokeLinecap="round" />
+            {/* E4: inner pale reflection running along the inside edge of green */}
+            <path d={innerReflection} fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth="2" strokeLinecap="round" />
+            {/* E4: outer dark hairline running just outside the green */}
+            <path d={outerEdge} fill="none" stroke="rgba(20,30,22,0.18)" strokeWidth="1" strokeLinecap="round" />
           </>;
         })()}
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
