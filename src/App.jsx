@@ -2655,7 +2655,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   // arc-edge dots aren't clipped. The left half-circle is drawn. Time fraction
   // f∈[0,1] (0 = window start / top, 0.5 = now / left-most, 1 = window end /
   // bottom) maps to angle 90°→270°. ──
-  const R = 480;
+  const R = 420;
   const DIAL_PAD = 24; // breathing room so arc-edge dots (NOW dot, edge events,
                        // top/bottom ticks) aren't clipped at the viewBox edges
   const VB_W = R + DIAL_PAD, VB_H = 2 * R + 2 * DIAL_PAD, CX = VB_W, CY = VB_H / 2;
@@ -2689,28 +2689,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   const fillRGB = "220, 226, 220";
   const nowCoreRGB = "51, 84, 62"; // primary #33543E for the NOW-pool
 
-  // Hour ticks + labels across the window (every 1 hour for denser rim,
-  // plus NOW). Cool-migration scale-up: more presence, more granularity.
+  // Hour ticks + labels across the window (every 2 hours, plus NOW).
   const ticks = [];
   const tickLabels = [];
-  // Start at the first whole hour ≥ windowStart.
+  // Start at the first whole even hour ≥ windowStart.
   const startHour = new Date(windowStart);
   startHour.setMinutes(0, 0, 0);
-  for (let t = startHour.getTime(); t <= windowEnd; t += 1 * 60 * 60 * 1000) {
+  if (startHour.getHours() % 2 !== 0) startHour.setHours(startHour.getHours() + 1);
+  for (let t = startHour.getTime(); t <= windowEnd; t += 2 * 60 * 60 * 1000) {
     const f = fracOf(t);
     if (f < 0 || f > 1) continue;
     const [x, y] = ptAt(f, R);
     const a = angleOf(f);
     const [ix, iy] = [x - 14 * Math.cos(a), y - 14 * Math.sin(a)];
     ticks.push(`M ${x.toFixed(1)} ${y.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`);
-    // Only label even hours so the rim doesn't feel cluttered with text;
-    // the in-between ticks render as bare lines (rhythm marker only).
+    const [lx, ly] = ptAt(f, R - 30);
     const d = new Date(t);
-    if (d.getHours() % 2 === 0) {
-      const [lx, ly] = ptAt(f, R - 30);
-      const lbl = formatTimeLabel(d).replace(":00", "");
-      tickLabels.push({ x: lx, y: ly, lbl });
-    }
+    const lbl = formatTimeLabel(d).replace(":00", "");
+    tickLabels.push({ x: lx, y: ly, lbl });
   }
 
   // NOW marker — at the REAL now's position in the (possibly scrubbed) window.
@@ -2923,32 +2919,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             );
           })()}
         </defs>
-        {/* base atmosphere — half disc, edge-anchored, feathers to 0 at the rim */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-sage)" />
-        {/* duotone — a whisper of brand sage in the atmosphere */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-duo)" />
-        {/* NOW-glow — warm pool riding the live now-height, dies before the rim */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-core)" />
-        {/* ── COMET TAIL — a 12h green segment led by the purple NOW dot (full dial
-            window). Head at NOW, tail trailing 12h ahead, fading green→grey along
-            its length. Anchored to the dot (not the window): as NOW climbs, the tail
-            slides up and rides off the top edge, clipped by the SVG viewport. The
-            faint full guide-arc underneath is the rest of the day (grey). */}
+        {/* ── VARIANT 2: MONOCHROME RIBBON ──────────────────────────────
+            No atmospheric dome. The dial is now a thick band arc — elapsed
+            in solid primary green, future in cool grey outline. Reads as a
+            curled progress bar. Replaces the three radial gradient fills
+            (rt-dial-sage / duo / core) AND the comet-tail layer below. */}
         {(() => {
           const [gx0, gy0] = ptAt(0, R);
           const [gx1, gy1] = ptAt(1, R);
-          const guide = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          const fullArc = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
           if (!nowInWindow) {
-            return <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />;
+            return <path d={fullArc} fill="none" stroke="#DCE0DC" strokeWidth="16" strokeLinecap="butt" />;
           }
           const headF = Math.min(1, Math.max(0, nowFrac));
-          const drawTailF = Math.min(1, headF + 1.0);   // 12h tail, clipped at the visible top
           const [hx, hy] = ptAt(headF, R);
-          const [tx, ty] = ptAt(drawTailF, R);
-          const tail = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${tx.toFixed(1)} ${ty.toFixed(1)}`;
+          // Full grey band underneath (future portion is what shows after the green
+          // overdraws the elapsed portion).
+          // Elapsed: window-start (top) → NOW
+          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${hx.toFixed(1)} ${hy.toFixed(1)}`;
+          // Future: NOW → window-end (bottom)
+          const future = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
           return <>
-            <path d={guide} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="2.5" strokeLinecap="round" />
-            <path d={tail} fill="none" stroke="url(#rt-arc-elapsed)" strokeWidth="3" strokeLinecap="round" />
+            <path d={future} fill="none" stroke="#DCE0DC" strokeWidth="16" strokeLinecap="butt" />
+            <path d={elapsed} fill="none" stroke="#33543E" strokeWidth="16" strokeLinecap="round" />
           </>;
         })()}
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
@@ -2974,14 +2967,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — primary green dot at current time, with white center
-            pip for depth + brighter pulse halo. Cool-migration palette. */}
+        {/* NOW marker — primary green disc at the ribbon junction with a white
+            outer ring so it pops cleanly against the 16px green/grey ribbon.
+            Variant 2: monochrome ribbon. */}
         {nowInWindow && <>
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="7" fill="#33543E" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="2.5" fill="#FFFFFF" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="13" fill="none" stroke="#33543E" strokeOpacity="0.30" strokeWidth="1.5">
-          <animate attributeName="r" values="13;19;13" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-          <animate attributeName="stroke-opacity" values="0.32;0.06;0.32" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="14" fill="#FFFFFF" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="14" fill="none" stroke="#33543E" strokeWidth="2" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#33543E" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="22" fill="none" stroke="#33543E" strokeOpacity="0.20" strokeWidth="1.5">
+          <animate attributeName="r" values="22;30;22" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.24;0.04;0.24" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
         </circle>
         </>}
       </svg>
