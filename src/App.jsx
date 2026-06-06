@@ -2681,9 +2681,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   // and as the user scrubbed toward evening. Both were removed — they read
   // as a bug ("the dial gets dark when I scroll") more than a feature.
   // The dial now reads as a single warm cream surface at every hour.
-  // Original sun RGB: (255, 240, 214). Alpha stops below preserved verbatim
-  // from the pre-shift state (i.e. with aBoost = 1).
-  const fillRGB = "255, 240, 214";
+  // Original sun RGB: (255, 240, 214). Cool migration: (220, 226, 220).
+  // For Variant B (brand-threaded): dome stays cool grey via fillRGB,
+  // but the now-core radial uses primary green for a brand pool that
+  // rides the live moment. Other gradients (sage, duo) still consume
+  // fillRGB normally.
+  const fillRGB = "220, 226, 220";
+  const nowCoreRGB = "51, 84, 62"; // primary #33543E for the NOW-pool
 
   // Hour ticks + labels across the window (every 2 hours, plus NOW).
   const ticks = [];
@@ -2887,14 +2891,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="0.6" stopColor="rgba(86, 139, 104, 0.04)" />
             <stop offset="1" stopColor="rgba(86, 139, 104, 0)" />
           </radialGradient>
-          {/* NOW-glow — warm pool bound to the live NOW height (nowY); rides the
-              day so warmth sits at the current moment. Pulled toward the events
-              side, dies before the rim. Dials: cx (how far in), r (spread). */}
+          {/* NOW-glow — green pool bound to the live NOW height (nowY); rides the
+              day so brand sits at the current moment. Pulled toward the events
+              side, dies before the rim. Dials: cx (how far in), r (spread).
+              Variant B: uses nowCoreRGB (primary green) instead of fillRGB so
+              the moment you're living in lights up green. */}
           <radialGradient id="rt-dial-core" cx={CX - 150} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="215" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor={`rgba(${fillRGB}, 0.48)`} />
-            <stop offset="0.50" stopColor={`rgba(${fillRGB}, 0.20)`} />
-            <stop offset="0.82" stopColor={`rgba(${fillRGB}, 0.05)`} />
-            <stop offset="1" stopColor={`rgba(${fillRGB}, 0)`} />
+            <stop offset="0" stopColor={`rgba(${nowCoreRGB}, 0.32)`} />
+            <stop offset="0.50" stopColor={`rgba(${nowCoreRGB}, 0.14)`} />
+            <stop offset="0.82" stopColor={`rgba(${nowCoreRGB}, 0.04)`} />
+            <stop offset="1" stopColor={`rgba(${nowCoreRGB}, 0)`} />
           </radialGradient>
           {/* COMET-TAIL gradient — green tail led by the NOW dot, fading to grey
               behind it. Anchored head=now → tail behind, clipped at window edges. */}
@@ -2964,12 +2970,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — purple dot at current time, with a slow live-pulse halo (②). */}
+        {/* NOW marker — primary green dot at current time, with white center
+            pip for depth + brighter pulse halo. Cool-migration palette. */}
         {nowInWindow && <>
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#7c5cf3" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="none" stroke="#7c5cf3" strokeOpacity="0.25" strokeWidth="1.5">
-          <animate attributeName="r" values="11;17;11" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-          <animate attributeName="stroke-opacity" values="0.28;0.05;0.28" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="7" fill="#33543E" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="2.5" fill="#FFFFFF" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="13" fill="none" stroke="#33543E" strokeOpacity="0.30" strokeWidth="1.5">
+          <animate attributeName="r" values="13;19;13" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.32;0.06;0.32" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
         </circle>
         </>}
       </svg>
@@ -8759,6 +8767,17 @@ export default function App({ user }) {
         }
         body.rt-today-redesign .rt-dial-now-ring {
           stroke: #33543E !important;
+        }
+
+        /* Floating quick-log FAB (bottom-right) — was purple gradient.
+           Override to forest green for the redesign. */
+        body.rt-today-redesign .rt-quicklog-fab {
+          background: #33543E !important;
+          background-image: none !important;
+          box-shadow: 0 1px 2px rgba(20,30,22,0.10), 0 6px 20px rgba(51,84,62,0.30) !important;
+        }
+        body.rt-today-redesign .rt-quicklog-fab:hover {
+          background: #274230 !important;
         }
 
         /* ═══════════════════════════════════════════════════════════════
