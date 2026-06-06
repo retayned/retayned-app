@@ -7912,11 +7912,12 @@ export default function App({ user }) {
     setAiTyping(true);
 
     try {
-      // Conversation history — last 30 messages in Anthropic format.
-      // Cap raised from 10 to 30 alongside the Confidant launch — deep
-      // CRM conversations regularly span more than 5 turns and Rai
-      // forgetting recent context felt jarring. 30 messages ≈ 15 turns.
-      const history = aiMessages.slice(-30).map(m => ({
+      // Conversation history — last 40 messages in Anthropic format.
+      // Cap evolution: 10 → 30 (Confidant launch) → 40 (Jun 6 2026, alongside
+      // DAILY_LIMIT raise from 15 → 20). 40 messages = 20 user turns + 20
+      // assistant turns, matching the daily cap so the latter half of a
+      // user's day still has the earlier half in context.
+      const history = aiMessages.slice(-40).map(m => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text
       }));
@@ -8204,8 +8205,8 @@ export default function App({ user }) {
   // ─── CONFIDANT: send message to Rai (per-client thread) ──────────
   // Mirrors sendAi but: passes focused_client_id, uses confidant
   // state instead of global aiMessages state, persists to the
-  // pre-loaded confidantConvoId thread. Same 30-message cap, same
-  // streaming Edge Function call.
+  // pre-loaded confidantConvoId thread. Same 40-message cap (matches
+  // DAILY_LIMIT 20 user turns), same streaming Edge Function call.
   const sendConfidantMessage = async (text, clientId) => {
     const q = (text || "").trim();
     if (!q || !clientId || !user) return;
@@ -8214,7 +8215,8 @@ export default function App({ user }) {
     setConfidantTyping(true);
     try {
       // Build the same Anthropic-format history as the global chat.
-      const history = confidantMessages.slice(-30).map(m => ({
+      // 40 messages = 20 turns, matching DAILY_LIMIT and the global chat cap.
+      const history = confidantMessages.slice(-40).map(m => ({
         role: m.role === "ai" ? "assistant" : "user",
         content: m.text,
       }));
