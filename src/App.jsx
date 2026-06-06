@@ -2934,25 +2934,25 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── VARIANT 10 + 10A RIM (LIGHTER):
-              Original 10's interior gradients (lighter than 10A's) + 10A's
-              stronger engraved rim. Then slight interior lift via reduced
-              shadow opacity and a whisper of soft-green wash. No bloom,
-              no NOW glow — just clean deboss + rim. */}
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
+          {/* ── VARIANT 10A SHADING + LIGHT INTERIOR:
+              10A's full shading geometry (stronger inner shadow positioned
+              upper-left, brighter highlight from lower-right, larger radii
+              for proper deboss feel) + the original 10 color decision (just
+              a whisper of soft-green wash, no bloom, no NOW glow). */}
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 270} cy={CY - 220} r={R * 1.15} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.28)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.10)" />
             <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.75)" />
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 80} cy={CY + 240} r={R * 0.95} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.95)" />
             <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.22)" />
             <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
           </radialGradient>
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
-            <feOffset dx="1.5" dy="3" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
+            <feOffset dx="2" dy="4" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.45" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2960,19 +2960,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 10 INTERIOR + 10A RIM (LIGHTER) ────────────────────
-            Three layers + the 10A rim. Interior is the original 10's deboss
-            (lighter than 10A's), nudged slightly lighter via a whisper of
-            soft-green wash and reduced shadow contrast. The 10A rim's
-            stronger dark stroke + bright inner highlight gives the sphere
-            a confident edge. */}
-        {/* Layer 1: whisper of soft-green wash (small, just a hint) */}
+        {/* ── VARIANT 10A SHADING + LIGHT INTERIOR ───────────────────────
+            Full 10A deboss geometry + crisp rim, with a whisper of soft-green
+            wash for warmth (no bloom, no glow). */}
+        {/* Layer 1: whisper of soft-green wash */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="rgba(86, 139, 104, 0.05)" />
-        {/* Layer 2: deboss inner shadow (original 10, lighter than 10A) */}
+        {/* Layer 2: deboss inner shadow (10A geometry) */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Layer 3: deboss highlight (original 10, slightly lifted) */}
+        {/* Layer 3: deboss highlight (10A geometry) */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* 10A rim — stronger dark stroke + brighter inner highlight */}
+        {/* 10A rim — stronger dark stroke + bright inner highlight */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.45)" strokeWidth="1.5" />
         <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
         {/* Time labels (A · inside rim) — drawn just inside the arc */}
