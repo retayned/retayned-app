@@ -2934,40 +2934,25 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── VARIANT 10A LIGHT — SOFT GREEN PASS:
-              Pulled further away from skeu. Halved the deboss shadow again,
-              dropped highlight intensity meaningfully, lifted the soft-green
-              wash + bloom to carry the dome's character. The depression now
-              whispers; soft green leads. */}
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 270} cy={CY - 220} r={R * 1.15} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.08)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.03)" />
+          {/* ── VARIANT 10 + 10A RIM (LIGHTER):
+              Original 10's interior gradients (lighter than 10A's) + 10A's
+              stronger engraved rim. Then slight interior lift via reduced
+              shadow opacity and a whisper of soft-green wash. No bloom,
+              no NOW glow — just clean deboss + rim. */}
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
             <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 80} cy={CY + 240} r={R * 0.95} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.55)" />
-            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.75)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.22)" />
             <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
           </radialGradient>
-          {/* Atmospheric duotone bloom — lifted to carry the dome's soft-green character */}
-          <radialGradient id="rt-dial-atm-duo" cx={CX - 200} cy={CY} r="320" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(86, 139, 104, 0.22)" />
-            <stop offset="0.5" stopColor="rgba(86, 139, 104, 0.09)" />
-            <stop offset="1" stopColor="rgba(86, 139, 104, 0)" />
-          </radialGradient>
-          {/* Quiet NOW glow — keeps the live moment present */}
-          <radialGradient id="rt-dial-atm-glow" cx={(CX - 280).toFixed(1)} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="240" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(51, 84, 62, 0.13)" />
-            <stop offset="0.5" stopColor="rgba(51, 84, 62, 0.04)" />
-            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
-          </radialGradient>
-          <clipPath id="rt-dial-dome-clip">
-            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} />
-          </clipPath>
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
             <feOffset dx="1.5" dy="3" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.22" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2975,28 +2960,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 10A LIGHT — SOFT GREEN ─────────────────────────────
-            Six layers, tuned for daily-use pleasantness:
-              1. lifted full-dome primaryLight wash (0.11)
-              2. whispered inner shadow (0.08 max, down from 0.14)
-              3. softer highlight (0.55 max, down from 0.85)
-              4. boosted duotone bloom (0.22 max)
-              5. quiet NOW glow (clipped)
-              6. softened rim (0.22 stroke, 1.0 width) */}
-        {/* Layer 1: lifted full-dome soft green wash */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="rgba(86, 139, 104, 0.11)" />
-        {/* Layer 2: whispered inner shadow */}
+        {/* ── VARIANT 10 INTERIOR + 10A RIM (LIGHTER) ────────────────────
+            Three layers + the 10A rim. Interior is the original 10's deboss
+            (lighter than 10A's), nudged slightly lighter via a whisper of
+            soft-green wash and reduced shadow contrast. The 10A rim's
+            stronger dark stroke + bright inner highlight gives the sphere
+            a confident edge. */}
+        {/* Layer 1: whisper of soft-green wash (small, just a hint) */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="rgba(86, 139, 104, 0.05)" />
+        {/* Layer 2: deboss inner shadow (original 10, lighter than 10A) */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Layer 3: soft highlight */}
+        {/* Layer 3: deboss highlight (original 10, slightly lifted) */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* Layers 4–5: atmospheric (clipped) */}
-        <g clipPath="url(#rt-dial-dome-clip)">
-          <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-atm-duo)" />
-          <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-atm-glow)" />
-        </g>
-        {/* Layer 6: softened rim */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.22)" strokeWidth="1" />
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="0.6" />
+        {/* 10A rim — stronger dark stroke + brighter inner highlight */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.45)" strokeWidth="1.5" />
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
         {/* Time labels (A · inside rim) — drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
