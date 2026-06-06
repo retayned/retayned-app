@@ -8610,13 +8610,20 @@ export default function App({ user }) {
           background-image: none !important;
         }
 
-        /* Sidebar — flush left, primaryDark green, no float chrome.
-           Uses primaryDark (#274230), one stop lighter than primaryDeep.
-           Selector uses html prefix to outrank the inline style attribute
-           on the .r-desk element. */
+        /* Kill the .rt-today-canvas cream gradient — the beige wash that
+           sat behind the today's task list. Flat #FAFBFA instead. */
+        body.rt-today-redesign .rt-today-canvas {
+          background: transparent !important;
+          background-image: none !important;
+        }
+
+        /* Sidebar — flush left, primaryDeep green, no float chrome.
+           Uses primaryDeep (#1C3224), the darkest stop. Selector uses
+           html prefix to outrank the inline style attribute on the
+           .r-desk element. */
         html body.rt-today-redesign .r-desk,
         html body.rt-today-redesign div.r-desk {
-          background: #274230 !important;
+          background: #1C3224 !important;
           background-image: none !important;
           top: 0 !important;
           left: 0 !important;
@@ -8707,22 +8714,20 @@ export default function App({ user }) {
           text-decoration-color: rgba(28,50,36,0.5) !important;
         }
 
-        /* Composer plus button → green (was already green in some places,
-           ensure consistency on Today only). */
-        body.rt-today-redesign .rt-composer-plus,
-        body.rt-today-redesign .rt-fab {
-          background: #33543E !important;
+        /* Composer plus button → primaryGhost background with green center.
+           Reads as a soft "add" affordance, not a heavy CTA. */
+        body.rt-today-redesign .rt-composer-plus {
+          background: #F3F8F5 !important;
         }
-        body.rt-today-redesign .rt-composer-plus:hover,
-        body.rt-today-redesign .rt-fab:hover {
-          background: #2D4A37 !important;
+        body.rt-today-redesign .rt-composer-plus:hover {
+          background: #E6EFE9 !important;
         }
-        /* Icon inside the plus puck — make it white so it reads on the green */
+        /* Icon inside the plus puck — primary green on the ghost bg */
         body.rt-today-redesign .rt-composer-plus svg,
         body.rt-today-redesign .rt-composer-plus svg * {
-          color: #FFFFFF !important;
-          stroke: #FFFFFF !important;
-          fill: #FFFFFF !important;
+          color: #33543E !important;
+          stroke: #33543E !important;
+          fill: #33543E !important;
         }
 
         /* Composer Add button — green when armed (button only shows the
@@ -8736,6 +8741,15 @@ export default function App({ user }) {
         }
         body.rt-today-redesign .rt-add-task-btn:not(:disabled):hover {
           background: #2D4A37 !important;
+        }
+        /* Disabled / rest state — was cream (C.surfaceWarm).
+           Now hoverSurface #F4F6F4 with textMuted text. */
+        body.rt-today-redesign .rt-add-task-btn:disabled,
+        body.rt-today-redesign .rt-add-task-btn[disabled] {
+          background: #F4F6F4 !important;
+          background-image: none !important;
+          color: #9A9A93 !important;
+          box-shadow: none !important;
         }
 
         /* Dial now-marker — was purple; switch to forest green */
