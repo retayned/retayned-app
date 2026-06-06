@@ -2997,6 +2997,56 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             {tl.lbl}
           </text>
         ))}
+        {/* Hour ticks INSIDE the ribbon — short marks at each labeled hour
+            position. White on the green/upcoming side, dark grey on the
+            grey/elapsed side. Sit on top of the ribbon band. */}
+        {tickLabels.map((tl, i) => {
+          // Each tick — derive the rim point from the tick's f position
+          // (tl.x, tl.y are at R-30; we want a short segment inside the 18px band).
+          const dx = tl.x - CX, dy = tl.y - CY;
+          const len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len, uy = dy / len;
+          // Project back out to the rim to figure out which side of NOW this tick sits on.
+          // tl was computed from f via ptAt(f, R-30); we recover f via the angle.
+          const angle = Math.atan2(dy, dx);
+          const tickF = ((angle * 180 / Math.PI) - 90) / 180;
+          const isPast = tickF < nowFrac;
+          const ix = CX + ux * (R - 8), iy = CY + uy * (R - 8);
+          const ox = CX + ux * (R - 2), oy = CY + uy * (R - 2);
+          return (
+            <line key={`band-tick-${i}`}
+              x1={ix.toFixed(1)} y1={iy.toFixed(1)}
+              x2={ox.toFixed(1)} y2={oy.toFixed(1)}
+              stroke={isPast ? "rgba(28,50,36,0.32)" : "rgba(255,255,255,0.65)"}
+              strokeWidth="1.5" strokeLinecap="round" />
+          );
+        })}
+        {/* Minute ring — faint inner marks every 30 minutes within the window.
+            Reads as a chronograph subdial scale. */}
+        {(() => {
+          const minR = R - 38;
+          const marks = [];
+          const halfHour = 30 * 60 * 1000;
+          const startM = new Date(windowStart);
+          startM.setMinutes(0, 0, 0);
+          for (let t = startM.getTime(); t <= windowEnd; t += halfHour) {
+            const f = fracOf(t);
+            if (f < 0 || f > 1) continue;
+            const a = angleOf(f);
+            const [x1, y1] = [CX + (minR - 3) * Math.cos(a), CY + (minR - 3) * Math.sin(a)];
+            const [x2, y2] = [CX + minR * Math.cos(a), CY + minR * Math.sin(a)];
+            marks.push({ x1, y1, x2, y2 });
+          }
+          return (
+            <g stroke="rgba(28,50,36,0.18)" strokeWidth="0.75" strokeLinecap="round">
+              {marks.map((m, i) => (
+                <line key={`min-${i}`}
+                  x1={m.x1.toFixed(1)} y1={m.y1.toFixed(1)}
+                  x2={m.x2.toFixed(1)} y2={m.y2.toFixed(1)} />
+              ))}
+            </g>
+          );
+        })()}
         {/* Connector (E) — a faint dashed leader from each event's dial dot toward
             the rail (running left, off the disc). Ties every event to its point on
             the TIMELINE rather than to a vertical rail. Drawn under the dots. */}
@@ -3004,12 +3054,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
             stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
         ))}
-        {/* Event rim dots — embedded in the stone. Tiny shadow casts give them
-            inset depth; the next-up event picks up a halo from the internal glow. */}
+        {/* Event rim dots — jewel-style. Past = grey on the elapsed side.
+            Future events = white pips with green core (read as embedded jewels
+            on the green ribbon). Next-up = solid green disc with white pip + halo. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="10" fill="none" stroke="#33543E" strokeOpacity="0.35" strokeWidth="1.5" />}
-            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="11" fill="none" stroke="#33543E" strokeOpacity="0.35" strokeWidth="1.5" />}
+            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="5" fill={p.isPast ? "#9A9A93" : (p.isNext ? "#33543E" : "#FFFFFF")} />
+            {!p.isPast && !p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="2" fill="#33543E" />}
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="2" fill="#FFFFFF" />}
           </g>
         ))}
         {/* NOW marker — ribbon crown: white disc with green stroke ring and
