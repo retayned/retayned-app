@@ -8575,13 +8575,48 @@ export default function App({ user }) {
           background-image: none !important;
         }
 
-        /* Sidebar — flush left, DARK primary green, no float chrome.
-           Uses primaryDeep (#1C3224), not primary (#33543E). Selector
-           uses html prefix to outrank the inline style attribute on
-           the .r-desk element. */
+        /* ─── CREAM-TO-COOL MIGRATION ──────────────────────────────
+           Locked palette (Jun 6 2026):
+             canvas             #FAFBFA  (was --rt-bg #FAFAF7)
+             card               #FFFFFF  (unchanged)
+             hoverSurface       #F4F6F4  (was --rt-surface #EEEFEB)
+             border-cool        #ECEFEC  (was --rt-border #D8DFD8)
+             border-cool-strong #DCE0DC  (focus rings)
+             surface-cool       #F4F6F4  (was --rt-surface-warm #F2EEE8)
+             deep-cool          #DCE0DC  (was --rt-deep-cream #EAE4D6)
+
+           Strategy: redirect the existing CSS variables when on the
+           Today redesign. Every inline C.surfaceWarm, C.deepCream,
+           C.surface, var(--rt-bg) etc. automatically picks up the
+           new cool tone because they all resolve through these tokens.
+           Variables only — no individual component touches. */
+        body.rt-today-redesign {
+          --rt-bg: #FAFBFA !important;
+          --rt-surface: #F4F6F4 !important;
+          --rt-surface-warm: #F4F6F4 !important;
+          --rt-deep-cream: #DCE0DC !important;
+          --rt-border: #ECEFEC !important;
+          --rt-border-light: #F2F4F2 !important;
+          --rt-border-soft: #F2F4F2 !important;
+        }
+        /* Also kill the V1_GRAD warm rainbow gradients used on the calendar
+           strip and other places — they bake #FAFAF7 cream into hardcoded
+           strings, so the variable redirect can't reach them. Flat them
+           to canvas instead. */
+        body.rt-today-redesign [style*="V1_GRAD"],
+        body.rt-today-redesign [style*="rgba(124,92,243,0.10) 0%"],
+        body.rt-today-redesign [style*="#FAFAF7"] {
+          background: #FAFBFA !important;
+          background-image: none !important;
+        }
+
+        /* Sidebar — flush left, primaryDark green, no float chrome.
+           Uses primaryDark (#274230), one stop lighter than primaryDeep.
+           Selector uses html prefix to outrank the inline style attribute
+           on the .r-desk element. */
         html body.rt-today-redesign .r-desk,
         html body.rt-today-redesign div.r-desk {
-          background: #1C3224 !important;
+          background: #274230 !important;
           background-image: none !important;
           top: 0 !important;
           left: 0 !important;
@@ -8647,12 +8682,29 @@ export default function App({ user }) {
           padding-left: 0 !important;
         }
 
+        /* Client-name links in the daily brief and Today surfaces —
+           was C.btn purple (#7c5cf3). Variant B locked: primaryDeep
+           with dotted underline. Matches the dark sidebar, reads as
+           authoritative rather than decorative. Scoped to Today only;
+           other pages keep purple. */
+        body.rt-today-redesign .rt-purple-link {
+          color: #1C3224 !important;
+          text-decoration-color: #1C3224 !important;
+        }
+        @media (hover: hover) {
+          body.rt-today-redesign .rt-purple-link:hover {
+            color: #274230 !important;
+            text-decoration-color: #274230 !important;
+            text-decoration-style: solid !important;
+          }
+        }
+
         /* Client-name underline color — was purple (.lede a is the styled link).
            Override to forest green for any anchor within the today page. */
         body.rt-today-redesign .rt-today-lede a,
         body.rt-today-redesign .rt-today-lede a:visited {
-          color: #33543E !important;
-          text-decoration-color: rgba(51,84,62,0.45) !important;
+          color: #1C3224 !important;
+          text-decoration-color: rgba(28,50,36,0.5) !important;
         }
 
         /* Composer plus button → green (was already green in some places,
