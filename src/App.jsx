@@ -2918,32 +2918,49 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
+          {/* VARIANT 10 — DEBOSSED dome gradients:
+              - inner shadow (top-left): darker, simulates light depression
+              - highlight (bottom-right): lighter, simulates curved interior
+              - filter for raised NOW marker drop-shadow */}
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
+            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
+          </radialGradient>
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.85)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.25)" />
+            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+          </radialGradient>
+          <radialGradient id="rt-dial-deboss-tint" cx={CX - 180} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="240" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(51, 84, 62, 0.10)" />
+            <stop offset="0.65" stopColor="rgba(51, 84, 62, 0.03)" />
+            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
+          </radialGradient>
+          <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
+            <feOffset dx="1.5" dy="3" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.40" />
+            <feComposite in2="offsetblur" operator="in" />
+            <feMerge>
+              <feMergeNode />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
-        {/* ── VARIANT 2: MONOCHROME RIBBON ──────────────────────────────
-            No atmospheric dome. The dial is now a thick band arc — elapsed
-            in solid primary green, future in cool grey outline. Reads as a
-            curled progress bar. Replaces the three radial gradient fills
-            (rt-dial-sage / duo / core) AND the comet-tail layer below. */}
-        {(() => {
-          const [gx0, gy0] = ptAt(0, R);
-          const [gx1, gy1] = ptAt(1, R);
-          const fullArc = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
-          if (!nowInWindow) {
-            return <path d={fullArc} fill="none" stroke="#DCE0DC" strokeWidth="16" strokeLinecap="butt" />;
-          }
-          const headF = Math.min(1, Math.max(0, nowFrac));
-          const [hx, hy] = ptAt(headF, R);
-          // Full grey band underneath (future portion is what shows after the green
-          // overdraws the elapsed portion).
-          // Elapsed: window-start (top) → NOW
-          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${hx.toFixed(1)} ${hy.toFixed(1)}`;
-          // Future: NOW → window-end (bottom)
-          const future = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
-          return <>
-            <path d={future} fill="none" stroke="#DCE0DC" strokeWidth="16" strokeLinecap="butt" />
-            <path d={elapsed} fill="none" stroke="#33543E" strokeWidth="16" strokeLinecap="round" />
-          </>;
-        })()}
+        {/* ── VARIANT 10: DEBOSSED DOME ──────────────────────────────
+            The dome is pressed INTO the page. Inner shadow from upper-left
+            creates the depression illusion; highlight from lower-right
+            simulates the curved interior catching light. A faint green tint
+            still rides the NOW position. The rim is rendered as two thin
+            lines: one dark engraved edge + one light highlight just inside.
+            Hour ticks read as carved indentations. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-tint)" />
+        {/* Engraved rim line — dark stroke + light highlight just inside */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.32)" strokeWidth="1" />
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="0.5" />
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
             the arc at the positions the tickLabels array already computes (R−30).
             Muted so they read as a quiet scale under the events + tail. */}
@@ -2967,18 +2984,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — primary green disc at the ribbon junction with a white
-            outer ring so it pops cleanly against the 16px green/grey ribbon.
-            Variant 2: monochrome ribbon. */}
-        {nowInWindow && <>
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="14" fill="#FFFFFF" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="14" fill="none" stroke="#33543E" strokeWidth="2" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="6" fill="#33543E" />
-        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="22" fill="none" stroke="#33543E" strokeOpacity="0.20" strokeWidth="1.5">
-          <animate attributeName="r" values="22;30;22" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-          <animate attributeName="stroke-opacity" values="0.24;0.04;0.24" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-        </circle>
-        </>}
+        {/* NOW marker — RAISED above the debossed surface with a drop-shadow.
+            The only thing sitting ABOVE the page; everything else is carved IN.
+            Variant 10: debossed dome. */}
+        {nowInWindow && <g filter="url(#rt-dial-now-raised)">
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3.2" fill="#FFFFFF" />
+        </g>}
+        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
+          <animate attributeName="r" values="16;22;16" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.26;0.04;0.26" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        </circle>}
       </svg>
 
       {/* Event RAIL — events live OUTSIDE the disc now, in a vertical list to
