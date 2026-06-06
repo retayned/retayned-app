@@ -2918,74 +2918,62 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* VARIANT 10A + LAYERED ATMOSPHERE (iv) gradients:
-              - inner shadow: stronger (0.28 max) for the dramatized depression
-              - highlight: brighter (0.95 max) for richer light catch
-              - duo: soft green bloom centered on events side (left-center)
-              - glow: quiet primary green radial at NOW
-              - clipPath: contains atmospheric layers within the dome
-              - filter: raised marker drop-shadow */}
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 270} cy={CY - 220} r={R * 1.15} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.28)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.10)" />
-            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
-          </radialGradient>
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 80} cy={CY + 240} r={R * 0.95} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.95)" />
-            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.22)" />
-            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
-          </radialGradient>
-          {/* Atmospheric duotone bloom — soft primaryLight on events side */}
-          <radialGradient id="rt-dial-atm-duo" cx={CX - 200} cy={CY} r="320" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(86, 139, 104, 0.16)" />
-            <stop offset="0.5" stopColor="rgba(86, 139, 104, 0.06)" />
-            <stop offset="1" stopColor="rgba(86, 139, 104, 0)" />
-          </radialGradient>
-          {/* Quiet NOW glow — low intensity primary green radial, rides nowY */}
-          <radialGradient id="rt-dial-atm-glow" cx={(CX - 280).toFixed(1)} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="240" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(51, 84, 62, 0.14)" />
-            <stop offset="0.5" stopColor="rgba(51, 84, 62, 0.05)" />
-            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
-          </radialGradient>
-          {/* clipPath matching the half-disc — keeps atmospheric layers contained */}
-          <clipPath id="rt-dial-dome-clip">
-            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} />
-          </clipPath>
-          <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
-            <feOffset dx="2" dy="4" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.45" />
-            <feComposite in2="offsetblur" operator="in" />
-            <feMerge>
-              <feMergeNode />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
+          {/* VARIANT 2 FORWARD — gradient + outer halo (E3):
+              Geometry: f=0 (windowStart, earlier) renders at BOTTOM,
+                        f=1 (windowEnd, later) renders at TOP.
+              So time ABOVE NOW = upcoming → GREEN.
+                  time BELOW NOW = elapsed → GREY.
+              Green gradient: vivid primary at NOW → softer primaryLight at EOD.
+              E3 halo: blurred green ghost copy underneath for outer glow. */}
+          {(() => {
+            // Gradient is computed in user-space along the line from NOW (top)
+            // to windowEnd point (top of dial). As nowFrac changes, the gradient
+            // anchors slide accordingly.
+            const [nx, ny] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
+            const [ex, ey] = ptAt(1, R);
+            return (
+              <linearGradient id="rt-arc-fwd" gradientUnits="userSpaceOnUse"
+                x1={nx.toFixed(1)} y1={ny.toFixed(1)}
+                x2={ex.toFixed(1)} y2={ey.toFixed(1)}>
+                <stop offset="0" stopColor="#33543E" />
+                <stop offset="0.5" stopColor="#3F6B4B" />
+                <stop offset="1" stopColor="#558B68" />
+              </linearGradient>
+            );
+          })()}
+          <filter id="rt-arc-fwd-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="12" />
           </filter>
         </defs>
-        {/* ── VARIANT 10A + LAYERED ATMOSPHERE (iv) ─────────────────────
-            Heritage carved dome + three atmospheric layers stacked at low
-            intensity for interior depth. Layer order:
-              1. faint full-dome primaryLight wash
-              2. deboss inner shadow (dramatized)
-              3. deboss highlight (brighter ambient)
-              4. duotone bloom (events side, clipped)
-              5. quiet NOW glow (clipped, low intensity)
-              6. engraved rim
-            Atmospheric layers contained via clipPath — no overflow. */}
-        {/* Layer 1: faint full-dome green wash */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="rgba(86, 139, 104, 0.05)" />
-        {/* Layer 2: deboss inner shadow */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Layer 3: deboss highlight */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* Layers 4–5: atmospheric (clipped to dome) */}
-        <g clipPath="url(#rt-dial-dome-clip)">
-          <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-atm-duo)" />
-          <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-atm-glow)" />
-        </g>
-        {/* Layer 6: engraved rim — stronger dark stroke + brighter highlight */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.45)" strokeWidth="1.5" />
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
+        {/* ── VARIANT 2 FORWARD-LOOKING RIBBON ───────────────────────────
+            Green = what's coming. Grey = what's behind. Gradient runs from
+            vivid primary at NOW (most imminent) to softer primaryLight at
+            EOD (winding down). Outer Gaussian-blurred halo (E3) under the
+            green path gives the future a soft glow without the skeuomorphic
+            inset-reflection feel. */}
+        {(() => {
+          const [gx0, gy0] = ptAt(0, R);    // window start point (BOTTOM)
+          const [gx1, gy1] = ptAt(1, R);    // window end point (TOP)
+          const fullArc = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          if (!nowInWindow) {
+            // NOW outside window — paint the whole arc grey.
+            return <path d={fullArc} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />;
+          }
+          const headF = Math.min(1, Math.max(0, nowFrac));
+          const [hx, hy] = ptAt(headF, R);  // NOW point on rim
+          // Elapsed = windowStart → NOW (BOTTOM-up to the NOW position): grey
+          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${hx.toFixed(1)} ${hy.toFixed(1)}`;
+          // Upcoming = NOW → windowEnd (NOW position up to TOP): green gradient
+          const upcoming = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          return <>
+            {/* E3 OUTER HALO — blurred green ghost copy under the upcoming path */}
+            <path d={upcoming} fill="none" stroke="url(#rt-arc-fwd)" strokeWidth="32" strokeLinecap="round" opacity="0.45" filter="url(#rt-arc-fwd-glow)" />
+            {/* Elapsed: grey ribbon */}
+            <path d={elapsed} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />
+            {/* Upcoming: green-gradient ribbon */}
+            <path d={upcoming} fill="none" stroke="url(#rt-arc-fwd)" strokeWidth="18" strokeLinecap="round" />
+          </>;
+        })()}
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
             the arc at the positions the tickLabels array already computes (R−30).
             Muted so they read as a quiet scale under the events + tail. */}
@@ -3010,18 +2998,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — Variant 10A heritage: raised above the dramatized
-            depression. Two-layer (dark green body + white pip) with the
-            strongest drop-shadow of any variant. The only thing above
-            the surface. */}
-        {nowInWindow && <g filter="url(#rt-dial-now-raised)">
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="#33543E" />
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="4" fill="#FFFFFF" />
-        </g>}
-        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.26" strokeWidth="1.5">
-          <animate attributeName="r" values="18;24;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-          <animate attributeName="stroke-opacity" values="0.30;0.05;0.30" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-        </circle>}
+        {/* NOW marker — ribbon crown: white disc with green stroke ring and
+            green core, anchored at the junction of grey (elapsed) and green
+            (upcoming) portions. Variant 2 forward-looking. */}
+        {nowInWindow && <>
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="#FFFFFF" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeWidth="2.5" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="7" fill="#33543E" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="24" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
+          <animate attributeName="r" values="24;32;24" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.26;0.04;0.26" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        </circle>
+        </>}
       </svg>
 
       {/* Event RAIL — events live OUTSIDE the disc now, in a vertical list to
