@@ -2918,33 +2918,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* VARIANT 10C — LIT-FROM-WITHIN debossed dome:
-              - inner shadow (top-left): the depression
-              - highlight (bottom-right): catches ambient
-              - lit-glow: strong primary-green radial centered at NOW, rises with the day
+          {/* VARIANT 10A — DEEPER ENGRAVING dome gradients:
+              - inner shadow: stronger (0.28 max) for the dramatized depression
+              - highlight: brighter (0.95 max) for richer light catch
               - filter: raised marker drop-shadow */}
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.20)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.08)" />
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 270} cy={CY - 220} r={R * 1.15} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.28)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.10)" />
             <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
-            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.15)" />
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 80} cy={CY + 240} r={R * 0.95} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.95)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.22)" />
             <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
           </radialGradient>
-          {/* The lit-from-within glow — strong primary green radial centered at the
-              live NOW position. As NOW climbs through the day, the glow rises with it. */}
-          <radialGradient id="rt-dial-lit-glow" cx={nowX.toFixed(1)} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="320" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(51, 84, 62, 0.55)" />
-            <stop offset="0.22" stopColor="rgba(51, 84, 62, 0.28)" />
-            <stop offset="0.55" stopColor="rgba(51, 84, 62, 0.08)" />
-            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
-          </radialGradient>
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" />
-            <feOffset dx="1.5" dy="3" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.40" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
+            <feOffset dx="2" dy="4" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.45" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2952,26 +2943,57 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 10C: LIT-FROM-WITHIN DEBOSSED DOME ─────────────────
-            The dome is carved INTO the page (inner shadow + highlight) AND
-            simultaneously lit from behind by a green light source at NOW.
-            The brand color seeps through the depression like firelight inside
-            an alabaster lamp. Carving gives gravitas; glow gives heartbeat. */}
-        {/* Carved depression: inner shadow */}
+        {/* ── VARIANT 10A: DEEPER ENGRAVING + ENGRAVED TIME ─────────────
+            Dramatized deboss with stronger inner shadow + brighter highlight.
+            The current time is rendered as if pressed into the dome surface,
+            using a paint-order trick (white stroke under dark fill) to read
+            as carved typography. Heritage product feel. */}
+        {/* Carved depression — stronger inner shadow */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Curved interior catching ambient */}
+        {/* Brighter highlight catching ambient on the curved interior */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* The internal green light — strongest at NOW, falls off radially */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-lit-glow)" />
-        {/* Concentric green halos AROUND NOW — the light source rendered explicitly */}
-        {nowInWindow && <>
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="56" fill="rgba(51, 84, 62, 0.08)" />
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="36" fill="rgba(51, 84, 62, 0.14)" />
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="22" fill="rgba(51, 84, 62, 0.22)" />
-        </>}
-        {/* Engraved rim — dark stroke + light highlight just inside */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.32)" strokeWidth="1" />
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.65)" strokeWidth="0.5" />
+        {/* Engraved rim — stronger dark stroke + brighter highlight */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.45)" strokeWidth="1.5" />
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
+        {/* Engraved time — rendered on the dome surface itself. The white "stroke"
+            underneath simulates the carved relief edge; the darker fill is the
+            depth of the cut. Positioned in the dome's negative space (centered
+            roughly between left rim and right edge). */}
+        <text x={(CX - R * 0.45).toFixed(1)} y={CY.toFixed(1)} textAnchor="middle"
+          style={{
+            fontFamily: "'Fraunces', Georgia, serif",
+            fontSize: 84,
+            fontStyle: "italic",
+            fontWeight: 400,
+            fill: "rgba(28,50,36,0.50)",
+            paintOrder: "stroke",
+            stroke: "rgba(255,255,255,0.8)",
+            strokeWidth: 0.5,
+            pointerEvents: "none",
+          }}>
+          {(() => {
+            // Render current scrubbed-or-real time as h:mm
+            const showTime = new Date(nowMs);
+            const h = showTime.getHours();
+            const m = showTime.getMinutes();
+            const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+            return `${h12}:${m.toString().padStart(2, "0")}`;
+          })()}
+        </text>
+        <text x={(CX - R * 0.45).toFixed(1)} y={(CY + 30).toFixed(1)} textAnchor="middle"
+          style={{
+            fontFamily: "'Manrope', sans-serif",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.2em",
+            fill: "rgba(28,50,36,0.40)",
+            pointerEvents: "none",
+          }}>
+          {(() => {
+            const h = new Date(nowMs).getHours();
+            return `${h >= 12 ? "PM" : "AM"} · NOW`;
+          })()}
+        </text>
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
             the arc at the positions the tickLabels array already computes (R−30).
             Muted so they read as a quiet scale under the events + tail. */}
@@ -2996,18 +3018,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — RAISED above the carved dome AND the source of the
-            internal light. Three-layer: dark green base + white pip + bright
-            green inner core (the actual "flame"). Drop-shadow filter for the
-            raised feel. Variant 10C: lit-from-within. */}
+        {/* NOW marker — RAISED above the dramatized depression. Two-layer:
+            green base + white pip. Strongest drop-shadow of any variant.
+            The only thing above the surface. Variant 10A: heritage product. */}
         {nowInWindow && <g filter="url(#rt-dial-now-raised)">
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="10" fill="#33543E" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="11" fill="#33543E" />
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="4" fill="#FFFFFF" />
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="2" fill="#558B68" />
         </g>}
-        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.30" strokeWidth="1.5">
-          <animate attributeName="r" values="18;26;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-          <animate attributeName="stroke-opacity" values="0.34;0.06;0.34" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.26" strokeWidth="1.5">
+          <animate attributeName="r" values="18;24;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="stroke-opacity" values="0.30;0.05;0.30" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
         </circle>}
       </svg>
 
