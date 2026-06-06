@@ -2918,9 +2918,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* VARIANT 10A — DEEPER ENGRAVING dome gradients:
+          {/* VARIANT 10A + LAYERED ATMOSPHERE (iv) gradients:
               - inner shadow: stronger (0.28 max) for the dramatized depression
               - highlight: brighter (0.95 max) for richer light catch
+              - duo: soft green bloom centered on events side (left-center)
+              - glow: quiet primary green radial at NOW
+              - clipPath: contains atmospheric layers within the dome
               - filter: raised marker drop-shadow */}
           <radialGradient id="rt-dial-deboss-inner" cx={CX - 270} cy={CY - 220} r={R * 1.15} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="rgba(20, 30, 22, 0.28)" />
@@ -2932,6 +2935,22 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.22)" />
             <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
           </radialGradient>
+          {/* Atmospheric duotone bloom — soft primaryLight on events side */}
+          <radialGradient id="rt-dial-atm-duo" cx={CX - 200} cy={CY} r="320" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(86, 139, 104, 0.16)" />
+            <stop offset="0.5" stopColor="rgba(86, 139, 104, 0.06)" />
+            <stop offset="1" stopColor="rgba(86, 139, 104, 0)" />
+          </radialGradient>
+          {/* Quiet NOW glow — low intensity primary green radial, rides nowY */}
+          <radialGradient id="rt-dial-atm-glow" cx={(CX - 280).toFixed(1)} cy={(nowInWindow ? nowY : CY).toFixed(1)} r="240" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(51, 84, 62, 0.14)" />
+            <stop offset="0.5" stopColor="rgba(51, 84, 62, 0.05)" />
+            <stop offset="1" stopColor="rgba(51, 84, 62, 0)" />
+          </radialGradient>
+          {/* clipPath matching the half-disc — keeps atmospheric layers contained */}
+          <clipPath id="rt-dial-dome-clip">
+            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} />
+          </clipPath>
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
             <feOffset dx="2" dy="4" result="offsetblur" />
@@ -2943,15 +2962,28 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 10A: DEEPER ENGRAVING ─────────────────────────────
-            Dramatized deboss with stronger inner shadow + brighter highlight.
-            Heritage product feel — the dome reads as carved into stone.
-            No engraved typography (was too dominant for just the time). */}
-        {/* Carved depression — stronger inner shadow */}
+        {/* ── VARIANT 10A + LAYERED ATMOSPHERE (iv) ─────────────────────
+            Heritage carved dome + three atmospheric layers stacked at low
+            intensity for interior depth. Layer order:
+              1. faint full-dome primaryLight wash
+              2. deboss inner shadow (dramatized)
+              3. deboss highlight (brighter ambient)
+              4. duotone bloom (events side, clipped)
+              5. quiet NOW glow (clipped, low intensity)
+              6. engraved rim
+            Atmospheric layers contained via clipPath — no overflow. */}
+        {/* Layer 1: faint full-dome green wash */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="rgba(86, 139, 104, 0.05)" />
+        {/* Layer 2: deboss inner shadow */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Brighter highlight catching ambient on the curved interior */}
+        {/* Layer 3: deboss highlight */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* Engraved rim — stronger dark stroke + brighter highlight */}
+        {/* Layers 4–5: atmospheric (clipped to dome) */}
+        <g clipPath="url(#rt-dial-dome-clip)">
+          <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-atm-duo)" />
+          <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-atm-glow)" />
+        </g>
+        {/* Layer 6: engraved rim — stronger dark stroke + brighter highlight */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.45)" strokeWidth="1.5" />
         <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
