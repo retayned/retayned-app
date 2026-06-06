@@ -2948,19 +2948,76 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── VARIANT 10: DEBOSSED DOME ──────────────────────────────
-            The dome is pressed INTO the page. Inner shadow from upper-left
-            creates the depression illusion; highlight from lower-right
-            simulates the curved interior catching light. A faint green tint
-            still rides the NOW position. The rim is rendered as two thin
-            lines: one dark engraved edge + one light highlight just inside.
-            Hour ticks read as carved indentations. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-tint)" />
-        {/* Engraved rim line — dark stroke + light highlight just inside */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.32)" strokeWidth="1" />
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="0.5" />
+        {/* ── VARIANT 2B: CHRONOGRAPH RIBBON ──────────────────────────────
+            Thick monochrome ribbon (elapsed green / future grey) layered
+            with watch-face details: hour ticks INSIDE the ribbon, minute
+            marks on a faint inner ring, event dots embedded in the band.
+            Reads as a precision timepiece. */}
+        {(() => {
+          const [gx0, gy0] = ptAt(0, R);
+          const [gx1, gy1] = ptAt(1, R);
+          const fullArc = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          if (!nowInWindow) {
+            return <path d={fullArc} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />;
+          }
+          const headF = Math.min(1, Math.max(0, nowFrac));
+          const [hx, hy] = ptAt(headF, R);
+          const elapsed = `M ${gx0.toFixed(1)} ${gy0.toFixed(1)} A ${R} ${R} 0 0 1 ${hx.toFixed(1)} ${hy.toFixed(1)}`;
+          const future = `M ${hx.toFixed(1)} ${hy.toFixed(1)} A ${R} ${R} 0 0 1 ${gx1.toFixed(1)} ${gy1.toFixed(1)}`;
+          return <>
+            <path d={future} fill="none" stroke="#DCE0DC" strokeWidth="18" strokeLinecap="butt" />
+            <path d={elapsed} fill="none" stroke="#33543E" strokeWidth="18" strokeLinecap="round" />
+          </>;
+        })()}
+        {/* Hour ticks WITHIN the ribbon — small white marks at each labeled hour.
+            Sit on top of the green/grey ribbon as chronograph index marks. */}
+        {tickLabels.map((tl, i) => {
+          // Each tick position — derive the rim point from the tick's f position
+          // (we already have tl.x, tl.y which are at R-30; recompute at R to get rim,
+          // then a short outward-pointing segment 6px long inside the 18px ribbon).
+          // The tick marks already-computed angle: we use atan2 from (CX,CY).
+          const dx = tl.x - CX, dy = tl.y - CY;
+          const len = Math.hypot(dx, dy) || 1;
+          const ux = dx / len, uy = dy / len;
+          // Inner end of the in-band tick: at R - 8 (inside the 18px band)
+          // Outer end of the in-band tick: at R - 2 (just inside outer rim)
+          const ix = CX + ux * (R - 8), iy = CY + uy * (R - 8);
+          const ox = CX + ux * (R - 2), oy = CY + uy * (R - 2);
+          return (
+            <line key={`band-tick-${i}`}
+              x1={ix.toFixed(1)} y1={iy.toFixed(1)}
+              x2={ox.toFixed(1)} y2={oy.toFixed(1)}
+              stroke="rgba(255,255,255,0.65)" strokeWidth="1.5" strokeLinecap="round" />
+          );
+        })}
+        {/* Minute ring — faint inner arc with small marks every 30 minutes.
+            Reads as the seconds/minutes scale on a chronograph subdial. */}
+        {(() => {
+          const minR = R - 38;
+          const marks = [];
+          // Every 30 minutes within the window. windowStart/End give the bounds.
+          const halfHour = 30 * 60 * 1000;
+          const startM = new Date(windowStart);
+          startM.setMinutes(0, 0, 0);
+          for (let t = startM.getTime(); t <= windowEnd; t += halfHour) {
+            const f = fracOf(t);
+            if (f < 0 || f > 1) continue;
+            const a = angleOf(f);
+            // Inner and outer endpoints of a tiny radial tick
+            const [x1, y1] = [CX + (minR - 3) * Math.cos(a), CY + (minR - 3) * Math.sin(a)];
+            const [x2, y2] = [CX + minR * Math.cos(a), CY + minR * Math.sin(a)];
+            marks.push({ x1, y1, x2, y2 });
+          }
+          return (
+            <g stroke="rgba(28,50,36,0.20)" strokeWidth="0.75" strokeLinecap="round">
+              {marks.map((m, i) => (
+                <line key={`min-${i}`}
+                  x1={m.x1.toFixed(1)} y1={m.y1.toFixed(1)}
+                  x2={m.x2.toFixed(1)} y2={m.y2.toFixed(1)} />
+              ))}
+            </g>
+          );
+        })()}
         {/* Time labels (A · inside rim) — the dial's hour marks, drawn just inside
             the arc at the positions the tickLabels array already computes (R−30).
             Muted so they read as a quiet scale under the events + tail. */}
@@ -2977,24 +3034,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
             stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
         ))}
-        {/* Event rim dots */}
+        {/* Event rim dots — small white pips embedded in the chronograph ribbon
+            (like jeweled hour indices on a watch). Past = grey, next-up = green
+            with white center, others = white on the green band. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.3" strokeWidth="1.4" />}
-            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="11" fill="none" stroke="#33543E" strokeOpacity="0.35" strokeWidth="1.5" />}
+            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="5" fill={p.isPast ? "#9A9A93" : (p.isNext ? "#33543E" : "#FFFFFF")} />
+            {!p.isPast && !p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="2" fill="#33543E" />}
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="2" fill="#FFFFFF" />}
           </g>
         ))}
-        {/* NOW marker — RAISED above the debossed surface with a drop-shadow.
-            The only thing sitting ABOVE the page; everything else is carved IN.
-            Variant 10: debossed dome. */}
-        {nowInWindow && <g filter="url(#rt-dial-now-raised)">
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3.2" fill="#FFFFFF" />
-        </g>}
-        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
-          <animate attributeName="r" values="16;22;16" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+        {/* NOW marker — chronograph-style: white disc with green stroke ring
+            and green core, anchored at the live moment on the ribbon.
+            Variant 2B: chronograph ribbon. */}
+        {nowInWindow && <>
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="#FFFFFF" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="16" fill="none" stroke="#33543E" strokeWidth="2.5" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="7" fill="#33543E" />
+        <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="24" fill="none" stroke="#33543E" strokeOpacity="0.22" strokeWidth="1.5">
+          <animate attributeName="r" values="24;32;24" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
           <animate attributeName="stroke-opacity" values="0.26;0.04;0.26" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
-        </circle>}
+        </circle>
+        </>}
       </svg>
 
       {/* Event RAIL — events live OUTSIDE the disc now, in a vertical list to
