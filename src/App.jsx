@@ -8026,18 +8026,25 @@ export default function App({ user }) {
   };
 
   // Watches for a pending auto-send queued by the task-discussion click
-  // handler. Fires AFTER aiMessages + observationContext have been updated
-  // by React, so sendAi sees the fresh closure with the new context. The
+  // handler. Fires AFTER aiMessages + focusedTaskId have been updated by
+  // React, so sendAi sees the fresh closure with the new task focus. The
   // ref is consumed on first fire (cleared to null) to prevent re-trigger
   // when aiMessages updates again during the streaming reply.
+  //
+  // [Jun 6 2026 fix] Previously gated on observationContext, but the
+  // Jun 6 architectural fix stopped setting observationContext in favor
+  // of server-side context fetch via focusedTaskId. The gate was never
+  // updated to match, so the auto-send never fired — the user landed on
+  // a silent Coach page. Now we wait on focusedTaskId (or observationContext
+  // for legacy call sites that still set it like Health and Referrals).
   useEffect(() => {
     if (!pendingAutoSendRef.current) return;
-    if (!observationContext) return; // context must have flushed
+    if (!focusedTaskId && !observationContext) return; // need one or the other
     const text = pendingAutoSendRef.current;
     pendingAutoSendRef.current = null;
     sendAi(text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [observationContext, aiMessages]);
+  }, [focusedTaskId, observationContext, aiMessages]);
 
   // ─── Rai conversation handlers (sidebar) ──────────────────────────────
   // Start a fresh chat — clears messages + convo id so the next send creates
