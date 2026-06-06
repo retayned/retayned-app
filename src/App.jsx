@@ -5899,6 +5899,17 @@ export default function App({ user }) {
   const [showAddClient, setShowAddClient] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [clientsSort, setClientsSort] = useState("retention");
+  // Phase 9 — Rai task dismissal feedback modal.
+  // When a Rai-suggested task is dismissed, we open this modal to capture
+  // a short reason. The reason replaces the default "user_deleted" string
+  // on rai_suggestions.dismiss_reason. The hourly lesson extractor then
+  // turns substantive reasons into lessons that propagate to all three
+  // Rai surfaces (chat, sweep, observer).
+  //
+  // State shape: { task, source: 'swipe' | 'button' } or null
+  const [dismissModalTask, setDismissModalTask] = useState(null);
+  const [dismissReasonChip, setDismissReasonChip] = useState(null);
+  const [dismissReasonText, setDismissReasonText] = useState("");
   // Clients page filter chips — see toolbar render. Both default to "all".
   // Drift: one of "all" | "Improving" | "Stable" | "Something shifted" | "Declining" | "At risk"
   // Score: one of "all" | "thriving" | "healthy" | "watch" | "atrisk"
@@ -7414,15 +7425,81 @@ export default function App({ user }) {
 
   // ═══ SUPABASE-BACKED MUTATIONS ═══
   // When a Rai-added task is deleted, close the learning loop: mark the
-  // originating rai_suggestions row dismissed with reason 'user_deleted' so the
-  // next sweep (which reads recent_suggestions) won't re-add the same thing.
+  // originating rai_suggestions row dismissed so the next sweep (which
+  // reads recent_suggestions) won't re-add the same thing.
+  //
+  // Phase 9 update: the second argument is the dismiss_reason string.
+  // Substantive reasons ("already done", "wrong client", free text)
+  // become lessons via the hourly extractor. "user_deleted" (the
+  // default for bare swipe/click dismissals) is treated as no-signal
+  // and never extracts a lesson — only powers the 14-day anti-repeat.
   // Safe no-op for non-Rai tasks or tasks with no suggestion link.
-  const dismissRaiTaskFeedback = (t) => {
+  const dismissRaiTaskFeedback = (t, reason = "user_deleted") => {
     if (!t || !t.ai || !t.rai_suggestion_id) return;
     supabase.from("rai_suggestions")
-      .update({ status: "dismissed", dismiss_reason: "user_deleted", acted_at: new Date().toISOString() })
+      .update({ status: "dismissed", dismiss_reason: reason, acted_at: new Date().toISOString() })
       .eq("id", t.rai_suggestion_id)
       .then(({ error }) => { if (error) console.error("Rai task delete-feedback failed:", error); });
+  };
+
+  // Phase 9 — gating function called by swipe/button dismiss handlers.
+  // If the task is Rai-suggested, opens the feedback modal (which will
+  // run the actual delete on confirm). If not, just dismisses silently
+  // by running the provided performDelete callback immediately.
+  //
+  // The performDelete callback contains the actual task removal — local
+  // state update + tasksDb.delete. We need it as a callback because the
+  // modal needs to defer the deletion until the user confirms.
+  const openDismissFlow = (t, performDelete) => {
+    if (!t) return;
+    // Non-Rai task → no feedback to capture. Delete immediately.
+    if (!t.ai || !t.rai_suggestion_id) {
+      performDelete();
+      return;
+    }
+    // Rai task → open modal. Store the performDelete callback so the
+    // modal can call it on confirm.
+    setDismissModalTask({ task: t, performDelete });
+    setDismissReasonChip(null);
+    setDismissReasonText("");
+  };
+
+  // Phase 9 — confirm handler for the dismiss modal. Builds the final
+  // reason string from chip + free-text, writes feedback, runs delete,
+  // closes the modal.
+  const confirmDismissWithReason = () => {
+    if (!dismissModalTask) return;
+    const { task, performDelete } = dismissModalTask;
+
+    // Build the reason string. Chip alone = preset semantic tag.
+    // Free text alone = full user explanation (richest signal).
+    // Both = chip-tag prefix + free text. Neither = "user_deleted".
+    const text = (dismissReasonText || "").trim();
+    let reason = "user_deleted";
+    if (dismissReasonChip && text) {
+      reason = `${dismissReasonChip}: ${text}`;
+    } else if (text) {
+      reason = text;
+    } else if (dismissReasonChip) {
+      reason = dismissReasonChip;
+    }
+
+    dismissRaiTaskFeedback(task, reason);
+    performDelete();
+    setDismissModalTask(null);
+    setDismissReasonChip(null);
+    setDismissReasonText("");
+  };
+
+  // Phase 9 — skip giving a reason and just delete (the original behavior).
+  const skipDismissReason = () => {
+    if (!dismissModalTask) return;
+    const { task, performDelete } = dismissModalTask;
+    dismissRaiTaskFeedback(task, "user_deleted");
+    performDelete();
+    setDismissModalTask(null);
+    setDismissReasonChip(null);
+    setDismissReasonText("");
   };
   // When a task is deleted, also delete its completion/occurrence history so it
   // leaves ZERO footprint for Rai. The sweep reads task_completions and
@@ -13127,14 +13204,26 @@ export default function App({ user }) {
                           if (off <= -SWIPE_THRESHOLD) {
                             // Left swipe past threshold → DELETE the task. Slide off-screen left, then remove.
                             setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
-                            setTimeout(() => {
-                              dismissRaiTaskFeedback(t);
+                            // Phase 9: if Rai task, open feedback modal; the
+                            // actual delete is deferred to the modal's confirm.
+                            // For non-Rai tasks, openDismissFlow runs the
+                            // delete immediately (no modal).
+                            const performDelete = () => {
                               purgeTaskHistory(t.id);
                               setTasks(prev => prev.filter(t2 => t2.id !== t.id));
                               tasksDb.delete(t.id);
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-                            }, 180);
+                            };
+                            // Wait for the slide-off animation before deleting
+                            // when no modal will appear. If a modal opens, the
+                            // delete waits on user confirm — and the swipe
+                            // visual stays at -SWIPE_MAX until they decide.
+                            if (t.ai && t.rai_suggestion_id) {
+                              openDismissFlow(t, performDelete);
+                            } else {
+                              setTimeout(performDelete, 180);
+                            }
                           } else if (off >= SWIPE_THRESHOLD && !t.recurring) {
                             // Right swipe past threshold → PUSH to next bucket. Recurring tasks
                             // skip this branch — they don't move between buckets.
@@ -13658,7 +13747,17 @@ export default function App({ user }) {
                               );
                             })() : null}
 
-                            <button onClick={(e) => { e.stopPropagation(); dismissRaiTaskFeedback(t); purgeTaskHistory(t.id); setTasks(tasks.filter(t2 => t2.id !== t.id)); tasksDb.delete(t.id); }}
+                            <button onClick={(e) => {
+                                e.stopPropagation();
+                                // Phase 9: for Rai tasks, opens the feedback
+                                // modal which runs the delete on confirm.
+                                // For non-Rai tasks, deletes immediately.
+                                openDismissFlow(t, () => {
+                                  purgeTaskHistory(t.id);
+                                  setTasks(tasks.filter(t2 => t2.id !== t.id));
+                                  tasksDb.delete(t.id);
+                                });
+                              }}
                               className="rt-dismiss"
                               style={{ width: 28, height: 28, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", color: C.textMuted, opacity: 0, background: "none", border: "none", cursor: "pointer", flexShrink: 0, transition: "opacity 120ms ease" }}
                               aria-label="dismiss">
@@ -21344,6 +21443,107 @@ export default function App({ user }) {
         })(),
         document.body
       )}
+
+      {/* Phase 9 — Rai task dismiss feedback modal.
+          Opens when a Rai-suggested task is dismissed. Captures a short
+          reason (optional) so the lesson extractor can learn from the
+          dismissal. Skipping gives the default "user_deleted" which
+          only powers the 14-day anti-repeat, not a lesson. */}
+      {dismissModalTask && createPortal(
+        (() => {
+          const task = dismissModalTask.task;
+          const PRESET_CHIPS = [
+            { id: "wrong_client", label: "Wrong client" },
+            { id: "already_done", label: "Already handled" },
+            { id: "not_relevant", label: "Not relevant" },
+            { id: "wrong_timing", label: "Wrong time" },
+          ];
+          return (
+            <div onClick={() => skipDismissReason()} style={{ position: "fixed", inset: 0, zIndex: 6500, background: "rgba(20,30,22,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "10vh 20px", fontFamily: "'Manrope', system-ui, sans-serif" }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 18, padding: 24, width: "100%", maxWidth: 460, boxShadow: "0 1px 3px rgba(20,30,22,0.1), 0 30px 70px rgba(20,30,22,0.3)" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Why dismiss?</h2>
+                    <div style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.45 }}>
+                      Optional — but helps Rai stop suggesting things like this.
+                    </div>
+                  </div>
+                  <button onClick={skipDismissReason} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: C.surfaceWarm, color: C.textSec, fontSize: 15, cursor: "pointer", flexShrink: 0 }} aria-label="skip">✕</button>
+                </div>
+
+                <div style={{ marginTop: 14, fontSize: 13, color: C.text, padding: "10px 12px", background: C.surfaceWarm, borderRadius: 10, fontStyle: "italic", lineHeight: 1.45 }}>
+                  "{task.text}"
+                </div>
+
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 16 }}>
+                  {PRESET_CHIPS.map(c => {
+                    const selected = dismissReasonChip === c.id;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => setDismissReasonChip(selected ? null : c.id)}
+                        style={{
+                          padding: "7px 12px",
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          borderRadius: 999,
+                          border: "1px solid " + (selected ? C.primary : C.borderLight),
+                          background: selected ? C.primarySoft : "#fff",
+                          color: selected ? C.primary : C.textSec,
+                          cursor: "pointer",
+                          fontFamily: "inherit",
+                          transition: "all 120ms ease",
+                        }}
+                      >
+                        {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <textarea
+                  value={dismissReasonText}
+                  onChange={e => setDismissReasonText(e.target.value)}
+                  placeholder="Add detail (optional). The more specific, the better Rai gets."
+                  rows={3}
+                  style={{
+                    width: "100%",
+                    marginTop: 12,
+                    padding: "10px 12px",
+                    border: "none",
+                    boxShadow: "inset 0 1px 2px rgba(20,30,22,0.08)",
+                    borderRadius: 10,
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    outline: "none",
+                    background: C.surfaceWarm,
+                    resize: "vertical",
+                    boxSizing: "border-box",
+                    color: C.text,
+                  }}
+                />
+
+                <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                  <button
+                    onClick={skipDismissReason}
+                    style={{ padding: "10px 14px", background: C.surfaceWarm, color: C.textSec, border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    Skip
+                  </button>
+                  <button
+                    onClick={confirmDismissWithReason}
+                    style={{ padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(124,92,243,0.15), 0 2px 6px rgba(124,92,243,0.22)" }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
       {selectedRolodex && (() => {
         const sr = selectedRolodex;
         const answers = retroAnswers[sr.id] || {};
