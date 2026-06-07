@@ -2944,29 +2944,35 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ATMOSPHERIC FINAL · NOW-anchored + frosted + hairline ────
-              Restored Jun 7 2026 reference spec. Flat tinted atmospheric
-              region on the page surface — same visual family as the
-              sidebar (which is also a flat tinted region with character).
+          {/* ── ATMOSPHERIC · Frosted glass + static upper-left wash ──────
+              Frosted glass with a STATIC bright spot positioned at the
+              upper-left of the dial. The bright spot represents where
+              ambient light most concentrates as it passes through the
+              glass — light source from above-left (the same direction
+              implied by every other shadow on the page, including the
+              task tiles).
 
-              The frosted texture is NOT making a "this is glass" claim.
-              It's surface character on a textured atmospheric region —
-              like fog, mist, or vapor that has micro-particulate
-              variation. Light concentrating at NOW represents attention
-              concentrating there, not literal photons through glass.
-              Physics coherent under that reading.
+              Physics: coherent. Frosted glass has a fixed brightness
+              distribution determined by where the light source is.
+              Light from above-left → bright spot lives at the
+              upper-left of the glass. Doesn't move because the light
+              source doesn't move.
 
               Components:
-              1. NOW-anchored radial mint wash, stops 0.20 / 0.08 / 0.02
-              2. Frosted texture overlay (feTurbulence noise at
-                 baseFrequency 0.35, colorMatrix alpha 0.035,
-                 overlay opacity 0.35)
-              3. Single soft hairline edge at rgba(28,50,36,0.16) 0.6px
-              4. Raised NOW dot (drop-shadow dx 0.6 / dy 1.4 /
-                 alpha 0.28 / blur 1.5) + pulsing ring */}
-          {/* NOW-anchored radial wash — center follows nowX/nowY */}
+              1. Frosted glass wash — radial gradient, center fixed at
+                 upper-left of the dial, stops 0.20 / 0.08 / 0.02
+              2. Frosted texture overlay (feTurbulence noise)
+              3. Single soft hairline edge
+              4. NOW dot (raised, with pulsing ring) sits on top of
+                 the glass at its time position, but the GLASS's
+                 brightness no longer follows the NOW dot. */}
+          {/* Static upper-left wash. Center positioned at the upper
+              portion of the flat edge (left side of the half-disc),
+              about 50% up from the geometric center. The half-disc's
+              flat edge is at x=CX, so center at (CX, CY - R*0.5) puts
+              the brightest point at upper-left of the visible dial. */}
           <radialGradient id="rt-dial-wash"
-                          cx={nowX} cy={nowY} r={R * 1.15}
+                          cx={CX} cy={CY - R * 0.5} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
