@@ -2975,12 +2975,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
           </radialGradient>
           {/* Outer shadow halo — wide soft Gaussian blur applied to a
-              shape slightly larger than the disc. Acts as a symmetric
-              ambient shadow around the dial. No offset = no implied
+              shape sized just outside the disc. No offset = no implied
               light direction = no Z-depth claim. Matches the visual
-              language of the task tiles. */}
-          <filter id="rt-dial-halo" x="-15%" y="-15%" width="130%" height="130%">
-            <feGaussianBlur stdDeviation="6" />
+              language of the task tiles.
+
+              Tuning: alpha 0.05 (was 0.12) keeps the halo barely
+              perceptible — a hint of darker air, not a wash. Blur
+              stdDeviation 4 (was 6) tightens the falloff so the
+              shadow doesn't bleed into the dial interior. Source
+              shape at R+22 (was R+10) sits well outside the dial
+              edge so the blurred falloff stays OUTSIDE the dial. */}
+          <filter id="rt-dial-halo" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" />
           </filter>
           {/* NOW dot drop-shadow — small lift so the dot sits ON the
               tinted region (not floating IN front of it). */}
@@ -2996,13 +3002,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           </filter>
         </defs>
         {/* ── ATMOSPHERIC DIAL · Outer shadow halo render ──────────────── */}
-        {/* Layer 1: outer shadow halo. A slightly larger disc shape
-            filled with low-opacity primary-deep tint, then blurred
-            with a wide Gaussian. Drawn FIRST behind the wash so the
-            halo extends past the wash's perimeter and is visible as
-            a soft surrounding shadow. */}
-        <path d={`M ${CX} ${CY - (R + 10)} A ${R + 10} ${R + 10} 0 0 0 ${CX} ${CY + (R + 10)} Z`}
-              fill="rgba(28, 50, 36, 0.12)"
+        {/* Layer 1: outer shadow halo. Source shape at R+22 (well outside
+            the dial edge) filled with low-opacity primary-deep tint, then
+            blurred with tighter Gaussian. The blurred falloff feathers
+            BACK toward the dial without covering its interior. */}
+        <path d={`M ${CX} ${CY - (R + 22)} A ${R + 22} ${R + 22} 0 0 0 ${CX} ${CY + (R + 22)} Z`}
+              fill="rgba(28, 50, 36, 0.05)"
               filter="url(#rt-dial-halo)" />
         {/* Layer 2: NOW-anchored radial mint wash — the contained area. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
