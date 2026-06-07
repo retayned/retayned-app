@@ -2791,73 +2791,83 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           Tap returns the dial to NOW. Three lines: where the scrub
           started (SCRUBBED · <real-time>), what time is being shown, and
           the return action. */}
-      {isScrubbed && (
-        <button
-          onClick={() => { setScrubMs(0); }}
-          aria-label="Return to now"
-          style={{
-            position: "absolute",
-            // Position: upper-inner dial area, well clear of both the
-            // arc curve AND the left-side rail of event labels. Previous
-            // position (right: 290 / top: 60) landed ON the noon-area
-            // rail events at smaller dial scales — labels and indicator
-            // visually collided. Pushing further right + slightly down
-            // keeps the indicator inside the arc curve but above all
-            // event rows. Scale-compensated so on-screen offset stays
-            // consistent across dial-scale breakpoints.
-            right: "calc(180px / var(--dial-scale, 1))",
-            top: "calc(40px / var(--dial-scale, 1))",
-            zIndex: 8,
-            background: "transparent",
-            border: "none",
-            padding: "10px 14px",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontFamily: "inherit",
-            textAlign: "right",
-            transition: "background 120ms var(--rt-ease-out)",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = "rgba(20,30,22,0.03)"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-        >
-          {/* Corner brackets — top-left and bottom-right L-marks at 22%
-              opacity. Defines the indicator's region without enclosing
-              it in a card. Reads as "snippet of content" not as a UI
-              element. Quietest possible "this is a thing" treatment. */}
-          <span style={{ position: "absolute", left: 0, top: 0, width: 8, height: 8, borderLeft: "1px solid rgba(20,30,22,0.22)", borderTop: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
-          <span style={{ position: "absolute", right: 0, bottom: 0, width: 8, height: 8, borderRight: "1px solid rgba(20,30,22,0.22)", borderBottom: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
-          <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted }}>
-            Scrubbed{(() => {
-              // Show the actual real-time clock value at the moment they
-              // started scrubbing. We have nowMs (live) and scrubMs (offset);
-              // the dial currently displays nowMs + scrubMs. Showing live
-              // time here gives the user a fix point.
-              const liveNow = new Date(nowMs);
-              const h = liveNow.getHours();
-              const m = liveNow.getMinutes();
-              const ampm = h >= 12 ? "pm" : "am";
-              const h12 = ((h + 11) % 12) + 1;
-              const mm = String(m).padStart(2, "0");
-              return ` · ${h12}:${mm}${ampm}`;
-            })()}
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.1, marginTop: 2, letterSpacing: "-0.01em" }}>
-            {(() => {
-              // The time the dial is currently centered on.
-              const scrubbedT = new Date(nowMs + scrubMs);
-              const h = scrubbedT.getHours();
-              const m = scrubbedT.getMinutes();
-              const ampm = h >= 12 ? "pm" : "am";
-              const h12 = ((h + 11) % 12) + 1;
-              const mm = String(m).padStart(2, "0");
-              return `${h12}:${mm}${ampm}`;
-            })()}
-          </div>
+      {/* Time indicator — ALWAYS visible. Two states:
+          1. NOT scrubbed (live): shows current time only, no return action
+          2. Scrubbed: shows scrubbed time + SCRUBBED · live-time eyebrow +
+             Return to now action
+          Tapping it when scrubbed returns the dial to NOW. */}
+      <button
+        onClick={() => { if (isScrubbed) setScrubMs(0); }}
+        aria-label={isScrubbed ? "Return to now" : "Current time"}
+        disabled={!isScrubbed}
+        style={{
+          position: "absolute",
+          // Position: upper-inner dial area, well clear of both the
+          // arc curve AND the left-side rail of event labels. Previous
+          // position (right: 290 / top: 60) landed ON the noon-area
+          // rail events at smaller dial scales — labels and indicator
+          // visually collided. Pushing further right + slightly down
+          // keeps the indicator inside the arc curve but above all
+          // event rows. Scale-compensated so on-screen offset stays
+          // consistent across dial-scale breakpoints.
+          right: "calc(180px / var(--dial-scale, 1))",
+          top: "calc(40px / var(--dial-scale, 1))",
+          zIndex: 8,
+          background: "transparent",
+          border: "none",
+          padding: "10px 14px",
+          borderRadius: 8,
+          cursor: isScrubbed ? "pointer" : "default",
+          fontFamily: "inherit",
+          textAlign: "right",
+          transition: "background 120ms var(--rt-ease-out)",
+        }}
+        onMouseEnter={e => { if (isScrubbed) e.currentTarget.style.background = "rgba(20,30,22,0.03)"; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      >
+        {/* Corner brackets — top-left and bottom-right L-marks at 22%
+            opacity. Defines the indicator's region without enclosing
+            it in a card. Reads as "snippet of content" not as a UI
+            element. Quietest possible "this is a thing" treatment. */}
+        <span style={{ position: "absolute", left: 0, top: 0, width: 8, height: 8, borderLeft: "1px solid rgba(20,30,22,0.22)", borderTop: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
+        <span style={{ position: "absolute", right: 0, bottom: 0, width: 8, height: 8, borderRight: "1px solid rgba(20,30,22,0.22)", borderBottom: "1px solid rgba(20,30,22,0.22)", pointerEvents: "none" }} aria-hidden="true" />
+        {/* Eyebrow — "NOW" when live, "SCRUBBED · live-time" when scrubbed */}
+        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.textMuted }}>
+          {isScrubbed ? (() => {
+            // Show the actual real-time clock value at the moment they
+            // started scrubbing. Gives the user a fix point.
+            const liveNow = new Date(nowMs);
+            const h = liveNow.getHours();
+            const m = liveNow.getMinutes();
+            const ampm = h >= 12 ? "pm" : "am";
+            const h12 = ((h + 11) % 12) + 1;
+            const mm = String(m).padStart(2, "0");
+            return `Scrubbed · ${h12}:${mm}${ampm}`;
+          })() : "Now"}
+        </div>
+        {/* Main time display — scrubbed time when scrubbed, live time when not */}
+        <div style={{ fontSize: 22, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.1, marginTop: 2, letterSpacing: "-0.01em" }}>
+          {(() => {
+            // When scrubbed: the time the dial is currently centered on.
+            // When live: the actual current time.
+            const t = new Date(nowMs + (isScrubbed ? scrubMs : 0));
+            const h = t.getHours();
+            const m = t.getMinutes();
+            const ampm = h >= 12 ? "pm" : "am";
+            const h12 = ((h + 11) % 12) + 1;
+            const mm = String(m).padStart(2, "0");
+            return `${h12}:${mm}${ampm}`;
+          })()}
+        </div>
+        {/* Return action — only rendered when scrubbed. When live,
+            this slot stays blank so the card doesn't show an action
+            the user can't take. */}
+        {isScrubbed && (
           <div style={{ fontSize: 10.5, color: "#33543E", fontWeight: 700, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Return to now
           </div>
-        </button>
-      )}
+        )}
+      </button>
       {/* Fixed-size dial box pinned to the right edge, vertically centered.
           Rendering at exact viewBox px (not a scaled %) keeps a consistent
           size AND makes the HTML card overlay's %-of-box positioning line up
@@ -2967,9 +2977,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <radialGradient id="rt-dial-wash"
                           cx={nowX} cy={nowY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.15)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.06)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.015)" />
           </radialGradient>
           {/* Frosted texture — feTurbulence-based noise overlay. */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
