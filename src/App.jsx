@@ -2934,22 +2934,32 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL · Variant B (02+06+07+12) ──────────────────
-              Variant B makes the glass time-anchored: the wash itself
-              becomes a radial gradient centered on NOW. The disc reads
-              brightest where you ARE in the day; dimmer where you've
-              been (past) and where you're going (future). NOW becomes
-              the literal center of attention by ambient lighting alone.
+          {/* ── FLAT GLASS DIAL · Variant B + debossed groove ──────────────
+              Variant B base (NOW-anchored radial wash + frosted texture)
+              with the rim edge upgraded to a debossed groove cut into
+              the frosted glass.
+
+              The edge is no longer a single uniform hairline. It's a
+              paired stroke: outer rim catches a soft highlight (light
+              from above-left), inner ring 3px inboard sits in shadow.
+              Together they read as a recessed channel.
 
               Layered enhancements:
-              02. Edge weight (1.2px stroke @ 0.28 alpha — uniform)
-              06. NOW-anchored radial wash (replaces linear gradient)
+              02. Debossed groove edge (paired highlight + shadow
+                  hairlines simulating a recessed perimeter channel
+                  cut into the glass surface)
+              06. NOW-anchored radial wash (brightest at NOW)
               07. Frosted texture — feTurbulence noise overlay
-              12. NOW orb glow — static mint halo under NOW
 
-              NOTE: Variant A's gradient edge (03) and diagonal wash (05)
-              are NOT in this variant. B is a focal-attention treatment;
-              A is a directional-light treatment. */}
+              The static NOW orb glow (12) was removed — with the
+              NOW-anchored radial wash already lighting up the area
+              around NOW, a static halo on top doubled up the attention
+              signal. The pulsing ring remains.
+
+              The groove respects the frosted-glass diffusion: both
+              hairlines are soft and low-contrast. Frosted glass
+              scatters light, so a real groove in it doesn't pop —
+              it reads as a tonal dip with a luminous upper edge. */}
           {/* 06 — NOW-anchored radial wash. Center follows nowX/nowY so
               the brightest point of the glass always sits at NOW. Radius
               extends past the disc boundary so the falloff carries
@@ -2977,13 +2987,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                                   0 0 0 0.07 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
-          {/* NOW orb glow — tighter halo radiating under the NOW dot
-              itself, on top of the radial wash. The wash provides ambient
-              focus; this orb-glow gives the dot its own crisp halo. */}
-          <radialGradient id="rt-dial-now-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.55)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0)" />
-          </radialGradient>
           {/* NOW dot drop-shadow — small lift to keep it sitting ON the glass */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
@@ -3005,11 +3008,35 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
               opacity="0.55" />
-        {/* 02 — Uniform 1.2px edge at 0.28 alpha. */}
+        {/* 02+debossed-groove — Edge treatment. Instead of a single
+            uniform hairline, this pairs two strokes to create the
+            illusion of a debossed channel cut into the frosted glass
+            near the rim.
+
+            PHYSICS: Light from above-left strikes the flat disc face.
+            A groove cut into the surface near the perimeter has:
+              - Outer wall (facing the light): catches direct light →
+                soft white highlight hairline along the rim
+              - Inner wall (occluded by the lip): falls into shadow →
+                darker hairline 3px inboard
+              - Floor between them sits slightly darker (handled by
+                the existing frosted texture)
+
+            Both strokes are soft/diffuse — frosted glass scatters
+            everything, so the groove reads as a tonal dip rather than
+            a sharp engraved line. */}
+        {/* Outer rim — luminous highlight hairline */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
-              stroke="rgba(28, 50, 36, 0.28)"
-              strokeWidth="1.2" />
+              stroke="rgba(255, 255, 255, 0.55)"
+              strokeWidth="0.6" />
+        {/* Inner shadow line — 3px inboard from the rim, the darker
+            wall of the groove. Slightly heavier than the highlight so
+            the eye reads "the floor goes DOWN into shadow." */}
+        <path d={`M ${CX} ${CY - (R - 3)} A ${R - 3} ${R - 3} 0 0 0 ${CX} ${CY + (R - 3)}`}
+              fill="none"
+              stroke="rgba(28, 50, 36, 0.34)"
+              strokeWidth="0.9" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
@@ -3030,9 +3057,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* 12 — NOW orb glow (crisp halo on top of the radial wash). */}
-        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="28" fill="url(#rt-dial-now-glow)" />}
-        {/* NOW marker — small lift via tighter drop-shadow. */}
+        {/* NOW marker — small lift via tighter drop-shadow. The radial
+            wash already provides ambient focus around NOW; the static
+            orb halo (12) was removed because it doubled up on the
+            attention signal. Pulsing ring still active. */}
         {nowInWindow && <g filter="url(#rt-dial-now-raised)">
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3.5" fill="#FFFFFF" />
