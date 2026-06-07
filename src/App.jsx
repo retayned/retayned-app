@@ -2987,11 +2987,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
 
-          {/* Disc tint — soft mint wash. Slight center concentration
-              keeps visual presence without claiming carved depth.
-              This is the disc's material color. */}
+          {/* Static center-left wash. Center positioned at (CX, CY) —
+              exactly on the flat edge of the half-disc, vertically
+              centered. The brightest point sits at the center-left of
+              the visible dial area. Fixed position; does not follow NOW.
+
+              Physics: light source positioned behind the flat-edge side
+              of the dial, evenly illuminating the center. NOW moves
+              around the perimeter as time passes; the glass stays put. */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX + R * 0.4} cy={CY} r={R * 1.15}
+                          cx={CX} cy={CY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
