@@ -15342,7 +15342,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                  <button className="r-btn" data-tone="purple" onClick={() => { setShowAddClient(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(124,92,243,0.15), 0 2px 6px rgba(124,92,243,0.22)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="green" onClick={() => { setShowAddClient(true); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                     Add Client
                   </button>
                 </div>
@@ -15611,31 +15611,20 @@ export default function App({ user }) {
                       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Sort</span>
                         {sortOptions.map(s => (
-                          <button key={s.id} onClick={() => setClientsSort(s.id)} className={(sortId === s.id ? "" : "rt-sort-opt ") + (s.id === "cadence" ? "rc-sort-cadence" : s.id === "renewal" ? "rc-sort-renewal" : "")} style={{
-                            padding: "4px 10px", fontSize: 11.5, borderRadius: 999, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                            transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
-                            // Active = lifted card chip (sh-card-lift + 0.5px translate).
-                            // Matches the chip-language used by view toggle, tabs, and
-                            // nav active states. Inactive resting + hover styles live in
-                            // .rt-sort-opt (subtle card surface).
-                            ...(sortId === s.id
-                              ? { background: C.card, color: C.text, border: "none", boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
-                              : {}),
+                          <button key={s.id} onClick={() => setClientsSort(s.id)} className={"rt-composer-pill" + (sortId === s.id ? " is-filled" : "") + (s.id === "cadence" ? " rc-sort-cadence" : s.id === "renewal" ? " rc-sort-renewal" : "")} style={{
+                            padding: "4px 10px", fontSize: 11.5, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
+                            color: sortId === s.id ? C.text : C.textSec,
                           }}>{s.label}</button>
                         ))}
                       </div>
-                      <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, borderRadius: 8 }}>
+                      <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 4 }}>
                         {viewOptions.map(v => (
-                          <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} className={variant === v.id ? "" : "rt-view-opt"} style={{
-                            display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
-                            border: "none",
-                            transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
-                            ...(variant === v.id
-                              ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
-                              : {}),
+                          <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} className={"rt-composer-pill" + (variant === v.id ? " is-filled" : "")} style={{
+                            display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit",
+                            color: variant === v.id ? C.text : C.textSec,
                           }}>
                             <Icon name={v.icon} size={14} color={variant === v.id ? C.text : C.textMuted} />
-                            <span style={{ fontSize: 12, fontWeight: 500 }}>{v.label}</span>
+                            <span style={{ fontSize: 12, fontWeight: variant === v.id ? 600 : 500 }}>{v.label}</span>
                           </button>
                         ))}
                       </div>
@@ -15686,7 +15675,7 @@ export default function App({ user }) {
 
                   {dataLoaded && variant === "table" && (
                     <div className="rc-desktop-view" style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.bg }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.surface }}>
                         <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
                         <div style={{ flex: 2, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
                         <div style={{ width: 56, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
@@ -17538,16 +17527,15 @@ export default function App({ user }) {
                 </div>
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   <button
-                    className="r-btn" data-tone="purple"
+                    className="r-btn" data-tone="green"
                     onClick={() => { setNewWorkerName(""); setNewWorkerEmail(""); setNewWorkerRole(""); setAddWorkerOpen(true); }}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
                       padding: "10px 16px",
-                      background: "var(--rt-grad-btn)", color: "#fff",
+                      color: "#fff",
                       border: "none", borderRadius: 10,
                       fontSize: 13.5, fontWeight: 600,
                       cursor: "pointer", fontFamily: "inherit",
-                      boxShadow: "var(--rt-sh-purple)",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -18079,7 +18067,7 @@ export default function App({ user }) {
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
-                  <button className="r-btn" data-tone="purple" onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "var(--rt-grad-btn)", color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", whiteSpace: "nowrap" }}>
+                  <button className="r-btn" data-tone="green" onClick={() => setRefForm(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                     Log Referral
                   </button>
                 </div>
@@ -18819,7 +18807,7 @@ export default function App({ user }) {
                     {referReady > 0 && <><span className="rt-sep" /><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
                   </div>
                 </div>
-                <button className="r-btn" data-tone="purple" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", background: "var(--rt-grad-btn)", color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)", flexShrink: 0 }}>
+                <button className="r-btn" data-tone="green" onClick={() => setShowAddRolodex(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 16px", color: "#fff", borderRadius: 10, fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
                   <span style={{ whiteSpace: "nowrap" }}>New Contact</span>
                 </button>
               </div>
