@@ -2934,25 +2934,46 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL ───────────────────────────────────────────
-              Not debossed (recessed into the page) and not embossed
-              (popping out of it). Sits on the SAME PLANE as the surface
-              — like a thin glass disc resting on the page. Identity
-              comes from a faint mint tint + a single soft edge, not
-              from any inner shadow or convex highlight.
+          {/* ── FLAT GLASS DIAL · Enhancement set 1 (02+07+09+10+12) ──────
+              Base flat-glass still sits on the same plane as the page.
+              Layered enhancements add presence and meaning without
+              reintroducing deboss/emboss illusions:
 
-              Three layers only:
-              1. The glass — very faint mint wash, top stronger
-              2. The edge — single soft hairline tracing the boundary
-              3. Hour ticks + labels (etched into the glass)
-
-              NOW marker keeps a small lift via tighter drop-shadow so
-              it reads as something resting ON the glass, not part of it. */}
-          {/* Glass tint — mint morning, slightly stronger at top */}
-          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.10)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.04)" />
+              02. Stronger single edge (1.2px @ 0.28 — was 0.8px @ 0.22)
+              07. Frosted texture — feTurbulence noise overlay for
+                  micro-variation. Pure 2D, no 3D illusion.
+              09. Past/future tone split — past (below NOW) is cooler/
+                  dimmer grey-mint, future (above NOW) is brighter mint.
+                  Reads time direction at a glance.
+              10. Etched hour tick marks at each hour boundary.
+              12. NOW orb glow — static mint halo under the NOW dot. */}
+          {/* Future-side wash (brighter mint) — used for the area above NOW */}
+          <linearGradient id="rt-dial-wash-future" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.14)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.06)" />
           </linearGradient>
+          {/* Past-side wash (cooler grey-mint) — used for the area below NOW */}
+          <linearGradient id="rt-dial-wash-past" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(196, 196, 189, 0.10)" />
+            <stop offset="100%" stopColor="rgba(196, 196, 189, 0.05)" />
+          </linearGradient>
+          {/* Frosted texture — feTurbulence-based noise overlay. Tinted
+              mint-dark so it composites as faint micro-variation across
+              the glass without changing the overall hue much. */}
+          <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" stitchTiles="stitch" />
+            <feColorMatrix values="0 0 0 0 0.11
+                                  0 0 0 0 0.20
+                                  0 0 0 0 0.14
+                                  0 0 0 0.07 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
+          </filter>
+          {/* NOW orb glow — static mint halo radiating under the NOW dot.
+              Layers underneath the existing pulsing ring + raised dot. */}
+          <radialGradient id="rt-dial-now-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.55)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0)" />
+          </radialGradient>
           {/* NOW dot drop-shadow — small lift to keep it sitting ON the glass */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
@@ -2965,14 +2986,62 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── FLAT GLASS DIAL ─────────────────────────────────────────────
-            Single-plane reading. No inner shadow, no convex highlight. */}
-        {/* Layer 1: the glass itself — faint mint tint */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2: the edge — single soft hairline. This is the only
-            cue that there's a boundary. No double-stroke (which would
-            read as rim/lip), no contrast shift across the edge. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.22)" strokeWidth="0.8" />
+        {/* ── FLAT GLASS DIAL · Enhancement set 1 render ───────────────── */}
+        {/* 09 — Past/future split fill. Two filled half-paths divided at
+            the horizontal line through NOW (nowY). Future = above NOW
+            (brighter mint), past = below NOW (cooler grey-mint).
+            The fillRule "evenodd" keeps the inner area filled correctly. */}
+        {(() => {
+          // Compute path for the FUTURE region: from top of dial down to
+          // the horizontal line at nowY, then back along that line, closed.
+          const futurePath = `M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${nowX} ${nowY} L ${CX} ${nowY} Z`;
+          // PAST region: from nowY line down to bottom of dial, closed.
+          const pastPath = `M ${nowX} ${nowY} A ${R} ${R} 0 0 0 ${CX} ${CY + R} L ${CX} ${nowY} Z`;
+          return (
+            <>
+              <path d={futurePath} fill="url(#rt-dial-wash-future)" />
+              <path d={pastPath} fill="url(#rt-dial-wash-past)" />
+            </>
+          );
+        })()}
+        {/* 07 — Frosted texture overlay. Same dial shape, low-opacity noise
+            tinted dark-mint. Creates surface micro-variation reading as
+            actual frosted glass without 3D illusion. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
+              fill="rgba(170, 220, 185, 0.40)"
+              filter="url(#rt-dial-frosted)"
+              opacity="0.55" />
+        {/* 02 — Stronger single edge. 1.2px stroke at 0.28 alpha (was
+            0.8 @ 0.22). Still a single hairline — no double-stroke that
+            would read as rim/lip. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
+              fill="none"
+              stroke="rgba(28, 50, 36, 0.28)"
+              strokeWidth="1.2" />
+        {/* 10 — Etched hour ticks. Tiny outward-pointing marks at each
+            full hour, faintly stroked into the glass. Generated from the
+            ptAt function: each hour occupies 1/12 of the window. The tick
+            mark is a short line from R-4 to R+1 along the radial direction. */}
+        {(() => {
+          // Generate 13 hour ticks from windowStart to windowEnd (inclusive).
+          // Each at fraction i/12, position via ptAt at R for outer point
+          // and a slightly inner R for the inner point.
+          const ticks = [];
+          for (let i = 0; i <= 12; i++) {
+            const f = i / 12;
+            const [ox, oy] = ptAt(f, R + 1);   // just outside the edge
+            const [ix, iy] = ptAt(f, R - 5);   // 5px inside the edge
+            ticks.push(
+              <line key={`tick-${i}`}
+                    x1={ix.toFixed(1)} y1={iy.toFixed(1)}
+                    x2={ox.toFixed(1)} y2={oy.toFixed(1)}
+                    stroke="rgba(28, 50, 36, 0.30)"
+                    strokeWidth={i % 2 === 0 ? 0.8 : 0.5}
+                    strokeLinecap="round" />
+            );
+          }
+          return ticks;
+        })()}
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
@@ -2993,6 +3062,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
+        {/* 12 — NOW orb glow. Static mint halo under the NOW dot,
+            radiating outward. Reinforces NOW as focal point. Drawn
+            BEFORE the raised dot + pulse so they layer on top. */}
+        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="28" fill="url(#rt-dial-now-glow)" />}
         {/* NOW marker — small lift via tighter drop-shadow so it reads as
             something resting ON the glass (not part of the same plane).
             Two-layer green body + white pip. */}
