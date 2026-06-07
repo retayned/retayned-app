@@ -2934,100 +2934,57 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── INSET CHANNEL DIAL ────────────────────────────────────────
-              Recessed track cut into the page surface. Top edge darker
-              (shadow inside the channel from above), bottom edge brighter
-              (light catching the lip). NOW is a luminous mint orb sitting
-              in the trough. Event dots sit IN the channel at their times.
-              Past portion has a faint mint wash tracing what's elapsed. */}
-          {/* Channel base fill — gentle gradient inside the trough */}
-          <linearGradient id="rt-dial-channel-fill" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(28, 50, 36, 0.08)" />
-            <stop offset="100%" stopColor="rgba(28, 50, 36, 0.04)" />
+          {/* ── ORIGINAL 10 INTERIOR + 10A RIM + E2+E3+E4+E5:
+              - E2: subtle inner hairline ring inside the rim
+              - E3: directional wash (top stronger, bottom softer)
+              - E4: tighter raised dot + lighter shadow
+              - E5: softened rim stroke 0.45 → 0.38 */}
+          {/* E3: directional wash — mint morning. Brighter than the prior
+              primaryLight forest tone; cooler hue (more blue undertone)
+              reads as fresh / morning light at similar opacity. Top
+              stronger (upcoming side), softer at bottom (elapsed side). */}
+          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
           </linearGradient>
-          {/* Inset shadow falling from the top lip of the channel */}
-          <linearGradient id="rt-dial-channel-shadow" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(28, 50, 36, 0.30)" />
-            <stop offset="60%" stopColor="rgba(28, 50, 36, 0.08)" />
-            <stop offset="100%" stopColor="rgba(28, 50, 36, 0)" />
-          </linearGradient>
-          {/* Bottom-lip highlight — light catching the inside of the curve */}
-          <linearGradient id="rt-dial-channel-hi" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(255, 255, 255, 0)" />
-            <stop offset="60%" stopColor="rgba(255, 255, 255, 0.20)" />
-            <stop offset="100%" stopColor="rgba(255, 255, 255, 0.55)" />
-          </linearGradient>
-          {/* NOW orb glow halo */}
-          <radialGradient id="rt-dial-now-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.85)" />
-            <stop offset="40%" stopColor="rgba(170, 220, 185, 0.45)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0)" />
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
+            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          {/* NOW orb body — slight 3D feel with light from upper-left */}
-          <radialGradient id="rt-dial-now-orb" cx="35%" cy="30%" r="65%">
-            <stop offset="0%" stopColor="#5B9479" />
-            <stop offset="60%" stopColor="#33543E" />
-            <stop offset="100%" stopColor="#1C3224" />
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
+            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
           </radialGradient>
+          {/* E4: tighter raised dot — lighter shadow (0.40 → 0.32), tighter blur */}
+          <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+            <feOffset dx="1.2" dy="2.5" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
+            <feComposite in2="offsetblur" operator="in" />
+            <feMerge>
+              <feMergeNode />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
-        {/* ── INSET CHANNEL RENDER ──────────────────────────────────────
-            All four layers stroked along the same half-circle path. The
-            wide base creates the trough; the shadow + highlight on top of
-            it create the inset illusion; the mint past-trace inside that
-            shows elapsed time. */}
-        {/* Layer 1 — channel base (the trough fill) */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-              fill="none"
-              stroke="url(#rt-dial-channel-fill)"
-              strokeWidth="28"
-              strokeLinecap="round" />
-        {/* Layer 2 — top-edge shadow (recess illusion: light from above
-            casts shadow inside the channel). Offset by negative Y so the
-            shadow falls from the upper lip downward into the trough. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-              fill="none"
-              stroke="url(#rt-dial-channel-shadow)"
-              strokeWidth="6"
-              strokeLinecap="round"
-              transform="translate(0, -10)"
-              opacity="0.65" />
-        {/* Layer 3 — bottom-lip highlight (light catches the inside of
-            the curve at the bottom lip). Offset positive Y. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-              fill="none"
-              stroke="url(#rt-dial-channel-hi)"
-              strokeWidth="3"
-              strokeLinecap="round"
-              transform="translate(0, 10)"
-              opacity="0.75" />
-        {/* Layer 4 — mint past trace. Stroked from NOW back to the bottom
-            of the dial (showing the time already elapsed). Uses the same
-            half-circle path but clipped via dasharray based on nowFrac. */}
-        {(() => {
-          // Total arc length for a half circle = π * R
-          const totalLen = Math.PI * R;
-          // Past portion length: from end (bottom) up to NOW
-          // nowFrac: 0 = bottom (start of window), 1 = top (end of window)
-          // Past arc is from bottom up to nowFrac
-          const pastLen = nowFrac * totalLen;
-          // Use stroke-dasharray to draw only the past portion. Path traces
-          // from TOP (CY-R) down to BOTTOM (CY+R), so we need to render the
-          // segment from (totalLen - pastLen) to totalLen.
-          const futureLen = totalLen - pastLen;
-          return (
-            <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-                  fill="none"
-                  stroke="rgba(170, 220, 185, 0.50)"
-                  strokeWidth="20"
-                  strokeLinecap="round"
-                  strokeDasharray={`${pastLen} ${totalLen}`}
-                  strokeDashoffset={-futureLen} />
-          );
-        })()}
-        {/* Time labels — to the LEFT of the channel, outside, so the
-            channel itself stays uncluttered */}
+        {/* ── ORIGINAL 10 INTERIOR + 10A RIM + E2+E3+E4+E5 ───────────────
+            Final-pass enhancements layered onto the baseline. */}
+        {/* Layer 1 (E3): directional soft-green wash (top stronger) */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
+        {/* Layer 2: inner shadow (original 10) */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
+        {/* Layer 3: highlight (original 10) */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
+        {/* 10A rim (E5: dark stroke softened 0.45 → 0.38) */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.38)" strokeWidth="1.5" />
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
+        {/* E2: subtle inner hairline ring — engraved circle 18px inside the rim */}
+        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
+        {/* Time labels (A · inside rim) — drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
-          <text key={`tl-${i}`} x={(tl.x - 22).toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="end"
+          <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
             style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 600, fill: "#9A9A93", pointerEvents: "none" }}>
             {tl.lbl}
           </text>
@@ -3037,23 +2994,23 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
             stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
         ))}
-        {/* Event dots — sit INSIDE the channel. Past = dim grey, future
-            = white center with mint border, next-up gets a soft halo. */}
+        {/* Event rim dots — embedded in the dome surface. Original cool-palette
+            dots; next-up gets a halo from the NOW glow context. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
-            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="8" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
-            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4" fill={p.isPast ? "#C4C4BD" : "#FFFFFF"} stroke={p.isPast ? "none" : "#33543E"} strokeWidth="1.5" />
+            {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
+            <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — luminous mint orb sitting in the trough.
-            Three layers: outer halo glow, 3D orb body, bright inner pip. */}
-        {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="28" fill="url(#rt-dial-now-glow)" />}
-        {nowInWindow && <g>
-          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="10" fill="url(#rt-dial-now-orb)" />
-          <circle cx={(nowX - 3).toFixed(1)} cy={(nowY - 3).toFixed(1)} r="2.5" fill="rgba(200, 235, 212, 0.95)" />
+        {/* NOW marker — Variant 10A + E4 tighter dot: raised above the dome
+            with drop-shadow. Two-layer (green body + white pip). E4: smaller
+            radii (11→9, 4→3.5) for a lighter sit. */}
+        {nowInWindow && <g filter="url(#rt-dial-now-raised)">
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
+          <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3.5" fill="#FFFFFF" />
         </g>}
         {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.26" strokeWidth="1.5">
-          <animate attributeName="r" values="18;26;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+          <animate attributeName="r" values="18;24;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
           <animate attributeName="stroke-opacity" values="0.30;0.05;0.30" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
         </circle>}
       </svg>
