@@ -2934,19 +2934,36 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL · Enhancement set (02+07+12) ──────────────
-              Base flat-glass still sits on the same plane as the page.
-              Layered enhancements add presence without reintroducing
-              deboss/emboss illusions:
+          {/* ── FLAT GLASS DIAL · Variant A (02+03+05+07+12) ──────────────
+              Variant A adds atmospheric directionality to the base set.
+              The dial now reads as "glass disc with light striking from
+              upper-left" — without breaking the same-plane flatness.
 
-              02. Stronger single edge (1.2px @ 0.28 — was 0.8px @ 0.22)
-              07. Frosted texture — feTurbulence noise overlay for
-                  micro-variation. Pure 2D, no 3D illusion.
-              12. NOW orb glow — static mint halo under the NOW dot. */}
-          {/* Glass tint — mint morning, slightly stronger at top */}
-          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.10)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.04)" />
+              Layered enhancements:
+              02. Edge weight (1.2px stroke — was 0.8px)
+              03. Gradient edge — stroke alpha fades top-strong to
+                  bottom-soft, matching the wash directionality
+              05. Diagonal wash — mint stronger at upper-left, fades
+                  toward lower-right. Replaces the vertical wash.
+              07. Frosted texture — feTurbulence noise overlay
+              12. NOW orb glow — static mint halo under NOW */}
+          {/* 05 — Diagonal wash. x1/y1 = upper-left = stronger.
+              x2/y2 = lower-right = clearer. Range pushed slightly
+              (0.14 → 0.02) since the wash is now directional rather
+              than uniform; the high end can be more present at the
+              source of "light" without overall feeling heavier. */}
+          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="80%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.14)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
+          </linearGradient>
+          {/* 03 — Gradient edge. Stroke gradient runs top→bottom matching
+              the wash's vertical pull. Top of the edge is more present
+              (where "light" hits), bottom is softer. Same hue as the
+              uniform edge was (rgba(28,50,36,...)), just varying alpha. */}
+          <linearGradient id="rt-dial-edge" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(28, 50, 36, 0.38)" />
+            <stop offset="50%" stopColor="rgba(28, 50, 36, 0.26)" />
+            <stop offset="100%" stopColor="rgba(28, 50, 36, 0.14)" />
           </linearGradient>
           {/* Frosted texture — feTurbulence-based noise overlay. Tinted
               mint-dark so it composites as faint micro-variation across
@@ -2977,22 +2994,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── FLAT GLASS DIAL · Enhancement set render ─────────────────── */}
-        {/* Layer 1: the glass — single uniform mint wash, top stronger */}
+        {/* ── FLAT GLASS DIAL · Variant A render ─────────────────────────── */}
+        {/* Layer 1: the glass — diagonal mint wash */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* 07 — Frosted texture overlay. Same dial shape, low-opacity noise
-            tinted dark-mint. Creates surface micro-variation reading as
-            actual frosted glass without 3D illusion. */}
+        {/* 07 — Frosted texture overlay. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
               opacity="0.55" />
-        {/* 02 — Stronger single edge. 1.2px stroke at 0.28 alpha (was
-            0.8 @ 0.22). Still a single hairline — no double-stroke that
-            would read as rim/lip. */}
+        {/* 02+03 — Edge: 1.2px gradient stroke (top stronger, bottom softer). */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
-              stroke="rgba(28, 50, 36, 0.28)"
+              stroke="url(#rt-dial-edge)"
               strokeWidth="1.2" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
@@ -3014,13 +3027,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* 12 — NOW orb glow. Static mint halo under the NOW dot,
-            radiating outward. Reinforces NOW as focal point. Drawn
-            BEFORE the raised dot + pulse so they layer on top. */}
+        {/* 12 — NOW orb glow. */}
         {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="28" fill="url(#rt-dial-now-glow)" />}
-        {/* NOW marker — small lift via tighter drop-shadow so it reads as
-            something resting ON the glass (not part of the same plane).
-            Two-layer green body + white pip. */}
+        {/* NOW marker — small lift via tighter drop-shadow. */}
         {nowInWindow && <g filter="url(#rt-dial-now-raised)">
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3.5" fill="#FFFFFF" />
