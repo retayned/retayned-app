@@ -2944,43 +2944,23 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ATMOSPHERIC · Frosted glass + center-left wash ───────────
-              Frosted glass disc on the page with a STATIC bright spot
-              positioned at the center-left of the visible dial — on
-              the flat edge, vertically centered.
-
-              Physics: coherent. Frosted glass with a fixed light source
-              positioned behind the flat-edge side. Bright spot stays
-              put. NOW moves around the perimeter as a marker; the
-              glass's brightness doesn't change.
-
-              Components:
-              1. Frosted glass wash — radial gradient centered at
-                 (CX, CY), stops 0.20 / 0.08 / 0.02
-              2. Frosted texture overlay (feTurbulence noise)
-              3. Single soft hairline edge
-              4. NOW dot (raised, with pulsing ring) sits on top */}
-          {/* Static center-left wash — center on the flat edge, vertically
-              centered. Brightest point at center-left of visible dial. */}
+          {/* ── ATMOSPHERIC · NOW-anchored wash + hairline (no frosted) ──
+              Tinted atmospheric region on the page. No frosted texture
+              (no material claim). The wash itself is NOW-anchored — the
+              bright spot follows the user's current position around the
+              dial. Since there's no frosted-glass claim, moving
+              brightness is physically coherent: it's just where the
+              green tint concentrates, which is wherever attention is. */}
+          {/* NOW-anchored radial wash — center follows nowX/nowY */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX} cy={CY} r={R * 1.15}
+                          cx={nowX} cy={nowY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
-          {/* Frosted texture — feTurbulence noise tinted mint-dark.
-              baseFrequency 0.35 keeps the noise soft/atmospheric. */}
-          <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
-            <feColorMatrix values="0 0 0 0 0.11
-                                  0 0 0 0 0.20
-                                  0 0 0 0 0.14
-                                  0 0 0 0.035 0" />
-            <feComposite in2="SourceGraphic" operator="in" />
-          </filter>
           {/* NOW dot drop-shadow — small lift so the dot sits ON the
-              glass rather than floating in front of it. */}
+              tinted region rather than floating in front of it. */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
             <feOffset dx="0.6" dy="1.4" result="offsetblur" />
@@ -2993,14 +2973,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           </filter>
         </defs>
         {/* ── ATMOSPHERIC render ─────────────────────────────────────────── */}
-        {/* Layer 1: frosted glass wash — static center-left bright spot */}
+        {/* Layer 1: NOW-anchored radial mint wash */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2: frosted texture overlay */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
-              fill="rgba(170, 220, 185, 0.40)"
-              filter="url(#rt-dial-frosted)"
-              opacity="0.35" />
-        {/* Layer 3: single soft hairline edge */}
+        {/* Layer 2: single soft hairline edge */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
               stroke="rgba(28, 50, 36, 0.16)"
