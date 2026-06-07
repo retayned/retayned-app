@@ -2944,64 +2944,60 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL · Variant B + original three-line edge ─────
-              Variant B (NOW-anchored radial wash + frosted texture)
-              with the original three-line edge restored from the
-              earlier dome version.
+          {/* ── FINAL SHOWDOWN · Original debossed dome + frosted texture ─
+              The original dome exactly as it was — debossed deboss with
+              dark inner shadow + bright bottom highlight + rim stroke +
+              inner highlight hairline + engraved interior ring + raised
+              NOW dot — with the frosted texture overlay (07) layered in
+              as the only new element.
 
-              Edge composition:
-                - Outer rim: dark hairline at 1.5px @ 0.38 alpha
-                - Inner highlight: white hairline at 0.8px @ 0.95 alpha,
-                  2px inboard from the rim
-                - Engraved interior ring: 0.5px @ 0.10 alpha, 18px inboard
+              The wash is uniform vertical (top stronger), NOT NOW-anchored.
+              Color belongs to the dial as an object, not to time.
 
-              Layered enhancements:
-              02. Original three-line edge (dark rim + white inner
-                  highlight + faint engraved ring)
-              06. NOW-anchored radial wash (brightest at NOW)
-              07. Frosted texture — feTurbulence noise overlay
-
-              No NOW orb glow (12) — the radial wash already handles
-              the ambient focus around NOW. */}
-          {/* 06 — NOW-anchored radial wash. Center follows nowX/nowY so
-              the brightest point of the glass always sits at NOW. Radius
-              extends past the disc boundary so the falloff carries
-              smoothly to the edges. gradientUnits="userSpaceOnUse" lets
-              us use absolute SVG coordinates for the center (matching
-              nowX/nowY which are also in user space).
-
-              Brightness range pushed higher at center (0.20) than the
-              linear version (0.10) because radial falloff is steeper —
-              the average opacity across the disc still works out to
-              roughly the same overall presence. */}
-          <radialGradient id="rt-dial-wash"
-                          cx={nowX} cy={nowY} r={R * 1.15}
-                          gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.15)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.05)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.01)" />
+              Layered components:
+              - E3: uniform mint wash (top stronger, vertical)
+              - 10:  inner-shadow + bottom-highlight radials creating
+                     the debossed-into-page illusion
+              - 07:  frosted texture overlay (NEW — atmospheric noise)
+              - 10A: rim — outer dark stroke + inner white hairline
+              - E2:  engraved interior ring 18px inboard
+              - E4:  raised NOW dot with drop-shadow */}
+          {/* E3: uniform mint wash — vertical, top stronger */}
+          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
+          </linearGradient>
+          {/* 10: inner shadow radial — concentrates at upper-left so
+              the dome reads as recessed (light source convention). */}
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
+            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          {/* Frosted texture — feTurbulence noise tuned for smooth blend.
-              Previous (baseFrequency=0.85) created high-frequency speckle
-              that read as discrete pixels at low wash opacity. Lowering
-              to 0.35 makes the noise softer/blurrier (larger noise
-              "cells") which blends as continuous atmospheric texture
-              rather than visible grain. Alpha also reduced (0.07 → 0.035)
-              to scale down with the new lower wash intensity — noise
-              should sit ~30% strength of wash center, not match it. */}
+          {/* 10: bottom highlight radial — concentrates at lower-right
+              so the dome lip catches light there. */}
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
+            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+          </radialGradient>
+          {/* 07: frosted texture overlay — NEW layer. feTurbulence noise
+              tinted mint-dark, low alpha so it composites as faint
+              micro-variation across the dome. baseFrequency 0.35 keeps
+              the grain soft/atmospheric rather than discrete speckle. */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
             <feColorMatrix values="0 0 0 0 0.11
                                   0 0 0 0 0.20
                                   0 0 0 0 0.14
-                                  0 0 0 0.035 0" />
+                                  0 0 0 0.05 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
-          {/* NOW dot drop-shadow — small lift to keep it sitting ON the glass */}
+          {/* E4: raised NOW dot — drop-shadow filter for the lift effect */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
-            <feOffset dx="0.6" dy="1.4" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.28" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+            <feOffset dx="1.2" dy="2.5" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -3009,36 +3005,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── FLAT GLASS DIAL · Variant B render ─────────────────────────── */}
-        {/* Layer 1: the glass — NOW-anchored radial mint wash. Brightest
-            at NOW, fades outward smoothly. */}
+        {/* ── ORIGINAL DEBOSSED DOME · render order (E3 → 10 → 07 → 10A → E2) ─ */}
+        {/* Layer 1 (E3): uniform mint wash — vertical, top stronger */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* 07 — Frosted texture overlay. Outer opacity reduced (0.55 → 0.35)
-            to scale with the new lower wash intensity. */}
+        {/* Layer 2 (10): inner shadow — recessed-into-page illusion */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
+        {/* Layer 3 (10): bottom highlight — light catching the lower lip */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
+        {/* Layer 4 (07): frosted texture overlay — atmospheric noise */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
-              opacity="0.35" />
-        {/* 02+original-three-line — Restored edge from earlier dome version.
-            Three strokes in sequence: outer dark stroke (the visible rim),
-            inner white hairline (the lip catching highlight just inside),
-            and a faint engraved ring 18px inboard (subtle interior detail). */}
-        {/* Outer rim — dark hairline (the visible edge of the disc) */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-              fill="none"
-              stroke="rgba(28,50,36,0.38)"
-              strokeWidth="1.5" />
-        {/* Inner white hairline — 2px inboard, catching highlight */}
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`}
-              fill="none"
-              stroke="rgba(255,255,255,0.95)"
-              strokeWidth="0.8" />
-        {/* Engraved interior ring — 18px inboard. Opacity softened
-            (0.10 → 0.06) so it doesn't compete with the gentler wash. */}
-        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`}
-              fill="none"
-              stroke="rgba(28,50,36,0.06)"
-              strokeWidth="0.5" />
+              opacity="0.40" />
+        {/* Layer 5 (10A): rim — outer dark stroke */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.38)" strokeWidth="1.5" />
+        {/* Layer 5 (10A): rim — inner white hairline 2px inboard */}
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
+        {/* Layer 6 (E2): engraved interior ring — 18px inboard, barely visible */}
+        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
