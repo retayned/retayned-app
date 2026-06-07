@@ -2944,52 +2944,48 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ATMOSPHERIC DIAL · NOW-anchored + outer shadow halo boundary ─
-              The dial is a tinted region on the page surface. The
-              boundary is defined by a soft symmetric shadow halo
-              OUTSIDE the disc perimeter — same visual family as the
-              task tiles (which also have ambient shadows). The shadow
-              has NO directional offset (no dx/dy) so no Z-depth is
-              implied — just a halo of slightly darker air around the
-              dial, signaling "this is a region" without claiming
-              carved/raised.
+          {/* ── ATMOSPHERIC FINAL · NOW-anchored + frosted + hairline ────
+              Restored Jun 7 2026 reference spec. Flat tinted atmospheric
+              region on the page surface — same visual family as the
+              sidebar (which is also a flat tinted region with character).
 
-              Two visual elements:
-              1. Outer shadow halo — soft Gaussian-blurred shape
-                 OUTSIDE the disc, primary-deep tinted at low opacity.
-                 Symmetric, no offset.
-              2. Inner wash — NOW-anchored radial mint, brightest at NOW.
+              The frosted texture is NOT making a "this is glass" claim.
+              It's surface character on a textured atmospheric region —
+              like fog, mist, or vapor that has micro-particulate
+              variation. Light concentrating at NOW represents attention
+              concentrating there, not literal photons through glass.
+              Physics coherent under that reading.
 
-              No frosted feTurbulence overlay (would imply material).
-              No stroke (would imply object edge).
-              No bleed (would dissolve the boundary).
-              No deboss, no rim, no engraved interior ring. */}
-          {/* Inner wash — NOW-anchored. Stops at 0.22/0.10/0.03 (matched
-              to prior atmospheric-bleed version so the dial interior
-              has consistent presence regardless of boundary treatment). */}
+              Components:
+              1. NOW-anchored radial mint wash, stops 0.20 / 0.08 / 0.02
+              2. Frosted texture overlay (feTurbulence noise at
+                 baseFrequency 0.35, colorMatrix alpha 0.035,
+                 overlay opacity 0.35)
+              3. Single soft hairline edge at rgba(28,50,36,0.16) 0.6px
+              4. Raised NOW dot (drop-shadow dx 0.6 / dy 1.4 /
+                 alpha 0.28 / blur 1.5) + pulsing ring */}
+          {/* NOW-anchored radial wash — center follows nowX/nowY */}
           <radialGradient id="rt-dial-wash"
                           cx={nowX} cy={nowY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.22)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.10)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
-          {/* Outer shadow halo — wide soft Gaussian blur applied to a
-              shape sized just outside the disc. No offset = no implied
-              light direction = no Z-depth claim. Matches the visual
-              language of the task tiles.
-
-              Tuning: alpha 0.05 (was 0.12) keeps the halo barely
-              perceptible — a hint of darker air, not a wash. Blur
-              stdDeviation 4 (was 6) tightens the falloff so the
-              shadow doesn't bleed into the dial interior. Source
-              shape at R+22 (was R+10) sits well outside the dial
-              edge so the blurred falloff stays OUTSIDE the dial. */}
-          <filter id="rt-dial-halo" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="4" />
+          {/* Frosted texture — feTurbulence noise tinted mint-dark.
+              baseFrequency 0.35 keeps the noise soft/atmospheric
+              (continuous gradient feel, not discrete speckle).
+              Reads as misted atmosphere micro-texture, not glass. */}
+          <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
+            <feColorMatrix values="0 0 0 0 0.11
+                                  0 0 0 0 0.20
+                                  0 0 0 0 0.14
+                                  0 0 0 0.035 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
           </filter>
           {/* NOW dot drop-shadow — small lift so the dot sits ON the
-              tinted region (not floating IN front of it). */}
+              tinted region rather than floating in front of it. */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
             <feOffset dx="0.6" dy="1.4" result="offsetblur" />
@@ -3001,16 +2997,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── ATMOSPHERIC DIAL · Outer shadow halo render ──────────────── */}
-        {/* Layer 1: outer shadow halo. Source shape at R+22 (well outside
-            the dial edge) filled with low-opacity primary-deep tint, then
-            blurred with tighter Gaussian. The blurred falloff feathers
-            BACK toward the dial without covering its interior. */}
-        <path d={`M ${CX} ${CY - (R + 22)} A ${R + 22} ${R + 22} 0 0 0 ${CX} ${CY + (R + 22)} Z`}
-              fill="rgba(28, 50, 36, 0.05)"
-              filter="url(#rt-dial-halo)" />
-        {/* Layer 2: NOW-anchored radial mint wash — the contained area. */}
+        {/* ── ATMOSPHERIC FINAL render ──────────────────────────────────── */}
+        {/* Layer 1: NOW-anchored radial mint wash */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
+        {/* Layer 2: frosted texture overlay — micro-variation across
+            the tinted region (reads as misted atmosphere, not glass). */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
+              fill="rgba(170, 220, 185, 0.40)"
+              filter="url(#rt-dial-frosted)"
+              opacity="0.35" />
+        {/* Layer 3: single soft hairline edge — the only "line."
+            Reads as where the tint ends, not as a physical edge. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
+              fill="none"
+              stroke="rgba(28, 50, 36, 0.16)"
+              strokeWidth="0.6" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
