@@ -2689,31 +2689,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   const fillRGB = "220, 226, 220";
   const nowCoreRGB = "51, 84, 62"; // primary #33543E for the NOW-pool
 
-  // Hour ticks + labels — every hour gets a tick notch, every EVEN hour
-  // additionally gets a text label. Labels at breathing cadence; ticks add
-  // rhythm without text clutter (watch-face style).
-  const ticks = [];         // every hour (rendered as small notches)
-  const tickLabels = [];    // even hours only (text labels)
+  // Hour ticks + labels across the window (every 2 hours, plus NOW).
+  const ticks = [];
+  const tickLabels = [];
+  // Start at the first whole even hour ≥ windowStart.
   const startHour = new Date(windowStart);
   startHour.setMinutes(0, 0, 0);
-  for (let t = startHour.getTime(); t <= windowEnd; t += 60 * 60 * 1000) {
+  if (startHour.getHours() % 2 !== 0) startHour.setHours(startHour.getHours() + 1);
+  for (let t = startHour.getTime(); t <= windowEnd; t += 2 * 60 * 60 * 1000) {
     const f = fracOf(t);
     if (f < 0 || f > 1) continue;
+    const [x, y] = ptAt(f, R);
     const a = angleOf(f);
-    // Notches sit ON the inner hairline ring (at R-18), straddling it 3px
-    // outward + 3px inward. Reads as engraved index marks on the interior
-    // dial face rather than skeu rim ticks on the outer edge.
-    const cosA = Math.cos(a), sinA = Math.sin(a);
-    const tickOuter = R - 15, tickInner = R - 21;
-    const [tox, toy] = [CX + tickOuter * cosA, CY + tickOuter * sinA];
-    const [tix, tiy] = [CX + tickInner * cosA, CY + tickInner * sinA];
-    ticks.push(`M ${tox.toFixed(1)} ${toy.toFixed(1)} L ${tix.toFixed(1)} ${tiy.toFixed(1)}`);
+    const [ix, iy] = [x - 14 * Math.cos(a), y - 14 * Math.sin(a)];
+    ticks.push(`M ${x.toFixed(1)} ${y.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`);
+    const [lx, ly] = ptAt(f, R - 30);
     const d = new Date(t);
-    if (d.getHours() % 2 === 0) {
-      const [lx, ly] = ptAt(f, R - 38);
-      const lbl = formatTimeLabel(d).replace(":00", "");
-      tickLabels.push({ x: lx, y: ly, lbl });
-    }
+    const lbl = formatTimeLabel(d).replace(":00", "");
+    tickLabels.push({ x: lx, y: ly, lbl });
   }
 
   // NOW marker — at the REAL now's position in the (possibly scrubbed) window.
@@ -2987,10 +2980,6 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
         <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
         {/* E2: subtle inner hairline ring — engraved circle 18px inside the rim */}
         <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
-        {/* Hour notches — engraved marks sitting ON the inner hairline ring
-            at R-18. Soft opacity since they're interior marks, not skeu rim
-            ticks. Even hours also get text labels at R-38 below the notch. */}
-        <path d={ticks.join(" ")} fill="none" stroke="rgba(28,50,36,0.22)" strokeWidth="1" strokeLinecap="round" />
         {/* Time labels (A · inside rim) — drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
@@ -12099,9 +12088,9 @@ export default function App({ user }) {
                         className="rt-band-pick is-expanded"
                         style={{
                           marginTop: 8,
-                          fontSize: 14,
+                          fontSize: 13.5,
                           lineHeight: 1.5,
-                          color: C.textSec,
+                          color: C.textMuted,
                           fontFamily: "'Fraunces', Georgia, serif",
                           fontStyle: "italic",
                           fontWeight: 500,
@@ -12213,9 +12202,9 @@ export default function App({ user }) {
                       className="rt-band-pick is-expanded"
                       style={{
                         marginTop: 8,
-                        fontSize: 14,
+                        fontSize: 13.5,
                         lineHeight: 1.5,
-                        color: C.textSec,
+                        color: C.textMuted,
                         fontFamily: "'Fraunces', Georgia, serif",
                         fontStyle: "italic",
                         fontWeight: 500,
