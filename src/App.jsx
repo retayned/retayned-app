@@ -2716,6 +2716,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   const nowInWindow = nowFrac >= 0 && nowFrac <= 1;
   const [nowX, nowY] = ptAt(Math.min(1, Math.max(0, nowFrac)), R);
 
+  // Fixed wash anchor — the position NOW would occupy in the unscrubbed
+  // view. Always ptAt(0.5, R) because when unscrubbed, NOW sits exactly
+  // at the window center (nowFrac = 0.5 → center-left of the dial arc).
+  // The wash anchors to THIS fixed position, not to nowX/nowY, so the
+  // green hub stays put when the user scrubs around exploring other times.
+  const [washX, washY] = ptAt(0.5, R);
+
   // Event placements — a rim dot at each event's fraction f; the outside rail
   // lists details aligned to ry. (No inward staggering needed anymore.)
   const placements = [];
@@ -2953,24 +2960,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               behind it. The light source doesn't move, so the bright
               spot doesn't move. NOW dot is a marker that travels
               around the perimeter; the glass itself stays put. */}
-          {/* Wash anchored at (CX + R*0.15, CY) — pushed INSIDE the
-              visible dial by 15% of the radius. Center on the flat
-              edge means the gradient's brightest half renders
-              OFF-SCREEN (clipped by the half-disc cut-off), leaving
-              only the outer falloff visible — too uniform, no real
-              concentration. Pushing the center INTO the visible area
-              puts the gradient peak ON SCREEN, creating a visible
-              green hub on the left-center area of the dial.
-
-              Smaller radius (R*0.65 instead of R*1.15) keeps the
-              concentration TIGHTER — falls off faster, so the
-              contrast between the hub and the rest of the dial is
-              more visible. */}
+          {/* Wash anchored to washX, washY — the FIXED position where
+              NOW lives in the unscrubbed view. This is the same as
+              nowX/nowY when not scrubbed, but unlike nowX/nowY, washX
+              does NOT shift when the user scrubs. The green hub stays
+              put while the user scrubs around. */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX + R * 0.15} cy={CY} r={R * 0.65}
+                          cx={washX} cy={washY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.28)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.10)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
           {/* Frosted texture — feTurbulence noise overlay, soft baseFreq.
