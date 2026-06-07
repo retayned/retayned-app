@@ -2939,11 +2939,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               - E3: directional wash (top stronger, bottom softer)
               - E4: tighter raised dot + lighter shadow
               - E5: softened rim stroke 0.45 → 0.38 */}
-          {/* E3: directional wash — green stronger at the top (upcoming side),
-              softer at the bottom (elapsed side). Replaces the flat wash. */}
+          {/* E3: directional wash — mint morning. Brighter than the prior
+              primaryLight forest tone; cooler hue (more blue undertone)
+              reads as fresh / morning light at similar opacity. Top
+              stronger (upcoming side), softer at bottom (elapsed side). */}
           <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(86, 139, 104, 0.08)" />
-            <stop offset="100%" stopColor="rgba(86, 139, 104, 0.02)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
           </linearGradient>
           <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
@@ -8920,10 +8922,23 @@ export default function App({ user }) {
            is invisible on the dark sidebar. Override here with a sage
            tint — same brand family as the nav hover state, just text
            only (no background fill, the period selectors are inline
-           text toggles not chip rows). */
+           text toggles not chip rows).
+
+           Active state: brighter sage + sage underline. Affordance
+           escalates from hover (soft sage at 40% underline) to active
+           (sharper sage at full underline). Active has no className
+           in JSX (only inactive items get .r-period-opt), so we target
+           via the inline border-bottom signature with the primary-green
+           color — uniquely identifies the active period row. */
         html .r-desk .rt-sidebar-widget .r-period-opt:hover {
           color: #A8C4B5 !important;
           border-bottom-color: rgba(168,196,181,0.40) !important;
+        }
+        html .r-desk .rt-sidebar-widget div[style*="border-bottom: 1px solid rgb(51, 84, 62)"],
+        html .r-desk .rt-sidebar-widget div[style*="border-bottom:1px solid rgb(51, 84, 62)"],
+        html .r-desk .rt-sidebar-widget div[style*="border-bottom: 1px solid #33543E"] {
+          color: #C8DCD0 !important;
+          border-bottom-color: #C8DCD0 !important;
         }
 
         /* ── PROFILE CHIP (A circle + name + company) ──────────────────
