@@ -8811,11 +8811,11 @@ export default function App({ user }) {
         }
 
         /* ── BRAND LOGO COLOR ───────────────────────────────────────────
-           Cool paper (#ECEFEC) — matches --rt-border, the same off-white
-           the page borders use. Systemic — reads as part of the palette
-           rather than a separate brand decision. */
+           Pure white #FFFFFF — what the major B2B SaaS brands do on dark
+           sidebars (Notion, Linear, Vercel, Stripe Dashboard). Maximum
+           legibility, brand-agnostic, no second-guessing. */
         .r-desk > div:first-child span {
-          color: #ECEFEC !important;
+          color: #FFFFFF !important;
         }
 
         /* ── NAV DOT BULLSEYE FIX ──────────────────────────────────────
@@ -8976,6 +8976,83 @@ export default function App({ user }) {
           display: none !important;                  /* Chrome / Safari / Edge */
           width: 0 !important;
           height: 0 !important;
+        }
+
+        /* ── RAI SIDEBAR CONVO LIST — HIDE SCROLLBAR ───────────────────
+           Same treatment as the chat container — the past-chats list
+           inside the sidebar gets a scrollbar that visually clashes
+           with the dark green chrome. */
+        .r-rai-sidebar-list {
+          scrollbar-width: none !important;
+          -ms-overflow-style: none !important;
+        }
+        .r-rai-sidebar-list::-webkit-scrollbar {
+          display: none !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+
+        /* ── RAI SIDEBAR — NEW CHAT BUTTON ─────────────────────────────
+           Inline JSX uses var(--rt-grad-btn) (purple gradient) + purple
+           shadow. That gradient was right for the old cream sidebar but
+           reads as loud / AI-generated against the dark green. Override
+           to coherent sidebar treatment — primary-tinted ghost button
+           with hover state matching nav rows. */
+        html .r-desk .rt-rai-pop-btn {
+          background: rgba(80, 130, 95, 0.22) !important;
+          background-image: none !important;
+          color: rgba(255,255,255,0.92) !important;
+          box-shadow: none !important;
+          border: 1px solid rgba(255,255,255,0.10) !important;
+        }
+        html .r-desk .rt-rai-pop-btn:hover {
+          background: rgba(80, 130, 95, 0.36) !important;
+          background-image: none !important;
+          color: #FFFFFF !important;
+          border-color: rgba(255,255,255,0.16) !important;
+          box-shadow: none !important;
+          transform: none !important;
+        }
+        html .r-desk .rt-rai-pop-btn:active {
+          background: rgba(80, 130, 95, 0.40) !important;
+          transform: none !important;
+        }
+
+        /* ── RAI SIDEBAR — CONVO ROW HOVER / ACTIVE ────────────────────
+           Inline JSX uses purple bg + purple text + 2px purple inset
+           left-shadow on active. That's the old loud AI-gen treatment.
+           Match the sidebar nav row family — same green tints, just text
+           with NO left bar (kill the inset shadow which paints the
+           purple stripe).
+
+           Active rows: JSX inline sets background rgba(124,92,243,0.10),
+           color C.btn (#7c5cf3), and boxShadow inset-2px purple. All
+           three need overriding. */
+        html .r-desk .r-convo-row {
+          color: rgba(255,255,255,0.65) !important;
+          background: transparent !important;
+        }
+        html .r-desk .r-convo-row:hover {
+          background: rgba(80, 130, 95, 0.18) !important;
+          color: #FFFFFF !important;
+        }
+        /* Active convo row — inline JSX paints rgba(124,92,243,0.10) bg
+           plus an inset 2px purple left bar. Match the active nav row
+           family (more saturated green tint) and kill the inset bar. */
+        html .r-desk .r-convo-row[style*="rgba(124,92,243"] {
+          background: rgba(80, 130, 95, 0.32) !important;
+          color: #FFFFFF !important;
+          box-shadow: none !important;
+        }
+        html .r-desk .r-convo-row[style*="rgba(124,92,243"] span {
+          color: #FFFFFF !important;
+        }
+
+        /* Section labels (Starred / Recent) above convo lists — JSX sets
+           color: C.textSec which is dark ink, invisible on dark sidebar. */
+        .r-rai-sidebar-list > div[style*="text-transform: uppercase"],
+        .r-rai-sidebar-list > div[style*="textTransform: uppercase"] {
+          color: rgba(255,255,255,0.45) !important;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -10857,7 +10934,7 @@ export default function App({ user }) {
                 </>
               );
               return (
-                <div style={{ padding: "4px 10px 10px", flex: 1, minHeight: 0, overflowY: "auto" }}>
+                <div className="r-rai-sidebar-list" style={{ padding: "4px 10px 10px", flex: 1, minHeight: 0, overflowY: "auto" }}>
                   {starred.length > 0 && section("Starred", starred)}
                   {recent.length > 0 && section("Recent", recent)}
                 </div>
