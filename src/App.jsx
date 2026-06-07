@@ -2939,16 +2939,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               - E3: directional wash (top stronger, bottom softer)
               - E4: tighter raised dot + lighter shadow
               - E5: softened rim stroke 0.45 → 0.38 */}
-          {/* E3: directional wash — mint morning, atmospheric. Brighter
-              than the prior primaryLight forest tone; cooler hue (more
-              blue undertone) reads as fresh / morning light. Opacity
-              tuned down ~25% from initial mint pass — the wash now
-              whispers rather than speaks, reading as ambient atmosphere
-              rather than visible color presence. Top stronger (upcoming
-              side), softer at bottom (elapsed side). */}
+          {/* E3: directional wash — mint morning. Brighter than the prior
+              primaryLight forest tone; cooler hue (more blue undertone)
+              reads as fresh / morning light at similar opacity. Top
+              stronger (upcoming side), softer at bottom (elapsed side). */}
           <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.09)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
           </linearGradient>
           <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
