@@ -2969,28 +2969,43 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           </linearGradient>
           {/* 10: inner shadow radial — concentrates at upper-left so
               the dome reads as recessed (light source convention).
-              Tint shifted from near-black rgba(20,30,22,...) to light
-              mint green so the dome reads as ATMOSPHERIC GREEN rather
-              than dark/forest.
+              Tint is light mint green so the dome reads atmospheric
+              rather than dark/forest.
 
-              Shading intensity reduced from initial mint pass:
-              - Center (upper-left core): 0.32 → 0.18 — most aggressive
-                cut. This is where the dome was reading darkest.
-              - Mid: 0.14 → 0.10 — moderate reduction across the
-                falloff zone.
-              The deboss reading is preserved (shadow still concentrates
-              at upper-left, light source convention intact); the dome
-              just no longer pools as heavily in that corner. */}
+              Stop curve uses 7 stops instead of 3 to eliminate gradient
+              banding. With only 3 stops at large opacity deltas, the
+              eye reads discrete rings inside the dome. Adding
+              intermediate stops creates a smoother interpolation curve
+              that reads as continuous atmospheric gradient.
+
+              Target opacities (3-stop equivalents):
+                Center 0.14, Mid 0.06, Outer 0.005
+              Interpolated to 7 stops at 0.00 / 0.15 / 0.30 / 0.50 / 0.70 / 0.85 / 1.00
+              with smooth easing between them. */}
           <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(140, 190, 160, 0.18)" />
-            <stop offset="0.40" stopColor="rgba(140, 190, 160, 0.10)" />
-            <stop offset="1" stopColor="rgba(140, 190, 160, 0)" />
+            <stop offset="0" stopColor="rgba(140, 190, 160, 0.14)" />
+            <stop offset="0.15" stopColor="rgba(140, 190, 160, 0.11)" />
+            <stop offset="0.30" stopColor="rgba(140, 190, 160, 0.085)" />
+            <stop offset="0.50" stopColor="rgba(140, 190, 160, 0.060)" />
+            <stop offset="0.70" stopColor="rgba(140, 190, 160, 0.035)" />
+            <stop offset="0.85" stopColor="rgba(140, 190, 160, 0.018)" />
+            <stop offset="1" stopColor="rgba(140, 190, 160, 0.005)" />
           </radialGradient>
           {/* 10: bottom highlight radial — concentrates at lower-right
-              so the dome lip catches light there. */}
+              so the dome lip catches light there. Same smoothing
+              treatment as the inner shadow: 7 stops instead of 3 to
+              eliminate banding.
+
+              Target opacities (3-stop equivalents):
+                Center 0.70, Mid 0.18, Outer 0
+              Interpolated with smooth easing between. */}
           <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
+            <stop offset="0.20" stopColor="rgba(255, 255, 255, 0.50)" />
+            <stop offset="0.40" stopColor="rgba(255, 255, 255, 0.32)" />
             <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
+            <stop offset="0.70" stopColor="rgba(255, 255, 255, 0.10)" />
+            <stop offset="0.85" stopColor="rgba(255, 255, 255, 0.04)" />
             <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
           </radialGradient>
           {/* 07: frosted texture overlay — NEW layer. feTurbulence noise
