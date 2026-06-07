@@ -8658,22 +8658,30 @@ export default function App({ user }) {
            layering white. Pure white at any opacity reads as grey-cool on
            dark green and introduces a foreign hue. Lifting within the
            green family keeps the hover looking like "this row got more
-           illuminated" rather than "a grey film was laid on top." */
-        .r-desk .nav-item {
+           illuminated" rather than "a grey film was laid on top."
+
+           html prefix on all rules — there are conflicting global
+           .nav-item rules later in the stylesheet (set white card bg on
+           hover, designed for old cream sidebar). Equal-specificity later
+           rules would override. html prefix bumps these rules to a
+           higher specificity (0,2,1 vs 0,2,0) so they win unconditionally. */
+        html .r-desk .nav-item {
           color: rgba(255,255,255,0.78) !important;
           background: transparent !important;
           background-image: none !important;
         }
-        .r-desk .nav-item:hover {
+        html .r-desk .nav-item:hover,
+        html .r-desk .nav-item:hover:not(.is-active) {
           background: rgba(80, 130, 95, 0.18) !important;
           background-image: none !important;
           color: #FFFFFF !important;
+          box-shadow: none !important;
         }
         /* Active state: the inline JSX sets a white→cream embossed gradient
            with stacked inset shadows + translateY. That treatment was right
            for a cream sidebar but reads as a kid-UI white chip on the dark
            green. Kill the gradient + shadows; lift the row in-family. */
-        .r-desk .nav-item.is-active {
+        html .r-desk .nav-item.is-active {
           background: rgba(80, 130, 95, 0.32) !important;
           background-image: none !important;
           color: #FFFFFF !important;
@@ -8682,13 +8690,20 @@ export default function App({ user }) {
         }
         /* Active text + icon — JSX inlined C.primaryDeep (same as sidebar
            bg) so they vanish on the green tint. Force white. */
-        .r-desk .nav-item.is-active span {
+        html .r-desk .nav-item.is-active span {
           color: #FFFFFF !important;
         }
-        .r-desk .nav-item.is-active svg,
-        .r-desk .nav-item.is-active svg * {
+        html .r-desk .nav-item.is-active svg,
+        html .r-desk .nav-item.is-active svg * {
           stroke: #FFFFFF !important;
           color: #FFFFFF !important;
+        }
+        /* Hovered nav-item svg should be white too (overriding the global
+           .nav-item:hover:not(.is-active) svg rule that sets var(--rt-text)). */
+        html .r-desk .nav-item:hover svg,
+        html .r-desk .nav-item:hover svg * {
+          color: #FFFFFF !important;
+          stroke: #FFFFFF !important;
         }
         .r-desk .nav-item svg {
           stroke: currentColor !important;
