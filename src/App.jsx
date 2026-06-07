@@ -2978,16 +2978,23 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                           cx={nowX} cy={nowY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.15)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.06)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.015)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.05)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.01)" />
           </radialGradient>
-          {/* Frosted texture — feTurbulence-based noise overlay. */}
+          {/* Frosted texture — feTurbulence noise tuned for smooth blend.
+              Previous (baseFrequency=0.85) created high-frequency speckle
+              that read as discrete pixels at low wash opacity. Lowering
+              to 0.35 makes the noise softer/blurrier (larger noise
+              "cells") which blends as continuous atmospheric texture
+              rather than visible grain. Alpha also reduced (0.07 → 0.035)
+              to scale down with the new lower wash intensity — noise
+              should sit ~30% strength of wash center, not match it. */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" stitchTiles="stitch" />
+            <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
             <feColorMatrix values="0 0 0 0 0.11
                                   0 0 0 0 0.20
                                   0 0 0 0 0.14
-                                  0 0 0 0.07 0" />
+                                  0 0 0 0.035 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
           {/* NOW dot drop-shadow — small lift to keep it sitting ON the glass */}
@@ -3006,11 +3013,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
         {/* Layer 1: the glass — NOW-anchored radial mint wash. Brightest
             at NOW, fades outward smoothly. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* 07 — Frosted texture overlay. */}
+        {/* 07 — Frosted texture overlay. Outer opacity reduced (0.55 → 0.35)
+            to scale with the new lower wash intensity. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
-              opacity="0.55" />
+              opacity="0.35" />
         {/* 02+original-three-line — Restored edge from earlier dome version.
             Three strokes in sequence: outer dark stroke (the visible rim),
             inner white hairline (the lip catching highlight just inside),
@@ -3025,10 +3033,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               fill="none"
               stroke="rgba(255,255,255,0.95)"
               strokeWidth="0.8" />
-        {/* Engraved interior ring — 18px inboard, barely visible */}
+        {/* Engraved interior ring — 18px inboard. Opacity softened
+            (0.10 → 0.06) so it doesn't compete with the gentler wash. */}
         <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`}
               fill="none"
-              stroke="rgba(28,50,36,0.10)"
+              stroke="rgba(28,50,36,0.06)"
               strokeWidth="0.5" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
