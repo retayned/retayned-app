@@ -2853,7 +2853,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               return `${h12}:${mm}${ampm}`;
             })()}
           </div>
-          <div style={{ fontSize: 10.5, color: "#1C3224", fontWeight: 700, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <div style={{ fontSize: 10.5, color: "#33543E", fontWeight: 700, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Return to now
           </div>
         </button>
@@ -8700,16 +8700,16 @@ export default function App({ user }) {
           padding-left: 0 !important;
         }
 
-        /* Link color — was purple (#7c5cf3). Now primaryDeep with dotted
-           underline. Authoritative rather than decorative. */
+        /* Link color — was purple (#7c5cf3). Now primary forest green
+           with dotted underline. Lighter than primaryDeep — reads warmer. */
         .rt-purple-link {
-          color: #1C3224 !important;
-          text-decoration-color: #1C3224 !important;
+          color: #33543E !important;
+          text-decoration-color: #33543E !important;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
-            color: #274230 !important;
-            text-decoration-color: #274230 !important;
+            color: #2D4A37 !important;
+            text-decoration-color: #2D4A37 !important;
             text-decoration-style: solid !important;
           }
         }
@@ -8717,8 +8717,8 @@ export default function App({ user }) {
         /* Client-name link color in the daily brief (.rt-today-lede a). */
         .rt-today-lede a,
         .rt-today-lede a:visited {
-          color: #1C3224 !important;
-          text-decoration-color: rgba(28,50,36,0.5) !important;
+          color: #33543E !important;
+          text-decoration-color: rgba(51,84,62,0.5) !important;
         }
 
         /* Composer plus button → primarySoft locked as default. No
@@ -8777,10 +8777,10 @@ export default function App({ user }) {
         }
 
         /* ── BRAND LOGO COLOR ───────────────────────────────────────────
-           Pure white was sterile. Warm cream feels printed, premium, more
-           Retayned. Sits inside the sidebar's primaryDeep dark green. */
+           Soft sage (#E6EFE9) — primarySoft. Ties to the palette family;
+           reads as a quiet brand mark on the primaryDeep sidebar. */
         .r-desk > div:first-child span {
-          color: #F5F0E3 !important;
+          color: #E6EFE9 !important;
         }
 
         /* ── NAV DOT BULLSEYE FIX ──────────────────────────────────────
