@@ -5205,21 +5205,6 @@ export default function App({ user }) {
     document.querySelectorAll(".r-main, .r-rai-scroll").forEach(el => { el.scrollTop = 0; });
   }, [page]);
 
-  // ─── RAI FULL-WIDTH MODE ──────────────────────────────────────────
-  // When on the Rai page (page === "coach"), hide the physical sidebar
-  // entirely and give the chat the full viewport width. Uses a body
-  // data-attribute the CSS can target. Cleaner than conditionally
-  // rendering the sidebar (no React re-mount flicker on nav).
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (page === "coach") {
-      document.body.setAttribute("data-rai-fullwidth", "1");
-    } else {
-      document.body.removeAttribute("data-rai-fullwidth");
-    }
-    return () => { document.body.removeAttribute("data-rai-fullwidth"); };
-  }, [page]);
-
   // iOS Safari viewport fix — when the address bar collapses/expands, 100vh doesn't update,
   // leaving fixed-positioned elements (like the bottom nav) anchored to the wrong bottom.
   // visualViewport API tracks the actual visible viewport. We write its height to a CSS var
@@ -8945,22 +8930,6 @@ export default function App({ user }) {
         /* ═══════════════════════════════════════════════════════════════
            END SITEWIDE MIGRATION
            ═══════════════════════════════════════════════════════════════ */
-
-        /* ── RAI FULL-WIDTH MODE ───────────────────────────────────────
-           When body has [data-rai-fullwidth], hide the physical left
-           sidebar (.r-desk) and reclaim the full viewport width for the
-           Rai chat. Toggle button hidden too — there's no sidebar to
-           toggle. Set by the useEffect on page === "coach". */
-        body[data-rai-fullwidth] .r-desk,
-        body[data-rai-fullwidth] .rt-sidebar-toggle {
-          display: none !important;
-        }
-        body[data-rai-fullwidth] .r-main {
-          left: 0 !important;
-          right: 0 !important;
-          top: 0 !important;
-          bottom: 0 !important;
-        }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         /* Paper grain — barely-perceptible noise texture on the cream
