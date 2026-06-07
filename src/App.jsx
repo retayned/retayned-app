@@ -2972,15 +2972,21 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
-          {/* Frosted texture — feTurbulence noise overlay, soft baseFreq.
-              Bumped: colorMatrix alpha 0.035 → 0.05, overlay opacity
-              0.35 → 0.5 for more visible surface character. */}
+          {/* Atmospheric density variation — feTurbulence noise tuned
+              to read as density modulation rather than surface texture.
+              baseFrequency 0.15 (was 0.35) makes the noise cells
+              LARGER — soft blotches of variation rather than fine
+              grain. Eye reads larger soft blotches as "atmospheric
+              density" rather than "surface noise."
+              colorMatrix alpha 0.025 (was 0.05) — barely visible,
+              present but not asserting itself as texture.
+              Overlay opacity 0.4 (was 0.5) — kept slight presence. */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
+            <feTurbulence type="fractalNoise" baseFrequency="0.15" numOctaves="2" seed="3" stitchTiles="stitch" />
             <feColorMatrix values="0 0 0 0 0.11
                                   0 0 0 0 0.20
                                   0 0 0 0 0.14
-                                  0 0 0 0.05 0" />
+                                  0 0 0 0.025 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
           {/* NOW dot drop-shadow */}
@@ -2998,11 +3004,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
         {/* ── ATMOSPHERIC render ─────────────────────────────────────────── */}
         {/* Layer 1: static mint wash */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2: frosted texture overlay */}
+        {/* Layer 2: atmospheric density variation overlay */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
-              opacity="0.5" />
+              opacity="0.4" />
         {/* Layer 3: single soft hairline edge */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
@@ -8649,11 +8655,10 @@ export default function App({ user }) {
         }
 
         /* Today canvas backdrop — Variant A border-cool-strong wash.
-           A soft cool-grey zone behind the task list. Top stop toned
-           from 0.42 → 0.30 for a quieter zone definition. */
+           A soft cool-grey zone behind the task list. Top stop at 0.32. */
         .rt-today-canvas {
-          background: linear-gradient(180deg, rgba(220,224,220,0.30), rgba(220,224,220,0.02)) !important;
-          background-image: linear-gradient(180deg, rgba(220,224,220,0.30), rgba(220,224,220,0.02)) !important;
+          background: linear-gradient(180deg, rgba(220,224,220,0.32), rgba(220,224,220,0.02)) !important;
+          background-image: linear-gradient(180deg, rgba(220,224,220,0.32), rgba(220,224,220,0.02)) !important;
         }
 
         /* Sidebar — flush left, primaryDeep green, no float chrome.
