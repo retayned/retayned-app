@@ -8653,17 +8653,22 @@ export default function App({ user }) {
 
         /* Logo color is set further down (warm cream override) */
 
-        /* Nav items — readable on dark green */
+        /* Nav items — readable on dark green. Hover/active states lift the
+           dark green toward primary (lighter same-family) instead of
+           layering white. Pure white at any opacity reads as grey-cool on
+           dark green and introduces a foreign hue. Lifting within the
+           green family keeps the hover looking like "this row got more
+           illuminated" rather than "a grey film was laid on top." */
         .r-desk .nav-item {
           color: rgba(255,255,255,0.78) !important;
           background: transparent !important;
         }
         .r-desk .nav-item:hover {
-          background: rgba(255,255,255,0.06) !important;
+          background: rgba(80, 130, 95, 0.18) !important;
           color: #FFFFFF !important;
         }
         .r-desk .nav-item.is-active {
-          background: rgba(255,255,255,0.10) !important;
+          background: rgba(80, 130, 95, 0.32) !important;
           color: #FFFFFF !important;
           box-shadow: none !important;
         }
@@ -8828,59 +8833,61 @@ export default function App({ user }) {
         .rt-sidebar-widget svg path {
           stroke: rgba(255,255,255,0.45) !important;
         }
-        /* Bucket count NUMBERS — restore their accent colors. The portfolio
-           bucket counts use C.retElite/C.retGood/C.retOk/C.retWarn/C.retCrit
-           inline (verified from line 66 of App.jsx). The * rule above
-           overrides these to white — we need to put them back. retElite
-           and retGood are too dark on the sidebar bg, so they're lifted
-           to brighter accent variants. */
+        /* Bucket count NUMBERS — keep the bucket counts mostly muted on
+           the small sidebar widget. Thriving + Healthy stay legible as
+           muted greens (part of the brand). The warning tier (retOk/
+           retWarn/retCrit) gets pulled toward neutral grey-warm tones —
+           the widget shouldn't be pulling attention from the main
+           content with vivid yellows and reds. The data is still
+           there on inspection, just not shouting. */
         .rt-sidebar-widget [style*="color: rgb(12, 58, 46)"],
         .rt-sidebar-widget [style*="color: #0C3A2E"] {
-          color: #4A9374 !important; /* retElite → lifted brighter for dark bg */
+          color: #5B9479 !important; /* retElite → muted green */
         }
         .rt-sidebar-widget [style*="color: rgb(31, 122, 92)"],
         .rt-sidebar-widget [style*="color: #1F7A5C"] {
-          color: #5BB28D !important; /* retGood → lifted brighter for dark bg */
+          color: #6BA68C !important; /* retGood → muted green */
         }
         .rt-sidebar-widget [style*="color: rgb(168, 164, 32)"],
         .rt-sidebar-widget [style*="color: #A8A420"] {
-          color: #D4D03A !important; /* retOk → lifted */
+          color: rgba(255,255,255,0.50) !important; /* retOk → neutral */
         }
         .rt-sidebar-widget [style*="color: rgb(209, 122, 27)"],
         .rt-sidebar-widget [style*="color: #D17A1B"] {
-          color: #ED9540 !important; /* retWarn → lifted */
+          color: rgba(255,255,255,0.42) !important; /* retWarn → neutral */
         }
         .rt-sidebar-widget [style*="color: rgb(180, 52, 31)"],
         .rt-sidebar-widget [style*="color: #B4341F"] {
-          color: #E55543 !important; /* retCrit → lifted */
+          color: rgba(255,255,255,0.35) !important; /* retCrit → neutral */
         }
         .r-desk-bucket-dark-fix {}  /* anchor */
-        /* The 8px-tall stacked bucket bar uses the same dark accent hexes as
-           backgrounds. Lift those too so the bar strip is visible. */
+        /* The 8px-tall stacked bucket bar — same muting for backgrounds.
+           Thriving + Healthy still hint green (brand alignment); warning
+           tier is neutral so the bar reads as quiet portfolio context. */
         .rt-sidebar-widget [style*="background: rgb(12, 58, 46)"],
         .rt-sidebar-widget [style*="background: #0C3A2E"],
         .rt-sidebar-widget [style*="background:#0C3A2E"] {
-          background: #4A9374 !important;
+          background: #5B9479 !important;
         }
         .rt-sidebar-widget [style*="background: rgb(31, 122, 92)"],
         .rt-sidebar-widget [style*="background: #1F7A5C"],
         .rt-sidebar-widget [style*="background:#1F7A5C"] {
-          background: #5BB28D !important;
+          background: #6BA68C !important;
         }
         .rt-sidebar-widget [style*="background: rgb(168, 164, 32)"],
         .rt-sidebar-widget [style*="background: #A8A420"],
         .rt-sidebar-widget [style*="background:#A8A420"] {
-          background: #D4D03A !important;
+          background: rgba(255,255,255,0.32) !important;
         }
         .rt-sidebar-widget [style*="background: rgb(209, 122, 27)"],
         .rt-sidebar-widget [style*="background: #D17A1B"],
         .rt-sidebar-widget [style*="background:#D17A1B"] {
-          background: #ED9540 !important;
+          background: rgba(255,255,255,0.24) !important;
         }
         .rt-sidebar-widget [style*="background: rgb(180, 52, 31)"],
         .rt-sidebar-widget [style*="background: #B4341F"],
         .rt-sidebar-widget [style*="background:#B4341F"] {
-          background: #E55543 !important;
+          background: rgba(255,255,255,0.18) !important;
         }
 
         /* ── PROFILE CHIP (A circle + name + company) ──────────────────
