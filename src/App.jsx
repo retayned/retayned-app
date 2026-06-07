@@ -8915,6 +8915,17 @@ export default function App({ user }) {
           background: rgba(255,255,255,0.10) !important; /* Critical */
         }
 
+        /* ── PERIOD SELECTOR (Week / Month / Year) — SIDEBAR DARK MODE ─
+           Base CSS sets hover to var(--rt-text) (near-black ink) which
+           is invisible on the dark sidebar. Override here with a sage
+           tint — same brand family as the nav hover state, just text
+           only (no background fill, the period selectors are inline
+           text toggles not chip rows). */
+        html .r-desk .rt-sidebar-widget .r-period-opt:hover {
+          color: #A8C4B5 !important;
+          border-bottom-color: rgba(168,196,181,0.40) !important;
+        }
+
         /* ── PROFILE CHIP (A circle + name + company) ──────────────────
            Avatar: C.primarySoft (#E6EFE9) — pale on dark = wafer.
            Name: C.text (#1E261F) — invisible on dark.
