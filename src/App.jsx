@@ -2934,32 +2934,25 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL · Variant B + debossed groove ──────────────
-              Variant B base (NOW-anchored radial wash + frosted texture)
-              with the rim edge upgraded to a debossed groove cut into
-              the frosted glass.
+          {/* ── FLAT GLASS DIAL · Variant B + original three-line edge ─────
+              Variant B (NOW-anchored radial wash + frosted texture)
+              with the original three-line edge restored from the
+              earlier dome version.
 
-              The edge is no longer a single uniform hairline. It's a
-              paired stroke: outer rim catches a soft highlight (light
-              from above-left), inner ring 3px inboard sits in shadow.
-              Together they read as a recessed channel.
+              Edge composition:
+                - Outer rim: dark hairline at 1.5px @ 0.38 alpha
+                - Inner highlight: white hairline at 0.8px @ 0.95 alpha,
+                  2px inboard from the rim
+                - Engraved interior ring: 0.5px @ 0.10 alpha, 18px inboard
 
               Layered enhancements:
-              02. Debossed groove edge (paired highlight + shadow
-                  hairlines simulating a recessed perimeter channel
-                  cut into the glass surface)
+              02. Original three-line edge (dark rim + white inner
+                  highlight + faint engraved ring)
               06. NOW-anchored radial wash (brightest at NOW)
               07. Frosted texture — feTurbulence noise overlay
 
-              The static NOW orb glow (12) was removed — with the
-              NOW-anchored radial wash already lighting up the area
-              around NOW, a static halo on top doubled up the attention
-              signal. The pulsing ring remains.
-
-              The groove respects the frosted-glass diffusion: both
-              hairlines are soft and low-contrast. Frosted glass
-              scatters light, so a real groove in it doesn't pop —
-              it reads as a tonal dip with a luminous upper edge. */}
+              No NOW orb glow (12) — the radial wash already handles
+              the ambient focus around NOW. */}
           {/* 06 — NOW-anchored radial wash. Center follows nowX/nowY so
               the brightest point of the glass always sits at NOW. Radius
               extends past the disc boundary so the falloff carries
@@ -3008,35 +3001,25 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
               opacity="0.55" />
-        {/* 02+debossed-groove — Edge treatment. Instead of a single
-            uniform hairline, this pairs two strokes to create the
-            illusion of a debossed channel cut into the frosted glass
-            near the rim.
-
-            PHYSICS: Light from above-left strikes the flat disc face.
-            A groove cut into the surface near the perimeter has:
-              - Outer wall (facing the light): catches direct light →
-                soft white highlight hairline along the rim
-              - Inner wall (occluded by the lip): falls into shadow →
-                darker hairline 3px inboard
-              - Floor between them sits slightly darker (handled by
-                the existing frosted texture)
-
-            Both strokes are soft/diffuse — frosted glass scatters
-            everything, so the groove reads as a tonal dip rather than
-            a sharp engraved line. */}
-        {/* Outer rim — luminous highlight hairline */}
+        {/* 02+original-three-line — Restored edge from earlier dome version.
+            Three strokes in sequence: outer dark stroke (the visible rim),
+            inner white hairline (the lip catching highlight just inside),
+            and a faint engraved ring 18px inboard (subtle interior detail). */}
+        {/* Outer rim — dark hairline (the visible edge of the disc) */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
-              stroke="rgba(255, 255, 255, 0.55)"
-              strokeWidth="0.6" />
-        {/* Inner shadow line — 3px inboard from the rim, the darker
-            wall of the groove. Slightly heavier than the highlight so
-            the eye reads "the floor goes DOWN into shadow." */}
-        <path d={`M ${CX} ${CY - (R - 3)} A ${R - 3} ${R - 3} 0 0 0 ${CX} ${CY + (R - 3)}`}
+              stroke="rgba(28,50,36,0.38)"
+              strokeWidth="1.5" />
+        {/* Inner white hairline — 2px inboard, catching highlight */}
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`}
               fill="none"
-              stroke="rgba(28, 50, 36, 0.34)"
-              strokeWidth="0.9" />
+              stroke="rgba(255,255,255,0.95)"
+              strokeWidth="0.8" />
+        {/* Engraved interior ring — 18px inboard, barely visible */}
+        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`}
+              fill="none"
+              stroke="rgba(28,50,36,0.10)"
+              strokeWidth="0.5" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
