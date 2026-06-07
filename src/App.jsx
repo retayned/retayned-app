@@ -72,20 +72,20 @@ const C = {
 // style block so they're authoritative at the document root.
 const THEME_CSS = `
   :root {
-    --rt-bg: #FAFAF7;
+    --rt-bg: #FAFBFA;
     --rt-card: #FFFFFF;
-    --rt-surface: #EEEFEB;
-    --rt-surface-warm: #F2EEE8;
-    --rt-deep-cream: #EAE4D6;
-    --rt-sidebar: #F2EEE8;
+    --rt-surface: #F4F6F4;
+    --rt-surface-warm: #F4F6F4;
+    --rt-deep-cream: #DCE0DC;
+    --rt-sidebar: #1C3224;
     --rt-text: #1E261F;
     --rt-text-sec: #6B6B66;
     --rt-text-muted: #9A9A93;
     --rt-ink-500: #6B6B66;
     --rt-ink-300: #C4C4BD;
-    --rt-border: #D8DFD8;
-    --rt-border-light: #EFEFEA;
-    --rt-border-soft: #EFEFEA;
+    --rt-border: #ECEFEC;
+    --rt-border-light: #F2F4F2;
+    --rt-border-soft: #F2F4F2;
     --rt-btn-light: #d6cbfb;
     /* ────────────── POLISH LAYER ──────────────
        Same palette, just enhanced with gradients, layered shadows for
@@ -5205,19 +5205,6 @@ export default function App({ user }) {
     document.querySelectorAll(".r-main, .r-rai-scroll").forEach(el => { el.scrollTop = 0; });
   }, [page]);
 
-  // ─── TODAY-PAGE REDESIGN BODY CLASS TOGGLER (Jun 6 2026) ──────────
-  // Adds .rt-today-redesign to <body> only when on the Today page,
-  // gating the redesign CSS block in the THEME <style>. Safe revert:
-  // delete this useEffect + the CSS block, no other changes needed.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (page === "today") {
-      document.body.classList.add("rt-today-redesign");
-    } else {
-      document.body.classList.remove("rt-today-redesign");
-    }
-    return () => { document.body.classList.remove("rt-today-redesign"); };
-  }, [page]);
   // iOS Safari viewport fix — when the address bar collapses/expands, 100vh doesn't update,
   // leaving fixed-positioned elements (like the bottom nav) anchored to the wrong bottom.
   // visualViewport API tracks the actual visible viewport. We write its height to a CSS var
@@ -8578,92 +8565,63 @@ export default function App({ user }) {
         /* ═══════════════════════════════════════════════════════════════
            TODAY-PAGE REDESIGN (Jun 6 2026 — Adam direction)
            ───────────────────────────────────────────────────────────────
-           Scope: ONLY when body has class .rt-today-redesign (set when
-           page === 'today'). Other pages untouched.
+           MIGRATED Jun 7 2026: this block originally lived under
+           body.rt-today-redesign so it only applied to the Today page.
+           After Today landed, Adam migrated everything sitewide — the
+           cool palette + sidebar + composer greening + FAB greening +
+           dial greening are now the DEFAULT app state, not a scoped
+           override. Most palette redirects moved to :root above. The
+           rules below are the non-variable styling (sidebar geometry,
+           component recoloring) that needed to land as global defaults.
 
-           To revert: delete this entire block. Then remove the
-           useEffect that adds the body class. That's it — no other
-           file changes needed.
-
-           Changes:
-           1. Sidebar → primary forest green, flush-left, no card chrome
+           Changes baked in:
+           1. Sidebar → primaryDeep green, flush-left, no card chrome
            2. Logo → white
            3. Nav items recolored for dark bg
-           4. Page bg → #FAFBFA
+           4. Page bg → #FAFBFA (via --rt-bg, set on :root)
            5. Cards/tiles stay white
-           6. Client-name underlines → green (override on the Today
-              page lede only — global links elsewhere untouched)
+           6. Link color (was purple) → primaryDeep with dotted underline
            7. + buttons (composer plus, FAB) → green
            8. Composer Add button → green when triggered
            9. Dial now-dot → forest green (was purple)
            ═══════════════════════════════════════════════════════════════ */
 
-        body.rt-today-redesign {
+        body {
           background: #FAFBFA !important;
         }
         /* Content scroll container — force same bg as body so the
-           area right of the sidebar reads as a single continuous surface.
-           Without this, .r-main keeps its own paint (--rt-bg #FAFAF7
-           cream) which contrasts with our #FAFBFA body. */
-        body.rt-today-redesign .r-main {
+           area right of the sidebar reads as a single continuous surface. */
+        .r-main {
           background: #FAFBFA !important;
         }
-        /* Also kill the paper-grain dots on body when redesign is active —
-           we want a clean flat SaaS canvas, not the warm-paper texture. */
-        body.rt-today-redesign {
+        /* Kill the legacy paper-grain dots on body. */
+        body {
           background-image: none !important;
         }
 
-        /* ─── CREAM-TO-COOL MIGRATION ──────────────────────────────
-           Locked palette (Jun 6 2026):
-             canvas             #FAFBFA  (was --rt-bg #FAFAF7)
-             card               #FFFFFF  (unchanged)
-             hoverSurface       #F4F6F4  (was --rt-surface #EEEFEB)
-             border-cool        #ECEFEC  (was --rt-border #D8DFD8)
-             border-cool-strong #DCE0DC  (focus rings)
-             surface-cool       #F4F6F4  (was --rt-surface-warm #F2EEE8)
-             deep-cool          #DCE0DC  (was --rt-deep-cream #EAE4D6)
-
-           Strategy: redirect the existing CSS variables when on the
-           Today redesign. Every inline C.surfaceWarm, C.deepCream,
-           C.surface, var(--rt-bg) etc. automatically picks up the
-           new cool tone because they all resolve through these tokens.
-           Variables only — no individual component touches. */
-        body.rt-today-redesign {
-          --rt-bg: #FAFBFA !important;
-          --rt-surface: #F4F6F4 !important;
-          --rt-surface-warm: #F4F6F4 !important;
-          --rt-deep-cream: #DCE0DC !important;
-          --rt-border: #ECEFEC !important;
-          --rt-border-light: #F2F4F2 !important;
-          --rt-border-soft: #F2F4F2 !important;
-        }
-        /* Also kill the V1_GRAD warm rainbow gradients used on the calendar
-           strip and other places — they bake #FAFAF7 cream into hardcoded
+        /* Kill the V1_GRAD warm rainbow gradients used on the calendar
+           strip and other places — they bake the old cream into hardcoded
            strings, so the variable redirect can't reach them. Flat them
            to canvas instead. */
-        body.rt-today-redesign [style*="V1_GRAD"],
-        body.rt-today-redesign [style*="rgba(124,92,243,0.10) 0%"],
-        body.rt-today-redesign [style*="#FAFAF7"] {
+        [style*="V1_GRAD"],
+        [style*="rgba(124,92,243,0.10) 0%"],
+        [style*="#FAFAF7"] {
           background: #FAFBFA !important;
           background-image: none !important;
         }
 
         /* Today canvas backdrop — Variant A border-cool-strong wash.
-           A soft cool-grey zone behind the task list. Direct cool-palette
-           translation of the original cream gradient. Fades from 42%
-           opacity at the top to 2% at the bottom. */
-        body.rt-today-redesign .rt-today-canvas {
+           A soft cool-grey zone behind the task list. */
+        .rt-today-canvas {
           background: linear-gradient(180deg, rgba(220,224,220,0.42), rgba(220,224,220,0.02)) !important;
           background-image: linear-gradient(180deg, rgba(220,224,220,0.42), rgba(220,224,220,0.02)) !important;
         }
 
         /* Sidebar — flush left, primaryDeep green, no float chrome.
-           Uses primaryDeep (#1C3224), the darkest stop. Selector uses
-           html prefix to outrank the inline style attribute on the
-           .r-desk element. */
-        html body.rt-today-redesign .r-desk,
-        html body.rt-today-redesign div.r-desk {
+           Uses primaryDeep (#1C3224), the darkest stop. html prefix outranks
+           inline styles on the .r-desk element. */
+        html .r-desk,
+        html div.r-desk {
           background: #1C3224 !important;
           background-image: none !important;
           top: 0 !important;
@@ -8673,51 +8631,51 @@ export default function App({ user }) {
           box-shadow: none !important;
           width: 240px !important;
         }
-        html body.rt-today-redesign .r-desk.is-collapsed,
-        html body.rt-today-redesign div.r-desk.is-collapsed {
+        html .r-desk.is-collapsed,
+        html div.r-desk.is-collapsed {
           width: 64px !important;
         }
 
         /* Logo — white */
-        body.rt-today-redesign .r-desk > div:first-child span {
+        .r-desk > div:first-child span {
           color: #FFFFFF !important;
         }
 
         /* Nav items — readable on dark green */
-        body.rt-today-redesign .r-desk .nav-item {
+        .r-desk .nav-item {
           color: rgba(255,255,255,0.78) !important;
           background: transparent !important;
         }
-        body.rt-today-redesign .r-desk .nav-item:hover {
+        .r-desk .nav-item:hover {
           background: rgba(255,255,255,0.06) !important;
           color: #FFFFFF !important;
         }
-        body.rt-today-redesign .r-desk .nav-item.is-active {
+        .r-desk .nav-item.is-active {
           background: rgba(255,255,255,0.10) !important;
           color: #FFFFFF !important;
           box-shadow: none !important;
         }
-        body.rt-today-redesign .r-desk .nav-item svg {
+        .r-desk .nav-item svg {
           stroke: currentColor !important;
         }
 
         /* Stamp/Caveat text — slightly muted on dark */
-        body.rt-today-redesign .r-desk .caveat,
-        body.rt-today-redesign .r-desk [style*="Caveat"] {
+        .r-desk .caveat,
+        .r-desk [style*="Caveat"] {
           color: rgba(255,255,255,0.55) !important;
         }
 
         /* User chip + divider lines inside sidebar */
-        body.rt-today-redesign .r-desk .rt-user-chip {
+        .r-desk .rt-user-chip {
           color: rgba(255,255,255,0.88) !important;
         }
-        body.rt-today-redesign .r-desk hr,
-        body.rt-today-redesign .r-desk [style*="border-top"] {
+        .r-desk hr,
+        .r-desk [style*="border-top"] {
           border-color: rgba(255,255,255,0.08) !important;
         }
 
         /* Toggle button between sidebar and content — restyle for dark */
-        body.rt-today-redesign .rt-sidebar-toggle {
+        .rt-sidebar-toggle {
           background: #33543E !important;
           color: #FFFFFF !important;
           border: 1px solid rgba(255,255,255,0.12) !important;
@@ -8726,44 +8684,39 @@ export default function App({ user }) {
 
         /* Main content shift — sidebar is now flush-left (no 14px inset)
            so the main content's left padding should account for new width */
-        body.rt-today-redesign .r-mainwrap {
+        .r-mainwrap {
           padding-left: 0 !important;
         }
 
-        /* Client-name links in the daily brief and Today surfaces —
-           was C.btn purple (#7c5cf3). Variant B locked: primaryDeep
-           with dotted underline. Matches the dark sidebar, reads as
-           authoritative rather than decorative. Scoped to Today only;
-           other pages keep purple. */
-        body.rt-today-redesign .rt-purple-link {
+        /* Link color — was purple (#7c5cf3). Now primaryDeep with dotted
+           underline. Authoritative rather than decorative. */
+        .rt-purple-link {
           color: #1C3224 !important;
           text-decoration-color: #1C3224 !important;
         }
         @media (hover: hover) {
-          body.rt-today-redesign .rt-purple-link:hover {
+          .rt-purple-link:hover {
             color: #274230 !important;
             text-decoration-color: #274230 !important;
             text-decoration-style: solid !important;
           }
         }
 
-        /* Client-name underline color — was purple (.lede a is the styled link).
-           Override to forest green for any anchor within the today page. */
-        body.rt-today-redesign .rt-today-lede a,
-        body.rt-today-redesign .rt-today-lede a:visited {
+        /* Client-name link color in the daily brief (.rt-today-lede a). */
+        .rt-today-lede a,
+        .rt-today-lede a:visited {
           color: #1C3224 !important;
           text-decoration-color: rgba(28,50,36,0.5) !important;
         }
 
-        /* Composer plus button → primarySoft (the hover state) locked as
-           the default. No separate hover treatment — the soft green stays
-           regardless. */
-        body.rt-today-redesign .rt-composer-plus {
+        /* Composer plus button → primarySoft locked as default. No
+           separate hover treatment — the soft green stays regardless. */
+        .rt-composer-plus {
           background: #E6EFE9 !important;
         }
         /* Icon inside the plus puck — primary green on the soft bg */
-        body.rt-today-redesign .rt-composer-plus svg,
-        body.rt-today-redesign .rt-composer-plus svg * {
+        .rt-composer-plus svg,
+        .rt-composer-plus svg * {
           color: #33543E !important;
           stroke: #33543E !important;
           fill: #33543E !important;
@@ -8771,20 +8724,20 @@ export default function App({ user }) {
 
         /* Composer Add button — green when armed (button only shows the
            gradient when newTask.trim() is truthy; we override that armed
-           state to forest green on the Today page). */
-        body.rt-today-redesign .rt-add-task-btn:not(:disabled) {
+           state to forest green). */
+        .rt-add-task-btn:not(:disabled) {
           background: #33543E !important;
           background-image: none !important;
           color: #FFFFFF !important;
           box-shadow: 0 1px 2px rgba(20,30,22,0.10), 0 2px 6px rgba(51,84,62,0.25) !important;
         }
-        body.rt-today-redesign .rt-add-task-btn:not(:disabled):hover {
+        .rt-add-task-btn:not(:disabled):hover {
           background: #2D4A37 !important;
         }
         /* Disabled / rest state — was cream (C.surfaceWarm).
            Now hoverSurface #F4F6F4 with textMuted text. */
-        body.rt-today-redesign .rt-add-task-btn:disabled,
-        body.rt-today-redesign .rt-add-task-btn[disabled] {
+        .rt-add-task-btn:disabled,
+        .rt-add-task-btn[disabled] {
           background: #F4F6F4 !important;
           background-image: none !important;
           color: #9A9A93 !important;
@@ -8792,27 +8745,27 @@ export default function App({ user }) {
         }
 
         /* Dial now-marker — was purple; switch to forest green */
-        body.rt-today-redesign .rt-dial-now-dot,
-        body.rt-today-redesign .rt-dial-now circle {
+        .rt-dial-now-dot,
+        .rt-dial-now circle {
           fill: #33543E !important;
         }
-        body.rt-today-redesign .rt-dial-now-ring {
+        .rt-dial-now-ring {
           stroke: #33543E !important;
         }
 
         /* Floating quick-log FAB (bottom-right) — was purple gradient.
-           Override to forest green for the redesign. */
-        body.rt-today-redesign .rt-quicklog-fab {
+           Override to forest green globally. */
+        .rt-quicklog-fab {
           background: #33543E !important;
           background-image: none !important;
           box-shadow: 0 1px 2px rgba(20,30,22,0.10), 0 6px 20px rgba(51,84,62,0.30) !important;
         }
-        body.rt-today-redesign .rt-quicklog-fab:hover {
+        .rt-quicklog-fab:hover {
           background: #274230 !important;
         }
 
         /* ═══════════════════════════════════════════════════════════════
-           END TODAY-PAGE REDESIGN
+           END SITEWIDE MIGRATION
            ═══════════════════════════════════════════════════════════════ */
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -12088,7 +12041,7 @@ export default function App({ user }) {
                         className="rt-band-pick is-expanded"
                         style={{
                           marginTop: 8,
-                          fontSize: 13.5,
+                          fontSize: 14,
                           lineHeight: 1.5,
                           color: C.textMuted,
                           fontFamily: "'Fraunces', Georgia, serif",
@@ -12202,7 +12155,7 @@ export default function App({ user }) {
                       className="rt-band-pick is-expanded"
                       style={{
                         marginTop: 8,
-                        fontSize: 13.5,
+                        fontSize: 14,
                         lineHeight: 1.5,
                         color: C.textMuted,
                         fontFamily: "'Fraunces', Georgia, serif",
