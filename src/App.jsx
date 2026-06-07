@@ -2962,9 +2962,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           <radialGradient id="rt-dial-wash"
                           cx={nowX} cy={nowY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.15)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.05)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.01)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
           {/* Frosted texture — feTurbulence noise, soft baseFrequency
               for smooth atmospheric blend (not discrete speckle). */}
