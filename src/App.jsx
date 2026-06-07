@@ -2953,15 +2953,18 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               behind it. The light source doesn't move, so the bright
               spot doesn't move. NOW dot is a marker that travels
               around the perimeter; the glass itself stays put. */}
-          {/* Static wash centered at (CX - R*0.3, CY) — pushed off-screen
-              to the LEFT of the flat edge. Because the radial gradient
-              spreads symmetrically from its center, pulling the center
-              past the cut-off edge means only the right-falling portion
-              shows. The visible greenest point lands AT the flat edge
-              (center-left of dial), fading outward into the visible
-              dial area. */}
+          {/* Wash anchored to the FIXED screen position (CX, CY) — the
+              center-left of the dial, which is where live NOW appears
+              in the unscrubbed view. This is a static screen-space
+              position; it does NOT follow the user when they scrub.
+
+              The point: give the user a green atmospheric hub on the
+              left side of the dial where they spend most of their
+              attention (looking at NOW and nearby times). Scrubbing
+              away to explore other times shouldn't drag the
+              atmosphere along — the hub stays put. */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX - R * 0.3} cy={CY} r={R * 1.15}
+                          cx={CX} cy={CY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
