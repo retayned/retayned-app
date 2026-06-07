@@ -8662,15 +8662,33 @@ export default function App({ user }) {
         .r-desk .nav-item {
           color: rgba(255,255,255,0.78) !important;
           background: transparent !important;
+          background-image: none !important;
         }
         .r-desk .nav-item:hover {
           background: rgba(80, 130, 95, 0.18) !important;
+          background-image: none !important;
           color: #FFFFFF !important;
         }
+        /* Active state: the inline JSX sets a white→cream embossed gradient
+           with stacked inset shadows + translateY. That treatment was right
+           for a cream sidebar but reads as a kid-UI white chip on the dark
+           green. Kill the gradient + shadows; lift the row in-family. */
         .r-desk .nav-item.is-active {
           background: rgba(80, 130, 95, 0.32) !important;
+          background-image: none !important;
           color: #FFFFFF !important;
           box-shadow: none !important;
+          transform: none !important;
+        }
+        /* Active text + icon — JSX inlined C.primaryDeep (same as sidebar
+           bg) so they vanish on the green tint. Force white. */
+        .r-desk .nav-item.is-active span {
+          color: #FFFFFF !important;
+        }
+        .r-desk .nav-item.is-active svg,
+        .r-desk .nav-item.is-active svg * {
+          stroke: #FFFFFF !important;
+          color: #FFFFFF !important;
         }
         .r-desk .nav-item svg {
           stroke: currentColor !important;
