@@ -2953,21 +2953,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               behind it. The light source doesn't move, so the bright
               spot doesn't move. NOW dot is a marker that travels
               around the perimeter; the glass itself stays put. */}
-          {/* Wash anchored to the FIXED screen position (CX, CY) — the
-              center-left of the dial, which is where live NOW appears
-              in the unscrubbed view. This is a static screen-space
-              position; it does NOT follow the user when they scrub.
+          {/* Wash anchored at (CX + R*0.15, CY) — pushed INSIDE the
+              visible dial by 15% of the radius. Center on the flat
+              edge means the gradient's brightest half renders
+              OFF-SCREEN (clipped by the half-disc cut-off), leaving
+              only the outer falloff visible — too uniform, no real
+              concentration. Pushing the center INTO the visible area
+              puts the gradient peak ON SCREEN, creating a visible
+              green hub on the left-center area of the dial.
 
-              The point: give the user a green atmospheric hub on the
-              left side of the dial where they spend most of their
-              attention (looking at NOW and nearby times). Scrubbing
-              away to explore other times shouldn't drag the
-              atmosphere along — the hub stays put. */}
+              Smaller radius (R*0.65 instead of R*1.15) keeps the
+              concentration TIGHTER — falls off faster, so the
+              contrast between the hub and the rest of the dial is
+              more visible. */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX} cy={CY} r={R * 1.15}
+                          cx={CX + R * 0.15} cy={CY} r={R * 0.65}
                           gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.28)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.10)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
           {/* Frosted texture — feTurbulence noise overlay, soft baseFreq.
