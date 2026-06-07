@@ -5205,6 +5205,21 @@ export default function App({ user }) {
     document.querySelectorAll(".r-main, .r-rai-scroll").forEach(el => { el.scrollTop = 0; });
   }, [page]);
 
+  // ─── RAI FULL-WIDTH MODE ──────────────────────────────────────────
+  // When on the Rai page (page === "coach"), hide the physical sidebar
+  // entirely and give the chat the full viewport width. Uses a body
+  // data-attribute the CSS can target. Cleaner than conditionally
+  // rendering the sidebar (no React re-mount flicker on nav).
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (page === "coach") {
+      document.body.setAttribute("data-rai-fullwidth", "1");
+    } else {
+      document.body.removeAttribute("data-rai-fullwidth");
+    }
+    return () => { document.body.removeAttribute("data-rai-fullwidth"); };
+  }, [page]);
+
   // iOS Safari viewport fix — when the address bar collapses/expands, 100vh doesn't update,
   // leaving fixed-positioned elements (like the bottom nav) anchored to the wrong bottom.
   // visualViewport API tracks the actual visible viewport. We write its height to a CSS var
@@ -8636,10 +8651,7 @@ export default function App({ user }) {
           width: 64px !important;
         }
 
-        /* Logo — white */
-        .r-desk > div:first-child span {
-          color: #FFFFFF !important;
-        }
+        /* Logo color is set further down (warm cream override) */
 
         /* Nav items — readable on dark green */
         .r-desk .nav-item {
@@ -8764,9 +8776,107 @@ export default function App({ user }) {
           background: #274230 !important;
         }
 
+        /* ── BRAND LOGO COLOR ───────────────────────────────────────────
+           Pure white was sterile. Warm cream feels printed, premium, more
+           Retayned. Sits inside the sidebar's primaryDeep dark green. */
+        .r-desk > div:first-child span {
+          color: #F5F0E3 !important;
+        }
+
+        /* ── NAV DOT BULLSEYE FIX ──────────────────────────────────────
+           hasDot() rendered the red unread indicator with a solid white
+           ring (boxShadow: 0 0 0 2.5px C.card) so it would stand out from
+           the sidebar's cream background. Now that the sidebar is dark
+           green, a solid white ring around a red dot reads as kid-UI
+           bullseye. Subtler ring via inset rgba — adds a tiny crisp
+           separation against the active row without screaming. */
+        .r-desk .nav-item > div[style*="border-radius: 50%"][style*="background"] {
+          box-shadow: 0 0 0 1.5px rgba(0,0,0,0.18) !important;
+        }
+
+        /* ── DONE / PORTFOLIO WIDGET — DARK MODE TEXT ──────────────────
+           Widget uses C.text / C.textSec / C.primaryDeep / C.border which
+           all read as dark ink on light. On the dark sidebar everything
+           goes invisible. Override via descendant selectors so we don't
+           touch the JSX. The bucket bar (Thriving/Healthy/Watch) colors
+           are bright accent greens/yellow/red — they pop fine on dark, so
+           we DON'T override the [style*="color"] containing those. */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] {
+          background: rgba(255,255,255,0.04) !important;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18) !important;
+        }
+        /* Section labels (DONE, PORTFOLIO · 13), Tasks Completed subtext,
+           the period selector (Week/Month/Year), bucket labels (Thriving),
+           and MRR italic — all targeted by font-size selectors */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="textTransform: uppercase"],
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="text-transform: uppercase"] {
+          color: rgba(255,255,255,0.55) !important;
+        }
+        /* The big "108" count + active period selector */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="font-size: 22px"],
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="fontSize: 22"] {
+          color: rgba(255,255,255,0.92) !important;
+        }
+        /* Period selector active indicator underline */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="border-bottom"] {
+          border-bottom-color: rgba(255,255,255,0.55) !important;
+        }
+        /* All small-text labels inside (Tasks Completed, period labels,
+           bucket labels under counts, MRR italic) */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="font-size: 9.5px"],
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="fontSize: 9.5"],
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="font-size: 10.5px"],
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="fontSize: 10.5"] {
+          color: rgba(255,255,255,0.55) !important;
+        }
+        /* Section divider line */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="border-bottom: 0.5px"] {
+          border-bottom-color: rgba(255,255,255,0.08) !important;
+        }
+        /* The squiggle SVG underline below "108" — stroke is C.primaryDeep
+           which is the same dark green as the sidebar bg, so invisible. */
+        .r-desk > div[style*="rgba(60,45,25,0.03)"] svg path {
+          stroke: rgba(255,255,255,0.45) !important;
+        }
+
+        /* ── PROFILE CHIP (A circle + name + company) ──────────────────
+           Avatar: C.primarySoft (#E6EFE9) — pale on dark = wafer.
+           Name: C.text (#1E261F) — invisible on dark.
+           Company: C.textSec — invisible.
+           Make avatar a subtle white-on-dark chip, text light. */
+        .rt-user-chip > div:first-child {
+          background: rgba(255,255,255,0.10) !important;
+          color: #FFFFFF !important;
+        }
+        .rt-user-chip > div:nth-child(2) > div:first-child {
+          color: rgba(255,255,255,0.88) !important;
+        }
+        .rt-user-chip > div:nth-child(2) > div:nth-child(2) {
+          color: rgba(255,255,255,0.55) !important;
+        }
+        .rt-user-chip:hover {
+          background: rgba(255,255,255,0.05) !important;
+        }
+
         /* ═══════════════════════════════════════════════════════════════
            END SITEWIDE MIGRATION
            ═══════════════════════════════════════════════════════════════ */
+
+        /* ── RAI FULL-WIDTH MODE ───────────────────────────────────────
+           When body has [data-rai-fullwidth], hide the physical left
+           sidebar (.r-desk) and reclaim the full viewport width for the
+           Rai chat. Toggle button hidden too — there's no sidebar to
+           toggle. Set by the useEffect on page === "coach". */
+        body[data-rai-fullwidth] .r-desk,
+        body[data-rai-fullwidth] .rt-sidebar-toggle {
+          display: none !important;
+        }
+        body[data-rai-fullwidth] .r-main {
+          left: 0 !important;
+          right: 0 !important;
+          top: 0 !important;
+          bottom: 0 !important;
+        }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         /* Paper grain — barely-perceptible noise texture on the cream
