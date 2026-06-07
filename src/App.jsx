@@ -2944,43 +2944,29 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ATMOSPHERIC BLEED DIAL · NOW-anchored + outer bleed boundary ─
-              The dial isn't a contained object with a sharp boundary.
-              It's a region of atmospheric mint concentration that fades
-              into the page. The "edge" is where the concentration
-              becomes noticeably stronger — no line, no shadow, no
-              frosted texture. Zero material claims.
+          {/* ── ATMOSPHERIC DIAL · NOW-anchored + outer shadow halo boundary ─
+              The dial is a tinted region on the page surface. The
+              boundary is defined by a soft symmetric shadow halo
+              OUTSIDE the disc perimeter — same visual family as the
+              task tiles (which also have ambient shadows). The shadow
+              has NO directional offset (no dx/dy) so no Z-depth is
+              implied — just a halo of slightly darker air around the
+              dial, signaling "this is a region" without claiming
+              carved/raised.
 
-              Two wash layers:
-              1. Outer bleed — soft mint extending past the disc
-                 perimeter, fading to zero as it spreads outward into
-                 the page. Creates atmospheric halo.
-              2. Inner wash — NOW-anchored radial, brightest where NOW
-                 lives, stronger overall opacity than the bleed so the
-                 contained area has clear visual presence.
+              Two visual elements:
+              1. Outer shadow halo — soft Gaussian-blurred shape
+                 OUTSIDE the disc, primary-deep tinted at low opacity.
+                 Symmetric, no offset.
+              2. Inner wash — NOW-anchored radial mint, brightest at NOW.
 
               No frosted feTurbulence overlay (would imply material).
               No stroke (would imply object edge).
-              No shadow halo (would imply spatial displacement).
+              No bleed (would dissolve the boundary).
               No deboss, no rim, no engraved interior ring. */}
-          {/* Outer bleed — soft mint extending past disc perimeter.
-              Centered at the disc's geometric center (not NOW) so the
-              bleed is symmetric around the whole dial as an atmospheric
-              region, not biased toward NOW. Radius extends past the
-              disc edge so the falloff to zero happens OUTSIDE the
-              visible perimeter, creating the bleed effect. */}
-          <radialGradient id="rt-dial-bleed"
-                          cx={CX} cy={CY} r={R * 1.08}
-                          gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.08)" />
-            <stop offset="80%" stopColor="rgba(170, 220, 185, 0.06)" />
-            <stop offset="93%" stopColor="rgba(170, 220, 185, 0.04)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0)" />
-          </radialGradient>
-          {/* Inner wash — NOW-anchored. Stops bumped slightly from prior
-              flat-glass version (0.22/0.10/0.03 vs 0.20/0.08/0.02) to
-              compensate for no frosted texture adding visual weight
-              and to clearly separate the contained area from the bleed. */}
+          {/* Inner wash — NOW-anchored. Stops at 0.22/0.10/0.03 (matched
+              to prior atmospheric-bleed version so the dial interior
+              has consistent presence regardless of boundary treatment). */}
           <radialGradient id="rt-dial-wash"
                           cx={nowX} cy={nowY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
@@ -2988,11 +2974,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.10)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
           </radialGradient>
-          {/* Slight blur on the bleed layer — softens its outer falloff
-              so the bleed feathers smoothly into the page rather than
-              having a discernible radial gradient termination. */}
-          <filter id="rt-dial-bleed-blur" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="2.5" />
+          {/* Outer shadow halo — wide soft Gaussian blur applied to a
+              shape slightly larger than the disc. Acts as a symmetric
+              ambient shadow around the dial. No offset = no implied
+              light direction = no Z-depth claim. Matches the visual
+              language of the task tiles. */}
+          <filter id="rt-dial-halo" x="-15%" y="-15%" width="130%" height="130%">
+            <feGaussianBlur stdDeviation="6" />
           </filter>
           {/* NOW dot drop-shadow — small lift so the dot sits ON the
               tinted region (not floating IN front of it). */}
@@ -3007,16 +2995,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── ATMOSPHERIC BLEED DIAL render ──────────────────────────────── */}
-        {/* Layer 1: outer bleed — slightly larger disc (R+16), filled with
-            the soft bleed gradient, then blurred to soften the falloff.
-            Drawn FIRST behind the wash so the bleed extends past the
-            wash's perimeter without being clipped. */}
-        <path d={`M ${CX} ${CY - (R + 16)} A ${R + 16} ${R + 16} 0 0 0 ${CX} ${CY + (R + 16)} Z`}
-              fill="url(#rt-dial-bleed)"
-              filter="url(#rt-dial-bleed-blur)" />
-        {/* Layer 2: NOW-anchored radial mint wash — the contained area
-            with clear visual presence relative to the surrounding bleed. */}
+        {/* ── ATMOSPHERIC DIAL · Outer shadow halo render ──────────────── */}
+        {/* Layer 1: outer shadow halo. A slightly larger disc shape
+            filled with low-opacity primary-deep tint, then blurred
+            with a wide Gaussian. Drawn FIRST behind the wash so the
+            halo extends past the wash's perimeter and is visible as
+            a soft surrounding shadow. */}
+        <path d={`M ${CX} ${CY - (R + 10)} A ${R + 10} ${R + 10} 0 0 0 ${CX} ${CY + (R + 10)} Z`}
+              fill="rgba(28, 50, 36, 0.12)"
+              filter="url(#rt-dial-halo)" />
+        {/* Layer 2: NOW-anchored radial mint wash — the contained area. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
