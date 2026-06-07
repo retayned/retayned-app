@@ -2934,34 +2934,30 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ORIGINAL 10 INTERIOR + 10A RIM + E2+E3+E4+E5:
-              - E2: subtle inner hairline ring inside the rim
-              - E3: directional wash (top stronger, bottom softer)
-              - E4: tighter raised dot + lighter shadow
-              - E5: softened rim stroke 0.45 → 0.38 */}
-          {/* E3: directional wash — mint morning. Brighter than the prior
-              primaryLight forest tone; cooler hue (more blue undertone)
-              reads as fresh / morning light at similar opacity. Top
-              stronger (upcoming side), softer at bottom (elapsed side). */}
+          {/* ── FLAT GLASS DIAL ───────────────────────────────────────────
+              Not debossed (recessed into the page) and not embossed
+              (popping out of it). Sits on the SAME PLANE as the surface
+              — like a thin glass disc resting on the page. Identity
+              comes from a faint mint tint + a single soft edge, not
+              from any inner shadow or convex highlight.
+
+              Three layers only:
+              1. The glass — very faint mint wash, top stronger
+              2. The edge — single soft hairline tracing the boundary
+              3. Hour ticks + labels (etched into the glass)
+
+              NOW marker keeps a small lift via tighter drop-shadow so
+              it reads as something resting ON the glass, not part of it. */}
+          {/* Glass tint — mint morning, slightly stronger at top */}
           <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.10)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.04)" />
           </linearGradient>
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
-            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
-          </radialGradient>
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
-            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
-            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
-          </radialGradient>
-          {/* E4: tighter raised dot — lighter shadow (0.40 → 0.32), tighter blur */}
+          {/* NOW dot drop-shadow — small lift to keep it sitting ON the glass */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
-            <feOffset dx="1.2" dy="2.5" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
+            <feOffset dx="0.6" dy="1.4" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.28" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2969,42 +2965,37 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── ORIGINAL 10 INTERIOR + 10A RIM + E2+E3+E4+E5 ───────────────
-            Final-pass enhancements layered onto the baseline. */}
-        {/* Layer 1 (E3): directional soft-green wash (top stronger) */}
+        {/* ── FLAT GLASS DIAL ─────────────────────────────────────────────
+            Single-plane reading. No inner shadow, no convex highlight. */}
+        {/* Layer 1: the glass itself — faint mint tint */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2: inner shadow (original 10) */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Layer 3: highlight (original 10) */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* 10A rim (E5: dark stroke softened 0.45 → 0.38) */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.38)" strokeWidth="1.5" />
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
-        {/* E2: subtle inner hairline ring — engraved circle 18px inside the rim */}
-        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
-        {/* Time labels (A · inside rim) — drawn just inside the arc */}
+        {/* Layer 2: the edge — single soft hairline. This is the only
+            cue that there's a boundary. No double-stroke (which would
+            read as rim/lip), no contrast shift across the edge. */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.22)" strokeWidth="0.8" />
+        {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
             style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 600, fill: "#9A9A93", pointerEvents: "none" }}>
             {tl.lbl}
           </text>
         ))}
-        {/* Connector (E) — faint dashed leader from each event's dial dot to the rail */}
+        {/* Connector — faint dashed leader from each event's dial dot to the rail */}
         {placements.map((p, i) => (
           <line key={`lead-${i}`} x1={(p.rx - 8).toFixed(1)} y1={p.ry.toFixed(1)} x2="0" y2={p.ry.toFixed(1)}
             stroke="rgba(28,50,36,0.12)" strokeWidth="1" strokeDasharray="1 5" strokeLinecap="round" pointerEvents="none" />
         ))}
-        {/* Event rim dots — embedded in the dome surface. Original cool-palette
-            dots; next-up gets a halo from the NOW glow context. */}
+        {/* Event dots — sit on the glass surface. Past = dim grey,
+            future = soft sage, next-up gets a primary-green ring. */}
         {placements.map((p, i) => (
           <g key={p.e.id || i}>
             {p.isNext && <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* NOW marker — Variant 10A + E4 tighter dot: raised above the dome
-            with drop-shadow. Two-layer (green body + white pip). E4: smaller
-            radii (11→9, 4→3.5) for a lighter sit. */}
+        {/* NOW marker — small lift via tighter drop-shadow so it reads as
+            something resting ON the glass (not part of the same plane).
+            Two-layer green body + white pip. */}
         {nowInWindow && <g filter="url(#rt-dial-now-raised)">
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="9" fill="#33543E" />
           <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="3.5" fill="#FFFFFF" />
