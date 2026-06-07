@@ -2944,57 +2944,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── THIN DISC RESTING ON PAGE · Frosted surface + drop shadow ──
-              The dial is a thin tinted glass disc lying ON the page
-              surface. Not carved into it (debossed). Not popping out
-              of it (embossed). Just resting on top, casting a soft
-              shadow on the page beneath it.
+          {/* ── ATMOSPHERIC · Frosted glass + center-left wash ───────────
+              Frosted glass disc on the page with a STATIC bright spot
+              positioned at the center-left of the visible dial — on
+              the flat edge, vertically centered.
 
-              Same physical category as a coaster on a table, a glass
-              paperweight, a sticker on paper.
+              Physics: coherent. Frosted glass with a fixed light source
+              positioned behind the flat-edge side. Bright spot stays
+              put. NOW moves around the perimeter as a marker; the
+              glass's brightness doesn't change.
 
-              Cues that establish "resting on page":
-              1. Soft drop-shadow on the page beneath the disc —
-                 the critical cue. Without this the disc floats.
-              2. Upper-left rim highlight — light skimming the top
-                 edge of the thin disc (light source above-left).
-              3. Lower-right rim shadow — disc's own body blocks
-                 light from reaching its lower-right edge.
-              4. No interior depth gradients — disc is flat. No
-                 carved upper-left shadow pool, no lower-right
-                 highlight pool. Light striking a flat surface
-                 doesn't create radial concavity.
-              5. Engraved interior ring as surface detail (etched
-                 marker, like writing on a coaster).
-
-              The mint wash is the disc's tint (its material color).
-              The frosted texture is the disc's surface character.
-              Both are physical properties of the disc itself,
-              independent of how it sits on the page. */}
-
-          {/* Drop-shadow beneath the disc — THE critical cue.
-              Soft Gaussian blur, offset down-right matching the
-              page-wide above-left light direction. Without offset
-              the disc would float; with offset it rests. */}
-          <filter id="rt-dial-resting-shadow" x="-15%" y="-15%" width="130%" height="130%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="5" />
-            <feOffset dx="2" dy="4" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.10" />
-            <feComposite in2="offsetblur" operator="in" />
-            <feMerge>
-              <feMergeNode />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-
-          {/* Static center-left wash. Center positioned at (CX, CY) —
-              exactly on the flat edge of the half-disc, vertically
-              centered. The brightest point sits at the center-left of
-              the visible dial area. Fixed position; does not follow NOW.
-
-              Physics: light source positioned behind the flat-edge side
-              of the dial, evenly illuminating the center. NOW moves
-              around the perimeter as time passes; the glass stays put. */}
+              Components:
+              1. Frosted glass wash — radial gradient centered at
+                 (CX, CY), stops 0.20 / 0.08 / 0.02
+              2. Frosted texture overlay (feTurbulence noise)
+              3. Single soft hairline edge
+              4. NOW dot (raised, with pulsing ring) sits on top */}
+          {/* Static center-left wash — center on the flat edge, vertically
+              centered. Brightest point at center-left of visible dial. */}
           <radialGradient id="rt-dial-wash"
                           cx={CX} cy={CY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
@@ -3002,10 +2969,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
-
-          {/* Frosted surface texture — feTurbulence noise. This is
-              the disc's own surface character. Physically coherent
-              now: thin tinted glass disc with a frosted finish. */}
+          {/* Frosted texture — feTurbulence noise tinted mint-dark.
+              baseFrequency 0.35 keeps the noise soft/atmospheric. */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
             <feColorMatrix values="0 0 0 0 0.11
@@ -3014,33 +2979,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                                   0 0 0 0.035 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
-
-          {/* Rim highlight gradient — runs along the upper arc.
-              Bright at the top-left of the rim (light hits there),
-              fading to nothing by the time it reaches the
-              mid-perimeter. This is the thin disc's top edge
-              catching ambient light. */}
-          <linearGradient id="rt-dial-rim-light" x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%" stopColor="rgba(255, 255, 255, 0.65)" />
-            <stop offset="45%" stopColor="rgba(255, 255, 255, 0.20)" />
-            <stop offset="65%" stopColor="rgba(255, 255, 255, 0)" />
-            <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
-          </linearGradient>
-
-          {/* Rim shadow gradient — runs along the lower arc.
-              Faint shadow at the lower-right rim where the disc's
-              body blocks ambient light from reaching its edge. */}
-          <linearGradient id="rt-dial-rim-shadow" x1="50%" y1="0%" x2="50%" y2="100%">
-            <stop offset="0%" stopColor="rgba(28, 50, 36, 0)" />
-            <stop offset="55%" stopColor="rgba(28, 50, 36, 0)" />
-            <stop offset="75%" stopColor="rgba(28, 50, 36, 0.10)" />
-            <stop offset="100%" stopColor="rgba(28, 50, 36, 0.22)" />
-          </linearGradient>
-
           {/* NOW dot drop-shadow — small lift so the dot sits ON the
-              disc, not floating in front of it. Subtler than the
-              disc's own drop-shadow (the disc is bigger and casts
-              a bigger shadow). */}
+              glass rather than floating in front of it. */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
             <feOffset dx="0.6" dy="1.4" result="offsetblur" />
@@ -3052,42 +2992,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── THIN DISC RESTING ON PAGE render ──────────────────────────── */}
-        {/* Layer 1: drop-shadow beneath the disc. A second copy of the
-            disc shape is drawn with the resting-shadow filter, BEFORE
-            the visible disc, so the shadow appears on the page beneath. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
-              fill="rgba(20, 30, 22, 0.18)"
-              filter="url(#rt-dial-resting-shadow)" />
-        {/* Layer 2: the disc itself — mint tinted material */}
+        {/* ── ATMOSPHERIC render ─────────────────────────────────────────── */}
+        {/* Layer 1: frosted glass wash — static center-left bright spot */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 3: frosted surface texture */}
+        {/* Layer 2: frosted texture overlay */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
               opacity="0.35" />
-        {/* Layer 4: upper rim highlight — thin disc edge catching
-            ambient light from above-left. Stroked along the visible
-            arc with the linear gradient (bright top, fades to nothing
-            mid-arc). */}
+        {/* Layer 3: single soft hairline edge */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
-              stroke="url(#rt-dial-rim-light)"
-              strokeWidth="1.2" />
-        {/* Layer 5: lower rim shadow — disc's body blocking light
-            from reaching its lower edge. Faint, only visible in the
-            lower portion of the arc. */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-              fill="none"
-              stroke="url(#rt-dial-rim-shadow)"
-              strokeWidth="1.0" />
-        {/* Layer 6: engraved interior detail — 18px inboard, like
-            etched marking on the disc's surface. Pure surface detail,
-            no depth claim. */}
-        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`}
-              fill="none"
-              stroke="rgba(28, 50, 36, 0.10)"
-              strokeWidth="0.5" />
+              stroke="rgba(28, 50, 36, 0.16)"
+              strokeWidth="0.6" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
