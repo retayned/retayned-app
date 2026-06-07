@@ -2944,56 +2944,62 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ORIGINAL DEBOSSED DOME + FROSTED TEXTURE ──────────────────
-              The exact dome from the start of the session — dark inner
-              shadow radial + white bottom highlight radial + 1.5px dark
-              rim stroke + 0.8px inner white hairline + 18px engraved
-              interior ring + E4 raised NOW dot with drop-shadow — plus
-              the frosted texture overlay (07) as the only addition.
+          {/* ── ATMOSPHERIC BLEED DIAL · NOW-anchored + outer bleed boundary ─
+              The dial isn't a contained object with a sharp boundary.
+              It's a region of atmospheric mint concentration that fades
+              into the page. The "edge" is where the concentration
+              becomes noticeably stronger — no line, no shadow, no
+              frosted texture. Zero material claims.
 
-              Wash is uniform vertical mint morning (NOT NOW-anchored).
-              Color belongs to the dial as an object.
+              Two wash layers:
+              1. Outer bleed — soft mint extending past the disc
+                 perimeter, fading to zero as it spreads outward into
+                 the page. Creates atmospheric halo.
+              2. Inner wash — NOW-anchored radial, brightest where NOW
+                 lives, stronger overall opacity than the bleed so the
+                 contained area has clear visual presence.
 
-              Frosted texture tuned for visibility on the debossed
-              surface: colorMatrix alpha 0.04, overlay opacity 0.4. */}
-          {/* E3: uniform mint wash — vertical, top stronger */}
-          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
+              No frosted feTurbulence overlay (would imply material).
+              No stroke (would imply object edge).
+              No shadow halo (would imply spatial displacement).
+              No deboss, no rim, no engraved interior ring. */}
+          {/* Outer bleed — soft mint extending past disc perimeter.
+              Centered at the disc's geometric center (not NOW) so the
+              bleed is symmetric around the whole dial as an atmospheric
+              region, not biased toward NOW. Radius extends past the
+              disc edge so the falloff to zero happens OUTSIDE the
+              visible perimeter, creating the bleed effect. */}
+          <radialGradient id="rt-dial-bleed"
+                          cx={CX} cy={CY} r={R * 1.08}
+                          gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.08)" />
+            <stop offset="80%" stopColor="rgba(170, 220, 185, 0.06)" />
+            <stop offset="93%" stopColor="rgba(170, 220, 185, 0.04)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0)" />
+          </radialGradient>
+          {/* Inner wash — NOW-anchored. Stops bumped slightly from prior
+              flat-glass version (0.22/0.10/0.03 vs 0.20/0.08/0.02) to
+              compensate for no frosted texture adding visual weight
+              and to clearly separate the contained area from the bleed. */}
+          <radialGradient id="rt-dial-wash"
+                          cx={nowX} cy={nowY} r={R * 1.15}
+                          gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.22)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.10)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
-          </linearGradient>
-          {/* 10: inner shadow radial — concentrates at upper-left so the
-              dome reads as recessed (light source convention). Original
-              near-black tint, restored from the start of session. */}
-          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
-            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          {/* 10: bottom highlight radial — concentrates at lower-right so
-              the dome lip catches light there. Original 3-stop curve. */}
-          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
-            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
-            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
-          </radialGradient>
-          {/* 07: frosted texture overlay — feTurbulence noise tinted
-              mint-dark. Bumped from prior values: alpha 0.035 → 0.04,
-              overlay opacity 0.35 → 0.40 for more visible grain on the
-              debossed surface. baseFrequency 0.35 keeps the noise soft
-              (atmospheric, not discrete speckle). */}
-          <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
-            <feColorMatrix values="0 0 0 0 0.11
-                                  0 0 0 0 0.20
-                                  0 0 0 0 0.14
-                                  0 0 0 0.04 0" />
-            <feComposite in2="SourceGraphic" operator="in" />
+          {/* Slight blur on the bleed layer — softens its outer falloff
+              so the bleed feathers smoothly into the page rather than
+              having a discernible radial gradient termination. */}
+          <filter id="rt-dial-bleed-blur" x="-10%" y="-10%" width="120%" height="120%">
+            <feGaussianBlur stdDeviation="2.5" />
           </filter>
-          {/* E4: raised NOW dot — original drop-shadow filter */}
+          {/* NOW dot drop-shadow — small lift so the dot sits ON the
+              tinted region (not floating IN front of it). */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
-            <feOffset dx="1.2" dy="2.5" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
+            <feOffset dx="0.6" dy="1.4" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.28" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -3001,24 +3007,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── ORIGINAL DEBOSSED DOME render order ──────────────────────── */}
-        {/* Layer 1 (E3): uniform mint wash — vertical, top stronger */}
+        {/* ── ATMOSPHERIC BLEED DIAL render ──────────────────────────────── */}
+        {/* Layer 1: outer bleed — slightly larger disc (R+16), filled with
+            the soft bleed gradient, then blurred to soften the falloff.
+            Drawn FIRST behind the wash so the bleed extends past the
+            wash's perimeter without being clipped. */}
+        <path d={`M ${CX} ${CY - (R + 16)} A ${R + 16} ${R + 16} 0 0 0 ${CX} ${CY + (R + 16)} Z`}
+              fill="url(#rt-dial-bleed)"
+              filter="url(#rt-dial-bleed-blur)" />
+        {/* Layer 2: NOW-anchored radial mint wash — the contained area
+            with clear visual presence relative to the surrounding bleed. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2 (10): inner shadow — recessed-into-page illusion */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
-        {/* Layer 3 (10): bottom highlight — light catching the lower lip */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
-        {/* Layer 4 (07): frosted texture overlay — atmospheric noise */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
-              fill="rgba(170, 220, 185, 0.40)"
-              filter="url(#rt-dial-frosted)"
-              opacity="0.40" />
-        {/* Layer 5 (10A): rim — outer dark stroke 1.5px @ 0.38 */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.38)" strokeWidth="1.5" />
-        {/* Layer 5 (10A): rim — inner white hairline 0.8px @ 0.95, 2px inboard */}
-        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
-        {/* Layer 6 (E2): engraved interior ring — 18px inboard, barely visible */}
-        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
