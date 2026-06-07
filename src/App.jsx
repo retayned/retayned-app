@@ -2953,9 +2953,15 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               behind it. The light source doesn't move, so the bright
               spot doesn't move. NOW dot is a marker that travels
               around the perimeter; the glass itself stays put. */}
-          {/* Static wash centered at (CX, CY) */}
+          {/* Static wash centered at (CX - R*0.3, CY) — pushed off-screen
+              to the LEFT of the flat edge. Because the radial gradient
+              spreads symmetrically from its center, pulling the center
+              past the cut-off edge means only the right-falling portion
+              shows. The visible greenest point lands AT the flat edge
+              (center-left of dial), fading outward into the visible
+              dial area. */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX} cy={CY} r={R * 1.15}
+                          cx={CX - R * 0.3} cy={CY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
