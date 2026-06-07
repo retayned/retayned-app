@@ -2689,24 +2689,26 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   const fillRGB = "220, 226, 220";
   const nowCoreRGB = "51, 84, 62"; // primary #33543E for the NOW-pool
 
-  // Hour ticks + labels across the window (every 2 hours, plus NOW).
-  const ticks = [];
-  const tickLabels = [];
-  // Start at the first whole even hour ≥ windowStart.
+  // Hour ticks + labels — every hour gets a tick notch, every EVEN hour
+  // additionally gets a text label. Labels at breathing cadence; ticks add
+  // rhythm without text clutter (watch-face style).
+  const ticks = [];         // every hour (rendered as small notches)
+  const tickLabels = [];    // even hours only (text labels)
   const startHour = new Date(windowStart);
   startHour.setMinutes(0, 0, 0);
-  if (startHour.getHours() % 2 !== 0) startHour.setHours(startHour.getHours() + 1);
-  for (let t = startHour.getTime(); t <= windowEnd; t += 2 * 60 * 60 * 1000) {
+  for (let t = startHour.getTime(); t <= windowEnd; t += 60 * 60 * 1000) {
     const f = fracOf(t);
     if (f < 0 || f > 1) continue;
     const [x, y] = ptAt(f, R);
     const a = angleOf(f);
     const [ix, iy] = [x - 14 * Math.cos(a), y - 14 * Math.sin(a)];
     ticks.push(`M ${x.toFixed(1)} ${y.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`);
-    const [lx, ly] = ptAt(f, R - 30);
     const d = new Date(t);
-    const lbl = formatTimeLabel(d).replace(":00", "");
-    tickLabels.push({ x: lx, y: ly, lbl });
+    if (d.getHours() % 2 === 0) {
+      const [lx, ly] = ptAt(f, R - 30);
+      const lbl = formatTimeLabel(d).replace(":00", "");
+      tickLabels.push({ x: lx, y: ly, lbl });
+    }
   }
 
   // NOW marker — at the REAL now's position in the (possibly scrubbed) window.
@@ -2853,7 +2855,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               return `${h12}:${mm}${ampm}`;
             })()}
           </div>
-          <div style={{ fontSize: 10.5, color: "#7c5cf3", fontWeight: 700, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <div style={{ fontSize: 10.5, color: "#1C3224", fontWeight: 700, marginTop: 3, display: "inline-flex", alignItems: "center", gap: 4 }}>
             <span style={{ fontSize: 11, lineHeight: 1 }}>↺</span> Return to now
           </div>
         </button>
@@ -2980,6 +2982,10 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
         <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
         {/* E2: subtle inner hairline ring — engraved circle 18px inside the rim */}
         <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
+        {/* Hour notches — small tick marks at every hour, pointing inward from
+            the rim. Even hours also have text labels; odd hours are notch-only.
+            Adds rhythm without text clutter. */}
+        <path d={ticks.join(" ")} fill="none" stroke="rgba(28,50,36,0.32)" strokeWidth="1" strokeLinecap="round" />
         {/* Time labels (A · inside rim) — drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
