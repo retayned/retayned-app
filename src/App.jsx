@@ -8649,10 +8649,11 @@ export default function App({ user }) {
         }
 
         /* Today canvas backdrop — Variant A border-cool-strong wash.
-           A soft cool-grey zone behind the task list. */
+           A soft cool-grey zone behind the task list. Top stop toned
+           from 0.42 → 0.30 for a quieter zone definition. */
         .rt-today-canvas {
-          background: linear-gradient(180deg, rgba(220,224,220,0.42), rgba(220,224,220,0.02)) !important;
-          background-image: linear-gradient(180deg, rgba(220,224,220,0.42), rgba(220,224,220,0.02)) !important;
+          background: linear-gradient(180deg, rgba(220,224,220,0.30), rgba(220,224,220,0.02)) !important;
+          background-image: linear-gradient(180deg, rgba(220,224,220,0.30), rgba(220,224,220,0.02)) !important;
         }
 
         /* Sidebar — flush left, primaryDeep green, no float chrome.
