@@ -2944,43 +2944,56 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL · NOW-anchored + atmospheric single edge ──
-              Glass disc sits on the same plane as the page surface. No
-              carved illusion. Identity comes from three layers:
+          {/* ── ORIGINAL DEBOSSED DOME + FROSTED TEXTURE ──────────────────
+              The exact dome from the start of the session — dark inner
+              shadow radial + white bottom highlight radial + 1.5px dark
+              rim stroke + 0.8px inner white hairline + 18px engraved
+              interior ring + E4 raised NOW dot with drop-shadow — plus
+              the frosted texture overlay (07) as the only addition.
 
-              1. NOW-anchored radial mint wash — brightest where NOW
-                 lives, fades outward. As time progresses, the bright
-                 spot follows the user around the dial.
-              2. Frosted texture overlay — soft atmospheric noise.
-              3. Single soft hairline edge (option 5 from the
-                 atmospheric borders mockboard) — one thin low-alpha
-                 stroke marking where the wash ends. NO double-stroke,
-                 NO engraved interior ring. The line reads as "edge of
-                 the tint" not "edge of an object" because nothing else
-                 suggests depth — coherent with the atmospheric interior. */}
-          {/* NOW-anchored radial wash — center follows nowX/nowY */}
-          <radialGradient id="rt-dial-wash"
-                          cx={nowX} cy={nowY} r={R * 1.15}
-                          gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
-            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
-            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
+              Wash is uniform vertical mint morning (NOT NOW-anchored).
+              Color belongs to the dial as an object.
+
+              Frosted texture tuned for visibility on the debossed
+              surface: colorMatrix alpha 0.04, overlay opacity 0.4. */}
+          {/* E3: uniform mint wash — vertical, top stronger */}
+          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.12)" />
+            <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
+          </linearGradient>
+          {/* 10: inner shadow radial — concentrates at upper-left so the
+              dome reads as recessed (light source convention). Original
+              near-black tint, restored from the start of session. */}
+          <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
+            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
+            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
           </radialGradient>
-          {/* Frosted texture — feTurbulence noise, soft baseFrequency
-              for smooth atmospheric blend (not discrete speckle). */}
+          {/* 10: bottom highlight radial — concentrates at lower-right so
+              the dome lip catches light there. Original 3-stop curve. */}
+          <radialGradient id="rt-dial-deboss-hi" cx={CX - 100} cy={CY + 220} r={R * 0.85} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="rgba(255, 255, 255, 0.70)" />
+            <stop offset="0.55" stopColor="rgba(255, 255, 255, 0.18)" />
+            <stop offset="1" stopColor="rgba(255, 255, 255, 0)" />
+          </radialGradient>
+          {/* 07: frosted texture overlay — feTurbulence noise tinted
+              mint-dark. Bumped from prior values: alpha 0.035 → 0.04,
+              overlay opacity 0.35 → 0.40 for more visible grain on the
+              debossed surface. baseFrequency 0.35 keeps the noise soft
+              (atmospheric, not discrete speckle). */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
             <feColorMatrix values="0 0 0 0 0.11
                                   0 0 0 0 0.20
                                   0 0 0 0 0.14
-                                  0 0 0 0.035 0" />
+                                  0 0 0 0.04 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
-          {/* NOW dot drop-shadow — small lift so the dot sits ON the glass */}
+          {/* E4: raised NOW dot — original drop-shadow filter */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
-            <feOffset dx="0.6" dy="1.4" result="offsetblur" />
-            <feFlood floodColor="#1C3224" floodOpacity="0.28" />
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+            <feOffset dx="1.2" dy="2.5" result="offsetblur" />
+            <feFlood floodColor="#1C3224" floodOpacity="0.32" />
             <feComposite in2="offsetblur" operator="in" />
             <feMerge>
               <feMergeNode />
@@ -2988,22 +3001,24 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── FLAT GLASS DIAL render ─────────────────────────────────────── */}
-        {/* Layer 1: NOW-anchored radial mint wash */}
+        {/* ── ORIGINAL DEBOSSED DOME render order ──────────────────────── */}
+        {/* Layer 1 (E3): uniform mint wash — vertical, top stronger */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2: frosted texture overlay */}
+        {/* Layer 2 (10): inner shadow — recessed-into-page illusion */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-inner)" />
+        {/* Layer 3 (10): bottom highlight — light catching the lower lip */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-deboss-hi)" />
+        {/* Layer 4 (07): frosted texture overlay — atmospheric noise */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
-              opacity="0.35" />
-        {/* Layer 3: single soft hairline edge (option 5 atmospheric border).
-            One thin low-alpha stroke. No double-stroke, no inner highlight,
-            no engraved interior ring. Reads as "edge of the tint" not
-            "edge of an object." */}
-        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
-              fill="none"
-              stroke="rgba(28, 50, 36, 0.16)"
-              strokeWidth="0.6" />
+              opacity="0.40" />
+        {/* Layer 5 (10A): rim — outer dark stroke 1.5px @ 0.38 */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`} fill="none" stroke="rgba(28,50,36,0.38)" strokeWidth="1.5" />
+        {/* Layer 5 (10A): rim — inner white hairline 0.8px @ 0.95, 2px inboard */}
+        <path d={`M ${CX} ${CY - R + 2} A ${R - 2} ${R - 2} 0 0 0 ${CX} ${CY + R - 2}`} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth="0.8" />
+        {/* Layer 6 (E2): engraved interior ring — 18px inboard, barely visible */}
+        <path d={`M ${CX} ${CY - (R - 18)} A ${R - 18} ${R - 18} 0 0 0 ${CX} ${CY + (R - 18)}`} fill="none" stroke="rgba(28,50,36,0.10)" strokeWidth="0.5" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
           <text key={`tl-${i}`} x={tl.x.toFixed(1)} y={(tl.y + 4).toFixed(1)} textAnchor="middle"
