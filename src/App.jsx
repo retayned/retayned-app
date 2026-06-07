@@ -2934,40 +2934,41 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── FLAT GLASS DIAL · Variant A (02+03+05+07+12) ──────────────
-              Variant A adds atmospheric directionality to the base set.
-              The dial now reads as "glass disc with light striking from
-              upper-left" — without breaking the same-plane flatness.
+          {/* ── FLAT GLASS DIAL · Variant B (02+06+07+12) ──────────────────
+              Variant B makes the glass time-anchored: the wash itself
+              becomes a radial gradient centered on NOW. The disc reads
+              brightest where you ARE in the day; dimmer where you've
+              been (past) and where you're going (future). NOW becomes
+              the literal center of attention by ambient lighting alone.
 
               Layered enhancements:
-              02. Edge weight (1.2px stroke — was 0.8px)
-              03. Gradient edge — stroke alpha fades top-strong to
-                  bottom-soft, matching the wash directionality
-              05. Diagonal wash — mint stronger at upper-left, fades
-                  toward lower-right. Replaces the vertical wash.
+              02. Edge weight (1.2px stroke @ 0.28 alpha — uniform)
+              06. NOW-anchored radial wash (replaces linear gradient)
               07. Frosted texture — feTurbulence noise overlay
-              12. NOW orb glow — static mint halo under NOW */}
-          {/* 05 — Diagonal wash. x1/y1 = upper-left = stronger.
-              x2/y2 = lower-right = clearer. Range pushed slightly
-              (0.14 → 0.02) since the wash is now directional rather
-              than uniform; the high end can be more present at the
-              source of "light" without overall feeling heavier. */}
-          <linearGradient id="rt-dial-wash" x1="0%" y1="0%" x2="80%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.14)" />
+              12. NOW orb glow — static mint halo under NOW
+
+              NOTE: Variant A's gradient edge (03) and diagonal wash (05)
+              are NOT in this variant. B is a focal-attention treatment;
+              A is a directional-light treatment. */}
+          {/* 06 — NOW-anchored radial wash. Center follows nowX/nowY so
+              the brightest point of the glass always sits at NOW. Radius
+              extends past the disc boundary so the falloff carries
+              smoothly to the edges. gradientUnits="userSpaceOnUse" lets
+              us use absolute SVG coordinates for the center (matching
+              nowX/nowY which are also in user space).
+
+              Brightness range pushed higher at center (0.20) than the
+              linear version (0.10) because radial falloff is steeper —
+              the average opacity across the disc still works out to
+              roughly the same overall presence. */}
+          <radialGradient id="rt-dial-wash"
+                          cx={nowX} cy={nowY} r={R * 1.15}
+                          gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
+            <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
-          </linearGradient>
-          {/* 03 — Gradient edge. Stroke gradient runs top→bottom matching
-              the wash's vertical pull. Top of the edge is more present
-              (where "light" hits), bottom is softer. Same hue as the
-              uniform edge was (rgba(28,50,36,...)), just varying alpha. */}
-          <linearGradient id="rt-dial-edge" x1="0%" y1="0%" x2="0%" y2="100%" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="rgba(28, 50, 36, 0.38)" />
-            <stop offset="50%" stopColor="rgba(28, 50, 36, 0.26)" />
-            <stop offset="100%" stopColor="rgba(28, 50, 36, 0.14)" />
-          </linearGradient>
-          {/* Frosted texture — feTurbulence-based noise overlay. Tinted
-              mint-dark so it composites as faint micro-variation across
-              the glass without changing the overall hue much. */}
+          </radialGradient>
+          {/* Frosted texture — feTurbulence-based noise overlay. */}
           <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
             <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" stitchTiles="stitch" />
             <feColorMatrix values="0 0 0 0 0.11
@@ -2976,8 +2977,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                                   0 0 0 0.07 0" />
             <feComposite in2="SourceGraphic" operator="in" />
           </filter>
-          {/* NOW orb glow — static mint halo radiating under the NOW dot.
-              Layers underneath the existing pulsing ring + raised dot. */}
+          {/* NOW orb glow — tighter halo radiating under the NOW dot
+              itself, on top of the radial wash. The wash provides ambient
+              focus; this orb-glow gives the dot its own crisp halo. */}
           <radialGradient id="rt-dial-now-glow" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.55)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0)" />
@@ -2994,18 +2996,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             </feMerge>
           </filter>
         </defs>
-        {/* ── FLAT GLASS DIAL · Variant A render ─────────────────────────── */}
-        {/* Layer 1: the glass — diagonal mint wash */}
+        {/* ── FLAT GLASS DIAL · Variant B render ─────────────────────────── */}
+        {/* Layer 1: the glass — NOW-anchored radial mint wash. Brightest
+            at NOW, fades outward smoothly. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
         {/* 07 — Frosted texture overlay. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
               fill="rgba(170, 220, 185, 0.40)"
               filter="url(#rt-dial-frosted)"
               opacity="0.55" />
-        {/* 02+03 — Edge: 1.2px gradient stroke (top stronger, bottom softer). */}
+        {/* 02 — Uniform 1.2px edge at 0.28 alpha. */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
-              stroke="url(#rt-dial-edge)"
+              stroke="rgba(28, 50, 36, 0.28)"
               strokeWidth="1.2" />
         {/* Time labels — etched into the glass, drawn just inside the arc */}
         {tickLabels.map((tl, i) => (
@@ -3027,7 +3030,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <circle cx={p.rx.toFixed(1)} cy={p.ry.toFixed(1)} r="4.5" fill={p.isPast ? "#C4C4BD" : (p.isNext ? "#33543E" : "#558B68")} />
           </g>
         ))}
-        {/* 12 — NOW orb glow. */}
+        {/* 12 — NOW orb glow (crisp halo on top of the radial wash). */}
         {nowInWindow && <circle cx={nowX.toFixed(1)} cy={nowY.toFixed(1)} r="28" fill="url(#rt-dial-now-glow)" />}
         {/* NOW marker — small lift via tighter drop-shadow. */}
         {nowInWindow && <g filter="url(#rt-dial-now-raised)">
