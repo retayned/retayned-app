@@ -2971,10 +2971,19 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               the dome reads as recessed (light source convention).
               Tint shifted from near-black rgba(20,30,22,...) to light
               mint green so the dome reads as ATMOSPHERIC GREEN rather
-              than dark/forest. Same depth illusion, lighter tone. */}
+              than dark/forest.
+
+              Shading intensity reduced from initial mint pass:
+              - Center (upper-left core): 0.32 → 0.18 — most aggressive
+                cut. This is where the dome was reading darkest.
+              - Mid: 0.14 → 0.10 — moderate reduction across the
+                falloff zone.
+              The deboss reading is preserved (shadow still concentrates
+              at upper-left, light source convention intact); the dome
+              just no longer pools as heavily in that corner. */}
           <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(140, 190, 160, 0.32)" />
-            <stop offset="0.40" stopColor="rgba(140, 190, 160, 0.14)" />
+            <stop offset="0" stopColor="rgba(140, 190, 160, 0.18)" />
+            <stop offset="0.40" stopColor="rgba(140, 190, 160, 0.10)" />
             <stop offset="1" stopColor="rgba(140, 190, 160, 0)" />
           </radialGradient>
           {/* 10: bottom highlight radial — concentrates at lower-right
