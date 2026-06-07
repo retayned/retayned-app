@@ -8777,10 +8777,11 @@ export default function App({ user }) {
         }
 
         /* ── BRAND LOGO COLOR ───────────────────────────────────────────
-           Soft sage (#E6EFE9) — primarySoft. Ties to the palette family;
-           reads as a quiet brand mark on the primaryDeep sidebar. */
+           Cool paper (#ECEFEC) — matches --rt-border, the same off-white
+           the page borders use. Systemic — reads as part of the palette
+           rather than a separate brand decision. */
         .r-desk > div:first-child span {
-          color: #E6EFE9 !important;
+          color: #ECEFEC !important;
         }
 
         /* ── NAV DOT BULLSEYE FIX ──────────────────────────────────────
@@ -8789,7 +8790,7 @@ export default function App({ user }) {
            the sidebar's cream background. Now that the sidebar is dark
            green, a solid white ring around a red dot reads as kid-UI
            bullseye. Subtler ring via inset rgba — adds a tiny crisp
-           separation against the active row without screaming. */
+           separation against the active row's background without screaming. */
         .r-desk .nav-item > div[style*="border-radius: 50%"][style*="background"] {
           box-shadow: 0 0 0 1.5px rgba(0,0,0,0.18) !important;
         }
@@ -8797,46 +8798,89 @@ export default function App({ user }) {
         /* ── DONE / PORTFOLIO WIDGET — DARK MODE TEXT ──────────────────
            Widget uses C.text / C.textSec / C.primaryDeep / C.border which
            all read as dark ink on light. On the dark sidebar everything
-           goes invisible. Override via descendant selectors so we don't
-           touch the JSX. The bucket bar (Thriving/Healthy/Watch) colors
-           are bright accent greens/yellow/red — they pop fine on dark, so
-           we DON'T override the [style*="color"] containing those. */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] {
+           goes invisible. Class-scoped overrides for reliability. The
+           bucket count colors (retElite green, retGood softer green,
+           retWarn yellow) pop fine on dark — preserved. */
+        .rt-sidebar-widget {
           background: rgba(255,255,255,0.04) !important;
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18) !important;
         }
-        /* Section labels (DONE, PORTFOLIO · 13), Tasks Completed subtext,
-           the period selector (Week/Month/Year), bucket labels (Thriving),
-           and MRR italic — all targeted by font-size selectors */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="textTransform: uppercase"],
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="text-transform: uppercase"] {
+        /* All text inside the widget gets lifted to light by default. Then
+           specific bucket count digits get re-colored by inline style which
+           outranks this. */
+        .rt-sidebar-widget,
+        .rt-sidebar-widget * {
           color: rgba(255,255,255,0.55) !important;
         }
-        /* The big "108" count + active period selector */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="font-size: 22px"],
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="fontSize: 22"] {
+        /* Big "108" number + active period selector — brighter than rest */
+        .rt-sidebar-widget > div:first-child > div:nth-child(3) > div:first-child {
           color: rgba(255,255,255,0.92) !important;
         }
-        /* Period selector active indicator underline */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="border-bottom"] {
-          border-bottom-color: rgba(255,255,255,0.55) !important;
-        }
-        /* All small-text labels inside (Tasks Completed, period labels,
-           bucket labels under counts, MRR italic) */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="font-size: 9.5px"],
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="fontSize: 9.5"],
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="font-size: 10.5px"],
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="fontSize: 10.5"] {
-          color: rgba(255,255,255,0.55) !important;
-        }
-        /* Section divider line */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] div[style*="border-bottom: 0.5px"] {
+        /* Borders / dividers — soft on dark */
+        .rt-sidebar-widget > div:first-child {
           border-bottom-color: rgba(255,255,255,0.08) !important;
         }
-        /* The squiggle SVG underline below "108" — stroke is C.primaryDeep
-           which is the same dark green as the sidebar bg, so invisible. */
-        .r-desk > div[style*="rgba(60,45,25,0.03)"] svg path {
+        /* Active period selector underline */
+        .rt-sidebar-widget div[style*="border-bottom: 1px"] {
+          border-bottom-color: rgba(255,255,255,0.55) !important;
+        }
+        /* Squiggle SVG underline — was C.primaryDeep (same as sidebar bg) */
+        .rt-sidebar-widget svg path {
           stroke: rgba(255,255,255,0.45) !important;
+        }
+        /* Bucket count NUMBERS — restore their accent colors. The portfolio
+           bucket counts use C.retElite/C.retGood/C.retOk/C.retWarn/C.retCrit
+           inline (verified from line 66 of App.jsx). The * rule above
+           overrides these to white — we need to put them back. retElite
+           and retGood are too dark on the sidebar bg, so they're lifted
+           to brighter accent variants. */
+        .rt-sidebar-widget [style*="color: rgb(12, 58, 46)"],
+        .rt-sidebar-widget [style*="color: #0C3A2E"] {
+          color: #4A9374 !important; /* retElite → lifted brighter for dark bg */
+        }
+        .rt-sidebar-widget [style*="color: rgb(31, 122, 92)"],
+        .rt-sidebar-widget [style*="color: #1F7A5C"] {
+          color: #5BB28D !important; /* retGood → lifted brighter for dark bg */
+        }
+        .rt-sidebar-widget [style*="color: rgb(168, 164, 32)"],
+        .rt-sidebar-widget [style*="color: #A8A420"] {
+          color: #D4D03A !important; /* retOk → lifted */
+        }
+        .rt-sidebar-widget [style*="color: rgb(209, 122, 27)"],
+        .rt-sidebar-widget [style*="color: #D17A1B"] {
+          color: #ED9540 !important; /* retWarn → lifted */
+        }
+        .rt-sidebar-widget [style*="color: rgb(180, 52, 31)"],
+        .rt-sidebar-widget [style*="color: #B4341F"] {
+          color: #E55543 !important; /* retCrit → lifted */
+        }
+        .r-desk-bucket-dark-fix {}  /* anchor */
+        /* The 8px-tall stacked bucket bar uses the same dark accent hexes as
+           backgrounds. Lift those too so the bar strip is visible. */
+        .rt-sidebar-widget [style*="background: rgb(12, 58, 46)"],
+        .rt-sidebar-widget [style*="background: #0C3A2E"],
+        .rt-sidebar-widget [style*="background:#0C3A2E"] {
+          background: #4A9374 !important;
+        }
+        .rt-sidebar-widget [style*="background: rgb(31, 122, 92)"],
+        .rt-sidebar-widget [style*="background: #1F7A5C"],
+        .rt-sidebar-widget [style*="background:#1F7A5C"] {
+          background: #5BB28D !important;
+        }
+        .rt-sidebar-widget [style*="background: rgb(168, 164, 32)"],
+        .rt-sidebar-widget [style*="background: #A8A420"],
+        .rt-sidebar-widget [style*="background:#A8A420"] {
+          background: #D4D03A !important;
+        }
+        .rt-sidebar-widget [style*="background: rgb(209, 122, 27)"],
+        .rt-sidebar-widget [style*="background: #D17A1B"],
+        .rt-sidebar-widget [style*="background:#D17A1B"] {
+          background: #ED9540 !important;
+        }
+        .rt-sidebar-widget [style*="background: rgb(180, 52, 31)"],
+        .rt-sidebar-widget [style*="background: #B4341F"],
+        .rt-sidebar-widget [style*="background:#B4341F"] {
+          background: #E55543 !important;
         }
 
         /* ── PROFILE CHIP (A circle + name + company) ──────────────────
@@ -10829,7 +10873,7 @@ export default function App({ user }) {
           const callout = computeCallout();
 
           return (
-            <div style={{ padding: "14px 16px", margin: "0 10px 8px", background: "rgba(60,45,25,0.03)", borderRadius: 12, position: "relative", boxShadow: "inset 0 1px 3px rgba(60,45,25,0.10), inset 0 -1px 0 rgba(255,255,255,0.4)", flexShrink: 0 }}>
+            <div className="rt-sidebar-widget" style={{ padding: "14px 16px", margin: "0 10px 8px", background: "rgba(60,45,25,0.03)", borderRadius: 12, position: "relative", boxShadow: "inset 0 1px 3px rgba(60,45,25,0.10), inset 0 -1px 0 rgba(255,255,255,0.4)", flexShrink: 0 }}>
               {/* Handwritten callout — TEMPORARILY HIDDEN per request.
                   Restore by uncommenting the block below.
               <div
