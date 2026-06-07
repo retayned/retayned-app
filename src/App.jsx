@@ -2944,23 +2944,35 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ATMOSPHERIC · NOW-anchored wash + hairline (no frosted) ──
-              Tinted atmospheric region on the page. No frosted texture
-              (no material claim). The wash itself is NOW-anchored — the
-              bright spot follows the user's current position around the
-              dial. Since there's no frosted-glass claim, moving
-              brightness is physically coherent: it's just where the
-              green tint concentrates, which is wherever attention is. */}
-          {/* NOW-anchored radial wash — center follows nowX/nowY */}
+          {/* ── ATMOSPHERIC · Frosted + static wash at center-left ──────
+              Tinted atmospheric region with frosted texture overlay.
+              The wash is STATIC — does not follow NOW. Bright spot
+              stays at (CX, CY) regardless of time.
+
+              Physics coherent: frosted glass with a fixed light source
+              behind it. The light source doesn't move, so the bright
+              spot doesn't move. NOW dot is a marker that travels
+              around the perimeter; the glass itself stays put. */}
+          {/* Static wash centered at (CX, CY) */}
           <radialGradient id="rt-dial-wash"
-                          cx={nowX} cy={nowY} r={R * 1.15}
+                          cx={CX} cy={CY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
           </radialGradient>
-          {/* NOW dot drop-shadow — small lift so the dot sits ON the
-              tinted region rather than floating in front of it. */}
+          {/* Frosted texture — feTurbulence noise overlay, soft baseFreq.
+              Bumped: colorMatrix alpha 0.035 → 0.05, overlay opacity
+              0.35 → 0.5 for more visible surface character. */}
+          <filter id="rt-dial-frosted" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.35" numOctaves="2" seed="3" stitchTiles="stitch" />
+            <feColorMatrix values="0 0 0 0 0.11
+                                  0 0 0 0 0.20
+                                  0 0 0 0 0.14
+                                  0 0 0 0.05 0" />
+            <feComposite in2="SourceGraphic" operator="in" />
+          </filter>
+          {/* NOW dot drop-shadow */}
           <filter id="rt-dial-now-raised" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
             <feOffset dx="0.6" dy="1.4" result="offsetblur" />
@@ -2973,9 +2985,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           </filter>
         </defs>
         {/* ── ATMOSPHERIC render ─────────────────────────────────────────── */}
-        {/* Layer 1: NOW-anchored radial mint wash */}
+        {/* Layer 1: static mint wash */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`} fill="url(#rt-dial-wash)" />
-        {/* Layer 2: single soft hairline edge */}
+        {/* Layer 2: frosted texture overlay */}
+        <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R} Z`}
+              fill="rgba(170, 220, 185, 0.40)"
+              filter="url(#rt-dial-frosted)"
+              opacity="0.5" />
+        {/* Layer 3: single soft hairline edge */}
         <path d={`M ${CX} ${CY - R} A ${R} ${R} 0 0 0 ${CX} ${CY + R}`}
               fill="none"
               stroke="rgba(28, 50, 36, 0.16)"
