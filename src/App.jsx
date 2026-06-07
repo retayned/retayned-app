@@ -2944,35 +2944,31 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </linearGradient>
             );
           })()}
-          {/* ── ATMOSPHERIC · Frosted glass + static upper-left wash ──────
+          {/* ── ATMOSPHERIC · Frosted glass + center-positioned wash ──────
               Frosted glass with a STATIC bright spot positioned at the
-              upper-left of the dial. The bright spot represents where
-              ambient light most concentrates as it passes through the
-              glass — light source from above-left (the same direction
-              implied by every other shadow on the page, including the
-              task tiles).
+              geometric center of the visible half-disc. The bright spot
+              represents where ambient light most concentrates as it
+              passes through the glass — but its position is purely
+              ambient, not pulling the eye to any specific time.
 
-              Physics: coherent. Frosted glass has a fixed brightness
-              distribution determined by where the light source is.
-              Light from above-left → bright spot lives at the
-              upper-left of the glass. Doesn't move because the light
-              source doesn't move.
+              The upper-left wash was correct for matching page-wide
+              above-left lighting, BUT it drew attention to a region
+              that has no informational value. Center positioning keeps
+              the visual interest of the shading without creating false
+              focal hierarchy.
 
               Components:
               1. Frosted glass wash — radial gradient, center fixed at
-                 upper-left of the dial, stops 0.20 / 0.08 / 0.02
+                 geometric middle of the visible dial area
               2. Frosted texture overlay (feTurbulence noise)
               3. Single soft hairline edge
-              4. NOW dot (raised, with pulsing ring) sits on top of
-                 the glass at its time position, but the GLASS's
-                 brightness no longer follows the NOW dot. */}
-          {/* Static upper-left wash. Center positioned at the upper
-              portion of the flat edge (left side of the half-disc),
-              about 50% up from the geometric center. The half-disc's
-              flat edge is at x=CX, so center at (CX, CY - R*0.5) puts
-              the brightest point at upper-left of the visible dial. */}
+              4. NOW dot (raised, with pulsing ring) sits on top */}
+          {/* Static center wash. The visible half-disc extends from the
+              flat edge at x=CX rightward to x=CX+R. Geometric center
+              of the visible area is at (CX + R*0.4, CY). Putting the
+              brightest point there is purely ambient — no time bias. */}
           <radialGradient id="rt-dial-wash"
-                          cx={CX} cy={CY - R * 0.5} r={R * 1.15}
+                          cx={CX + R * 0.4} cy={CY} r={R * 1.15}
                           gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
             <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
