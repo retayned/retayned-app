@@ -2968,11 +2968,14 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
             <stop offset="100%" stopColor="rgba(170, 220, 185, 0.03)" />
           </linearGradient>
           {/* 10: inner shadow radial — concentrates at upper-left so
-              the dome reads as recessed (light source convention). */}
+              the dome reads as recessed (light source convention).
+              Tint shifted from near-black rgba(20,30,22,...) to light
+              mint green so the dome reads as ATMOSPHERIC GREEN rather
+              than dark/forest. Same depth illusion, lighter tone. */}
           <radialGradient id="rt-dial-deboss-inner" cx={CX - 250} cy={CY - 200} r={R} gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="rgba(20, 30, 22, 0.16)" />
-            <stop offset="0.40" stopColor="rgba(20, 30, 22, 0.06)" />
-            <stop offset="1" stopColor="rgba(20, 30, 22, 0)" />
+            <stop offset="0" stopColor="rgba(140, 190, 160, 0.32)" />
+            <stop offset="0.40" stopColor="rgba(140, 190, 160, 0.14)" />
+            <stop offset="1" stopColor="rgba(140, 190, 160, 0)" />
           </radialGradient>
           {/* 10: bottom highlight radial — concentrates at lower-right
               so the dome lip catches light there. */}
