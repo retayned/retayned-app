@@ -15617,11 +15617,16 @@ export default function App({ user }) {
                           }}>{s.label}</button>
                         ))}
                       </div>
-                      <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 4 }}>
+                      <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.surface, borderRadius: 8 }}>
                         {viewOptions.map(v => (
-                          <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} className={"rt-composer-pill" + (variant === v.id ? " is-filled" : "")} style={{
-                            display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit",
+                          <button key={v.id} onClick={() => setClientsView(v.id)} title={v.label} style={{
+                            display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
+                            border: "none", background: "transparent",
                             color: variant === v.id ? C.text : C.textSec,
+                            transition: "background 160ms var(--rt-ease-out), box-shadow 160ms var(--rt-ease-out)",
+                            ...(variant === v.id
+                              ? { background: C.card, boxShadow: "var(--rt-sh-xs)" }
+                              : {}),
                           }}>
                             <Icon name={v.icon} size={14} color={variant === v.id ? C.text : C.textMuted} />
                             <span style={{ fontSize: 12, fontWeight: variant === v.id ? 600 : 500 }}>{v.label}</span>
@@ -18407,16 +18412,16 @@ export default function App({ user }) {
                             Clients page (Table/Columns/Heatmap). Active state:
                             embossed white card + card-lift shadow + slight lift.
                             Idle state: transparent, hover darkens text. */}
-                        <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.bg, borderRadius: 8 }}>
+                        <div className="rc-view-toggle" style={{ display: "inline-flex", gap: 2, padding: 2, background: C.surface, borderRadius: 8 }}>
                           {["softer", "neutral", "firmer"].map(t => {
                             const isActive = askTone === t;
                             return (
-                              <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} className={isActive ? "" : "rt-view-opt"} style={{
+                              <button key={t} onClick={() => { setAskTone(t); setAskDraft(""); }} style={{
                                 padding: "5px 12px", fontSize: 12, borderRadius: 6, textTransform: "capitalize",
                                 border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: isActive ? 600 : 500,
-                                transition: "transform 180ms var(--rt-ease-out), box-shadow 180ms var(--rt-ease-out)",
+                                transition: "background 160ms var(--rt-ease-out), box-shadow 160ms var(--rt-ease-out)",
                                 ...(isActive
-                                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
+                                  ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
                                   : { background: "transparent", color: C.textMuted }),
                               }}>{t}</button>
                             );
