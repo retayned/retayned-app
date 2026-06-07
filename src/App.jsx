@@ -7219,6 +7219,15 @@ export default function App({ user }) {
           return [mapped, ...prev];
         });
       } else if (ev === "UPDATE") {
+        // Skip if we're currently mid-toggle for this row. The DB write
+        // we just initiated can race with this realtime echo — if the
+        // echo arrives with stale data (e.g. mid-replication) it would
+        // overwrite our optimistic state, causing the "I checked the
+        // task and it un-checked itself a second later" bug. Once the
+        // toggle write completes (inFlightToggles.delete fires), any
+        // subsequent realtime echo will reflect the post-write state
+        // and is safe to apply.
+        if (inFlightToggles.current.has(mapped.id)) return;
         setTasks(prev => prev.map(t => {
           if (t.id !== mapped.id) return t;
           // Preserve any local-only fields by spreading mapped over t
@@ -8851,61 +8860,59 @@ export default function App({ user }) {
         .rt-sidebar-widget svg path {
           stroke: rgba(255,255,255,0.45) !important;
         }
-        /* Bucket count NUMBERS — keep the bucket counts mostly muted on
-           the small sidebar widget. Thriving + Healthy stay legible as
-           muted greens (part of the brand). The warning tier (retOk/
-           retWarn/retCrit) gets pulled toward neutral grey-warm tones —
-           the widget shouldn't be pulling attention from the main
-           content with vivid yellows and reds. The data is still
-           there on inspection, just not shouting. */
+        /* Bucket count NUMBERS — fully neutral, BUT use a wide brightness
+           ramp to encode performance via opacity alone. Thriving is the
+           boldest (high contrast against dark sidebar), Critical is the
+           softest (recedes into the background). No greens, no warning
+           hues. Performance signal is purely tonal. */
         .rt-sidebar-widget [style*="color: rgb(12, 58, 46)"],
         .rt-sidebar-widget [style*="color: #0C3A2E"] {
-          color: #5B9479 !important; /* retElite → muted green */
+          color: rgba(255,255,255,0.95) !important; /* Thriving — boldest */
         }
         .rt-sidebar-widget [style*="color: rgb(31, 122, 92)"],
         .rt-sidebar-widget [style*="color: #1F7A5C"] {
-          color: #6BA68C !important; /* retGood → muted green */
+          color: rgba(255,255,255,0.72) !important; /* Healthy */
         }
         .rt-sidebar-widget [style*="color: rgb(168, 164, 32)"],
         .rt-sidebar-widget [style*="color: #A8A420"] {
-          color: rgba(255,255,255,0.50) !important; /* retOk → neutral */
+          color: rgba(255,255,255,0.52) !important; /* Watch */
         }
         .rt-sidebar-widget [style*="color: rgb(209, 122, 27)"],
         .rt-sidebar-widget [style*="color: #D17A1B"] {
-          color: rgba(255,255,255,0.42) !important; /* retWarn → neutral */
+          color: rgba(255,255,255,0.34) !important; /* At-risk */
         }
         .rt-sidebar-widget [style*="color: rgb(180, 52, 31)"],
         .rt-sidebar-widget [style*="color: #B4341F"] {
-          color: rgba(255,255,255,0.35) !important; /* retCrit → neutral */
+          color: rgba(255,255,255,0.22) !important; /* Critical — softest */
         }
         .r-desk-bucket-dark-fix {}  /* anchor */
-        /* The 8px-tall stacked bucket bar — same muting for backgrounds.
-           Thriving + Healthy still hint green (brand alignment); warning
-           tier is neutral so the bar reads as quiet portfolio context. */
+        /* Stacked bucket bar — matches the same opacity ramp but pulled
+           down ~15 points since a continuous strip reads brighter than
+           a 12px numeral at the same opacity. */
         .rt-sidebar-widget [style*="background: rgb(12, 58, 46)"],
         .rt-sidebar-widget [style*="background: #0C3A2E"],
         .rt-sidebar-widget [style*="background:#0C3A2E"] {
-          background: #5B9479 !important;
+          background: rgba(255,255,255,0.78) !important; /* Thriving */
         }
         .rt-sidebar-widget [style*="background: rgb(31, 122, 92)"],
         .rt-sidebar-widget [style*="background: #1F7A5C"],
         .rt-sidebar-widget [style*="background:#1F7A5C"] {
-          background: #6BA68C !important;
+          background: rgba(255,255,255,0.55) !important; /* Healthy */
         }
         .rt-sidebar-widget [style*="background: rgb(168, 164, 32)"],
         .rt-sidebar-widget [style*="background: #A8A420"],
         .rt-sidebar-widget [style*="background:#A8A420"] {
-          background: rgba(255,255,255,0.32) !important;
+          background: rgba(255,255,255,0.36) !important; /* Watch */
         }
         .rt-sidebar-widget [style*="background: rgb(209, 122, 27)"],
         .rt-sidebar-widget [style*="background: #D17A1B"],
         .rt-sidebar-widget [style*="background:#D17A1B"] {
-          background: rgba(255,255,255,0.24) !important;
+          background: rgba(255,255,255,0.20) !important; /* At-risk */
         }
         .rt-sidebar-widget [style*="background: rgb(180, 52, 31)"],
         .rt-sidebar-widget [style*="background: #B4341F"],
         .rt-sidebar-widget [style*="background:#B4341F"] {
-          background: rgba(255,255,255,0.18) !important;
+          background: rgba(255,255,255,0.10) !important; /* Critical */
         }
 
         /* ── PROFILE CHIP (A circle + name + company) ──────────────────
@@ -8930,6 +8937,20 @@ export default function App({ user }) {
         /* ═══════════════════════════════════════════════════════════════
            END SITEWIDE MIGRATION
            ═══════════════════════════════════════════════════════════════ */
+
+        /* ── RAI CHAT — HIDE SCROLLBAR ─────────────────────────────────
+           The internal scrollbar on .r-rai-scroll clashes visually with
+           the rounded card chrome / page border. Keep scroll functional,
+           hide the visible scrollbar across all browsers. */
+        .r-rai-scroll {
+          scrollbar-width: none !important;          /* Firefox */
+          -ms-overflow-style: none !important;       /* IE / old Edge */
+        }
+        .r-rai-scroll::-webkit-scrollbar {
+          display: none !important;                  /* Chrome / Safari / Edge */
+          width: 0 !important;
+          height: 0 !important;
+        }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         /* Paper grain — barely-perceptible noise texture on the cream
@@ -9172,11 +9193,15 @@ export default function App({ user }) {
            All scoped to (hover: hover) so touch devices don't get stuck states.
            Inactive variants use :not(.is-active) for segmented toggles. */
 
-        /* Purple inline links — Magic Scoop client name, Connect Google
+        /* Inline links — Magic Scoop client name, Connect Google
            Calendar. Hover signal: color darkens + dotted underline goes
            to solid. Font-weight stays at 600 at rest AND hover so the
            box geometry never shifts — hovering can't push neighboring
            text or change the link's footprint.
+
+           Uses primary green (#33543E) — was originally C.btn (purple).
+           Migrated sitewide so all dotted-underlined links and client
+           names match the brand palette. Hover deepens to primaryDark.
 
            Uses text-decoration (not border-bottom) so the underline
            survives when the consuming element has an inline border:none
@@ -9185,20 +9210,20 @@ export default function App({ user }) {
            those resets — Connect Google Calendar rendered with no
            underline at all. */
         .rt-purple-link {
-          color: ${C.btn};
+          color: #33543E;
           font-weight: 600;
           text-decoration: underline;
           text-decoration-style: dotted;
-          text-decoration-color: ${C.btn};
+          text-decoration-color: #33543E;
           text-decoration-thickness: 1px;
           text-underline-offset: 3px;
           transition: color 0.12s, text-decoration-style 0.12s, text-decoration-color 0.12s;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
-            color: ${C.btnHover};
+            color: #2D4A37;
             text-decoration-style: solid;
-            text-decoration-color: ${C.btnHover};
+            text-decoration-color: #2D4A37;
           }
         }
 
@@ -10055,16 +10080,16 @@ export default function App({ user }) {
             display: none !important;
           }
         }
-        /* Dotted purple underline on task titles whose text contains a thinking
-           verb. Indicates "click me to discuss with Rai." Title text stays black;
-           only the underline goes from dotted-light to solid-purple on hover.
-           Done tasks lose the affordance entirely.
-           Note: text-underline-offset is small (1px) because the parent div has
-           overflow:hidden — large offsets clip the dotted line out of view. */
+        /* Dotted primary-green underline on task titles whose text contains
+           a thinking verb. Indicates "click me to discuss with Rai." Title
+           text stays black; only the underline goes from dotted-light to
+           solid-green on hover. Done tasks lose the affordance entirely.
+           Note: text-underline-offset is small (1px) because the parent div
+           has overflow:hidden — large offsets clip the dotted line out of view. */
         .rt-task-title.is-discussable {
           text-decoration: underline;
           text-decoration-style: dotted;
-          text-decoration-color: ${C.btn};
+          text-decoration-color: #33543E;
           text-decoration-thickness: 2px;
           text-underline-offset: 2px;
           cursor: pointer;
@@ -10072,7 +10097,7 @@ export default function App({ user }) {
         }
         .rt-task-title.is-discussable:hover {
           text-decoration-style: solid;
-          text-decoration-color: ${C.btn};
+          text-decoration-color: #33543E;
         }
         .rt-row.is-done .rt-task-title.is-discussable {
           text-decoration: none;
@@ -10270,13 +10295,11 @@ export default function App({ user }) {
         @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.62; } }
         @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.52; } }
         /* Connect Google Calendar nudge — dotted underline on rest,
-           solid on hover. The hover swap is the affordance: dotted
-           reads as "tentative / suggestion," solid reads as "you're
-           about to act." Matches the editorial voice of the rest of
-           the surface. */
+           solid on hover. Primary green to match the rest of the link
+           treatment sitewide. */
         .rt-gcal-connect-link:hover {
           text-decoration-style: solid !important;
-          text-decoration-color: #7c5cf3 !important;
+          text-decoration-color: #33543E !important;
         }
         @media (max-width: 1099px) {
           .rt-dial-layer { display: none !important; }
@@ -14603,10 +14626,10 @@ export default function App({ user }) {
                           fontStyle: "italic",
                           fontSize: 14,
                           fontWeight: 600,
-                          color: "#7c5cf3",
+                          color: "#33543E",
                           cursor: "pointer",
                           textDecoration: "underline dotted",
-                          textDecorationColor: "rgba(124,92,243,0.55)",
+                          textDecorationColor: "rgba(51,84,62,0.55)",
                           textUnderlineOffset: 4,
                           textDecorationThickness: 1.5,
                           transition: "text-decoration-style 120ms ease",
