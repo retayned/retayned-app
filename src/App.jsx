@@ -8048,7 +8048,7 @@ export default function App({ user }) {
       // Rate limit: server returns JSON with status 429 (no stream)
       if (response.status === 429) {
         const data = await response.json();
-        setAiMessages(prev => [...prev, { role: "ai", text: data.message || "You've hit your daily message limit. Try again tomorrow." }]);
+        setAiMessages(prev => [...prev, { role: "ai", text: data.message || "You've reached today\'s chat limit. Please wait until tomorrow." }]);
         return;
       }
 
@@ -8328,7 +8328,7 @@ export default function App({ user }) {
           const errData = await response.json().catch(() => ({}));
           setConfidantMessages(prev => [...prev, {
             role: "ai",
-            text: errData.message || "You've hit your daily message limit. Try again tomorrow.",
+            text: errData.message || "You've reached today\'s chat limit. Please wait until tomorrow.",
           }]);
         } else {
           setConfidantMessages(prev => [...prev, {
@@ -19083,6 +19083,46 @@ export default function App({ user }) {
                                 {e.priority === "high" && (
                                   <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "linear-gradient(90deg, #D17A1B, #C04323)" }}>Heat {heat}</span>
                                 )}
+                                {(() => {
+                                  // Check-in reminder pill. Shows due/overdue/upcoming
+                                  // state inline. Without this, the user has no signal
+                                  // on the row that a reminder is set.
+                                  // Note: local state maps DB's reminder_date → reminder.
+                                  // Read both to be safe.
+                                  const reminderRaw = e.reminder ?? e.reminder_date;
+                                  if (!reminderRaw) return null;
+                                  const todayYmd = (() => {
+                                    const n = new Date();
+                                    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+                                  })();
+                                  const reminderYmd = String(reminderRaw).slice(0, 10);
+                                  const todayMs = new Date(todayYmd).getTime();
+                                  const reminderMs = new Date(reminderYmd).getTime();
+                                  const diffDays = Math.round((reminderMs - todayMs) / 86400000);
+                                  if (diffDays < 0) {
+                                    const days = Math.abs(diffDays);
+                                    return (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "#C04323" }}>
+                                        Overdue {days}d
+                                      </span>
+                                    );
+                                  }
+                                  if (diffDays === 0) {
+                                    return (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "#C04323" }}>
+                                        Check in today
+                                      </span>
+                                    );
+                                  }
+                                  if (diffDays <= 30) {
+                                    return (
+                                      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: C.primary, background: C.primarySoft, border: "1px solid " + C.primaryGhost }}>
+                                        In {diffDays}d
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
                               <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 8 }}>
                                 {contact && <span>{contact}</span>}
