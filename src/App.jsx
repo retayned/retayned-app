@@ -5983,7 +5983,7 @@ export default function App({ user }) {
   //
   // State shape: { task, source: 'swipe' | 'button' } or null
   const [dismissModalTask, setDismissModalTask] = useState(null);
-  const [dismissReasonChip, setDismissReasonChip] = useState(null);
+  const [dismissReasonChips, setDismissReasonChips] = useState([]);
   const [dismissReasonText, setDismissReasonText] = useState("");
   // Clients page filter chips — see toolbar render. Both default to "all".
   // Drift: one of "all" | "Improving" | "Stable" | "Something shifted" | "Declining" | "At risk"
@@ -7544,7 +7544,7 @@ export default function App({ user }) {
     // Rai task → open modal. Store the performDelete callback so the
     // modal can call it on confirm.
     setDismissModalTask({ task: t, performDelete });
-    setDismissReasonChip(null);
+    setDismissReasonChips([]);
     setDismissReasonText("");
   };
 
@@ -7555,23 +7555,25 @@ export default function App({ user }) {
     if (!dismissModalTask) return;
     const { task, performDelete } = dismissModalTask;
 
-    // Build the reason string. Chip alone = preset semantic tag.
-    // Free text alone = full user explanation (richest signal).
-    // Both = chip-tag prefix + free text. Neither = "user_deleted".
+    // Build the reason string. Chips alone = preset semantic tags
+    // (comma-joined if multiple). Free text alone = full user
+    // explanation (richest signal). Both = chip-tags prefix + free
+    // text. Neither = "user_deleted".
     const text = (dismissReasonText || "").trim();
+    const chipStr = (dismissReasonChips || []).join(",");
     let reason = "user_deleted";
-    if (dismissReasonChip && text) {
-      reason = `${dismissReasonChip}: ${text}`;
+    if (chipStr && text) {
+      reason = `${chipStr}: ${text}`;
     } else if (text) {
       reason = text;
-    } else if (dismissReasonChip) {
-      reason = dismissReasonChip;
+    } else if (chipStr) {
+      reason = chipStr;
     }
 
     dismissRaiTaskFeedback(task, reason);
     performDelete();
     setDismissModalTask(null);
-    setDismissReasonChip(null);
+    setDismissReasonChips([]);
     setDismissReasonText("");
   };
 
@@ -7582,7 +7584,7 @@ export default function App({ user }) {
     dismissRaiTaskFeedback(task, "user_deleted");
     performDelete();
     setDismissModalTask(null);
-    setDismissReasonChip(null);
+    setDismissReasonChips([]);
     setDismissReasonText("");
   };
   // When a task is deleted, also delete its completion/occurrence history so it
@@ -22083,34 +22085,47 @@ export default function App({ user }) {
                       Optional — but helps Rai stop suggesting things like this.
                     </div>
                   </div>
-                  <button onClick={skipDismissReason} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: C.surfaceWarm, color: C.textSec, fontSize: 15, cursor: "pointer", flexShrink: 0 }} aria-label="skip">✕</button>
+                  <button onClick={skipDismissReason} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: C.surfaceWarm, color: C.textSec, fontSize: 15, cursor: "pointer", flexShrink: 0 }} aria-label="nevermind">✕</button>
                 </div>
 
                 <div style={{ marginTop: 14, fontSize: 13, color: C.text, padding: "10px 12px", background: C.surfaceWarm, borderRadius: 10, fontStyle: "italic", lineHeight: 1.45 }}>
                   "{task.text}"
                 </div>
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 16 }}>
                   {PRESET_CHIPS.map(c => {
-                    const selected = dismissReasonChip === c.id;
+                    const selected = (dismissReasonChips || []).includes(c.id);
                     return (
                       <button
                         key={c.id}
-                        onClick={() => setDismissReasonChip(selected ? null : c.id)}
+                        onClick={() => {
+                          setDismissReasonChips(prev => {
+                            const arr = prev || [];
+                            return arr.includes(c.id) ? arr.filter(x => x !== c.id) : [...arr, c.id];
+                          });
+                        }}
                         style={{
-                          padding: "7px 12px",
+                          padding: "9px 12px",
                           fontSize: 12.5,
                           fontWeight: 600,
-                          borderRadius: 999,
-                          border: "1px solid " + (selected ? C.primary : C.borderLight),
-                          background: selected ? C.primarySoft : "#fff",
-                          color: selected ? C.primary : C.textSec,
+                          borderRadius: 8,
+                          border: "1px solid " + (selected ? C.retGood : C.borderLight),
+                          background: selected ? "#E8F3EC" : "#fff",
+                          color: selected ? C.retGood : C.textSec,
                           cursor: "pointer",
                           fontFamily: "inherit",
                           transition: "all 120ms ease",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 8,
+                          textAlign: "left",
                         }}
                       >
-                        {c.label}
+                        <span>{c.label}</span>
+                        {selected && (
+                          <span style={{ width: 14, height: 14, borderRadius: 4, background: C.retGood, color: "#fff", fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✓</span>
+                        )}
                       </button>
                     );
                   })}
@@ -22138,18 +22153,18 @@ export default function App({ user }) {
                   }}
                 />
 
-                <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+                <div style={{ display: "flex", alignItems: "center", marginTop: 18, justifyContent: "space-between" }}>
                   <button
                     onClick={skipDismissReason}
-                    style={{ padding: "10px 14px", background: C.surfaceWarm, color: C.textSec, border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ padding: "8px 4px", background: "transparent", color: C.textMuted, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}
                   >
-                    Skip
+                    Nevermind
                   </button>
                   <button
                     onClick={confirmDismissWithReason}
-                    style={{ padding: "10px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(124,92,243,0.15), 0 2px 6px rgba(124,92,243,0.22)" }}
+                    style={{ padding: "10px 16px", background: C.retGood, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(45,134,89,0.15), 0 2px 6px rgba(45,134,89,0.22)" }}
                   >
-                    Dismiss
+                    Delete Task
                   </button>
                 </div>
               </div>
