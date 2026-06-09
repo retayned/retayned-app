@@ -173,6 +173,10 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
 
   const editorialNames = new Set(["due"]);
   const isEditorial = editorialNames.has(name);
+  // Simple paths come in two coordinate systems. These are authored at
+  // 24×24; every other simplePaths entry is 32×32. Used to pick the right
+  // viewBox so the glyph centers correctly in the chip.
+  const SIMPLE_24 = new Set(["check", "infinity"]);
 
   // Simple variants of editorial icons — single-color silhouettes for
   // compact contexts (composer chips at 14px) where the duotone interior
@@ -360,7 +364,16 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
     <svg
       width={size}
       height={size}
-      viewBox={isEditorial ? "0 0 32 32" : "0 0 24 24"}
+      viewBox={
+        (simple && simplePaths[name])
+          // simplePaths are authored in two coordinate systems: check +
+          // infinity at 24×24, all others at 32×32. Match each so the
+          // glyph sits centered (regressed earlier when the nav-icon swap
+          // pulled clients/workers out of editorialNames → they fell to the
+          // 24 viewBox while their paths were 32-coords).
+          ? (SIMPLE_24.has(name) ? "0 0 24 24" : "0 0 32 32")
+          : (isEditorial ? "0 0 32 32" : "0 0 24 24")
+      }
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -7921,6 +7934,12 @@ export default function App({ user }) {
   // the new context. Without this two-step, the auto-send would close over
   // the stale (pre-context) state and Rai would respond blind.
   const pendingAutoSendRef = useRef(null);
+  // When a chat is auto-started from a task, the user message Rai receives is
+  // a generic prompt ("Draft this for me."). That made every task-originated
+  // chat title identical. This ref carries a meaningful title (the task +
+  // client) set at click time, used for the conversation title instead of
+  // the generic auto-send text. Consumed (cleared) on first use.
+  const pendingAutoTitleRef = useRef(null);
   const aiUserRef = useRef(null);
   useEffect(() => {
     // Claude-style: when a new user message is sent, scroll that message to the top of the viewport
@@ -8155,8 +8174,13 @@ export default function App({ user }) {
           // Lazy-load convoDb calls to avoid regressing in environments where
           // create/updateTitle aren't yet exported (older deploys).
           if (!aiConvoId && convoDb.create) {
-            const firstUserMsg = fullMessages.find(m => m.role === "user")?.text || "New chat";
-            const autoTitle = firstUserMsg.slice(0, 60).trim() + (firstUserMsg.length > 60 ? "…" : "");
+            // Prefer an explicit title set when the chat was auto-started from
+            // a task (task text + client). Falls back to the first user message
+            // for normal chats. Consume the ref so it doesn't leak to the next.
+            const explicitTitle = pendingAutoTitleRef.current;
+            pendingAutoTitleRef.current = null;
+            const titleSource = explicitTitle || fullMessages.find(m => m.role === "user")?.text || "New chat";
+            const autoTitle = titleSource.slice(0, 60).trim() + (titleSource.length > 60 ? "…" : "");
             const { data: created } = await convoDb.create(user.id, { title: autoTitle });
             if (created) {
               setAiConvoId(created.id);
@@ -8243,6 +8267,7 @@ export default function App({ user }) {
     setAiConvoId(null);
     setObservationContext(null);
     setFocusedTaskId(null);
+    pendingAutoTitleRef.current = null;
   };
 
   // Load a past conversation into the chat pane. Fetches the full row (list
@@ -9061,21 +9086,25 @@ export default function App({ user }) {
         html .r-desk .rt-rai-pop-btn {
           background: transparent !important;
           background-image: none !important;
-          color: #FFFFFF !important;
+          color: rgba(255,255,255,0.78) !important;
           box-shadow: none !important;
-          border: 1px solid rgba(255,255,255,0.18) !important;
+          border: none !important;
         }
         html .r-desk .rt-rai-pop-btn:hover {
-          background: rgba(255,255,255,0.06) !important;
+          background: rgba(80, 130, 95, 0.18) !important;
           background-image: none !important;
           color: #FFFFFF !important;
-          border-color: rgba(255,255,255,0.26) !important;
           box-shadow: none !important;
           transform: none !important;
         }
         html .r-desk .rt-rai-pop-btn:active {
-          background: rgba(255,255,255,0.09) !important;
+          background: rgba(80, 130, 95, 0.24) !important;
           transform: none !important;
+        }
+        html .r-desk .rt-rai-pop-btn svg,
+        html .r-desk .rt-rai-pop-btn svg * {
+          stroke: currentColor !important;
+          color: currentColor !important;
         }
 
         /* ── RAI SIDEBAR — CONVO ROW STATES ───────────────────────────
@@ -10940,9 +10969,10 @@ export default function App({ user }) {
                 the Rai nav item. flexShrink: 0 + its own wrapper means it
                 survives any viewport compression. Convo list (below) is
                 what scrolls when the sidebar runs out of room. */}
-            <div style={{ padding: "12px 10px 0", flexShrink: 0 }}>
-              <button className="rt-rai-pop-btn" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 200ms var(--rt-ease-out), border-color 200ms var(--rt-ease-out)" }}>
-                New Chat
+            <div style={{ padding: "8px 10px 0", flexShrink: 0 }}>
+              <button className="rt-rai-pop-btn" onClick={startNewRaiChat} style={{ width: "100%", padding: "8px 12px", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 500, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 11, transition: "background 200ms var(--rt-ease-out)" }}>
+                <Icon name="plus" size={17} color="currentColor" />
+                <span>New Chat</span>
               </button>
             </div>
             {/* Convo list — flex: 1 + overflowY: auto scrolls internally
@@ -11129,25 +11159,14 @@ export default function App({ user }) {
                 </div>
                 <div style={{ color: C.textSec, fontSize: 9.5 }}>Tasks Completed</div>
               </div>
-              {/* PORTFOLIO section */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase" }}>Portfolio · {total}</div>
-                <div style={{ fontSize: 9.5, color: C.textSec, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontWeight: 500, fontVariantNumeric: "tabular-nums" }}>${(totalRev / 1000).toFixed(1)}k MRR</div>
-              </div>
-              {/* Stacked bar — only non-zero buckets */}
-              <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", gap: 2, marginBottom: 8 }}>
-                {segs.map((s, i) => (
-                  <div key={i} style={{ flex: s.n, background: s.color, borderRadius: i === 0 ? "4px 0 0 4px" : i === segs.length - 1 ? "0 4px 4px 0" : 0 }} />
-                ))}
-              </div>
-              {/* Inline segment labels — count over label, stacked so 5 buckets fit without truncation. */}
-              <div style={{ display: "flex", gap: 6 }}>
-                {segs.map((s, i) => (
-                  <div key={i} style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-                    <div style={{ color: s.color, fontWeight: 700, fontSize: 13, fontVariantNumeric: "tabular-nums", lineHeight: 1.1 }}>{s.n}</div>
-                    <div style={{ color: C.textSec, fontSize: 9.5, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
-                  </div>
-                ))}
+              {/* PORTFOLIO section — simplified to a quiet stat block matching
+                  the DONE section above: same uppercase caption (with client
+                  count), then MRR as the Fraunces hero number. The "MRR" unit
+                  is dropped to caption size so the dollar figure leads. */}
+              <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Portfolio · {total}</div>
+              <div style={{ color: C.text, lineHeight: 1.15, fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ fontSize: 22, fontWeight: 500 }}>${(totalRev / 1000).toFixed(1)}k</span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: C.textSec, marginLeft: 6, letterSpacing: 0.3 }}>MRR</span>
               </div>
             </div>
           );
@@ -14179,6 +14198,17 @@ export default function App({ user }) {
                                           // once observationContext + aiMessages have flushed.
                                           setAiMessages([]);
                                           pendingAutoSendRef.current = autoMsg;
+                                          // Title this chat from the task (+ client) instead of
+                                          // the generic autoMsg, so the RECENT list is scannable
+                                          // ("Send Janet the Q3 report · Acme" not "Draft this
+                                          // for me."). Trimmed to a sane length downstream.
+                                          {
+                                            const taskText = (t.text || "").trim();
+                                            const cli = (t.client_name || client?.name || "").trim();
+                                            pendingAutoTitleRef.current = taskText
+                                              ? (cli ? `${taskText} · ${cli}` : taskText)
+                                              : null;
+                                          }
                                         }}
                                         style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                       >
@@ -14440,6 +14470,9 @@ export default function App({ user }) {
                                     return isRaiPlus ? <span style={{ display: "inline-flex", gap: 1 }}><Star /><Star /></span> : <Star />;
                                   })()}
                                   <span>{modeLabel}</span>
+                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, display: "block", opacity: 0.65, transform: todayModeMenuOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms var(--rt-ease-out)" }}>
+                                    <path d="M6 9l6 6 6-6" stroke={C.textSec} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
                                 </button>
                                 {todayModeMenuOpen && (
                                   <>
