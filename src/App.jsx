@@ -7886,6 +7886,7 @@ export default function App({ user }) {
   // assistant message. Cleared when a fresh conversation starts.
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [aiTyping, setAiTyping] = useState(false);
+  const [aiStreaming, setAiStreaming] = useState(false);
   // Attachments staged for next send. Shape: { id, name, type (image|document), media_type, data (base64), size }
   const [aiAttachments, setAiAttachments] = useState([]);
   // Current conversation id — null until first message persists. Tracks which
@@ -8065,11 +8066,34 @@ export default function App({ user }) {
         // Insert an empty AI message that we'll fill in chunk by chunk
         setAiMessages(prev => [...prev, { role: "ai", text: "" }]);
         setAiTyping(false); // remove the bouncing dots once streaming starts
+        setAiStreaming(true);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
         let accumulated = "";
+
+        // Smooth streaming: accumulate tokens as they arrive, but only
+        // flush to React state on an animation frame. Anthropic emits many
+        // text_delta events per second; calling setAiMessages on each one
+        // re-renders + re-parses the whole transcript per token, which makes
+        // the reply visibly jump and reflow. Coalescing writes to ~60fps
+        // (one rAF-scheduled flush at a time) makes it flow like Claude.
+        let rafPending = false;
+        const flush = () => {
+          rafPending = false;
+          setAiMessages(prev => {
+            const next = [...prev];
+            next[next.length - 1] = { role: "ai", text: accumulated };
+            return next;
+          });
+        };
+        const scheduleFlush = () => {
+          if (rafPending) return;
+          rafPending = true;
+          if (typeof requestAnimationFrame !== "undefined") requestAnimationFrame(flush);
+          else setTimeout(flush, 16);
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -8091,12 +8115,7 @@ export default function App({ user }) {
                 // Anthropic streaming: content_block_delta events carry text
                 if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
                   accumulated += parsed.delta.text;
-                  // Update the last message (the one we just inserted)
-                  setAiMessages(prev => {
-                    const next = [...prev];
-                    next[next.length - 1] = { role: "ai", text: accumulated };
-                    return next;
-                  });
+                  scheduleFlush();
                 }
               } catch {
                 // ignore malformed JSON chunks
@@ -8104,6 +8123,11 @@ export default function App({ user }) {
             }
           }
         }
+
+        // Final flush — guarantee the last tokens land even if the stream
+        // ended between animation frames.
+        flush();
+        setAiStreaming(false);
 
         // If stream ended with nothing, show fallback
         if (!accumulated) {
@@ -8185,6 +8209,7 @@ export default function App({ user }) {
       setAiMessages(prev => [...prev, { role: "ai", text: "Something went wrong connecting to Rai. Check your connection and try again." }]);
     }
     setAiTyping(false);
+    setAiStreaming(false);
   };
 
   // Watches for a pending auto-send queued by the task-discussion click
@@ -9034,61 +9059,46 @@ export default function App({ user }) {
            to coherent sidebar treatment — primary-tinted ghost button
            with hover state matching nav rows. */
         html .r-desk .rt-rai-pop-btn {
-          background: rgba(80, 130, 95, 0.22) !important;
-          background-image: none !important;
-          color: rgba(255,255,255,0.92) !important;
-          box-shadow: none !important;
-          border: 1px solid rgba(255,255,255,0.10) !important;
-        }
-        html .r-desk .rt-rai-pop-btn:hover {
-          background: rgba(80, 130, 95, 0.36) !important;
+          background: transparent !important;
           background-image: none !important;
           color: #FFFFFF !important;
-          border-color: rgba(255,255,255,0.16) !important;
+          box-shadow: none !important;
+          border: 1px solid rgba(255,255,255,0.18) !important;
+        }
+        html .r-desk .rt-rai-pop-btn:hover {
+          background: rgba(255,255,255,0.06) !important;
+          background-image: none !important;
+          color: #FFFFFF !important;
+          border-color: rgba(255,255,255,0.26) !important;
           box-shadow: none !important;
           transform: none !important;
         }
         html .r-desk .rt-rai-pop-btn:active {
-          background: rgba(80, 130, 95, 0.40) !important;
+          background: rgba(255,255,255,0.09) !important;
           transform: none !important;
         }
 
-        /* ── RAI SIDEBAR — CONVO ROW HOVER / ACTIVE ────────────────────
-           Inline JSX uses purple bg + purple text + 2px purple inset
-           left-shadow on active. That's the old loud AI-gen treatment.
-           Match the sidebar nav row family — same green tints, NO box
-           shadow on any convo row (kills the purple left stripe). */
+        /* ── RAI SIDEBAR — CONVO ROW STATES ───────────────────────────
+           Mirrors the main nav rows exactly:
+             rest   → transparent, 65% white text
+             hover  → green-tint, white text
+             active → white-tint pill (rgba 255 .06), white text, 600
+           Active bg + color come from the inline JSX; these rules set
+           the rest/hover text and kill any leftover shadow. */
         html .r-desk .r-convo-row {
-          color: rgba(255,255,255,0.65) !important;
-          background: transparent !important;
           box-shadow: none !important;
         }
-        html .r-desk .r-convo-row:hover {
-          background: rgba(80, 130, 95, 0.18) !important;
+        html body .r-desk .r-convo-row:not(:hover):not(.is-active),
+        html body .r-desk .r-convo-row:not(:hover):not(.is-active) span {
+          color: rgba(255,255,255,0.65) !important;
+        }
+        html body .r-desk .r-convo-row.is-active,
+        html body .r-desk .r-convo-row.is-active span {
           color: #FFFFFF !important;
-          box-shadow: none !important;
         }
-        /* Active convo row — JSX sets is-active by inline-styling background
-           to a purple rgba. Browsers may serialize that string differently
-           (with/without spaces, different opacity formats), so we don't try
-           to attribute-match; instead, we let inline CSS specificity carry
-           the BACKGROUND difference and just force the COLOR + SHADOW we
-           want everywhere. To override the purple inline bg, we use a
-           sibling selector trick: the active row also has fontWeight: 600
-           (vs 500 for inactive), but easier — directly target with
-           higher specificity via :where-style fallback. The cleanest path
-           is to mutate the JSX. But for CSS-only, force everything to the
-           same green family — the inline rgba purple wins on bg, our
-           selector wins on color + shadow. To beat that, use even higher
-           specificity. */
-        html body .r-desk .r-convo-row {
+        html body .r-desk .r-convo-row:hover {
+          background: rgba(80, 130, 95, 0.18) !important;
           box-shadow: none !important;
-        }
-        /* Active convo row text — JSX inline sets color: C.btn (#7c5cf3).
-           Force white everywhere; the rest state already uses rgba white. */
-        html body .r-desk .r-convo-row,
-        html body .r-desk .r-convo-row span {
-          color: rgba(255,255,255,0.65) !important;
         }
         html body .r-desk .r-convo-row:hover,
         html body .r-desk .r-convo-row:hover span {
@@ -9611,14 +9621,12 @@ export default function App({ user }) {
            token which had a 32px halo bleed — hover-tier intensity for
            a rest state. The class kept its name for compatibility but
            no longer applies the heavy halo. */
-        .rt-rai-pop-btn:hover {
-          background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-purple-hover) !important;
-          transform: translateY(-1px);
-        }
+        /* New Chat button (.rt-rai-pop-btn) lives only in the dark Rai
+           sidebar, where the html .r-desk ghost rules above own all of its
+           states (transparent + hairline, faint white-tint hover). No
+           purple gradient / lift here anymore. */
         .rt-rai-pop-btn:active {
-          transform: translateY(0) scale(0.98);
-          transition: transform 80ms var(--rt-ease-press);
+          transform: none;
         }
 
         /* ──────────────────────────────────────────────────────
@@ -9770,6 +9778,14 @@ export default function App({ user }) {
           box-shadow: 0 0 0 1px rgba(124,92,243,0.30),
                       0 1px 2px rgba(20,30,22,0.04),
                       0 2px 10px rgba(124,92,243,0.10) !important;
+        }
+        /* Rai composer focus — green ring (not purple), since the Rai send
+           button and chrome are green. Scoped under .r-rai-intro so the
+           Today task composer keeps its own focus treatment. */
+        .r-rai-intro .rt-composer:focus-within {
+          box-shadow: 0 0 0 1px rgba(51,84,62,0.28),
+                      0 1px 3px rgba(20,30,22,0.04),
+                      0 8px 24px rgba(20,30,22,0.06) !important;
         }
         /* (1) The TASK composer (inside the Today page) is an underline-
            style input, not a card. On focus, the 1.5px hairline at the
@@ -10070,17 +10086,15 @@ export default function App({ user }) {
         .r-chat-msg-user { scroll-margin-top: 56px !important; }
         /* Mobile: tighten chat input bar bottom padding — clear mobile nav (60px) + breathing room */
         .r-rai-inputbar { padding: 10px 16px 88px !important; }
-        /* Rai purple gradient — stronger on intro empty-state, lighter once chat starts */
+        /* Rai page surface — flat bg. The purple radial-gradient wash was
+           removed: send button + chrome are green now, the purple page
+           glow was the last thing making Rai read as purple. Flat bg also
+           means the input bar's matching bg no longer shows a seam line. */
         .r-rai-intro {
-          background:
-            radial-gradient(ellipse 75% 45% at 50% 8%, rgba(124,92,243,0.22), transparent 70%),
-            radial-gradient(ellipse 60% 35% at 50% 0%, rgba(124,92,243,0.35), transparent 60%),
-            ${C.bg};
+          background: ${C.bg};
         }
         .r-rai-chat {
-          background:
-            radial-gradient(ellipse 70% 35% at 50% 0%, rgba(124,92,243,0.10), transparent 75%),
-            ${C.bg};
+          background: ${C.bg};
         }
         /* Make the inputbar inherit the gradient background so it doesn't show a seam */
         .r-rai-intro .r-rai-inputbar,
@@ -10091,7 +10105,7 @@ export default function App({ user }) {
            cards) so it reads as Rai's surface. Targets BOTH the hero composer
            and the reply inputbox for that state. */
         .r-rai-intro .rt-composer,
-        .r-rai-intro .rt-rai-inputbox { box-shadow: var(--rt-sh-purple) !important; }
+        .r-rai-intro .rt-rai-inputbox { box-shadow: 0 1px 3px rgba(20,30,22,0.04), 0 8px 24px rgba(20,30,22,0.06) !important; }
         /* Mobile: don't vertically center the intro — start content near the top */
         @media (max-width: 767px) {
           .r-rai-intro .r-rai-inner { justify-content: flex-start !important; padding-top: 48px !important; }
@@ -10156,6 +10170,8 @@ export default function App({ user }) {
           .r-chat-msg-user { scroll-margin-top: 24px !important; }
         }
         @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.8} }
+        @keyframes rtCaretBlink { 0%,45%{opacity:1} 55%,100%{opacity:0} }
+        .rt-stream-caret { animation: rtCaretBlink 1s steps(1) infinite; }
         @keyframes confetti-fall {
           0%   { transform: translate(0,0) rotate(0); opacity: 1; }
           100% { transform: translate(var(--tx), 70vh) rotate(var(--rot)); opacity: 0; }
@@ -10925,7 +10941,7 @@ export default function App({ user }) {
                 survives any viewport compression. Convo list (below) is
                 what scrolls when the sidebar runs out of room. */}
             <div style={{ padding: "12px 10px 0", flexShrink: 0 }}>
-              <button className="r-btn rt-rai-pop-btn" data-tone="purple" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "var(--rt-grad-btn)", color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", border: "none", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "var(--rt-sh-purple)", transition: "background 220ms var(--rt-ease-out), box-shadow 220ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
+              <button className="rt-rai-pop-btn" onClick={startNewRaiChat} style={{ width: "100%", padding: "10px 12px", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 200ms var(--rt-ease-out), border-color 200ms var(--rt-ease-out)" }}>
                 New Chat
               </button>
             </div>
@@ -10943,14 +10959,14 @@ export default function App({ user }) {
                     return (
                       <div
                         key={c.id}
-                        className="r-convo-row"
+                        className={"r-convo-row" + (isActive ? " is-active" : "")}
                         onClick={() => openRaiChat(c.id)}
                         style={{
                           display: "flex", alignItems: "center", gap: 6,
                           padding: "8px 10px 8px 12px",
-                          borderRadius: 7, cursor: "pointer",
-                          background: isActive ? "rgba(124,92,243,0.10)" : "transparent",
-                          color: isActive ? C.btn : C.textSec,
+                          borderRadius: 9, cursor: "pointer",
+                          background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
+                          color: isActive ? "#FFFFFF" : C.textSec,
                           fontSize: 12.5,
                           fontWeight: isActive ? 600 : 500,
                           position: "relative",
@@ -19243,7 +19259,7 @@ export default function App({ user }) {
                       <p style={{ fontSize: 19, fontWeight: 400, color: C.textSec, lineHeight: 1.5, marginTop: 10, marginBottom: 36, letterSpacing: "-0.01em" }}>
                         What's on your mind today?
                       </p>
-                      <div className="rt-composer" style={{ background: C.card, borderRadius: 14, padding: "20px 22px 14px", textAlign: "left", boxShadow: "var(--rt-sh-card)" }}>
+                      <div className="rt-composer" style={{ background: C.card, borderRadius: 16, padding: "20px 22px 14px", textAlign: "left", border: "1px solid rgba(20,30,22,0.10)", boxShadow: "0 1px 3px rgba(20,30,22,0.04), 0 8px 24px rgba(20,30,22,0.06)" }}>
                         {aiAttachments.length > 0 && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
                             {aiAttachments.map(a => (
@@ -19273,11 +19289,10 @@ export default function App({ user }) {
                           <button
                             onClick={() => sendAi()}
                             disabled={!aiInput.trim() && aiAttachments.length === 0}
-                            className={(aiInput.trim() || aiAttachments.length > 0) ? "r-btn" : ""}
-                            data-tone={(aiInput.trim() || aiAttachments.length > 0) ? "purple" : undefined}
-                            style={{ width: 36, height: 36, borderRadius: 10, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? undefined : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 0.15s" }}
+                            aria-label="Send message"
+                            style={{ width: 36, height: 36, borderRadius: 999, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? "#33543E" : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 180ms var(--rt-ease-out), transform 180ms var(--rt-ease-out)" }}
                           >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13L13 8L3 3V7L9 8L3 9V13Z" fill="#fff"/></svg>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ transform: (aiInput.trim() || aiAttachments.length > 0) ? "scale(1)" : "scale(0.7)", opacity: (aiInput.trim() || aiAttachments.length > 0) ? 1 : 0.55, transition: "transform 180ms var(--rt-ease-out), opacity 180ms var(--rt-ease-out)" }}><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                           </button>
                         </div>
                       </div>
@@ -19322,13 +19337,16 @@ export default function App({ user }) {
                       const messageRef = isLastUser ? aiUserRef : null;
                       return m.role === "user" ? (
                         <div key={i} ref={messageRef} className="r-chat-msg-user" style={{ marginBottom: 28, display: "flex", justifyContent: "flex-end" }}>
-                          <div style={{ maxWidth: "75%", background: "#EEEEE8", borderRadius: 12, padding: "11px 16px" }}>
+                          <div style={{ maxWidth: "75%", background: "#F4F6F4", borderRadius: 12, padding: "11px 16px" }}>
                             {m.text.split("\n").map((l, j) => l.trim() === "" ? <div key={j} style={{ height: 8 }} /> : <p key={j} style={{ fontSize: 16, color: C.text, lineHeight: 1.5, margin: 0 }}>{l}</p>)}
                           </div>
                         </div>
                       ) : (
                         <div key={i} style={{ marginBottom: 28 }}>
                           <RaiMarkdown text={m.text} size={16} lineHeight={1.55} />
+                          {aiStreaming && i === aiMessages.length - 1 && (
+                            <span className="rt-stream-caret" aria-hidden="true" style={{ display: "inline-block", width: 8, height: 17, marginLeft: 1, verticalAlign: "-3px", borderRadius: 1, background: C.primary }} />
+                          )}
                         </div>
                       );
                     })}
@@ -19342,11 +19360,11 @@ export default function App({ user }) {
             {aiMessages.length > 0 && (
               <div className="r-rai-inputbar" style={{ background: C.bg, padding: "12px 24px 16px" }}>
                 <div style={{ maxWidth: 720, margin: "0 auto" }}>
-                  <div className="rt-rai-inputbox" style={{ background: C.card, border: "none", boxShadow: "var(--rt-sh-card)", borderRadius: 14, padding: "14px 16px 10px" }}>
+                  <div className="rt-rai-inputbox" style={{ background: C.card, border: "1px solid rgba(20,30,22,0.10)", boxShadow: "0 1px 3px rgba(20,30,22,0.04), 0 8px 24px rgba(20,30,22,0.06)", borderRadius: 16, padding: "14px 16px 10px" }}>
                     {aiAttachments.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                         {aiAttachments.map(a => (
-                          <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 10px", background: C.surfaceWarm, borderRadius: 8, fontSize: 12, color: C.text, maxWidth: 240 }}>
+                          <span key={a.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 10px", background: C.surface, borderRadius: 8, fontSize: 12, color: C.text, maxWidth: 240 }}>
                             <Icon name={a.type === "image" ? "image" : "file"} size={12} color={C.textSec} />
                             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                             <button onClick={() => setAiAttachments(prev => prev.filter(x => x.id !== a.id))} style={{ background: "none", border: "none", padding: 2, cursor: "pointer", color: C.textMuted, display: "flex" }} aria-label={"Remove " + a.name}>
@@ -19356,7 +19374,7 @@ export default function App({ user }) {
                         ))}
                       </div>
                     )}
-                    <textarea value={aiInput} onChange={e => { setAiInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} placeholder="Reply to Rai…" rows={1} style={{ width: "100%", padding: "4px 0", border: "none", fontSize: 16, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, overflowY: "auto" }} />
+                    <textarea value={aiInput} onChange={e => { setAiInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} placeholder="Write a message…" rows={1} style={{ width: "100%", padding: "4px 0", border: "none", fontSize: 16, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, overflowY: "auto" }} />
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
                       <label title="Attach a file (PDF or image, max 10MB)" style={{ width: 32, height: 32, borderRadius: 8, background: C.card, color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                         <input type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" onChange={e => { handleFilePick(Array.from(e.target.files || [])); e.target.value = ""; }} style={{ display: "none" }} />
@@ -19365,11 +19383,10 @@ export default function App({ user }) {
                       <button
                         onClick={() => sendAi()}
                         disabled={!aiInput.trim() && aiAttachments.length === 0}
-                        className={(aiInput.trim() || aiAttachments.length > 0) ? "r-btn" : ""}
-                        data-tone={(aiInput.trim() || aiAttachments.length > 0) ? "purple" : undefined}
-                        style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? undefined : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 0.15s" }}
+                        aria-label="Send message"
+                        style={{ width: 32, height: 32, borderRadius: 999, border: "none", background: (aiInput.trim() || aiAttachments.length > 0) ? "#33543E" : C.borderLight, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: (aiInput.trim() || aiAttachments.length > 0) ? "pointer" : "default", transition: "background 180ms var(--rt-ease-out), transform 180ms var(--rt-ease-out)" }}
                       >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 13L13 8L3 3V7L9 8L3 9V13Z" fill="#fff"/></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: (aiInput.trim() || aiAttachments.length > 0) ? "scale(1)" : "scale(0.7)", opacity: (aiInput.trim() || aiAttachments.length > 0) ? 1 : 0.55, transition: "transform 180ms var(--rt-ease-out), opacity 180ms var(--rt-ease-out)" }}><path d="M12 19V5M12 5L6 11M12 5L18 11" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       </button>
                     </div>
                   </div>
