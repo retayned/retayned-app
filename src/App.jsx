@@ -8726,13 +8726,16 @@ export default function App({ user }) {
         html .r-desk .nav-item.is-active svg * {
           stroke: #FFFFFF !important;
           color: #FFFFFF !important;
+          stroke-width: 2.15 !important;
         }
-        /* Hovered nav-item svg should be white too (overriding the global
-           .nav-item:hover:not(.is-active) svg rule that sets var(--rt-text)). */
-        html .r-desk .nav-item:hover svg,
-        html .r-desk .nav-item:hover svg * {
-          color: #FFFFFF !important;
-          stroke: #FFFFFF !important;
+        /* Hovered nav-item svg — brighter than rest (78%) but NOT full
+           white, so hover stays visibly distinct from the active state
+           (which is pure white). Without this, hover and active icons
+           looked identical even though the row background differed. */
+        html .r-desk .nav-item:hover:not(.is-active) svg,
+        html .r-desk .nav-item:hover:not(.is-active) svg * {
+          color: rgba(255,255,255,0.88) !important;
+          stroke: rgba(255,255,255,0.88) !important;
         }
         .r-desk .nav-item svg {
           stroke: currentColor !important;
@@ -9200,9 +9203,9 @@ export default function App({ user }) {
            progression as nav: never darken, only lift, but kept light
            because we're inside the sidebar's substrate. */
         .rt-user-chip:hover {
-          background: rgba(255,255,255,0.6);
-          box-shadow: var(--rt-sh-xs);
-          transform: translateY(-1px);
+          background: rgba(255,255,255,0.05) !important;
+          box-shadow: none !important;
+          transform: none !important;
         }
 
         /* Slideover topbar nav buttons (↑↓) — subtle surface wash and
@@ -10864,7 +10867,7 @@ export default function App({ user }) {
             OUTSIDE the sidebar (as a sibling, see below) so it can
             straddle the right edge as a floating disc without being
             clipped by the sidebar's overflow-y: auto. */}
-        <div style={{ padding: sidebarCollapsed ? "22px 0 18px" : "22px 22px 18px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
+        <div style={{ padding: sidebarCollapsed ? "24px 0 32px" : "24px 22px 32px 24px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
           <span style={{
             fontFamily: "system-ui, -apple-system, sans-serif",
             fontWeight: 900,
@@ -23074,7 +23077,7 @@ export default function App({ user }) {
 function BucketCalToggle({ label, count, open, onToggle, C }) {
   return (
     <div onClick={onToggle}
-      style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.text }}>
+      style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 6px 0", padding: "9px 4px", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontSize: 12, fontWeight: 600, color: C.textMuted }}>
       {/* Calendar widget glyph — body in sage (site brand light green) so
           the icon picks up a soft brand accent, while the "Calendar" label
           itself stays in standard dark text. Earlier the whole row was
