@@ -8713,7 +8713,7 @@ export default function App({ user }) {
            for a cream sidebar but reads as a kid-UI white chip on the dark
            green. Kill the gradient + shadows; lift the row in-family. */
         html .r-desk .nav-item.is-active {
-          background: rgba(80, 130, 95, 0.32) !important;
+          background: rgba(255, 255, 255, 0.06) !important;
           background-image: none !important;
           color: #FFFFFF !important;
           box-shadow: none !important;
