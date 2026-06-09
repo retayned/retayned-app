@@ -8938,6 +8938,12 @@ export default function App({ user }) {
         .rt-sidebar-widget > div:first-child > div:nth-child(3) > div:first-child {
           color: rgba(255,255,255,0.92) !important;
         }
+        /* MRR dollar figure — same brightness as the tasks number (the
+           positional selector above only catches the tasks number's DOM
+           slot, so the MRR figure is whitened by class instead). */
+        .rt-sidebar-widget .rt-widget-mrr {
+          color: rgba(255,255,255,0.92) !important;
+        }
         /* Borders / dividers — soft on dark */
         .rt-sidebar-widget > div:first-child {
           border-bottom-color: rgba(255,255,255,0.08) !important;
@@ -11165,7 +11171,7 @@ export default function App({ user }) {
                   is dropped to caption size so the dollar figure leads. */}
               <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Portfolio · {total}</div>
               <div style={{ color: C.text, lineHeight: 1.15, fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontVariantNumeric: "tabular-nums" }}>
-                <span style={{ fontSize: 22, fontWeight: 500 }}>${(totalRev / 1000).toFixed(1)}k</span>
+                <span className="rt-widget-mrr" style={{ fontSize: 22, fontWeight: 500 }}>${(totalRev / 1000).toFixed(1)}k</span>
                 <span style={{ fontSize: 11, fontWeight: 500, color: C.textSec, marginLeft: 6, letterSpacing: 0.3 }}>MRR</span>
               </div>
             </div>
@@ -14433,7 +14439,7 @@ export default function App({ user }) {
                           }}>{name.toLowerCase()}</span>
                           <span style={{ flex: 1, height: 1, background: C.borderLight }} />
                           {isToday && (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, background: "rgba(20,30,22,0.035)", borderRadius: 8, padding: "2px 4px" }}>
                               {/* Mode selector — quiet text label with caret,
                                   click to open dropdown with three options. */}
                               <div style={{ position: "relative" }}>
@@ -14470,9 +14476,6 @@ export default function App({ user }) {
                                     return isRaiPlus ? <span style={{ display: "inline-flex", gap: 1 }}><Star /><Star /></span> : <Star />;
                                   })()}
                                   <span>{modeLabel}</span>
-                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ flexShrink: 0, display: "block", opacity: 0.65, transform: todayModeMenuOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 160ms var(--rt-ease-out)" }}>
-                                    <path d="M6 9l6 6 6-6" stroke={C.textSec} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
                                 </button>
                                 {todayModeMenuOpen && (
                                   <>
