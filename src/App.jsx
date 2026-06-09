@@ -9806,7 +9806,7 @@ export default function App({ user }) {
           transition: opacity 220ms ease 60ms, transform 320ms cubic-bezier(.34,1.56,.64,1) 60ms;
         }
         .rt-row.is-done .rt-check {
-          background: var(--rt-grad-green-deep) !important;
+          background: linear-gradient(135deg, #33543E 0%, #274230 100%) !important;
           border-color: #33543E !important;
           box-shadow: var(--rt-sh-green-glow);
           transform: scale(1);
@@ -10867,7 +10867,7 @@ export default function App({ user }) {
             OUTSIDE the sidebar (as a sibling, see below) so it can
             straddle the right edge as a floating disc without being
             clipped by the sidebar's overflow-y: auto. */}
-        <div style={{ padding: sidebarCollapsed ? "24px 0 32px" : "24px 22px 32px 24px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
+        <div style={{ padding: sidebarCollapsed ? "22px 0 28px" : "22px 22px 28px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: sidebarCollapsed ? "center" : "flex-start" }}>
           <span style={{
             fontFamily: "system-ui, -apple-system, sans-serif",
             fontWeight: 900,
