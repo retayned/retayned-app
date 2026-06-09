@@ -171,7 +171,7 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
   // Cream highlights (#FCFCFE) stay constant across all states —
   // they're paper highlights, not brand color.
 
-  const editorialNames = new Set(["today", "clients", "health", "rolodex", "referrals", "rai", "workers", "settings", "due"]);
+  const editorialNames = new Set(["due"]);
   const isEditorial = editorialNames.has(name);
 
   // Simple variants of editorial icons — single-color silhouettes for
@@ -227,63 +227,61 @@ const Icon = ({ name, size = 18, color = "currentColor", accent = "#1C3224", sim
 
   const paths = {
     today: (<>
-      {/* Filled calendar — primary-light body with dark binding tabs and
-          cream center dot. New icon set, May 2026. */}
-      <path d="M4.5 10.5 Q4.5 6.5 8.5 6.5 L23.5 6.5 Q27.5 6.5 27.5 10.5 L27.5 24.5 Q27.5 28.5 23.5 28.5 L8.5 28.5 Q4.5 28.5 4.5 24.5 Z" fill="var(--icon-body, #558B68)"/>
-      <rect x="9" y="3.5" width="2.2" height="5.5" rx="1.1" fill="var(--icon-accent, #2F2F31)"/>
-      <rect x="20.8" y="3.5" width="2.2" height="5.5" rx="1.1" fill="var(--icon-accent, #2F2F31)"/>
-      <circle cx="16" cy="20" r="3.4" fill="#FCFCFE"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="5.6" width="16" height="14.4" rx="2.7"/>
+        <path d="M8.5 3.3v4M15.5 3.3v4M4 10.1H20"/>
+        <circle cx="8.8" cy="14.4" r="1.4" fill={color} stroke="none"/>
+      </g>
     </>),
     clients: (<>
-      {/* Two figures: foreground person in primary-light, background
-          person in dark accent with a connecting curve. New icon set. */}
-      <circle cx="11" cy="12.5" r="4.5" fill="var(--icon-body, #558B68)"/>
-      <path d="M3 25.5 C 3 19.5, 7 17, 11 17 C 15 17, 19 19.5, 19 25.5 Z" fill="var(--icon-body, #558B68)"/>
-      <circle cx="23" cy="10.5" r="3.4" fill="var(--icon-accent, #2F2F31)"/>
-      <path d="M18.5 19.6 C 20.2 18, 22 17.6, 23.5 17.6 C 27.5 17.6, 29 20, 29 23.5" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9.3" cy="9.3" r="3.1"/>
+        <path d="M3.7 19.5a5.6 5.6 0 0 1 11.2 0"/>
+        <circle cx="16.7" cy="8.5" r="2.4"/>
+        <path d="M16 13.5a4.9 4.9 0 0 1 4.3 6"/>
+      </g>
     </>),
     health: (<>
-      {/* Heart silhouette in primary-light with a cream ECG pulse line
-          through the middle. New icon set. */}
-      <path d="M16 26.5 C 7 21.5, 3 17.5, 3 12 C 3 8, 6 5.5, 9.5 5.5 C 12 5.5, 14.5 7, 16 9.5 C 17.5 7, 20 5.5, 22.5 5.5 C 26 5.5, 29 8, 29 12 C 29 17.5, 25 21.5, 16 26.5 Z" fill="var(--icon-body, #558B68)"/>
-      <path d="M6 15 L10 15 L12 11.5 L14.5 18.5 L16.5 13.5 L18 15 L26 15" fill="none" stroke="#FCFCFE" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M12 19.6C12 19.6 3.6 14.8 3.6 9 3.6 6.4 5.6 4.5 8.1 4.5c1.7 0 3.2.9 3.9 2.3.7-1.4 2.2-2.3 3.9-2.3 2.5 0 4.5 1.9 4.5 4.5 0 5.8-8.4 10.6-8.4 10.6Z" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5.4 11.3h2.4l1.1-2.4 1.9 4.7 1.3-2.3h3.1" fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
     </>),
     rai: (<>
-      {/* Speech bubble with cream 4-point sparkle inside. New icon set. */}
-      <path d="M4 10 Q4 6 8 6 L24 6 Q28 6 28 10 L28 19 Q28 23 24 23 L14 23 L9 27.5 L10 23 Q4 23 4 19 Z" fill="var(--icon-body, #558B68)"/>
-      <path d="M16 10 L17.8 14.2 L22 15.7 L17.8 17.2 L16 21.4 L14.2 17.2 L10 15.7 L14.2 14.2 Z" fill="#FCFCFE"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2.6Q12.9 11.1 21.4 12Q12.9 12.9 12 21.4Q11.1 12.9 2.6 12Q11.1 11.1 12 2.6Z"/>
+      </g>
     </>),
     rolodex: (<>
-      {/* ID-card style: rounded primary-light rect with a dark divider
-          rule, cream avatar circle, and cream text lines. New icon set. */}
-      <rect x="4" y="6" width="24" height="20" rx="4" fill="var(--icon-body, #558B68)"/>
-      <line x1="4" y1="11.5" x2="28" y2="11.5" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2" opacity="0.45"/>
-      <circle cx="11.5" cy="19" r="2.6" fill="#FCFCFE"/>
-      <line x1="16.5" y1="18" x2="23.5" y2="18" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round"/>
-      <line x1="16.5" y1="22" x2="20.5" y2="22" stroke="#FCFCFE" strokeWidth="2" strokeLinecap="round" opacity="0.85"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 6V4.4M15 6V4.4"/>
+        <circle cx="9" cy="3.6" r="0.95" fill={color} stroke="none"/>
+        <circle cx="15" cy="3.6" r="0.95" fill={color} stroke="none"/>
+        <rect x="3.6" y="6" width="16.8" height="13.2" rx="2.7"/>
+        <circle cx="8.8" cy="12.3" r="2.2"/>
+        <path d="M13 11H17.4M13 14H16"/>
+      </g>
     </>),
     referrals: (<>
-      {/* Three nodes: large hub on left, two satellites on right with
-          primary-light connector lines. New icon set. */}
-      <line x1="10.6" y1="14.6" x2="21.4" y2="9" stroke="var(--icon-body, #558B68)" strokeWidth="3" strokeLinecap="round"/>
-      <line x1="10.6" y1="17.4" x2="21.4" y2="23" stroke="var(--icon-body, #558B68)" strokeWidth="3" strokeLinecap="round"/>
-      <circle cx="8" cy="16" r="4" fill="var(--icon-body, #558B68)"/>
-      <circle cx="24" cy="7.5" r="3.4" fill="var(--icon-body, #558B68)"/>
-      <circle cx="24" cy="24.5" r="3.4" fill="var(--icon-body, #558B68)"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="6.4" cy="12" r="2.6"/>
+        <circle cx="17.1" cy="6.2" r="2.6"/>
+        <circle cx="17.1" cy="17.8" r="2.6"/>
+        <path d="M8.7 10.7 14.8 7.4M8.7 13.3 14.8 16.6"/>
+      </g>
     </>),
     workers: (<>
-      {/* Briefcase: primary-light body with dark handle and divider rule,
-          cream center lock. New icon set. */}
-      <rect x="3" y="10" width="26" height="17" rx="3.4" fill="var(--icon-body, #558B68)"/>
-      <path d="M10.5 10 V 7.5 Q 10.5 5 13 5 L 19 5 Q 21.5 5 21.5 7.5 V 10" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2.4" fill="none" strokeLinejoin="round" strokeLinecap="round"/>
-      <line x1="3" y1="17.5" x2="29" y2="17.5" stroke="var(--icon-accent, #2F2F31)" strokeWidth="2" opacity="0.4"/>
-      <rect x="13.5" y="15.5" width="5" height="4" rx="0.8" fill="#FCFCFE"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3.6" y="7.9" width="16.8" height="11.3" rx="2.7"/>
+        <path d="M8.7 7.9V6.5a2.2 2.2 0 0 1 2.2-2.2h2.2a2.2 2.2 0 0 1 2.2 2.2v1.4"/>
+        <path d="M3.6 13.1H20.4"/>
+        <rect x="10.7" y="11.8" width="2.6" height="2.6" rx="0.8"/>
+      </g>
     </>),
     user: (<><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke={color} strokeWidth="1.8" fill="none"/></>),
     settings: (<>
-      {/* Cog gear in primary-light with cream center. New icon set. */}
-      <path d="M16 3 L18.4 5.4 L21.6 4.6 L22.6 7.6 L25.6 8.4 L25 11.4 L27.5 13.2 L26.2 16 L28 18.6 L25.6 20.4 L26 23.4 L23 24.2 L22.2 27 L19 27 L16.8 29 L14 28 L11 29 L9 27 L5.8 27 L5 24.2 L2 23.4 L2.4 20.4 L0 18.6 L1.8 16 L0.5 13.2 L3 11.4 L2.4 8.4 L5.4 7.6 L6.4 4.6 L9.6 5.4 L12 3 L14 4 Z" fill="var(--icon-body, #558B68)" transform="translate(2 0) scale(0.92)"/>
-      <circle cx="16" cy="14.7" r="4.4" fill="#FCFCFE"/>
+      <g fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19.11 9.05 L19.61 10.80 L21.58 10.48 L21.58 13.52 L19.61 13.20 L19.11 14.95 L18.23 16.53 L19.85 17.70 L17.70 19.85 L16.53 18.23 L14.95 19.11 L13.20 19.61 L13.52 21.58 L10.48 21.58 L10.80 19.61 L9.05 19.11 L7.47 18.23 L6.30 19.85 L4.15 17.70 L5.77 16.53 L4.89 14.95 L4.39 13.20 L2.42 13.52 L2.42 10.48 L4.39 10.80 L4.89 9.05 L5.77 7.47 L4.15 6.30 L6.30 4.15 L7.47 5.77 L9.05 4.89 L10.80 4.39 L10.48 2.42 L13.52 2.42 L13.20 4.39 L14.95 4.89 L16.53 5.77 L17.70 4.15 L19.85 6.30 L18.23 7.47 L19.11 9.05 Z"/>
+        <circle cx="12" cy="12" r="3.2"/>
+      </g>
     </>),
     due: (<>
       {/* Calendar widget header icon — primary-light body with dark
@@ -8871,8 +8869,10 @@ export default function App({ user }) {
            bucket count colors (retElite green, retGood softer green,
            retWarn yellow) pop fine on dark — preserved. */
         .rt-sidebar-widget {
-          background: rgba(255,255,255,0.04) !important;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18) !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          border-top: 1px solid rgba(255,255,255,0.08) !important;
+          border-radius: 0 !important;
         }
         /* All text inside the widget gets lifted to light by default. Then
            specific bucket count digits get re-colored by inline style which
@@ -8895,61 +8895,58 @@ export default function App({ user }) {
         }
         /* Squiggle SVG underline — was C.primaryDeep (same as sidebar bg) */
         .rt-sidebar-widget svg path {
-          stroke: rgba(255,255,255,0.45) !important;
+          stroke: rgba(111,191,142,0.55) !important;
         }
-        /* Bucket count NUMBERS — fully neutral, BUT use a wide brightness
-           ramp to encode performance via opacity alone. Thriving is the
-           boldest (high contrast against dark sidebar), Critical is the
-           softest (recedes into the background). No greens, no warning
-           hues. Performance signal is purely tonal. */
+        /* Bucket count NUMBERS — restored to the real retention palette,
+           brightened so each hue reads on the dark green sidebar. Keeps the
+           green → gold → red meaning consistent with the rest of the app
+           instead of a foreign monochrome grey ramp. */
         .rt-sidebar-widget [style*="color: rgb(12, 58, 46)"],
         .rt-sidebar-widget [style*="color: #0C3A2E"] {
-          color: rgba(255,255,255,0.95) !important; /* Thriving — boldest */
+          color: #6FBF8E !important; /* Thriving */
         }
         .rt-sidebar-widget [style*="color: rgb(31, 122, 92)"],
         .rt-sidebar-widget [style*="color: #1F7A5C"] {
-          color: rgba(255,255,255,0.72) !important; /* Healthy */
+          color: #4FB389 !important; /* Healthy */
         }
         .rt-sidebar-widget [style*="color: rgb(168, 164, 32)"],
         .rt-sidebar-widget [style*="color: #A8A420"] {
-          color: rgba(255,255,255,0.52) !important; /* Watch */
+          color: #D4C84A !important; /* Watch */
         }
         .rt-sidebar-widget [style*="color: rgb(209, 122, 27)"],
         .rt-sidebar-widget [style*="color: #D17A1B"] {
-          color: rgba(255,255,255,0.34) !important; /* At-risk */
+          color: #E89B47 !important; /* At-risk */
         }
         .rt-sidebar-widget [style*="color: rgb(180, 52, 31)"],
         .rt-sidebar-widget [style*="color: #B4341F"] {
-          color: rgba(255,255,255,0.22) !important; /* Critical — softest */
+          color: #E0654A !important; /* Critical */
         }
         .r-desk-bucket-dark-fix {}  /* anchor */
-        /* Stacked bucket bar — matches the same opacity ramp but pulled
-           down ~15 points since a continuous strip reads brighter than
-           a 12px numeral at the same opacity. */
+        /* Stacked bucket bar — same brightened retention ramp as the numbers. */
         .rt-sidebar-widget [style*="background: rgb(12, 58, 46)"],
         .rt-sidebar-widget [style*="background: #0C3A2E"],
         .rt-sidebar-widget [style*="background:#0C3A2E"] {
-          background: rgba(255,255,255,0.78) !important; /* Thriving */
+          background: #6FBF8E !important; /* Thriving */
         }
         .rt-sidebar-widget [style*="background: rgb(31, 122, 92)"],
         .rt-sidebar-widget [style*="background: #1F7A5C"],
         .rt-sidebar-widget [style*="background:#1F7A5C"] {
-          background: rgba(255,255,255,0.55) !important; /* Healthy */
+          background: #4FB389 !important; /* Healthy */
         }
         .rt-sidebar-widget [style*="background: rgb(168, 164, 32)"],
         .rt-sidebar-widget [style*="background: #A8A420"],
         .rt-sidebar-widget [style*="background:#A8A420"] {
-          background: rgba(255,255,255,0.36) !important; /* Watch */
+          background: #D4C84A !important; /* Watch */
         }
         .rt-sidebar-widget [style*="background: rgb(209, 122, 27)"],
         .rt-sidebar-widget [style*="background: #D17A1B"],
         .rt-sidebar-widget [style*="background:#D17A1B"] {
-          background: rgba(255,255,255,0.20) !important; /* At-risk */
+          background: #E89B47 !important; /* At-risk */
         }
         .rt-sidebar-widget [style*="background: rgb(180, 52, 31)"],
         .rt-sidebar-widget [style*="background: #B4341F"],
         .rt-sidebar-widget [style*="background:#B4341F"] {
-          background: rgba(255,255,255,0.10) !important; /* Critical */
+          background: #E0654A !important; /* Critical */
         }
 
         /* ── PERIOD SELECTOR (Week / Month / Year) — SIDEBAR DARK MODE ─
@@ -9596,8 +9593,8 @@ export default function App({ user }) {
                       transform 200ms var(--rt-ease-out);
         }
         .rt-add-task-btn:not(:disabled):hover {
-          background: var(--rt-grad-btn-hover) !important;
-          box-shadow: var(--rt-sh-purple-hover) !important;
+          background: #274230 !important;
+          box-shadow: 0 1px 2px rgba(20,30,22,0.10), 0 6px 20px rgba(51,84,62,0.30) !important;
           transform: translateY(-1px);
         }
         .rt-add-task-btn:not(:disabled):active {
@@ -13493,9 +13490,9 @@ export default function App({ user }) {
                         // 32px halo bleed at rest — hover-tier intensity for
                         // a non-hover state. Now consistent: gradient marks
                         // the button as primary, hover adds the lift + halo.
-                        background: newTask.trim() ? "var(--rt-grad-btn)" : C.surfaceWarm,
+                        background: newTask.trim() ? "#33543E" : C.surfaceWarm,
                         color: newTask.trim() ? "#fff" : C.textMuted,
-                        boxShadow: newTask.trim() ? "var(--rt-sh-purple)" : "none",
+                        boxShadow: newTask.trim() ? "0 1px 2px rgba(20,30,22,0.10), 0 2px 6px rgba(51,84,62,0.25)" : "none",
                         transition: "all 220ms var(--rt-ease-out)",
                       }}
                     >
@@ -22162,7 +22159,7 @@ export default function App({ user }) {
                   </button>
                   <button
                     onClick={confirmDismissWithReason}
-                    style={{ padding: "10px 16px", background: C.retGood, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(45,134,89,0.15), 0 2px 6px rgba(45,134,89,0.22)" }}
+                    style={{ padding: "10px 16px", background: C.primary, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 1px 2px rgba(51,84,62,0.15), 0 2px 6px rgba(51,84,62,0.22)" }}
                   >
                     Delete Task
                   </button>
@@ -23083,7 +23080,7 @@ function BucketCalToggle({ label, count, open, onToggle, C }) {
           itself stays in standard dark text. Earlier the whole row was
           primary-green which was too prominent; now just the icon carries
           the color. */}
-      <Icon name="due" size={16} color={C.primaryLight} accent={C.primary} />
+      <Icon name="due" size={16} color={C.textMuted} accent={C.textSec} />
       <span>{label}</span>
       <span style={{ color: C.textMuted, fontWeight: 500 }}>· {count} event{count === 1 ? "" : "s"}</span>
       <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", color: C.textMuted, transform: open ? "rotate(90deg)" : "none", transition: "transform .18s" }}>
