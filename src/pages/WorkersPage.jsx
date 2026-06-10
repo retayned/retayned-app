@@ -404,7 +404,7 @@ export default function WorkersPage({ app }) {
                   {/* LEFT RAIL — Team / Team History / Recent Movement */}
                   <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
                     {/* Card 1: TEAM (mirrors Portfolio) */}
-                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Team</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                         <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
@@ -456,7 +456,7 @@ export default function WorkersPage({ app }) {
                     </div>
 
                     {/* Card 2: TEAM HISTORY */}
-                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Team history</div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                         <div>
@@ -482,7 +482,7 @@ export default function WorkersPage({ app }) {
                     </div>
 
                     {/* Card 3: RECENT MOVEMENT */}
-                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Recent movement</div>
                         <div style={{ fontSize: 10.5, color: C.textMuted }}>7d</div>
