@@ -13,6 +13,7 @@
 // names shadow App state names; see the shadowing-inversion incident.
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import {
   personalCalendar as personalCalendarDb,
@@ -43,6 +44,20 @@ function dueLabel(ymd) {
   return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+// Next 7 days as dropdown options: Today, Tomorrow, then weekday names.
+function dueOptions() {
+  const out = [];
+  const d = new Date();
+  for (let i = 0; i < 7; i++) {
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const label = i === 0 ? "Today" : i === 1 ? "Tomorrow"
+      : d.toLocaleDateString("en-US", { weekday: "long" });
+    out.push({ ymd, label });
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
 export default function BrainDump({ open, onClose, clients, user, onCommitted }) {
   const [step, setStep] = useState("input");           // 'input' | 'review'
   const [clientId, setClientId] = useState(null);
@@ -55,11 +70,68 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
   const [items, setItems] = useState([]);              // [{key,title,notes,type,suggested_due,keep}]
   const [editingField, setEditingField] = useState(null); // {key, field:'title'|'notes'}
   const [typeMenuKey, setTypeMenuKey] = useState(null);
+  const [dueMenuKey, setDueMenuKey] = useState(null);
   const textareaRef = useRef(null);
   const editRef = useRef(null);
 
   const activeClients = (clients || []).filter((c) => c.is_active !== false);
   const chosenClient = clientId ? activeClients.find((c) => c.id === clientId) || null : null;
+  // Manual pick is sticky — autodetect never overrides an explicit choice.
+  const [manualPick, setManualPick] = useState(false);
+
+  // ── Draft persistence ───────────────────────────────────────────────
+  // The dump is the user's asset — losing it to a stray navigation is
+  // unacceptable. Persist the whole session (dump, client, review items)
+  // to localStorage for 48h, restore on open, clear only on commit.
+  const DRAFT_TTL_MS = 48 * 60 * 60 * 1000;
+  const draftKey = `rt:brainDumpDraft:${user?.id || "anon"}`;
+  const draftRestored = useRef(false);
+  useEffect(() => {
+    if (!open || draftRestored.current) return;
+    draftRestored.current = true;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (!d.savedAt || Date.now() - d.savedAt > DRAFT_TTL_MS) {
+        window.localStorage.removeItem(draftKey);
+        return;
+      }
+      if (d.dump) setDump(d.dump);
+      if (d.clientId) setClientId(d.clientId);
+      if (d.manualPick) setManualPick(true);
+      if (Array.isArray(d.items) && d.items.length) { setItems(d.items); }
+      if (d.step === "review" && Array.isArray(d.items) && d.items.length) setStep("review");
+    } catch { /* corrupt draft — ignore */ }
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    try {
+      if (!dump && items.length === 0) return;
+      window.localStorage.setItem(draftKey, JSON.stringify({
+        dump, clientId, manualPick, items, step, savedAt: Date.now(),
+      }));
+    } catch { /* storage full/blocked — degrade silently */ }
+  }, [open, dump, clientId, manualPick, items, step]);
+  const clearDraft = () => { try { window.localStorage.removeItem(draftKey); } catch {} };
+
+  // ── Client autodetect ───────────────────────────────────────────────
+  // Same magic as the composer: type a client's name anywhere in the dump
+  // and it pairs automatically. Longest name wins on multiple matches.
+  // The picker stays as the manual override.
+  useEffect(() => {
+    if (!open || manualPick) return;
+    const lower = dump.toLowerCase();
+    let best = null;
+    for (const c of activeClients) {
+      if (!c.name || c.name.length < 3) continue;
+      if (lower.includes(c.name.toLowerCase())) {
+        if (!best || c.name.length > best.name.length) best = c;
+      }
+    }
+    if (best && best.id !== clientId) setClientId(best.id);
+    if (!best && clientId && !manualPick) setClientId(null);
+  }, [dump, open, manualPick]);
 
   useEffect(() => {
     if (open && step === "input") {
@@ -77,6 +149,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
   const reset = () => {
     setStep("input"); setDump(""); setItems([]); setError(null);
     setEditingField(null); setTypeMenuKey(null); setClientMenuOpen(false);
+    setManualPick(false); setDueMenuKey(null);
   };
   const close = () => { reset(); setClientId(null); onClose(); };
 
@@ -103,7 +176,10 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
         title: it.title,
         notes: it.notes || null,
         type: it.type || "task",
-        suggested_due: it.suggested_due || null,
+        // No date is not a state — everything lands somewhere. Rai's
+        // explicit date wins; otherwise Today. The due dropdown in
+        // review changes it.
+        suggested_due: it.suggested_due || localYmdToday(),
         keep: true,
       }));
       if (got.length === 0) {
@@ -183,6 +259,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
       }
     }
     setCommitting(false);
+    clearDraft();
     onCommitted?.({ tasks: createdTasks, touchpoints: tp, events: ev, failed });
     close();
   };
@@ -194,12 +271,16 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)));
 
   // ── styles ────────────────────────────────────────────────────────────
+  // Same backdrop the client modal uses (App.jsx) — fixed to the BODY via
+  // portal so it blurs EVERYTHING including the sidebar. Rendering inside
+  // the page container put it inside a stacking context that couldn't
+  // cover the sidebar.
   const overlay = {
-    position: "fixed", inset: 0, zIndex: 900,
-    background: "rgba(20,30,22,0.35)",
+    position: "fixed", inset: 0, zIndex: 90,
+    background: "rgba(20,30,22,0.38)",
+    backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)",
     display: "flex", alignItems: "flex-start", justifyContent: "center",
     padding: "8vh 16px 16px",
-    backdropFilter: "blur(2px)",
   };
   const card = {
     width: "100%", maxWidth: 640, maxHeight: "82vh",
@@ -216,7 +297,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
     color: C.textSec, cursor: "pointer", fontFamily: "inherit",
   };
 
-  return (
+  return createPortal(
     <div style={overlay} onClick={close}>
       <div style={card} onClick={(e) => e.stopPropagation()}>
 
@@ -276,7 +357,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                       }}
                     />
                     <button
-                      onClick={() => { setClientId(null); setClientMenuOpen(false); setClientSearch(""); }}
+                      onClick={() => { setClientId(null); setManualPick(true); setClientMenuOpen(false); setClientSearch(""); }}
                       style={{
                         display: "block", width: "100%", textAlign: "left", padding: "7px 8px",
                         border: "none", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
@@ -291,7 +372,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                       .map((c) => (
                         <button
                           key={c.id}
-                          onClick={() => { setClientId(c.id); setClientMenuOpen(false); setClientSearch(""); }}
+                          onClick={() => { setClientId(c.id); setManualPick(true); setClientMenuOpen(false); setClientSearch(""); }}
                           style={{
                             display: "block", width: "100%", textAlign: "left", padding: "7px 8px",
                             border: "none", borderRadius: 6, cursor: "pointer", fontFamily: "inherit",
@@ -450,12 +531,43 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                             </div>
                           </>
                         )}
-                        <span style={{
-                          fontSize: 10.5, fontWeight: 600,
-                          color: it.suggested_due ? C.textSec : C.textMuted,
-                        }}>
-                          {dueLabel(it.suggested_due)}
-                        </span>
+                        <button
+                          onClick={() => it.keep && setDueMenuKey(dueMenuKey === it.key ? null : it.key)}
+                          style={{
+                            ...chipBtn, padding: "2px 8px", fontSize: 10.5,
+                            color: C.textSec,
+                          }}
+                        >
+                          {dueLabel(it.suggested_due)} <span style={{ fontSize: 8, opacity: 0.7 }}>▾</span>
+                        </button>
+                        {dueMenuKey === it.key && (
+                          <>
+                            <div onClick={() => setDueMenuKey(null)}
+                                 style={{ position: "fixed", inset: 0, zIndex: 49, background: "transparent" }} />
+                            <div style={{
+                              position: "absolute", top: "calc(100% + 4px)", left: 70, zIndex: 50,
+                              background: C.card, borderRadius: 8, padding: 4, minWidth: 130,
+                              boxShadow: "0 10px 28px rgba(20,30,22,0.18)",
+                            }}>
+                              {dueOptions().map((opt) => (
+                                <button
+                                  key={opt.ymd}
+                                  onClick={() => { patchItem(it.key, { suggested_due: opt.ymd }); setDueMenuKey(null); }}
+                                  style={{
+                                    display: "block", width: "100%", textAlign: "left",
+                                    border: "none", borderRadius: 5, padding: "5px 10px",
+                                    fontFamily: "inherit", fontSize: 12, cursor: "pointer",
+                                    fontWeight: it.suggested_due === opt.ymd ? 700 : 500,
+                                    background: it.suggested_due === opt.ymd ? C.surface : "transparent",
+                                    color: C.text,
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Note — the long-task solution in action */}
@@ -533,6 +645,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
