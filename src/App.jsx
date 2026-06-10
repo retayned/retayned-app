@@ -6254,7 +6254,7 @@ export default function App({ user }) {
                   is dropped to caption size so the dollar figure leads. */}
               <div style={{ fontSize: 10, color: C.textSec, fontWeight: 700, letterSpacing: 0.7, textTransform: "uppercase", marginBottom: 10 }}>Portfolio · {total}</div>
               <div style={{ color: C.text, lineHeight: 1.15, fontFamily: "'Fraunces', Georgia, serif", fontVariationSettings: '"opsz" 96, "SOFT" 50, "WONK" 0', fontVariantNumeric: "tabular-nums" }}>
-                <span className="rt-widget-mrr" style={{ fontSize: 22, fontWeight: 500 }}>${(totalRev / 1000).toFixed(1)}k</span>
+                <span className="rt-widget-mrr" style={{ fontSize: 22, fontWeight: 500, fontStyle: "italic" }}>${(totalRev / 1000).toFixed(1)}k</span>
                 <span style={{ fontSize: 11, fontWeight: 500, color: C.textSec, marginLeft: 6, letterSpacing: 0.3 }}>MRR</span>
               </div>
             </div>
