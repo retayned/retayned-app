@@ -379,3 +379,18 @@ function ymdInTz(tz, atDate = new Date()) {
 // ============================================================
 
 export { getUserInitial, getWorkerInitials, retColor, retGradient, THINKING_VERBS, detectThinkingVerb, buildTaskDiscussionContext, escapeRegexChars, addDays, todayAnchored, localYmd, tzOffsetMinutes, tzMidnightInstant, ymdInTz };
+
+// Long-task compiler: composer text beyond the title cap becomes a short
+// scannable title + the FULL original preserved as a note — the same
+// title+note shape Brain Dump produces, no AI call needed. Previously
+// long input was hard-chopped at the cap and the tail was lost.
+export function splitLongTask(text, cap = 75) {
+  const t = (text || "").trim();
+  if (t.length <= cap) return { text: t, notes: null };
+  const firstSentence = t.split(/[.!?]\s+/)[0];
+  if (firstSentence && firstSentence.length >= 15 && firstSentence.length <= cap) {
+    return { text: firstSentence.replace(/[.!?]+$/, ""), notes: t };
+  }
+  const cut = t.slice(0, cap - 1).replace(/\s+\S*$/, "");
+  return { text: (cut || t.slice(0, cap - 1)) + "…", notes: t };
+}
