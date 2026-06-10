@@ -720,7 +720,45 @@ export default function App({ user }) {
   const [retroDeleteConfirm, setRetroDeleteConfirm] = useState(false);
   const [rolodexFiledFilter, setRolodexFiledFilter] = useState("all");
   const [showReminderPicker, setShowReminderPicker] = useState(false);
-  const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(false);
+  // Rolodex check-in dot "seen" — persisted per LOCAL DAY so a refresh
+  // doesn't resurrect the dot (the in-memory flag reset on every reload).
+  // New due reminders tomorrow re-light it naturally.
+  const _rolodexSeenDayKey = "rt:rolodexSeenDay";
+  const _todayLocalYmd = () => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  };
+  const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(() => {
+    try { return window.localStorage.getItem(_rolodexSeenDayKey) === _todayLocalYmd(); } catch { return false; }
+  });
+
+  // ── Google Calendar auto-sync ───────────────────────────────────────
+  // syncGoogleCalendar previously had exactly ONE caller: the post-OAuth
+  // connect flow. Nothing ever re-synced, so moved/edited Google events
+  // never updated in the app. Now: silent sync on app load and on tab
+  // refocus, throttled to once per 15 minutes (localStorage stamp — same
+  // pattern as the activity heartbeat).
+  useEffect(() => {
+    if (!user?.id || !googleConnected) return;
+    const beat = () => {
+      try {
+        const k = `rt:gcalSyncBeat:${user.id}`;
+        const last = Number(localStorage.getItem(k) || 0);
+        if (Date.now() - last > 15 * 60 * 1000) {
+          try { localStorage.setItem(k, String(Date.now())); } catch (_) { /* unavailable */ }
+          syncGoogleCalendar({ silent: true });
+        }
+      } catch (_) { /* localStorage unavailable — skip */ }
+    };
+    beat();
+    const onFocus = () => beat();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [user?.id, googleConnected]);
   // Cleared→set true when the user opens the Health page, so the "new
   // observation" red dot disappears on visit (without changing the
   // observation's own status — it still shows on the page until unpacked/
@@ -3415,7 +3453,10 @@ export default function App({ user }) {
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
   const goTo = (id) => {
     if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); }
-    if (id === "retros") setRolodexRemindersSeen(true);
+    if (id === "retros") {
+      setRolodexRemindersSeen(true);
+      try { window.localStorage.setItem(_rolodexSeenDayKey, _todayLocalYmd()); } catch (_) { /* unavailable */ }
+    }
     if (id === "health") {
       // Persist observation-viewed state to DB so the red dot doesn't
       // resurrect on page refresh. Updates viewed_at = NOW() on the
