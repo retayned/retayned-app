@@ -337,7 +337,7 @@ export default function ReferralsPage({ app }) {
                     const sorted = [...referrers].sort((a, b) => b.revenue - a.revenue);
                     const max = Math.max(1, ...sorted.map(r => r.revenue));
                     return (
-                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who's compounding</div>
                         <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3, marginBottom: 12 }}>Revenue through each client's referrals</div>
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -369,7 +369,7 @@ export default function ReferralsPage({ app }) {
                   })()}
 
                   {/* Who to ask next */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who to ask next</div>
                       <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Strongest signals first</div>
@@ -404,7 +404,7 @@ export default function ReferralsPage({ app }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
 
                   {/* NETWORK MAP — d3-force live simulation */}
-                  <div style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "18px 20px" }}>
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "18px 20px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12, gap: 16, flexWrap: "wrap" }}>
                       <div>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Referral Network</div>
@@ -517,8 +517,17 @@ export default function ReferralsPage({ app }) {
                           {(() => {
                             const allDates = refs.map(r => r.date || r.on).filter(Boolean).map(d => new Date(d).getTime()).filter(t => Number.isFinite(t));
                             if (allDates.length < 3) return null;
-                            const minMs = Math.min(...allDates);
                             const maxMs = Date.now();
+                            // Junk-date guard: a single malformed referral date
+                            // (e.g. parsed as 2001) made the range start decades
+                            // back, cramming all real data into the last sliver
+                            // of the slider. Floor the range at 2015; if nothing
+                            // sane remains, fall back to one year back. Also
+                            // guarantee a non-zero range.
+                            const saneFloor = new Date("2015-01-01").getTime();
+                            const saneDates = allDates.filter(t => t >= saneFloor);
+                            let minMs = saneDates.length ? Math.min(...saneDates) : maxMs - 365 * 86400000;
+                            if (minMs >= maxMs) minMs = maxMs - 30 * 86400000;
                             const curMs = networkAsOf ? new Date(networkAsOf).getTime() : maxMs;
                             const pct = ((curMs - minMs) / (maxMs - minMs)) * 100;
                             const fmt = (ms) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
@@ -537,7 +546,7 @@ export default function ReferralsPage({ app }) {
                                     const v = parseInt(e.target.value, 10);
                                     setNetworkAsOf(v >= maxMs - 86400000 ? null : new Date(v).toISOString());
                                   }}
-                                  style={{ width: "100%", accentColor: C.btn }}
+                                  style={{ width: "100%", accentColor: C.primary }}
                                 />
                                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2, fontSize: 10, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>
                                   <span>{fmt(minMs)}</span>
@@ -553,7 +562,7 @@ export default function ReferralsPage({ app }) {
 
                   {/* ASK DRAFT CARD */}
                   {activeAsk && (
-                    <div id="ask-composer" style={{ background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "16px 18px" }}>
+                    <div id="ask-composer" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "16px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, marginBottom: 10, flexWrap: "wrap" }}>
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>Ask {activeAsk.name}</div>
@@ -623,7 +632,7 @@ export default function ReferralsPage({ app }) {
                         No referrals logged yet.
                       </div>
                     ) : (
-                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                         {refs.map((r, i) => {
                           const isActive = r.status === "converted" || r.status === "active";
                           return (
