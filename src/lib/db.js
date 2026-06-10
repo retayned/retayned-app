@@ -64,6 +64,18 @@ export const auth = {
 // ============================================================
 
 export const profile = {
+  // Sweep-eligibility heartbeat: stamps profiles.last_active_at.
+  // Drives the 14-day activity gate in sweep_enqueue_due() — dormant
+  // accounts stop consuming nightly Anthropic sweeps until they return.
+  // Throttling is the caller's job (App throttles to once per 6h).
+  touchLastActive: async (userId) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ last_active_at: new Date().toISOString() })
+      .eq('id', userId);
+    return { error };
+  },
+
   get: async (userId) => {
     const { data, error } = await supabase
       .from('profiles')
@@ -199,13 +211,19 @@ export const tasks = {
   // Get today's tasks (including completed ones for progress count)
   // Recurring tasks always included — they persist across days and auto-reset in app
   listToday: async (userId) => {
-    const today = localYmd();
+    // completed_at is timestamptz. A bare 'YYYY-MM-DD' in the filter
+    // parses as UTC midnight, not local midnight — in a negative-UTC
+    // offset (e.g. DC), tasks completed after ~8pm reappear as "done
+    // today" the next morning; in positive offsets, morning completions
+    // vanish from today. Build the LOCAL midnight as a full ISO
+    // timestamp so the boundary lands where the user's day starts.
+    const localMidnightIso = new Date(`${localYmd()}T00:00:00`).toISOString();
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', userId)
       .is('cleared_at', null)  // exclude soft-cleared (post-2am rollover) tasks
-      .or(`is_done.eq.false,completed_at.gte.${today},is_recurring.eq.true`)
+      .or(`is_done.eq.false,completed_at.gte.${localMidnightIso},is_recurring.eq.true`)
       .order('sort_order', { ascending: true });
     return { data: data || [], error };
   },
@@ -491,6 +509,43 @@ export const tasks = {
       .update({ cleared_at: new Date().toISOString() })
       .eq('id', taskId);
     return { error };
+  },
+
+  // Rollover soft-clear candidates: done one-off tasks completed BEFORE
+  // `cutoffIso` (local midnight) that haven't been cleared yet. The
+  // midnight rollover must source candidates from THIS query, never from
+  // listToday — listToday is a display query whose boundary keeps rows
+  // completed AFTER local midnight, i.e. it excludes exactly the rows the
+  // rollover needs. (Sourcing from listToday meant the soft-clear could
+  // only ever see the sliver between UTC midnight and local midnight —
+  // and nothing at all once the display boundary was fixed.)
+  // is_recurring matched as null-or-false to mirror `!t.is_recurring`.
+  listRolloverClearCandidates: async (userId, cutoffIso) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('id, completed_at')
+      .eq('user_id', userId)
+      .eq('is_done', true)
+      .is('cleared_at', null)
+      .lt('completed_at', cutoffIso)
+      .or('is_recurring.is.null,is_recurring.eq.false');
+    return { data: data || [], error };
+  },
+
+  // Bulk soft-clear with a single shared timestamp, chunked to keep the
+  // .in() list within URL limits. Used by the midnight rollover; the
+  // per-row clearFromActive above stays for single-task use.
+  clearFromActiveBulk: async (taskIds) => {
+    const ts = new Date().toISOString();
+    for (let i = 0; i < taskIds.length; i += 200) {
+      const chunk = taskIds.slice(i, i + 200);
+      const { error } = await supabase
+        .from('tasks')
+        .update({ cleared_at: ts })
+        .in('id', chunk);
+      if (error) return { error };
+    }
+    return { error: null };
   },
 
   // Reorder tasks (batch update sort_order)
@@ -2389,12 +2444,15 @@ export const workers = {
 // Generate a URL-safe random token (32 chars).
 // Uses crypto.getRandomValues for cryptographic randomness.
 function generateToken() {
-  const bytes = new Uint8Array(24);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  // This token IS the worker's credential — never degrade to
+  // Math.random(). Every supported browser has crypto.getRandomValues;
+  // if it's somehow absent, fail loudly rather than mint a guessable
+  // magic link.
+  if (typeof crypto === "undefined" || !crypto.getRandomValues) {
+    throw new Error("Secure random unavailable — cannot generate worker token");
   }
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
   // base64url
   let str = btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -2402,24 +2460,15 @@ function generateToken() {
 }
 
 export const workerTokens = {
-  // Get or create an active token for a worker. If a non-expired
-  // non-revoked token exists, reuse it — otherwise create a fresh one.
-  // 7-day expiry from creation.
+  // NOTE: currently UNCALLED from the app — the live token mint is the
+  // worker-task-notify edge function. Kept correct so it isn't a trap:
+  // semantics are now mint-fresh + hash-only storage (a DB leak cannot
+  // expose live links). Returns the plaintext token ONCE on `data.token`
+  // for immediate display; it is never persisted and cannot be re-read.
   getOrCreate: async (userId, workerId) => {
-    // First check for an existing active token
-    const { data: existing } = await supabase
-      .from('worker_magic_tokens')
-      .select('*')
-      .eq('worker_id', workerId)
-      .is('revoked_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existing) return { data: existing, error: null };
-
-    // Create new
+    const token = generateToken();
+    const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+    const tokenHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
     const expires = new Date();
     expires.setDate(expires.getDate() + 7);
 
@@ -2428,20 +2477,22 @@ export const workerTokens = {
       .insert({
         user_id: userId,
         worker_id: workerId,
-        token: generateToken(),
+        token_hash: tokenHash,
         expires_at: expires.toISOString(),
       })
       .select()
       .single();
-    return { data, error };
+    return { data: data ? { ...data, token } : null, error };
   },
 
-  // Revoke a token (Worker clicks "this isn't me")
+  // Revoke a token (Worker clicks "this isn't me") — matched by hash.
   revoke: async (token) => {
+    const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+    const tokenHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
     const { data, error } = await supabase
       .from('worker_magic_tokens')
       .update({ revoked_at: new Date().toISOString() })
-      .eq('token', token)
+      .eq('token_hash', tokenHash)
       .select()
       .single();
     return { data, error };
