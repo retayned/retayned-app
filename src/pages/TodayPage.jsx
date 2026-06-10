@@ -5,9 +5,10 @@ import { Icon } from "../components/Icon";
 import { MobileCalendarStrip } from "../components/MobileCalendarStrip";
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
 import { TimeDial } from "../components/TimeDial";
+import BrainDump from "../components/BrainDump";
 import { supabase } from "../lib/supabase.js";
 import { parseCalendarEntry, parseComposer } from "../parser";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
 import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, ymdInTz } from "../utils";
@@ -154,6 +155,11 @@ export default function TodayPage({ app }) {
     workerPickerOpen,
     workersList,
   } = app;
+
+  // ── Brain Dump + task-notes local UI state (page-local, not app state) ──
+  const [brainDumpOpen, setBrainDumpOpen] = useState(false);
+  const [openNoteId, setOpenNoteId] = useState(null);
+  const [editingNoteId, setEditingNoteId] = useState(null);
 
           // ─── LOCAL ALIASES ───────────────────────────────────────────────
           const focusId = todayFocusId, setFocusId = setTodayFocusId;
@@ -2187,6 +2193,17 @@ export default function TodayPage({ app }) {
                         </>
                       )}
                     </div>
+                    {/* Brain Dump — dump a call's worth of notes; Rai fans
+                        them into tasks/touchpoints/events for review. */}
+                    <button
+                      onClick={() => setBrainDumpOpen(true)}
+                      className="rt-composer-pill"
+                      title="Brain Dump — paste your call notes, Rai sorts them into tasks"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}
+                    >
+                      <Icon name="sparkles" size={12} simple color={C.textSec} />
+                      <span className="rt-row-text">Brain Dump</span>
+                    </button>
                     {/* Spacer pushes the Add button to the right edge of
                         the chips row. Previously held the "Past tense →
                         touchpoint" hint — removed as training-wheels text;
@@ -2922,6 +2939,22 @@ export default function TodayPage({ app }) {
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
+                                {t.notes && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === t.id ? null : t.id); }}
+                                    title={openNoteId === t.id ? "Hide note" : "Show note"}
+                                    style={{
+                                      display: "inline-flex", alignItems: "center",
+                                      border: "none", cursor: "pointer", flexShrink: 0,
+                                      padding: "1px 7px", borderRadius: 999,
+                                      fontSize: 10, fontWeight: 700, fontFamily: "inherit",
+                                      letterSpacing: "0.03em",
+                                      background: openNoteId === t.id ? "rgba(51,84,62,0.10)" : C.card,
+                                      color: openNoteId === t.id ? "#33543E" : C.textMuted,
+                                      boxShadow: "var(--rt-sh-xs)",
+                                    }}
+                                  >Note</button>
+                                )}
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
                                   const psRaw = calcProfileScoreRaw(client.ret || 50, client, clients);
@@ -2952,6 +2985,34 @@ export default function TodayPage({ app }) {
                               {/* [Removed Jun 2026] "Rai's pick" reason text — deprecated
                                   alongside the per-task badge. Pick reasons still render
                                   at the client level via the daily brief surface. */}
+                              {/* Task note — the long-form body behind the short title.
+                                  Brain Dump populates it; double-click to edit (same
+                                  muscle memory as title editing). */}
+                              {t.notes && openNoteId === t.id && (
+                                editingNoteId === t.id ? (
+                                  <textarea
+                                    autoFocus
+                                    defaultValue={t.notes}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onBlur={async (e) => {
+                                      const v = e.target.value.trim();
+                                      setEditingNoteId(null);
+                                      if (v === (t.notes || "")) return;
+                                      setTasks(prev => prev.map(x => x.id === t.id ? { ...x, notes: v || null } : x));
+                                      try { await tasksDb.setNotes(t.id, v || null); } catch (err) { console.warn("setNotes failed:", err); }
+                                    }}
+                                    onKeyDown={(e) => { if (e.key === "Escape") setEditingNoteId(null); }}
+                                    style={{ width: "100%", boxSizing: "border-box", marginTop: 6, minHeight: 52, border: "1px solid " + C.borderLight, borderRadius: 8, padding: "6px 9px", font: "inherit", fontSize: 12, lineHeight: 1.5, color: C.textSec, background: C.card, outline: "none", resize: "vertical" }}
+                                  />
+                                ) : (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    onDoubleClick={(e) => { e.stopPropagation(); setEditingNoteId(t.id); }}
+                                    title="Double-click to edit"
+                                    style={{ marginTop: 6, padding: "5px 9px", borderLeft: "2px solid " + C.borderLight, fontSize: 12, lineHeight: 1.5, color: C.textSec, whiteSpace: "pre-wrap", cursor: "text" }}
+                                  >{t.notes}</div>
+                                )
+                              )}
                             </div>
 
                             {/* Worker assignment badge — only renders if task is assigned. */}
@@ -3643,6 +3704,18 @@ export default function TodayPage({ app }) {
               {/* CONFETTI */}
               {/* Confetti layer removed (May 2026) — celebration is fireworks
                   only now. The `confetti` state still gates the fireworks. */}
+
+              {/* Brain Dump — review-before-commit extraction modal. */}
+              <BrainDump
+                open={brainDumpOpen}
+                onClose={() => setBrainDumpOpen(false)}
+                clients={clients}
+                user={user}
+                onCommitted={({ tasks: newTasks, failed }) => {
+                  if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
+                  if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
+                }}
+              />
             </div>
           );
         
