@@ -26,7 +26,7 @@ import { lookupObservationIllustration } from "./observations";
 import { parseCalendarEntry, parseComposer } from "./parser";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "./recurrence";
 import { C, THEME_CSS } from "./theme";
-import { detectThinkingVerb, getUserInitial, getWorkerInitials, localYmd, retColor, retGradient, tzMidnightInstant, ymdInTz } from "./utils";
+import { detectThinkingVerb, getUserInitial, getWorkerInitials, localYmd, retColor, retGradient, splitLongTask, tzMidnightInstant, ymdInTz } from "./utils";
 
 
 
@@ -9904,9 +9904,11 @@ export default function App({ user }) {
                     ? ymdLocal(parsed.matchedDate.date)
                     : ymdLocal(new Date());
                   const optimisticId = "ql" + Date.now();
+                  const longSplit = splitLongTask(cleanedText);
                   const optimisticTask = {
                     id: optimisticId,
-                    text: cleanedText,
+                    text: longSplit.text,
+                    notes: longSplit.notes,
                     client: matchedClient?.name || null,
                     client_id: matchedClient?.id || null,
                     done: false,
@@ -9922,7 +9924,8 @@ export default function App({ user }) {
                   setTasks(prev => [optimisticTask, ...prev]);
                   try {
                     const { data: created } = await tasksDb.create(user.id, {
-                      text: cleanedText,
+                      text: longSplit.text,
+                      notes: longSplit.notes,
                       client_name: matchedClient?.name || null,
                       client_id: matchedClient?.id || null,
                       is_recurring: false,
@@ -10017,7 +10020,8 @@ export default function App({ user }) {
               const optimisticId = "ql" + Date.now();
               setTasks(prev => [{ id: optimisticId, text: r.cleanedText, client: r.clientName, client_id: r.clientId, done: false, ai: false, recurring: false, recurrence_pattern: null, due_date: dueDate, raiPriority: false, alert: false, created_at: Date.now(), assigned_worker_id: null }, ...prev]);
               try {
-                const { data: created } = await tasksDb.create(user.id, { text: r.cleanedText, client_name: r.clientName, client_id: r.clientId, is_recurring: false, recurrence_pattern: null, due_date: dueDate, assigned_worker_id: null });
+                const _mlSplit = splitLongTask(r.cleanedText);
+                const { data: created } = await tasksDb.create(user.id, { text: _mlSplit.text, notes: _mlSplit.notes, client_name: r.clientName, client_id: r.clientId, is_recurring: false, recurrence_pattern: null, due_date: dueDate, assigned_worker_id: null });
                 if (created?.id) setTasks(prev => prev.map(x => x.id === optimisticId ? { ...x, id: created.id } : x));
                 setQuickLogToast({ id: Date.now(), kind: "task", recordId: created?.id || optimisticId, label: r.clientName, relog: r });
               } catch { setTasks(prev => prev.filter(x => x.id !== optimisticId)); setQuickLogToast({ id: Date.now(), error: true }); }
