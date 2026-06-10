@@ -301,151 +301,145 @@ export const tasks = {
   // invisible to the sweep and the sidebar counter. This table holds
   // every completion as an immutable record; tasks.completed_at remains
   // the "current state" field.
+  // Toggle a task done/undone, recording history in task_completions.
+  //
+  // Round trips: 4 (was up to 8). The task UPDATE returns the full row
+  // plus an embedded client name (tasks_client_id_fkey), killing the
+  // separate pre-read and both client-name lookups. Day-level dedupe
+  // moved from a racy select-then-insert into the database itself:
+  // UNIQUE(task_id, completed_on) + upsert with ignoreDuplicates — the
+  // exact pattern task_occurrences already uses. Two tabs toggling the
+  // same task in the same instant now produce exactly one diary row.
+  //
+  // completed_on is the BROWSER-local day (localYmd), preserving the
+  // old dedupe-window semantics. Rows created before the migration have
+  // completed_on NULL — exempt from the unique index (NULLS DISTINCT)
+  // and handled explicitly in the undo path.
+  //
+  // REQUIRES the task_completions migration (completed_on column +
+  // task_completions_task_day_uniq index). If it hasn't run, the upsert
+  // fails with 42P10 and we degrade to the legacy select-then-insert
+  // (old race window and all) so no completion is ever lost.
   toggle: async (taskId, isDone) => {
-    // Read the row to capture task metadata for the completion record
-    // (denormalized snapshots). Also tells us the user_id and client_id.
-    // assigned_worker_id and due_date are pulled so task_completions can
-    // store complete worker-attribution + on-time data — without these
-    // the Workers page can't reconstruct history across refreshes.
-    const { data: existing, error: readErr } = await supabase
-      .from('tasks')
-      .select('id, user_id, client_id, text, is_recurring, assigned_worker_id, due_date')
-      .eq('id', taskId)
-      .single();
-    if (readErr) return { data: null, error: readErr };
-
     const nowIso = new Date().toISOString();
-    const { data, error } = await supabase
+
+    // 1) Update + RETURNING everything we need, client name embedded.
+    const { data: updated, error } = await supabase
       .from('tasks')
       .update({
         is_done: isDone,
         completed_at: isDone ? nowIso : null,
       })
       .eq('id', taskId)
-      .select()
+      .select('*, clients(name)')
       .single();
-    if (error) return { data, error };
+    if (error) return { data: null, error };
+
+    const clientName = updated.clients?.name ?? null;
+    const { clients: _embed, ...data } = updated; // strip embed from returned row
+
+    const completedOn = localYmd();
+    const wasOnTime = !data.due_date
+      ? true
+      : (nowIso.slice(0, 10) <= String(data.due_date).slice(0, 10));
 
     if (isDone) {
-      // Record the completion. Dedupe: don't insert if a row already
-      // exists for this task today (handles done → undo → done in
-      // quick succession).
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-      const { data: existingToday } = await supabase
+      // 2) Diary entry. DB-level dedupe; ignoreDuplicates = DO NOTHING.
+      const { error: insErr } = await supabase
         .from('task_completions')
-        .select('id')
-        .eq('task_id', taskId)
-        .gte('completed_at', todayStart.toISOString())
-        .lte('completed_at', todayEnd.toISOString())
-        .limit(1);
-
-      if (!existingToday || existingToday.length === 0) {
-        // Look up client name for the snapshot. Best-effort — if it
-        // fails or the client is null, we still insert with null name.
-        let clientName = null;
-        if (existing.client_id) {
-          const { data: cli } = await supabase
-            .from('clients')
-            .select('name')
-            .eq('id', existing.client_id)
-            .single();
-          clientName = cli?.name ?? null;
+        .upsert({
+          task_id: taskId,
+          user_id: data.user_id,
+          client_id: data.client_id,
+          client_name: clientName,
+          task_text: data.text,
+          is_recurring: data.is_recurring || false,
+          completed_at: nowIso,
+          completed_on: completedOn,
+          assigned_worker_id: data.assigned_worker_id || null,
+          due_date: data.due_date || null,
+          was_on_time: wasOnTime,
+        }, { onConflict: 'task_id,completed_on', ignoreDuplicates: true });
+      if (insErr) {
+        console.warn('task_completions upsert failed:', insErr);
+        // Migration not applied (42P10 = no matching constraint;
+        // PGRST204 = unknown column). Degrade to the legacy
+        // select-then-insert so the completion still records.
+        if (String(insErr.code) === '42P10' || String(insErr.code) === 'PGRST204') {
+          const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+          const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+          const { data: existingToday } = await supabase
+            .from('task_completions')
+            .select('id')
+            .eq('task_id', taskId)
+            .gte('completed_at', todayStart.toISOString())
+            .lte('completed_at', todayEnd.toISOString())
+            .limit(1);
+          if (!existingToday || existingToday.length === 0) {
+            const { error: legacyErr } = await supabase
+              .from('task_completions')
+              .insert({
+                task_id: taskId,
+                user_id: data.user_id,
+                client_id: data.client_id,
+                client_name: clientName,
+                task_text: data.text,
+                is_recurring: data.is_recurring || false,
+                completed_at: nowIso,
+                assigned_worker_id: data.assigned_worker_id || null,
+                due_date: data.due_date || null,
+                was_on_time: wasOnTime,
+              });
+            if (legacyErr) console.warn('task_completions legacy insert failed:', legacyErr);
+          }
         }
-        // on-time computed at insert time so it's frozen historically.
-        // If the task has no due_date it counts as on-time (no deadline
-        // to miss). Date comparison uses YYYY-MM-DD slice to ignore
-        // timezone noise.
-        const wasOnTime = !existing.due_date
-          ? true
-          : (nowIso.slice(0, 10) <= String(existing.due_date).slice(0, 10));
-        // Fire-and-forget — completion record is non-critical to UI
-        // responsiveness. Errors logged but don't block.
-        const { error: insErr } = await supabase
-          .from('task_completions')
-          .insert({
-            task_id: taskId,
-            user_id: existing.user_id,
-            client_id: existing.client_id,
-            client_name: clientName,
-            task_text: existing.text,
-            is_recurring: existing.is_recurring || false,
-            completed_at: nowIso,
-            assigned_worker_id: existing.assigned_worker_id || null,
-            due_date: existing.due_date || null,
-            was_on_time: wasOnTime,
-          });
-        if (insErr) console.warn('task_completions insert failed:', insErr);
       }
     } else {
-      // Undo: remove today's completion row(s) for this task.
+      // 2) Undo: remove today's diary row. New rows match on
+      // completed_on; pre-migration rows (completed_on null) match on
+      // the legacy local-day window.
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
       const { error: delErr } = await supabase
         .from('task_completions')
         .delete()
         .eq('task_id', taskId)
-        .gte('completed_at', todayStart.toISOString())
-        .lte('completed_at', todayEnd.toISOString());
+        .or(`completed_on.eq.${completedOn},and(completed_on.is.null,completed_at.gte.${todayStart.toISOString()},completed_at.lte.${todayEnd.toISOString()})`);
       if (delErr) console.warn('task_completions delete (undo) failed:', delErr);
     }
 
     // ─── DUAL-WRITE: also update task_occurrences for today ────────────
-    // Phase 2 of the occurrence-model migration. Every toggle writes to
-    // both the old fields (above) AND the corresponding occurrence row
-    // here. Phase 3 will cut readers over to occurrences one at a time;
-    // Phase 4 removes the old writes. This is best-effort — failures
-    // log but don't fail the toggle (old fields are still authoritative
-    // until Phase 4).
+    // Phase 2 of the occurrence-model migration, unchanged in purpose.
+    // Best-effort — failures log but don't fail the toggle (old fields
+    // stay authoritative until Phase 4). Client name and was_on_time are
+    // reused from above instead of re-fetched.
     try {
-      // Determine "today" in the user's stored timezone. Same logic the
-      // SQL materializer uses, so the occurrence date matches what
-      // pg_cron will create for tomorrow's auto-materialization.
+      // "Today" in the user's STORED timezone — same date the SQL
+      // materializer computes, so JS and SQL writes agree.
       const { data: prof } = await supabase
         .from('profiles')
         .select('timezone')
-        .eq('id', existing.user_id)
+        .eq('id', data.user_id)
         .single();
       const tz = prof?.timezone || 'UTC';
-      // Compute YYYY-MM-DD in user's stored TZ using Intl. This is the
-      // same date the SQL function (now() AT TIME ZONE tz)::date returns
-      // for the same moment, so writes from JS and SQL agree.
       const todayInTz = new Intl.DateTimeFormat('en-CA', {
         timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
       }).format(new Date());
-
-      let clientName = null;
-      if (existing.client_id) {
-        const { data: cli } = await supabase
-          .from('clients')
-          .select('name')
-          .eq('id', existing.client_id)
-          .single();
-        clientName = cli?.name ?? null;
-      }
-
-      // Upsert: if a row exists for (task_id, today), update is_done +
-      // completed_at. If not, insert a new occurrence row with all
-      // snapshot fields. The UNIQUE(task_id, occurrence_date) constraint
-      // turns this into a deterministic upsert via ON CONFLICT.
-      const wasOnTime = !existing.due_date
-        ? true
-        : (nowIso.slice(0, 10) <= String(existing.due_date).slice(0, 10));
 
       const { error: occErr } = await supabase
         .from('task_occurrences')
         .upsert({
           task_id: taskId,
-          user_id: existing.user_id,
+          user_id: data.user_id,
           occurrence_date: todayInTz,
           is_done: isDone,
           completed_at: isDone ? nowIso : null,
-          assigned_worker_id: existing.assigned_worker_id || null,
+          assigned_worker_id: data.assigned_worker_id || null,
           worker_completed_at: null, // worker flow not wired here yet
           was_on_time: isDone ? wasOnTime : null,
-          client_id: existing.client_id,
+          client_id: data.client_id,
           client_name: clientName,
-          task_text: existing.text,
+          task_text: data.text,
         }, { onConflict: 'task_id,occurrence_date' });
       if (occErr) console.warn('task_occurrences upsert failed:', occErr);
     } catch (occCatch) {
