@@ -400,7 +400,7 @@ export default function ClientsPage({ app }) {
                 {/* LEFT RAIL — Portfolio, Book history, Recent movement (3 separate cards) */}
                 <div className="rc-rail" style={{ position: "sticky", top: 20, display: "flex", flexDirection: "column", gap: 12 }}>
                   {/* Card 1: Portfolio */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                     <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Portfolio</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
                       <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
@@ -453,7 +453,7 @@ export default function ClientsPage({ app }) {
                   </div>
 
                   {/* Card 2: Book history */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                     <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Book history</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                       <div>
@@ -498,7 +498,7 @@ export default function ClientsPage({ app }) {
                     const mostActive = ranked.slice(0, 3);
                     const leastActive = ranked.slice(-3).reverse().filter(x => !mostActive.includes(x));
                     return (
-                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Recent movement</div>
                         {mostActive.length > 0 && (
                           <div style={{ marginBottom: leastActive.length > 0 ? 10 : 0 }}>
@@ -647,7 +647,7 @@ export default function ClientsPage({ app }) {
 
 
                   {/* Toolbar: search + sort + view toggle */}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "10px 14px", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "10px 14px", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <Icon name="search" size={14} color={C.textMuted} />
                       <input value={clientSearch} onChange={e => setClientSearch(e.target.value)} placeholder="Search clients, owners, industries…" style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, padding: "2px 0", fontFamily: "inherit", color: C.text }} />
@@ -658,8 +658,13 @@ export default function ClientsPage({ app }) {
                         <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginRight: 2 }}>Sort</span>
                         {sortOptions.map(s => (
                           <button key={s.id} onClick={() => setClientsSort(s.id)} className={"rt-composer-pill" + (sortId === s.id ? " is-filled" : "") + (s.id === "cadence" ? " rc-sort-cadence" : s.id === "renewal" ? " rc-sort-renewal" : "")} style={{
-                            padding: "4px 10px", fontSize: 11.5, fontWeight: sortId === s.id ? 600 : 500, cursor: "pointer", fontFamily: "inherit",
-                            color: sortId === s.id ? C.text : C.textSec,
+                            padding: "4px 10px", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit",
+                            // Selected = unmistakable: soft-green fill + primary
+                            // text, the same selected language the rest of the
+                            // site uses. Hover state untouched.
+                            ...(sortId === s.id
+                              ? { background: C.primarySoft, color: C.primary, fontWeight: 700 }
+                              : { color: C.textSec, fontWeight: 500 }),
                           }}>{s.label}</button>
                         ))}
                       </div>
@@ -693,7 +698,7 @@ export default function ClientsPage({ app }) {
 
                   {/* Mobile card list — always rendered, CSS reveals only <=768px */}
                   {dataLoaded && (
-                  <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                  <div className="rc-mobile-list" style={{ display: "none", flexDirection: "column", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     {filteredClients.map((c, i, arr) => {
                       const scoreColor = retColor(c.ret || 0);
                       const months = c.months || 0;
@@ -725,8 +730,8 @@ export default function ClientsPage({ app }) {
                   )}
 
                   {dataLoaded && variant === "table" && (
-                    <div className="rc-desktop-view" style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.borderLight, background: C.surface }}>
+                    <div className="rc-desktop-view" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderBottom: "1px solid " + C.border, background: C.card }}>
                         <div style={{ width: 32, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }} />
                         <div style={{ flex: 2, fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Client</div>
                         <div style={{ width: 56, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: C.textMuted, letterSpacing: 0.4, textTransform: "uppercase" }}>Health</div>
@@ -884,7 +889,7 @@ export default function ClientsPage({ app }) {
                         const renew = renewalInfo(c);
                         const renewUrgent = renew.urgent;
                         return (
-                          <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
+                          <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ position: "relative", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: 12, paddingLeft: 14, overflow: "hidden", cursor: "pointer" }}>
                             <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: 3, background: scoreColor }} />
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                               <ScoreRing2 client={c} size={34} />
