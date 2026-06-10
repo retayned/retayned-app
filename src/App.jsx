@@ -759,6 +759,16 @@ export default function App({ user }) {
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, [user?.id, googleConnected]);
+
+  // Belt-and-suspenders for the rolodex dot: stamp "seen" whenever the
+  // Rolodex page IS active, not only via goTo — covers any entry path
+  // (restored sessions, programmatic navigation) so the dot can never
+  // resurface after the page has actually been viewed today.
+  useEffect(() => {
+    if (page !== "retros") return;
+    setRolodexRemindersSeen(true);
+    try { window.localStorage.setItem(_rolodexSeenDayKey, _todayLocalYmd()); } catch (_) { /* unavailable */ }
+  }, [page]);
   // Cleared→set true when the user opens the Health page, so the "new
   // observation" red dot disappears on visit (without changing the
   // observation's own status — it still shows on the page until unpacked/
