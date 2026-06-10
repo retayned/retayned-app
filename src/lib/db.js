@@ -467,6 +467,18 @@ export const tasks = {
     return { data, error };
   },
 
+  // Set / clear a task's notes (the long-form body behind a short title).
+  // Same mechanics as setText; pass null/empty to clear.
+  setNotes: async (taskId, notes) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ notes: notes && notes.trim().length > 0 ? notes : null })
+      .eq('id', taskId)
+      .select()
+      .single();
+    return { data, error };
+  },
+
   setDueDate: async (taskId, dueDate) => {
     const dateStr = dueDate == null
       ? null
