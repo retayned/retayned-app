@@ -1749,6 +1749,7 @@ export default function App({ user }) {
           text: t.text,
           client: t.client_name || "",
           client_id: t.client_id || null,
+          notes: t.notes || null,
           done: doneVal,
           completed_at: completedVal,
           alert: t.is_alert,
