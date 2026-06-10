@@ -705,12 +705,11 @@ export default function HealthPage({ app }) {
                       a Health Check. */}
                   <button
                     className="r-btn"
-                    data-tone="purple"
+                    data-tone="green"
                     onClick={() => goTo("clients")}
                     style={{
                       display: "inline-flex", alignItems: "center", gap: 6,
                       padding: "10px 16px",
-                      background: "var(--rt-grad-btn)",
                       color: "#fff",
                       border: "none",
                       borderRadius: 10,
@@ -798,7 +797,7 @@ export default function HealthPage({ app }) {
                                   fontVariantNumeric: "tabular-nums",
                                   borderRadius: 4,
                                   color: isToday || isLogged ? "#fff" : isPlanned ? C.textSec : C.textMuted,
-                                  background: isToday ? C.btn : isLogged ? C.retGood : "transparent",
+                                  background: isToday ? C.primary : isLogged ? C.retGood : "transparent",
                                   border: isPlanned ? "1px dashed " + C.border : "1px solid transparent",
                                 }}>{d}</div>
                               );
@@ -807,7 +806,7 @@ export default function HealthPage({ app }) {
                           <div style={{ display: "flex", gap: 10, marginTop: 10, fontSize: 10, color: C.textMuted, flexWrap: "wrap" }}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.retGood }} />logged</span>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "transparent", border: "1px dashed " + C.border }} />planned</span>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.btn }} />today</span>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.primary }} />today</span>
                           </div>
                         </div>
                       )}
@@ -855,7 +854,7 @@ export default function HealthPage({ app }) {
                     while (cells.length % 7 !== 0) cells.push(null);
                     const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
                     return (
-                      <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px" }}>
                         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
                           <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>{monthName} rhythm</span>
                           <span style={{ fontSize: 10.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}><b style={{ color: C.text }}>{loggedCount}</b> checks · <b style={{ color: C.text }}>{todayDay}</b>/{daysInMonth}</span>
@@ -885,7 +884,7 @@ export default function HealthPage({ app }) {
                                 fontVariantNumeric: "tabular-nums",
                                 borderRadius: 6,
                                 color: isToday ? "#fff" : isLogged ? "#fff" : isPlanned ? C.textSec : C.textMuted,
-                                background: isToday ? C.btn : isLogged ? C.retGood : "transparent",
+                                background: isToday ? C.primary : isLogged ? C.retGood : "transparent",
                                 border: isPlanned ? "1px dashed " + C.border : "1px solid transparent",
                               }}>{d}</div>
                             );
@@ -895,12 +894,12 @@ export default function HealthPage({ app }) {
                         <div style={{ display: "flex", gap: 10, marginTop: 12, fontSize: 10, color: C.textMuted, flexWrap: "wrap" }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.retGood }} />logged</span>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: "transparent", border: "1px dashed " + C.border }} />planned</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.btn }} />today</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.primary }} />today</span>
                         </div>
                       </div>
                     );
                   })()}
-                  <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                     <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Queue</div>
@@ -965,7 +964,7 @@ export default function HealthPage({ app }) {
                   {/* Observation — rendered TWICE (once for mobile above calendar, once for desktop in this main column). renderObserver returns null when conditions aren't met. */}
                   {!isMobile && renderObserver()}
                   {activeQueue.length === 0 && justCompleted.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
+                    <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: C.text }}>All caught up</div>
                       <div style={{ fontSize: 12.5, color: C.textMuted }}>No health checks due right now. Check back when the next one is ready.</div>
                     </div>
@@ -1000,12 +999,12 @@ export default function HealthPage({ app }) {
                                 <span style={{ fontSize: 12, fontWeight: 700, color: retColor(h.ret), fontVariantNumeric: "tabular-nums" }}>{h.ret}</span>
                                 {client?.tag && <span style={{ fontSize: 11, color: C.textMuted }}>· {client.tag}</span>}
                               </div>
-                              <div style={{ fontSize: 12, color: h.overdue > 0 ? C.retWarn : (h.isFirstHC && h.due !== "Today") ? C.btn : C.retOk, marginTop: 2, fontWeight: 500 }}>
+                              <div style={{ fontSize: 12, color: h.overdue > 0 ? C.retWarn : (h.isFirstHC && h.due !== "Today") ? C.primary : C.retOk, marginTop: 2, fontWeight: 500 }}>
                                 {h.overdue > 0 ? `Review due ${h.overdue}d ago` : h.due === "Today" ? "Review due today" : `Coming up · in ${h.daysUntil}d`}
                               </div>
                             </div>
                             {!isOpen && (
-                              <button className="r-btn" data-tone="purple" style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Review</button>
+                              <button className="r-btn" data-tone="green" style={{ padding: "8px 16px", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Review</button>
                             )}
                           </div>
 
@@ -1018,11 +1017,11 @@ export default function HealthPage({ app }) {
                               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                                 <button
                                   onClick={() => { if (client) { setSelectedClient(client); } setHcOpen(null); }}
-                                  style={{ padding: "9px 18px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                  style={{ padding: "9px 18px", background: C.primary, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                 >Update profile</button>
                                 <button
                                   onClick={() => { if (client) { setAiMessages([]); setObservationContext(`The user opened a quarterly portfolio review for ${h.client} and wants to talk through whether anything has changed with this relationship — scope, contacts, communication pace, results, their gut read. Help them reflect and decide what (if anything) to update in the client's profile.`); } setHcOpen(null); setPage("coach"); }}
-                                  style={{ padding: "9px 18px", background: "transparent", color: C.btn, border: "1px solid " + C.btnLight, borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                  style={{ padding: "9px 18px", background: "transparent", color: C.primary, border: "1px solid rgba(51,84,62,0.35)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                 >Chat with Rai</button>
                                 <div style={{ flex: 1 }} />
                                 <button
@@ -1106,7 +1105,7 @@ export default function HealthPage({ app }) {
                     })()}
                   </div>
                   {totalPlotted > 0 && (
-                    <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
+                    <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
                         <div>
                           <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall</div>
@@ -1150,7 +1149,7 @@ export default function HealthPage({ app }) {
 
                   {/* Done this month */}
                   {justCompleted.length > 0 && (
-                    <div style={{ marginTop: 24, background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                    <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 20px 12px", borderBottom: "1px solid " + C.borderLight }}>
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Done this month</span>
                         <span style={{ fontSize: 11, color: C.textMuted }}>Most recent first</span>
