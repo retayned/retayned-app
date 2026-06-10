@@ -5,9 +5,24 @@ import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
 import { createPortal } from "react-dom";
 import { C } from "../theme";
+import { useState } from "react";
 import { retGradient } from "../utils";
 
 export default function RetrosPage({ app }) {
+  // Check-in banner dismissal — per LOCAL DAY, persisted, so "Dismiss"
+  // means "not today" rather than "until next render". The reminder
+  // itself is untouched; acting on it still goes through the contact.
+  const _checkinDismissKey = "rt:rolodexBannerDismissedDay";
+  const _checkinTodayYmd = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  })();
+  const [checkinDismissed, setCheckinDismissed] = useState(() => {
+    try { return window.localStorage.getItem(_checkinDismissKey) === _checkinTodayYmd; } catch { return false; }
+  });
+  // Retro flow is collapsed into a compact prompt by default; the full
+  // five-step card only takes over the page when the user opts in.
+  const [retroOpen, setRetroOpen] = useState(false);
   const {
     clients,
     dataLoaded,
@@ -97,6 +112,37 @@ export default function RetrosPage({ app }) {
             if (comeback.includes("yes")) tags.push("Would come back");
             if (r.type === "oneoff") tags.push("New lead");
             return tags;
+          };
+
+          // ─── Warmth ────────────────────────────────────────────────────
+          // The page's organizing signal: time since last touch. Same
+          // last-touch derivation calcHeat uses, banded into warm (≤30d),
+          // cooling (31–90d), cold (>90d).
+          const lastTouchMs = (r) => {
+            const d = r.last_touch ? new Date(r.last_touch) : (r.priority_set_at ? new Date(r.priority_set_at) : (r.created_at ? new Date(r.created_at) : null));
+            const t = d ? d.getTime() : NaN;
+            return Number.isFinite(t) ? t : null;
+          };
+          const warmthBand = (r) => {
+            const ms = lastTouchMs(r);
+            if (ms == null) return "cold";
+            const days = (Date.now() - ms) / 86400000;
+            return days <= 30 ? "warm" : days <= 90 ? "cooling" : "cold";
+          };
+          const WARMTH_META = {
+            warm:    { label: "Warm",    tone: C.retGood,   bg: "#E8F3EC" },
+            cooling: { label: "Cooling", tone: C.retWarn,   bg: "#FAF0DF" },
+            cold:    { label: "Cold",    tone: C.textMuted, bg: C.borderLight },
+          };
+          const agoLabel = (r) => {
+            const ms = lastTouchMs(r);
+            if (ms == null) return "no touch yet";
+            const days = Math.max(0, Math.floor((Date.now() - ms) / 86400000));
+            if (days < 1) return "today";
+            if (days < 7) return `${days}d ago`;
+            if (days < 30) return `${Math.floor(days / 7)}w ago`;
+            if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+            return `${Math.floor(days / 365)}y ago`;
           };
 
           // Retro step definitions
@@ -236,9 +282,21 @@ export default function RetrosPage({ app }) {
             advanceAfterRetro();
           };
 
-          // Filed list filter (click a stack)
+          // Filed filter — warmth bands (rail), type, refer-ready (pills),
+          // with legacy high/medium/low still honored.
           const [filedFilter, setFiledFilter] = [rolodexFiledFilter, setRolodexFiledFilter];
-          const filteredFiled = filedFilter === "all" ? saved : byPrio[filedFilter] || [];
+          const filteredFiled = saved.filter(r => {
+            if (!filedFilter || filedFilter === "all") return true;
+            if (filedFilter === "warm" || filedFilter === "cooling" || filedFilter === "cold") return warmthBand(r) === filedFilter;
+            if (filedFilter === "former") return r.type === "former";
+            if (filedFilter === "oneoff") return r.type !== "former";
+            if (filedFilter === "refer") return deriveTags(r).includes("Would refer");
+            if (byPrio[filedFilter]) return r.priority === filedFilter;
+            return true;
+          });
+          const allFiled = rolodex.filter(r => r.priority);
+          const warmthCounts = { warm: 0, cooling: 0, cold: 0 };
+          for (const r of allFiled) warmthCounts[warmthBand(r)]++;
 
           // ─── Render ─────────────────────────────────────────────────────
           return (
@@ -279,84 +337,72 @@ export default function RetrosPage({ app }) {
               {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
               <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
 
-                {/* LEFT RAIL: stacks + queue */}
+                {/* LEFT RAIL: warmth + check-in queue */}
                 <div className="rc-rail" style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 0, alignSelf: "start" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", padding: "0 4px 2px" }}>Stacks</div>
-                    {[
-                      { key: "high", label: "High", tone: C.retGood, toneBg: "#E8F3EC" },
-                      { key: "medium", label: "Medium", tone: C.retWarn, toneBg: "#FAF0DF" },
-                      { key: "low", label: "Low", tone: C.textMuted, toneBg: C.borderLight },
-                    ].map(s => {
-                      const count = byPrio[s.key].length;
-                      const selected = filedFilter === s.key;
-                      const cards = Math.min(6, count);
+                  {/* WARMTH — who needs you, not how you filed them. Click a
+                      band to filter the grid; click again to clear. */}
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Warmth</div>
+                    {["warm", "cooling", "cold"].map(band => {
+                      const m = WARMTH_META[band];
+                      const selected = filedFilter === band;
                       return (
-                        <button key={s.key} onClick={() => setFiledFilter(selected ? "all" : s.key)} style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", padding: "12px 14px", borderRadius: 12, boxShadow: "var(--rt-sh-card)", cursor: "pointer", textAlign: "left", background: selected ? s.toneBg : C.card, border: "1px solid " + (selected ? s.tone : C.border), fontFamily: "inherit", transition: "all 150ms" }}>
-                          <div style={{ position: "relative", width: 36, height: 44, flexShrink: 0 }}>
-                            {cards === 0 ? (
-                              <div style={{ position: "absolute", inset: 0, border: "1px dashed " + C.border, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, color: C.textMuted }}>empty</div>
-                            ) : (
-                              Array.from({ length: cards }).map((_, i) => (
-                                <div key={i} style={{ position: "absolute", bottom: i * 3, left: i * 2, right: -i * 2, top: i * 3, background: C.card, border: "1px solid " + s.tone, borderRadius: 5, opacity: 0.35 + (i / cards) * 0.6, boxShadow: i === cards - 1 ? "0 1px 2px rgba(0,0,0,0.05)" : "none" }} />
-                              ))
-                            )}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.3, textTransform: "uppercase" }}>{s.label}</div>
-                            <div style={{ fontSize: 22, fontWeight: 700, color: s.tone, letterSpacing: -0.4, marginTop: 2, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{count}</div>
-                          </div>
+                        <button key={band} onClick={() => setFiledFilter(selected ? "all" : band)} style={{
+                          display: "flex", alignItems: "center", gap: 8, width: "100%",
+                          padding: "8px 10px", marginBottom: 4, borderRadius: 8,
+                          border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                          background: selected ? m.bg : "transparent",
+                          transition: "background 120ms ease",
+                        }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: m.tone, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{m.label}</span>
+                          <span style={{ flex: 1 }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: selected ? m.tone : C.textSec, fontVariantNumeric: "tabular-nums" }}>{warmthCounts[band]}</span>
                         </button>
                       );
                     })}
+                    <div style={{ borderTop: "1px solid " + C.borderLight, marginTop: 8, paddingTop: 9, fontSize: 10.5, color: C.textMuted }}>
+                      {referReady} would refer · {queued.length} awaiting retro
+                    </div>
                   </div>
 
-                  {/* Awaiting retro queue — matches Referrals "Who to ask next" pattern.
-                      Card with header section (borderBottom divider), rows with 3px
-                      primary left-bar on active + borderBottom between rows. Same
-                      soft-row hover wash, same retention-gradient avatars, same
-                      two-line content layout. */}
-                  {queued.length > 0 && (
-                    <div style={{ background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
-                      <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        <div>
-                          <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Awaiting retro</div>
-                          <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Most recent first</div>
-                        </div>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999, flexShrink: 0 }}>{queued.length}</span>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column" }}>
-                        {queued.map((e, i) => {
-                          const isActive = active?.id === e.id;
-                          const name = e.client_name || e.client || "Untitled";
-                          const contact = e.contact_name || e.contact || "";
-                          const meta = (e.type === "former" ? "Former" : "New lead") + (contact ? " · " + contact.split(" ")[0] : "");
-                          return (
-                            <button
-                              key={e.id}
-                              onClick={() => { setRolodexFlowOpen(e.id); setRolodexStep(null); setRolodexStepOwner(null); setRolodexStepText(null); }}
-                              className={"rt-soft-row" + (isActive ? " is-active" : "")}
-                              style={{
-                                display: "flex", alignItems: "center", gap: 10,
-                                padding: "12px 14px",
-                                border: "none",
-                                borderBottom: i === queued.length - 1 ? "none" : "1px solid " + C.borderLight,
-                                borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent",
-                                cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                                ...(isActive ? { background: C.primarySoft } : {}),
-                              }}
-                            >
-                              <Avatar id={e.id} name={name} size={30} />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-                                <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meta}</div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                  {/* CHECK-IN QUEUE — due/upcoming reminders, soonest first.
+                      Mirrors the Health queue pattern; rows open the contact. */}
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
+                      <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Check-in queue</div>
                     </div>
-                  )}
+                    {(() => {
+                      const withReminder = rolodex
+                        .filter(r => r.reminder || r.reminder_date)
+                        .map(r => {
+                          const ymd = String(r.reminder ?? r.reminder_date).slice(0, 10);
+                          const diff = Math.round((new Date(ymd).getTime() - new Date(_checkinTodayYmd).getTime()) / 86400000);
+                          return { r, diff };
+                        })
+                        .sort((a, b) => a.diff - b.diff)
+                        .slice(0, 5);
+                      if (withReminder.length === 0) {
+                        return <div style={{ padding: "14px", fontSize: 12, color: C.textMuted }}>No check-ins scheduled.</div>;
+                      }
+                      return withReminder.map(({ r, diff }, i) => {
+                        const name = r.contact_name || r.contact || r.client_name || r.client || "Untitled";
+                        const sub = diff < 0 ? `${Math.abs(diff)}d overdue` : diff === 0 ? "due today" : `in ${diff}d`;
+                        const subColor = diff < 0 ? C.retCrit : diff === 0 ? C.retWarn : C.textMuted;
+                        return (
+                          <button key={r.id} onClick={() => setSelectedRolodex(r)} className="rt-soft-row" style={{
+                            display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, width: "100%",
+                            padding: "10px 14px", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                            background: "transparent",
+                            borderBottom: i === withReminder.length - 1 ? "none" : "1px solid " + C.borderLight,
+                          }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{name}</span>
+                            <span style={{ fontSize: 10.5, fontWeight: 600, color: subColor }}>{sub}</span>
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
 
                 {/* MAIN COLUMN */}
@@ -366,8 +412,8 @@ export default function RetrosPage({ app }) {
                       it shares the content margin and never overlaps the
                       left rail. Observation-green surface (primarySoft),
                       matching the Health observation cards. */}
-                  {dueReminders.length > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, borderRadius: 12, padding: "13px 16px" }}>
+                  {dueReminders.length > 0 && !checkinDismissed && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 12, padding: "13px 16px" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {dueReminders.length === 1 ? (
                           <>
@@ -384,6 +430,10 @@ export default function RetrosPage({ app }) {
                         )}
                       </div>
                       <button
+                        onClick={() => { setCheckinDismissed(true); try { window.localStorage.setItem(_checkinDismissKey, _checkinTodayYmd); } catch (_) { /* unavailable */ } }}
+                        style={{ background: "transparent", border: "none", color: C.textSec, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic", fontSize: 13.5, cursor: "pointer", padding: "8px 6px", flexShrink: 0 }}
+                      >Dismiss</button>
+                      <button
                         onClick={() => setSelectedRolodex(dueReminders[0])}
                         style={{ background: C.card, color: C.primary, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
                       >{dueReminders.length === 1 ? "View" : "Review"}</button>
@@ -391,12 +441,28 @@ export default function RetrosPage({ app }) {
                   )}
 
                   {/* ACTIVE RETRO (top card) or empty state */}
-                  {active ? (
+                  {/* RETRO — compact prompt by default; the five-step card
+                      expands on demand instead of dominating the page. */}
+                  {active && !retroOpen && (
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                      <Avatar id={active.id} name={active.client_name || active.client || "Untitled"} size={32} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>
+                          {queued.length === 1
+                            ? `${active.client_name || active.client || "Untitled"} retro waiting`
+                            : `${queued.length} retros waiting`}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>Capture the lesson while it's fresh · {activeSteps.length} steps</div>
+                      </div>
+                      <button onClick={() => setRetroOpen(true)} style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Start retro</button>
+                    </div>
+                  )}
+                  {active && retroOpen && (
                     <div style={{ position: "relative", paddingBottom: 8 }}>
                       {/* Peek of next cards behind */}
                       {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, borderRadius: 14, opacity: 0.5, zIndex: 0 }} />}
                       {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, borderRadius: 14, opacity: 0.8, zIndex: 0 }} />}
-                      <div style={{ position: "relative", zIndex: 1, background: C.card, borderRadius: 14, boxShadow: "0 4px 12px rgba(10,10,10,0.06)", overflow: "hidden" }}>
+                      <div style={{ position: "relative", zIndex: 1, background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "0 4px 12px rgba(10,10,10,0.06)", overflow: "hidden" }}>
                         {/* Header */}
                         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 20px 14px" }}>
                           <Avatar id={active.id} name={active.client_name || active.client} size={44} />
@@ -404,7 +470,7 @@ export default function RetrosPage({ app }) {
                             <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: -0.2 }}>{active.client_name || active.client}</div>
                             <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>{active.contact_name || active.contact || "No contact"}{active.type === "former" ? " · Former client" : " · New lead"}</div>
                           </div>
-                          <span style={{ fontSize: 10.5, fontWeight: 700, color: active.type === "former" ? C.retGood : C.btn, background: active.type === "former" ? "#E8F3EC" : C.primarySoft, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.3, textTransform: "uppercase" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: active.type === "former" ? C.retGood : C.primary, background: active.type === "former" ? "#E8F3EC" : C.primarySoft, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.3, textTransform: "uppercase" }}>
                             {active.type === "former" ? "Former client" : "New lead"}
                           </span>
                         </div>
@@ -479,125 +545,101 @@ export default function RetrosPage({ app }) {
                           ) : (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px 15px", borderTop: "1px solid " + C.borderLight }}>
                             <div style={{ display: "flex", gap: 4 }}>
+                              <button onClick={() => setRetroOpen(false)} style={{ fontSize: 12.5, color: C.textMuted, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Minimize</button>
                               <button onClick={advanceAfterRetro} style={{ fontSize: 12.5, color: C.textMuted, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Skip for now</button>
                               <button onClick={() => setRetroDeleteConfirm(true)} style={{ fontSize: 12.5, color: C.danger, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Delete</button>
                             </div>
                             <div style={{ display: "flex", gap: 8 }}>
                               <button onClick={onPrev} disabled={effectiveStep === 0} style={{ padding: "9px 16px", background: C.card, color: C.textSec, borderRadius: 9, fontSize: 13, fontWeight: 600, border: "none", boxShadow: "inset 0 0 0 1px " + C.border, cursor: effectiveStep === 0 ? "default" : "pointer", opacity: effectiveStep === 0 ? 0.5 : 1, fontFamily: "inherit" }}>Back</button>
-                              <button onClick={onNext} style={{ padding: "9px 20px", background: C.btn, color: "#fff", borderRadius: 9, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>Next</button>
+                              <button onClick={onNext} style={{ padding: "9px 20px", background: C.primaryDeep, color: "#fff", borderRadius: 9, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>Next</button>
                             </div>
                           </div>
                           )
                         )}
                       </div>
                     </div>
-                  ) : (
-                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, borderRadius: 14, boxShadow: "var(--rt-sh-card)" }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 22, background: "#E8F3EC", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", border: "2px solid " + C.retGood }}>
-                        <Icon name="check" size={20} color={C.retGood} />
-                      </div>
-                      <div style={{ fontSize: 16, fontWeight: 600 }}>Deck cleared.</div>
-                      <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 4 }}>All contacts are filed. Tap "New Contact" to add more.</div>
-                    </div>
                   )}
 
-                  {/* FILED LIST */}
+                  {/* FILED — dense card grid. Each card: who, type,
+                      warmth + recency, reminder state, heat. Click opens
+                      the contact detail. */}
                   <div>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 4px 10px" }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: C.textMuted }}>Filed</span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999 }}>{filteredFiled.length}</span>
-                        {filedFilter !== "all" && (
-                          <button onClick={() => setFiledFilter("all")} style={{ fontSize: 10.5, color: C.btn, fontWeight: 500, padding: "2px 8px", background: C.primarySoft, borderRadius: 4, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                            {filedFilter} · clear
-                          </button>
-                        )}
-                      </div>
-                      <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 200, padding: "9px 13px", borderRadius: 9, fontSize: 13, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, outline: "none", color: C.text }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "0 4px 10px", flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic", fontSize: 15, color: C.text }}>filed</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999 }}>{filteredFiled.length}</span>
+                      <span style={{ flex: 1 }} />
+                      {[
+                        { v: "all",    label: "All" },
+                        { v: "former", label: "Former" },
+                        { v: "oneoff", label: "Leads" },
+                        { v: "refer",  label: "Would refer" },
+                      ].map(f => {
+                        const isSel = filedFilter === f.v || (f.v === "all" && (!filedFilter || filedFilter === "all"));
+                        return (
+                          <button key={f.v} onClick={() => setFiledFilter(f.v)} style={{
+                            border: "none", cursor: "pointer", fontFamily: "inherit",
+                            padding: "3px 10px", borderRadius: 999, fontSize: 11,
+                            ...(isSel
+                              ? { background: C.primarySoft, color: C.primary, fontWeight: 700 }
+                              : { background: "transparent", color: C.textSec, fontWeight: 500 }),
+                          }}>{f.label}</button>
+                        );
+                      })}
+                      {["warm", "cooling", "cold"].includes(filedFilter) && (
+                        <button onClick={() => setFiledFilter("all")} style={{ fontSize: 10.5, color: C.primary, fontWeight: 600, padding: "3px 10px", background: C.primarySoft, borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                          {filedFilter} ✕
+                        </button>
+                      )}
+                      <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 170, padding: "8px 12px", borderRadius: 9, fontSize: 12.5, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, outline: "none", color: C.text }} />
                     </div>
 
                     {filteredFiled.length === 0 ? (
                       <div style={{ padding: "30px 20px", background: C.card, border: "1px dashed " + C.border, borderRadius: 12, textAlign: "center", color: C.textMuted, fontSize: 13 }}>
-                        {filedFilter === "all" ? "No filed contacts yet." : `Nothing in ${filedFilter} priority.`}
+                        {filedFilter === "all" ? "No filed contacts yet." : "Nothing matches this filter."}
                       </div>
                     ) : (
-                      filteredFiled.map(e => {
-                        const tags = deriveTags(e);
-                        const heat = calcHeat(e);
-                        const prioTone = e.priority === "high" ? C.retGood : e.priority === "medium" ? C.retWarn : C.textMuted;
-                        const name = e.client_name || e.client || "Untitled";
-                        const contact = e.contact_name || e.contact || "";
-                        // Summary = History > What you did/happened (step 1 text answer)
-                        const summary = (e.retro_answers && (e.retro_answers.happened || e.retro_answers.did || e.retro_answers.what)) || "";
-                        return (
-                          <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px", background: C.card, borderRadius: 12, boxShadow: "var(--rt-sh-card)", marginBottom: 8, cursor: "pointer" }}>
-                            <div style={{ width: 3, alignSelf: "stretch", background: prioTone, borderRadius: 2, flexShrink: 0 }} />
-                            <Avatar id={e.id} name={name} size={40} />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: 14.5, fontWeight: 600, color: C.text, letterSpacing: -0.2 }}>{name}</span>
-                                <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: e.type === "former" ? C.retGood : C.btn, background: e.type === "former" ? "#E8F3EC" : C.primarySoft }}>
-                                  {e.type === "former" ? "Former" : "New lead"}
-                                </span>
-                                {e.priority === "high" && (
-                                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "linear-gradient(90deg, #D17A1B, #C04323)" }}>Heat {heat}</span>
-                                )}
-                                {(() => {
-                                  // Check-in reminder pill. Shows due/overdue/upcoming
-                                  // state inline. Without this, the user has no signal
-                                  // on the row that a reminder is set.
-                                  // Note: local state maps DB's reminder_date → reminder.
-                                  // Read both to be safe.
-                                  const reminderRaw = e.reminder ?? e.reminder_date;
-                                  if (!reminderRaw) return null;
-                                  const todayYmd = (() => {
-                                    const n = new Date();
-                                    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-                                  })();
-                                  const reminderYmd = String(reminderRaw).slice(0, 10);
-                                  const todayMs = new Date(todayYmd).getTime();
-                                  const reminderMs = new Date(reminderYmd).getTime();
-                                  const diffDays = Math.round((reminderMs - todayMs) / 86400000);
-                                  if (diffDays < 0) {
-                                    const days = Math.abs(diffDays);
-                                    return (
-                                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "#C04323" }}>
-                                        Overdue {days}d
-                                      </span>
-                                    );
-                                  }
-                                  if (diffDays === 0) {
-                                    return (
-                                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: "#fff", background: "#C04323" }}>
-                                        Check in today
-                                      </span>
-                                    );
-                                  }
-                                  if (diffDays <= 30) {
-                                    return (
-                                      <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 999, letterSpacing: 0.2, color: C.primary, background: C.primarySoft, border: "1px solid " + C.primaryGhost }}>
-                                        In {diffDays}d
-                                      </span>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                              <div style={{ fontSize: 11.5, color: C.textMuted, marginBottom: 8 }}>
-                                {contact && <span>{contact}</span>}
-                              </div>
-                              {summary && <div style={{ fontSize: 12.5, color: C.textSec, lineHeight: 1.55, marginBottom: 8 }}>{summary}</div>}
-                              {tags.length > 0 && (
-                                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                                  {tags.map(t => (
-                                    <span key={t} style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 8px", borderRadius: 4, letterSpacing: 0.1, color: C.retGood, background: "#E8F3EC", border: "1px solid #C9E4D1" }}>{t}</span>
-                                  ))}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 8 }}>
+                        {filteredFiled.map(e => {
+                          const tags = deriveTags(e);
+                          const heat = calcHeat(e);
+                          const prioTone = e.priority === "high" ? C.retGood : e.priority === "medium" ? C.retWarn : C.textMuted;
+                          const name = e.client_name || e.client || "Untitled";
+                          const contact = e.contact_name || e.contact || "";
+                          const band = warmthBand(e);
+                          const wm = WARMTH_META[band];
+                          const refer = tags.includes("Would refer");
+                          const reminderRaw = e.reminder ?? e.reminder_date;
+                          let reminderChip = null;
+                          if (reminderRaw) {
+                            const reminderYmd = String(reminderRaw).slice(0, 10);
+                            const diffDays = Math.round((new Date(reminderYmd).getTime() - new Date(_checkinTodayYmd).getTime()) / 86400000);
+                            if (diffDays < 0) reminderChip = { label: `Overdue ${Math.abs(diffDays)}d`, color: "#fff", bg: "#C04323" };
+                            else if (diffDays === 0) reminderChip = { label: "Check in today", color: "#fff", bg: "#C04323" };
+                            else if (diffDays <= 30) reminderChip = { label: `Next: in ${diffDays}d`, color: C.primary, bg: C.primarySoft };
+                          }
+                          return (
+                            <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ position: "relative", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "11px 12px 11px 16px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 9 }}>
+                              <div style={{ position: "absolute", left: 6, top: 12, bottom: 12, width: 3, background: prioTone, borderRadius: 2 }} />
+                              <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                                <Avatar id={e.id} name={name} size={30} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: 600, color: C.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {name}{refer && <span style={{ color: C.retGood, marginLeft: 5, fontSize: 11 }}>★</span>}
+                                  </div>
+                                  <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {contact ? contact + " · " : ""}{e.type === "former" ? "Former" : "New lead"}
+                                  </div>
                                 </div>
-                              )}
+                              </div>
+                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: wm.tone, background: wm.bg }}>{wm.label.toLowerCase()} · {agoLabel(e)}</span>
+                                {reminderChip && <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: reminderChip.color, background: reminderChip.bg }}>{reminderChip.label}</span>}
+                                {e.priority === "high" && <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: "linear-gradient(90deg, #D17A1B, #C04323)" }}>Heat {heat}</span>}
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -644,13 +686,14 @@ export default function RetrosPage({ app }) {
                               const newEntry = { ...created, client: created.client_name, contact: created.contact_name, type: entryType, retro_answers: {}, tags: [] };
                               setRolodex(prev => [newEntry, ...prev]);
                               setRolodexFlowOpen(created.id);
+                              setRetroOpen(true);
                               setRolodexStep(0);
                               setRolodexStepOwner(created.id);
                               setRolodexStepText(null);
                             }
                             setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" });
                             setShowAddRolodex(false);
-                          }} onMouseEnter={e => { if (ready) e.currentTarget.style.background = C.btnHover; }} onMouseLeave={e => { if (ready) e.currentTarget.style.background = C.btn; }} style={{ flex: 1, padding: "12px", background: ready ? C.btn : C.surfaceWarm, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit", transition: "background 120ms ease" }}>{newRolodexEntry.type === "oneoff" ? "Add lead" : "Add & start retro"}</button>
+                          }} onMouseEnter={e => { if (ready) e.currentTarget.style.background = C.primary; }} onMouseLeave={e => { if (ready) e.currentTarget.style.background = C.primaryDeep; }} style={{ flex: 1, padding: "12px", background: ready ? C.primaryDeep : C.surfaceWarm, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit", transition: "background 120ms ease" }}>{newRolodexEntry.type === "oneoff" ? "Add lead" : "Add & start retro"}</button>
                         );
                       })()}
                       <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); }} style={{ padding: "12px 18px", background: C.surface, color: C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
