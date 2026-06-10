@@ -276,34 +276,6 @@ export default function RetrosPage({ app }) {
                 </button>
               </div>
 
-              {/* CHECK-IN REMINDER BANNER (Option B). Fires when a rolodex
-                  reminder has come due. Single → name + company. Multiple →
-                  count + names. "View" opens the contact. Entirely contained
-                  in Rolodex — no task, no Rai, no client system, by design. */}
-              {dueReminders.length > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, borderRadius: 12, padding: "13px 16px", boxShadow: "0 1px 3px rgba(20,30,22,0.06), 0 6px 16px rgba(20,30,22,0.07)", marginBottom: 20 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {dueReminders.length === 1 ? (
-                      <>
-                        <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {dueReminders[0].contact || dueReminders[0].client}</div>
-                        <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 1 }}>{dueReminders[0].client ? dueReminders[0].client + " · " : ""}reminder due</div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
-                        <div style={{ fontSize: 12.5, color: C.textMuted, marginTop: 1 }}>
-                          {dueReminders.slice(0, 2).map(r => r.contact || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setSelectedRolodex(dueReminders[0])}
-                    style={{ background: C.primaryGhost, color: C.primary, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                  >{dueReminders.length === 1 ? "View" : "Review"}</button>
-                </div>
-              )}
-
               {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
               <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
 
@@ -389,6 +361,34 @@ export default function RetrosPage({ app }) {
 
                 {/* MAIN COLUMN */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+
+                  {/* CHECK-IN REMINDER BANNER — lives in the main column so
+                      it shares the content margin and never overlaps the
+                      left rail. Observation-green surface (primarySoft),
+                      matching the Health observation cards. */}
+                  {dueReminders.length > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, borderRadius: 12, padding: "13px 16px" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {dueReminders.length === 1 ? (
+                          <>
+                            <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {dueReminders[0].contact || dueReminders[0].client}</div>
+                            <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>{dueReminders[0].client ? dueReminders[0].client + " · " : ""}reminder due</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
+                            <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>
+                              {dueReminders.slice(0, 2).map(r => r.contact || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setSelectedRolodex(dueReminders[0])}
+                        style={{ background: C.card, color: C.primary, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                      >{dueReminders.length === 1 ? "View" : "Review"}</button>
+                    </div>
+                  )}
 
                   {/* ACTIVE RETRO (top card) or empty state */}
                   {active ? (
