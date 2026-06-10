@@ -5,7 +5,6 @@ import { Icon } from "../components/Icon";
 import { MobileCalendarStrip } from "../components/MobileCalendarStrip";
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
 import { TimeDial } from "../components/TimeDial";
-import { clients, raiPicks, tasks } from "../lib/db.js";
 import { supabase } from "../lib/supabase.js";
 import { parseCalendarEntry, parseComposer } from "../parser";
 import { Fragment } from "react";
@@ -22,6 +21,7 @@ export default function TodayPage({ app }) {
     calcProfileScoreRaw,
     calendarMonth,
     cancelTaskEdit,
+    clients,
     collapsedDoneIds,
     commitTaskEdit,
     completedLogOpen,
@@ -70,6 +70,7 @@ export default function TodayPage({ app }) {
     personalEvents,
     pulseChip,
     purgeTaskHistory,
+    raiPicks,
     raiState,
     rankMode,
     rowDuePickerId,
@@ -133,6 +134,7 @@ export default function TodayPage({ app }) {
     swipeOffset,
     swipeStartX,
     swipeStartY,
+    tasks,
     todayCompletedOpen,
     todayComposerClient,
     todayComposerDue,

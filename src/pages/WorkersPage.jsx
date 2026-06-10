@@ -2,12 +2,12 @@
 // verbatim; only the surrounding component shell + imports are generated.
 import { workers as workersDb } from "../lib/db";
 import { Icon } from "../components/Icon";
-import { clients, tasks } from "../lib/db.js";
 import { C } from "../theme";
 import { getWorkerInitials, ymdInTz } from "../utils";
 
 export default function WorkersPage({ app }) {
   const {
+    clients,
     occurrenceFlags,
     setAddWorkerOpen,
     setNewWorkerEmail,
@@ -15,6 +15,7 @@ export default function WorkersPage({ app }) {
     setNewWorkerRole,
     setWorkersList,
     taskOccurrences,
+    tasks,
     userTimezone,
     workerCompletions,
     workersList,

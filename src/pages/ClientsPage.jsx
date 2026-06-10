@@ -2,7 +2,6 @@
 // verbatim; only the surrounding component shell + imports are generated.
 import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
-import { clients } from "../lib/db.js";
 import { C } from "../theme";
 import { retColor, retGradient } from "../utils";
 
@@ -12,6 +11,7 @@ export default function ClientsPage({ app }) {
     allTouchpoints,
     calcRetentionScore,
     clientSearch,
+    clients,
     clientsDriftFilter,
     clientsScoreFilter,
     clientsSort,

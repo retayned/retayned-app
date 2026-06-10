@@ -3,7 +3,6 @@
 import { healthChecks as hcDb, observations as observationsDb } from "../lib/db";
 import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
-import { clients } from "../lib/db.js";
 import { lookupObservationIllustration } from "../observations";
 import { C } from "../theme";
 import { retColor, retGradient } from "../utils";
@@ -13,6 +12,7 @@ export default function HealthPage({ app }) {
     allCompletions,
     allTouchpoints,
     clientDrift,
+    clients,
     dataLoaded,
     goTo,
     hcDone,

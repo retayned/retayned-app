@@ -3,7 +3,6 @@
 import { Icon } from "../components/Icon";
 import { ReferralNetworkD3 } from "../components/ReferralNetworkD3";
 import { EmptyState } from "../components/Skeletons";
-import { clients, rolodex } from "../lib/db.js";
 import { C } from "../theme";
 import { retGradient } from "../utils";
 
@@ -14,6 +13,7 @@ export default function ReferralsPage({ app }) {
     askActiveId,
     askDraft,
     askTone,
+    clients,
     dataLoaded,
     isMobile,
     networkAsOf,
@@ -21,6 +21,7 @@ export default function ReferralsPage({ app }) {
     refFrom,
     refName,
     refs,
+    rolodex,
     setAskActed,
     setAskActiveId,
     setAskDraft,

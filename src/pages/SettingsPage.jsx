@@ -2,12 +2,12 @@
 // verbatim; only the surrounding component shell + imports are generated.
 import { Icon } from "../components/Icon";
 import { sweepData } from "../demoData";
-import { clients, rolodex } from "../lib/db.js";
 import { supabase } from "../lib/supabase.js";
 import { C } from "../theme";
 
 export default function SettingsPage({ app }) {
   const {
+    clients,
     connectGoogleCalendar,
     disconnectGoogleCalendar,
     dismissCalendarEventLink,
@@ -18,6 +18,7 @@ export default function SettingsPage({ app }) {
     linkCalendarEvent,
     personalEvents,
     raiState,
+    rolodex,
     setAiTasks,
     syncGoogleCalendar,
     tier,

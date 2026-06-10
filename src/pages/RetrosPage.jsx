@@ -3,16 +3,17 @@
 import { rolodex as rolodexDb } from "../lib/db";
 import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
-import { clients, rolodex } from "../lib/db.js";
 import { createPortal } from "react-dom";
 import { C } from "../theme";
 import { retGradient } from "../utils";
 
 export default function RetrosPage({ app }) {
   const {
+    clients,
     dataLoaded,
     newRolodexEntry,
     retroDeleteConfirm,
+    rolodex,
     rolodexFiledFilter,
     rolodexFlowOpen,
     rolodexSearch,
