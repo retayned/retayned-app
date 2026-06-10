@@ -11,7 +11,7 @@ import { parseCalendarEntry, parseComposer } from "../parser";
 import { Fragment, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
-import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, ymdInTz } from "../utils";
+import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, splitLongTask, ymdInTz } from "../utils";
 
 export default function TodayPage({ app }) {
   const {
@@ -946,9 +946,13 @@ export default function TodayPage({ app }) {
             // the substring is trimmed; we DON'T append an ellipsis to
             // the stored text — display layers handle truncation visually.
             const TITLE_CAP = 75;
-            const cappedText = text.length > TITLE_CAP ? text.slice(0, TITLE_CAP).trimEnd() : text;
+            // Long-task compiler — short title + full text as a note,
+            // instead of chopping at TITLE_CAP and losing the tail.
+            const _split = splitLongTask(text, TITLE_CAP);
+            const cappedText = _split.text;
             const { data: created } = await tasksDb.create(user.id, {
               text: cappedText,
+              notes: _split.notes,
               client_name: clientName,
               client_id: clientObj?.id || null,
               is_recurring: newTaskRecurring,
@@ -959,6 +963,7 @@ export default function TodayPage({ app }) {
             const task = {
               id: created?.id || "u" + Date.now(),
               text: cappedText,
+              notes: _split.notes,
               client: clientName || null,
               done: false, ai: false,
               recurring: newTaskRecurring,
@@ -1456,6 +1461,27 @@ export default function TodayPage({ app }) {
                       }}
                     />
                     </span>
+                    {/* Brain Dump — right edge of the composer, where the
+                        feature's input lives. Brain glyph in the Rai purple. */}
+                    <button
+                      onClick={() => setBrainDumpOpen(true)}
+                      title="Brain Dump — paste your call notes, Rai sorts them into tasks"
+                      aria-label="Brain Dump"
+                      style={{
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        width: 32, height: 32, flexShrink: 0,
+                        border: "none", background: "transparent",
+                        borderRadius: 8, cursor: "pointer", padding: 0,
+                        transition: "background 120ms ease",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(124,92,243,0.10)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.btn} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4.5 18C3.12 18 2 16.88 2 15.5c0-.76.34-1.44.87-1.9A2.5 2.5 0 0 1 2 11.5c0-1.38 1.12-2.5 2.5-2.5.17 0 .34.02.5.05A2.5 2.5 0 0 1 7 6.5c0-.15.01-.3.04-.45A2.5 2.5 0 0 1 9.5 2Z" />
+                        <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 19.5 18c1.38 0 2.5-1.12 2.5-2.5 0-.76-.34-1.44-.87-1.9a2.5 2.5 0 0 0 .87-2.1c0-1.38-1.12-2.5-2.5-2.5-.17 0-.34.02-.5.05A2.5 2.5 0 0 0 17 6.5c0-.15-.01-.3-.04-.45A2.5 2.5 0 0 0 14.5 2Z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
 
@@ -1968,7 +1994,7 @@ export default function TodayPage({ app }) {
                                                 ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                                                 : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
-                                          >Date of month</button>
+                                          >By month</button>
                                           <button
                                             className={"rt-rec-chip" + (newTaskRecurrencePattern.kind === "monthly_weekday" ? " is-active" : "")}
                                             onClick={() => {
@@ -1983,7 +2009,7 @@ export default function TodayPage({ app }) {
                                                 ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-card-lift)", transform: "translateY(-0.5px)" }
                                                 : { background: C.card, color: C.textSec, boxShadow: "var(--rt-sh-xs)" }),
                                             }}
-                                          >Day of week</button>
+                                          >By week</button>
                                         </div>
                                         {newTaskRecurrencePattern.kind === "monthly_date" && (
                                           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.textSec }}>
@@ -2935,12 +2961,11 @@ export default function TodayPage({ app }) {
                                     style={{
                                       display: "inline-flex", alignItems: "center",
                                       border: "none", cursor: "pointer", flexShrink: 0,
-                                      padding: "1px 7px", borderRadius: 999,
-                                      fontSize: 10, fontWeight: 700, fontFamily: "inherit",
+                                      padding: "1px 8px", borderRadius: 999,
+                                      fontSize: 10, fontWeight: 600, fontFamily: "inherit",
                                       letterSpacing: "0.03em",
-                                      background: openNoteId === t.id ? "rgba(51,84,62,0.10)" : C.card,
-                                      color: openNoteId === t.id ? "#33543E" : C.textMuted,
-                                      boxShadow: "var(--rt-sh-xs)",
+                                      background: openNoteId === t.id ? C.primarySoft : C.surface,
+                                      color: openNoteId === t.id ? C.primary : C.textSec,
                                     }}
                                   >Note</button>
                                 )}
@@ -3289,35 +3314,6 @@ export default function TodayPage({ app }) {
                                   {focusMode ? "Focusing" : "Focus"}
                                 </button>
                               )}
-                              {/* Brain Dump — third Rai verb in the controls
-                                  strip. Dump call notes; Rai fans them into
-                                  tasks/touchpoints/events for review. */}
-                              <button
-                                onClick={() => setBrainDumpOpen(true)}
-                                title="Brain Dump — paste your call notes, Rai sorts them into tasks"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 5,
-                                  padding: "3px 8px",
-                                  border: "none",
-                                  background: "transparent",
-                                  fontFamily: "inherit",
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  color: C.textSec,
-                                  cursor: "pointer",
-                                  borderRadius: 6,
-                                  letterSpacing: "0.02em",
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.background = "rgba(20,30,22,0.04)"}
-                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                              >
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block" }} aria-hidden="true">
-                                  <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
-                                </svg>
-                                Brain Dump
-                              </button>
                               {/* Debug pill preserved so ⌘⇧D still works. */}
                               {debugScores && (
                                 <span style={{
