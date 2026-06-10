@@ -12,7 +12,7 @@ import { Fragment, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
 import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, ymdInTz } from "../utils";
- 
+
 export default function TodayPage({ app }) {
   const {
     allTouchpoints,
@@ -2199,7 +2199,17 @@ export default function TodayPage({ app }) {
                       onClick={() => setBrainDumpOpen(true)}
                       className="rt-composer-pill"
                       title="Brain Dump — paste your call notes, Rai sorts them into tasks"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                        padding: "0 10px",
+                        height: 28,
+                        border: "none",
+                        borderRadius: 8,
+                        fontSize: 12,
+                        color: C.textSec,
+                        cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                        fontWeight: 500,
+                      }}
                     >
                       <Icon name="sparkles" size={12} simple color={C.textSec} />
                       <span className="rt-row-text">Brain Dump</span>
