@@ -25,10 +25,12 @@ import { C } from "../theme";
 
 const TITLE_CAP = 75;
 
+// All three types share the site's soft-green chip treatment — type is a
+// classification, not a status; color coding added noise without meaning.
 const TYPE_META = {
-  task:       { label: "Task",       color: "#7c5cf3" },
-  touchpoint: { label: "Touchpoint", color: "#33543E" },
-  event:      { label: "Event",      color: "#B45309" },
+  task:       { label: "Task" },
+  touchpoint: { label: "Touchpoint" },
+  event:      { label: "Event" },
 };
 
 function localYmdToday() {
@@ -302,7 +304,10 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
       <div style={card} onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 18px 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 18px 12px" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }} aria-hidden="true">
+            <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+          </svg>
           <span style={{
             fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic",
             fontSize: 19, fontWeight: 500, color: C.text, letterSpacing: "-0.01em",
@@ -326,15 +331,33 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
         {step === "input" ? (
           <>
             {/* ── Client selector ── */}
-            <div style={{ padding: "0 18px 10px", position: "relative" }}>
-              <button onClick={() => setClientMenuOpen(!clientMenuOpen)} style={chipBtn}>
+            <div style={{ padding: "0 18px 10px", position: "relative", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => setClientMenuOpen(!clientMenuOpen)} style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: C.card, border: `0.5px solid ${C.borderLight}`,
+                borderRadius: 8, padding: "4px 10px 4px 5px",
+                cursor: "pointer", fontFamily: "inherit",
+              }}>
                 <span style={{
-                  width: 7, height: 7, borderRadius: 999,
-                  background: chosenClient ? "#33543E" : C.borderLight,
-                }} />
-                {chosenClient ? chosenClient.name : "No client / personal"}
-                <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
+                  width: 20, height: 20, borderRadius: 999, flexShrink: 0,
+                  background: chosenClient ? "#33543E" : C.surface,
+                  color: "#fff", fontSize: 9, fontWeight: 700,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {chosenClient
+                    ? chosenClient.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+                    : ""}
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: chosenClient ? C.text : C.textSec }}>
+                  {chosenClient ? chosenClient.name : "No client / personal"}
+                </span>
+                <span style={{ fontSize: 9, color: C.textMuted }}>▾</span>
               </button>
+              {chosenClient && !manualPick && (
+                <span style={{ fontSize: 10.5, color: C.textMuted, fontStyle: "italic" }}>
+                  detected from your notes — tap to change
+                </span>
+              )}
               {clientMenuOpen && (
                 <>
                   <div onClick={() => setClientMenuOpen(false)}
@@ -397,10 +420,10 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                 placeholder="Dump everything from the call. Rai will sort it into tasks, touchpoints, and events."
                 style={{
                   width: "100%", minHeight: 200, maxHeight: "46vh", resize: "vertical",
-                  border: `1px solid ${C.borderLight}`, borderRadius: 12,
-                  background: C.card, color: C.text,
-                  fontSize: 14, lineHeight: 1.55, fontFamily: "inherit",
-                  padding: "12px 14px", outline: "none", boxSizing: "border-box",
+                  border: "none", borderRadius: 12,
+                  background: C.surface, color: C.text,
+                  fontSize: 14, lineHeight: 1.6, fontFamily: "inherit",
+                  padding: "13px 15px", outline: "none", boxSizing: "border-box",
                 }}
               />
             </div>
@@ -414,7 +437,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             {/* ── Action bar ── */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px 16px" }}>
               <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>
-                {wordCount > 0 ? `${wordCount} word${wordCount === 1 ? "" : "s"}` : ""}
+                {wordCount > 0 ? `${wordCount} word${wordCount === 1 ? "" : "s"} · draft saved` : ""}
               </span>
               <span style={{ flex: 1 }} />
               <button
@@ -422,10 +445,10 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                 disabled={dump.trim().length < 10 || loading}
                 className="r-btn"
                 style={{
-                  border: "none", borderRadius: 10, padding: "9px 18px",
-                  fontFamily: "inherit", fontSize: 13.5, fontWeight: 700,
+                  border: "none", borderRadius: 999, padding: "9px 18px",
+                  fontFamily: "inherit", fontSize: 13, fontWeight: 600,
                   cursor: dump.trim().length < 10 || loading ? "default" : "pointer",
-                  background: dump.trim().length < 10 || loading ? C.surface : "#33543E",
+                  background: dump.trim().length < 10 || loading ? C.surface : "#1C3224",
                   color: dump.trim().length < 10 || loading ? C.textMuted : "#fff",
                 }}
               >
@@ -453,12 +476,19 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                     opacity: it.keep ? 1 : 0.45,
                     boxShadow: "0 1px 3px rgba(20,30,22,0.07)",
                   }}>
-                    <input
-                      type="checkbox"
-                      checked={it.keep}
-                      onChange={() => patchItem(it.key, { keep: !it.keep })}
-                      style={{ marginTop: 3, accentColor: "#33543E", cursor: "pointer" }}
-                    />
+                    <button
+                      onClick={() => patchItem(it.key, { keep: !it.keep })}
+                      aria-label={it.keep ? "Discard item" : "Keep item"}
+                      style={{
+                        width: 18, height: 18, borderRadius: 999, flexShrink: 0,
+                        marginTop: 2, padding: 0, cursor: "pointer",
+                        border: it.keep ? "none" : `1.5px solid ${C.ink300 || C.borderLight}`,
+                        background: it.keep ? "#33543E" : "transparent",
+                        color: "#fff", fontSize: 10, lineHeight: 1,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: "inherit",
+                      }}
+                    >{it.keep ? "✓" : ""}</button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {/* Title — double-click to edit, same muscle memory as task rows */}
                       {isEditTitle ? (
@@ -497,8 +527,11 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                         <button
                           onClick={() => it.keep && setTypeMenuKey(typeMenuKey === it.key ? null : it.key)}
                           style={{
-                            ...chipBtn, padding: "2px 8px", fontSize: 10.5,
-                            color: meta.color, borderColor: `${meta.color}33`,
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            border: "none", cursor: "pointer", fontFamily: "inherit",
+                            padding: "2px 9px", borderRadius: 999,
+                            fontSize: 10.5, fontWeight: 600,
+                            background: C.primarySoft, color: C.primary,
                           }}
                         >
                           {meta.label} <span style={{ fontSize: 8, opacity: 0.7 }}>▾</span>
@@ -522,7 +555,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                                     fontFamily: "inherit", fontSize: 12, cursor: "pointer",
                                     fontWeight: it.type === val ? 700 : 500,
                                     background: it.type === val ? C.surface : "transparent",
-                                    color: m.color,
+                                    color: C.text,
                                   }}
                                 >
                                   {m.label}
@@ -534,8 +567,11 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                         <button
                           onClick={() => it.keep && setDueMenuKey(dueMenuKey === it.key ? null : it.key)}
                           style={{
-                            ...chipBtn, padding: "2px 8px", fontSize: 10.5,
-                            color: C.textSec,
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            border: "none", cursor: "pointer", fontFamily: "inherit",
+                            padding: "2px 9px", borderRadius: 999,
+                            fontSize: 10.5, fontWeight: 600,
+                            background: C.surface, color: C.textSec,
                           }}
                         >
                           {dueLabel(it.suggested_due)} <span style={{ fontSize: 8, opacity: 0.7 }}>▾</span>
@@ -590,8 +626,8 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                           <div
                             onDoubleClick={() => it.keep && setEditingField({ key: it.key, field: "notes" })}
                             style={{
-                              marginTop: 7, padding: "6px 9px",
-                              borderLeft: `2px solid ${C.borderLight}`,
+                              marginTop: 8, padding: "7px 10px",
+                              background: C.surface, borderRadius: 8,
                               fontSize: 12, lineHeight: 1.5, color: C.textSec,
                               cursor: it.keep ? "text" : "default",
                               whiteSpace: "pre-wrap",
@@ -632,10 +668,10 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                 disabled={keptCount === 0 || committing}
                 className="r-btn"
                 style={{
-                  border: "none", borderRadius: 10, padding: "9px 18px",
-                  fontFamily: "inherit", fontSize: 13.5, fontWeight: 700,
+                  border: "none", borderRadius: 999, padding: "9px 18px",
+                  fontFamily: "inherit", fontSize: 13, fontWeight: 600,
                   cursor: keptCount === 0 || committing ? "default" : "pointer",
-                  background: keptCount === 0 || committing ? C.surface : "#33543E",
+                  background: keptCount === 0 || committing ? C.surface : "#1C3224",
                   color: keptCount === 0 || committing ? C.textMuted : "#fff",
                 }}
               >
