@@ -2193,27 +2193,6 @@ export default function TodayPage({ app }) {
                         </>
                       )}
                     </div>
-                    {/* Brain Dump — dump a call's worth of notes; Rai fans
-                        them into tasks/touchpoints/events for review. */}
-                    <button
-                      onClick={() => setBrainDumpOpen(true)}
-                      className="rt-composer-pill"
-                      title="Brain Dump — paste your call notes, Rai sorts them into tasks"
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "0 10px",
-                        height: 28,
-                        border: "none",
-                        borderRadius: 8,
-                        fontSize: 12,
-                        color: C.textSec,
-                        cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-                        fontWeight: 500,
-                      }}
-                    >
-                      <Icon name="sparkles" size={12} simple color={C.textSec} />
-                      <span className="rt-row-text">Brain Dump</span>
-                    </button>
                     {/* Spacer pushes the Add button to the right edge of
                         the chips row. Previously held the "Past tense →
                         touchpoint" hint — removed as training-wheels text;
@@ -3310,6 +3289,35 @@ export default function TodayPage({ app }) {
                                   {focusMode ? "Focusing" : "Focus"}
                                 </button>
                               )}
+                              {/* Brain Dump — third Rai verb in the controls
+                                  strip. Dump call notes; Rai fans them into
+                                  tasks/touchpoints/events for review. */}
+                              <button
+                                onClick={() => setBrainDumpOpen(true)}
+                                title="Brain Dump — paste your call notes, Rai sorts them into tasks"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  padding: "3px 8px",
+                                  border: "none",
+                                  background: "transparent",
+                                  fontFamily: "inherit",
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: C.textSec,
+                                  cursor: "pointer",
+                                  borderRadius: 6,
+                                  letterSpacing: "0.02em",
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = "rgba(20,30,22,0.04)"}
+                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, display: "block" }} aria-hidden="true">
+                                  <path d="M12 4l2.2 5.8 5.8 2.2-5.8 2.2L12 20l-2.2-5.8L4 12l5.8-2.2L12 4z" fill={C.btn} />
+                                </svg>
+                                Brain Dump
+                              </button>
                               {/* Debug pill preserved so ⌘⇧D still works. */}
                               {debugScores && (
                                 <span style={{
