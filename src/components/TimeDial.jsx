@@ -563,41 +563,12 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.title}</span>
               {p.e.client_name ? (
                 <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.client_name}</span>
-              ) : (p.e.needs_link && !p.e.link_dismissed) ? (
-                // "Needs client" — clickable. Opens a floating picker
-                // positioned at click coordinates. The dial layer is
-                // CSS-scaled, so we render the picker at page-root
-                // (via the onRequestLink callback) to avoid scale
-                // compensation issues. stopPropagation so the click
-                // doesn't also fire the row's setSelectedId.
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (typeof onRequestLink === "function") {
-                      const r = e.currentTarget.getBoundingClientRect();
-                      onRequestLink({ eventId: p.e.id, anchorRect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
-                    }
-                  }}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    padding: "1px 0",
-                    marginTop: 1,
-                    fontSize: 10,
-                    fontFamily: "inherit",
-                    fontStyle: "italic",
-                    color: "#A8A89A",
-                    cursor: "pointer",
-                    lineHeight: 1.2,
-                    textAlign: "right",
-                    textDecoration: "underline dotted",
-                    textUnderlineOffset: 2,
-                    textDecorationColor: "rgba(168,168,154,0.6)",
-                  }}
-                  title="Link this event to a client or prospect"
-                >· needs client</button>
               ) : null}
+              {/* "Needs client" attribution affordance REMOVED (June 2026).
+                  The matcher re-runs on every 15-min sync, so the durable
+                  fix for an unmatched event is renaming it in Google
+                  Calendar — that propagates to every future instance.
+                  Per-instance in-app linking was a band-aid. */}
               {/* Prep pill REMOVED from the rail (June 2026). Prep count
                   surfaces only in the right-side hub now ("Prep · N open /
                   N open task for [client]"). The rail row was colliding
