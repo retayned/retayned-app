@@ -1236,23 +1236,37 @@ export const raiConversations = {
 
   // Append a message to conversation
   addMessage: async (convoId, role, text) => {
-    // Get current messages
+    const message = { role, text, timestamp: new Date().toISOString() };
+
+    // Atomic append in SQL (rai_append_message RPC): one statement, one
+    // round trip, sends ONE message instead of rewriting the whole
+    // array, and concurrent appends from multiple tabs serialize at the
+    // row level instead of overwriting each other.
+    const { data, error } = await supabase
+      .rpc('rai_append_message', { p_convo_id: convoId, p_message: message });
+    if (!error) {
+      return { data: Array.isArray(data) ? (data[0] ?? null) : data, error: null };
+    }
+
+    // RPC missing (migration not run) → legacy read-modify-write so no
+    // message is ever lost. Old race window applies in this mode only.
+    console.warn('rai_append_message RPC unavailable, using legacy append:', error.message || error);
     const { data: convo } = await supabase
       .from('rai_conversations')
       .select('messages')
       .eq('id', convoId)
       .single();
 
-    const messages = [...(convo?.messages || []), { role, text, timestamp: new Date().toISOString() }];
+    const messages = [...(convo?.messages || []), message];
 
-    const { data, error } = await supabase
+    const { data: legacyData, error: legacyErr } = await supabase
       .from('rai_conversations')
       .update({ messages })
       .eq('id', convoId)
       .select()
       .single();
 
-    return { data, error };
+    return { data: legacyData, error: legacyErr };
   },
 
   // Get recent conversations
