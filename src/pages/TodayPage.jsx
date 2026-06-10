@@ -2065,9 +2065,9 @@ export default function TodayPage({ app }) {
                                         style={{ padding: "8px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                       >Cancel</button>
                                       <button
-                                        className="r-btn" data-tone="purple"
+                                        className="r-btn" data-tone="green"
                                         onClick={() => setDuePickerOpen(false)}
-                                        style={{ padding: "8px 16px", background: C.btn, color: "#fff", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginLeft: "auto", boxShadow: "var(--rt-sh-chip-purple)" }}
+                                        style={{ padding: "8px 16px", background: C.primary, color: "#fff", border: "none", borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", marginLeft: "auto" }}
                                       >Done</button>
                                     </div>
                                   </div>
@@ -3368,19 +3368,44 @@ export default function TodayPage({ app }) {
                             Nothing on today&rsquo;s list yet. Add one above &uarr;
                           </div>
                         )}
-                        {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (
-                          <div style={{ textAlign: "center", padding: "28px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                            <div style={{ width: 28, height: 28, borderRadius: "50%", background: C.primary, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 2 }}>
-                              <Icon name="check" size={14} color="#fff" />
-                            </div>
-                            <div style={{ fontSize: 13.5, fontWeight: 700, color: C.primaryDeep }}>Today&rsquo;s list is clear.</div>
-                            {_tomorrowBucket.length > 0 && (
-                              <div style={{ fontSize: 12, color: C.textSec }}>
-                                <b style={{ color: C.text, fontWeight: 700 }}>{_tomorrowBucket.length}</b> {_tomorrowBucket.length === 1 ? "task" : "tasks"} queued for tomorrow.
+                        {_todayBucket.length === 0 && todayCount > 0 && todayCount === todayDoneCount && (() => {
+                          // "Day, signed." — the close-of-day editorial moment.
+                          // The tally is data already in scope; one glance says
+                          // the work was seen. Voice stays direct.
+                          const tpToday = (allTouchpoints || []).filter(tp => {
+                            if (!tp.occurred_at) return false;
+                            const d = new Date(tp.occurred_at);
+                            const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                            return ymd === _todayStr;
+                          }).length;
+                          const clientCounts = {};
+                          for (const t of todayBucketTasks) { if (t.client) clientCounts[t.client] = (clientCounts[t.client] || 0) + 1; }
+                          const top = Object.entries(clientCounts).sort((x, y) => y[1] - x[1])[0];
+                          const topClientLine = top && top[1] >= 2 ? ` — ${top[0]} got the most of you.` : "";
+                          const segs = [`${todayCount} ${todayCount === 1 ? "task" : "tasks"}`];
+                          if (tpToday > 0) segs.push(`${tpToday} ${tpToday === 1 ? "touchpoint" : "touchpoints"}`);
+                          if (todayEventCount > 0) segs.push(`${todayEventCount} ${todayEventCount === 1 ? "event" : "events"}`);
+                          const firstUp = _tomorrowBucket[0]?.text || null;
+                          return (
+                            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "26px 24px", textAlign: "center" }}>
+                              <div style={{ width: 34, height: 34, borderRadius: 999, background: C.primarySoft, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                                <Icon name="check" size={16} color={C.primary} />
                               </div>
-                            )}
-                          </div>
-                        )}
+                              <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 21, color: C.primaryDeep, marginBottom: 8, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0" }}>
+                                The day is signed.
+                              </div>
+                              <div style={{ fontSize: 12.5, color: C.textSec, marginBottom: _tomorrowBucket.length > 0 ? 14 : 0 }}>
+                                {segs.join(" · ")}{topClientLine}
+                              </div>
+                              {_tomorrowBucket.length > 0 && (
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textMuted, background: C.surface, borderRadius: 999, padding: "5px 13px", maxWidth: "100%" }}>
+                                  <span style={{ whiteSpace: "nowrap" }}>Tomorrow holds <b style={{ color: C.primary, fontWeight: 600 }}>{_tomorrowBucket.length} {_tomorrowBucket.length === 1 ? "task" : "tasks"}</b></span>
+                                  {firstUp && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260 }}>— first up: {firstUp}</span>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         </div>
 
 
