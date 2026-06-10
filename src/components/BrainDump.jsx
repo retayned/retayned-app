@@ -39,25 +39,30 @@ function localYmdToday() {
 }
 
 // "2026-06-12" → "Fri, Jun 12" (local-safe: parse as local midnight)
+const _ymdOffset = (off) => {
+  const d = new Date();
+  d.setDate(d.getDate() + off);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 function dueLabel(ymd) {
-  if (!ymd) return "No date";
+  if (!ymd || ymd === _ymdOffset(0)) return "Today";
+  if (ymd === _ymdOffset(1)) return "Tomorrow";
+  if (ymd === _ymdOffset(7)) return "Later";
+  // Rai-suggested specific dates ("by Friday", "Father's Day") keep
+  // their real date label. Users can't hand-pick these — Rai sets them.
   const [y, m, d] = ymd.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
   return dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-// Next 7 days as dropdown options: Today, Tomorrow, then weekday names.
+// Exactly three user-selectable options. "Later" = a week out.
 function dueOptions() {
-  const out = [];
-  const d = new Date();
-  for (let i = 0; i < 7; i++) {
-    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const label = i === 0 ? "Today" : i === 1 ? "Tomorrow"
-      : d.toLocaleDateString("en-US", { weekday: "long" });
-    out.push({ ymd, label });
-    d.setDate(d.getDate() + 1);
-  }
-  return out;
+  return [
+    { ymd: _ymdOffset(0), label: "Today" },
+    { ymd: _ymdOffset(1), label: "Tomorrow" },
+    { ymd: _ymdOffset(7), label: "Later" },
+  ];
 }
 
 export default function BrainDump({ open, onClose, clients, user, onCommitted }) {
@@ -101,7 +106,6 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
       }
       if (d.dump) setDump(d.dump);
       if (d.clientId) setClientId(d.clientId);
-      if (d.manualPick) setManualPick(true);
       if (Array.isArray(d.items) && d.items.length) { setItems(d.items); }
       if (d.step === "review" && Array.isArray(d.items) && d.items.length) setStep("review");
     } catch { /* corrupt draft — ignore */ }
@@ -111,29 +115,55 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
     try {
       if (!dump && items.length === 0) return;
       window.localStorage.setItem(draftKey, JSON.stringify({
-        dump, clientId, manualPick, items, step, savedAt: Date.now(),
+        dump, clientId, items, step, savedAt: Date.now(),
       }));
     } catch { /* storage full/blocked — degrade silently */ }
   }, [open, dump, clientId, manualPick, items, step]);
   const clearDraft = () => { try { window.localStorage.removeItem(draftKey); } catch {} };
 
   // ── Client autodetect ───────────────────────────────────────────────
-  // Same magic as the composer: type a client's name anywhere in the dump
-  // and it pairs automatically. Longest name wins on multiple matches.
-  // The picker stays as the manual override.
+  // Composer-grade matching, not naive full-name inclusion: full client
+  // name (100) > full contact name (95) > distinctive name token ≥4 chars
+  // ("Fenix" → Fenix Sportier) (90) > unique contact first name (70).
+  // Word-boundary tested so "art" never matches inside "start". The
+  // picker stays as the manual override and is sticky once used.
   useEffect(() => {
     if (!open || manualPick) return;
     const lower = dump.toLowerCase();
-    let best = null;
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const wb = (s) => new RegExp(`(^|[^a-z0-9])${esc(s)}([^a-z0-9]|$)`);
+    const COMMON = new Set(["team","meeting","call","sync","update","review","status","weekly","monthly","daily","quarterly","recap","check","catch","catchup","kickoff","demo","planning","intro","discussion","agenda","quick"]);
+    const firstNameCounts = {};
     for (const c of activeClients) {
-      if (!c.name || c.name.length < 3) continue;
-      if (lower.includes(c.name.toLowerCase())) {
-        if (!best || c.name.length > best.name.length) best = c;
+      const f = (c.contact || "").trim().split(/\s+/)[0]?.toLowerCase();
+      if (f && f.length >= 2) firstNameCounts[f] = (firstNameCounts[f] || 0) + 1;
+    }
+    let best = null;
+    const consider = (score, c, len) => {
+      if (!best || score > best.score || (score === best.score && len > best.len)) best = { score, id: c.id, len };
+    };
+    for (const c of activeClients) {
+      const name = (c.name || "").trim();
+      if (!name) continue;
+      if (wb(name.toLowerCase()).test(lower)) { consider(100, c, name.length); continue; }
+      const contact = (c.contact || "").trim();
+      if (contact.includes(" ") && wb(contact.toLowerCase()).test(lower)) { consider(95, c, contact.length); continue; }
+      let tokenHit = false;
+      for (const tok of name.split(/\s+/)) {
+        const clean = tok.replace(/[^\w]/g, "").toLowerCase();
+        if (clean.length >= 4 && !COMMON.has(clean) && wb(clean).test(lower)) {
+          consider(90, c, clean.length);
+          tokenHit = true;
+          break;
+        }
       }
+      if (tokenHit) continue;
+      const first = contact.split(/\s+/)[0]?.toLowerCase() || "";
+      if (first && first.length >= 2 && firstNameCounts[first] === 1 && wb(first).test(lower)) consider(70, c, first.length);
     }
     if (best && best.id !== clientId) setClientId(best.id);
     if (!best && clientId && !manualPick) setClientId(null);
-  }, [dump, open, manualPick]);
+  }, [dump, open, manualPick, clients]);
 
   useEffect(() => {
     if (open && step === "input") {
@@ -476,19 +506,24 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                     opacity: it.keep ? 1 : 0.45,
                     boxShadow: "0 1px 3px rgba(20,30,22,0.07)",
                   }}>
+                    {/* Same geometry as the app's task checkbox (rt-check:
+                        22px, radius 6, 2px border) so it reads as the same
+                        toggleable control the user already knows. */}
                     <button
                       onClick={() => patchItem(it.key, { keep: !it.keep })}
                       aria-label={it.keep ? "Discard item" : "Keep item"}
                       style={{
-                        width: 18, height: 18, borderRadius: 999, flexShrink: 0,
-                        marginTop: 2, padding: 0, cursor: "pointer",
-                        border: it.keep ? "none" : `1.5px solid ${C.ink300 || C.borderLight}`,
-                        background: it.keep ? "#33543E" : "transparent",
-                        color: "#fff", fontSize: 10, lineHeight: 1,
+                        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                        marginTop: 1, padding: 0, cursor: "pointer",
+                        border: "2px solid " + (it.keep ? "#33543E" : C.border),
+                        background: it.keep ? "#33543E" : C.card,
                         display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        fontFamily: "inherit",
                       }}
-                    >{it.keep ? "✓" : ""}</button>
+                    >
+                      {it.keep && (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      )}
+                    </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {/* Title — double-click to edit, same muscle memory as task rows */}
                       {isEditTitle ? (
