@@ -3122,7 +3122,7 @@ export default function TodayPage({ app }) {
                           }}>{name.toLowerCase()}</span>
                           <span style={{ flex: 1, height: 1, background: C.borderLight }} />
                           {isToday && (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, background: "rgba(20,30,22,0.035)", borderRadius: 8, padding: "2px 4px" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, borderRadius: 8, padding: "2px 4px" }}>
                               {/* Mode selector — quiet text label with caret,
                                   click to open dropdown with three options. */}
                               <div style={{ position: "relative" }}>
