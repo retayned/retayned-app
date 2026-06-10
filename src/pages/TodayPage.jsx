@@ -12,7 +12,7 @@ import { Fragment, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
 import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, ymdInTz } from "../utils";
-
+ 
 export default function TodayPage({ app }) {
   const {
     allTouchpoints,
