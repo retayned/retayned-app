@@ -843,7 +843,7 @@ export default function ClientsPage({ app }) {
                               <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
                                 {col.map(c => {
                                   return (
-                                    <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ background: C.card, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
+                                    <div key={c.id} className="rt-row" onClick={() => setSelectedClient(c)} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: 10, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", minWidth: 0, overflow: "hidden" }}>
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                         <ScoreRing2 client={c} size={32} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -934,7 +934,7 @@ export default function ClientsPage({ app }) {
                   )}
 
                   {dataLoaded && filteredClients.length === 0 && activeClients.length > 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, borderRadius: 12 }}>
+                    <div style={{ textAlign: "center", padding: "40px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12 }}>
                       <div style={{ fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 6 }}>
                         No clients match {clientSearch ? `"${clientSearch}"` : "your filters"}.
                       </div>
