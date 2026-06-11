@@ -1,34 +1,27 @@
 import TodayPage from "./pages/TodayPage";
-import SweepsPage from "./pages/SweepsPage";
 import ClientsPage from "./pages/ClientsPage";
 import HealthPage from "./pages/HealthPage";
-import ReferralIntelPage from "./pages/ReferralIntelPage";
 import WorkersPage from "./pages/WorkersPage";
 import ReferralsPage from "./pages/ReferralsPage";
 import RetrosPage from "./pages/RetrosPage";
 import CoachPage from "./pages/CoachPage";
 import SettingsPage from "./pages/SettingsPage";
 import WorkerDashboard from "./WorkerDashboard";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { clientAddons as clientAddonsDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, clientEngagementPausesDb, clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, raiPicks as raiPicksDb, raiUserState as raiUserStateDb, realtime as realtimeDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
-import { MobileCalendarStrip } from "./components/MobileCalendarStrip";
 import BrainDump from "./components/BrainDump";
 import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
-import { RaiMarkdown } from "./components/RaiMarkdown";
-import { ReferralNetworkD3 } from "./components/ReferralNetworkD3";
-import { EmptyState, SkeletonPage } from "./components/Skeletons";
-import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow, QuickLogToast } from "./components/TaskBuckets";
+import { SkeletonPage } from "./components/Skeletons";
+import { QuickLogToast } from "./components/TaskBuckets";
 import { TimeDial } from "./components/TimeDial";
-import { enterpriseClients, referralReadiness, sweepData, sweepHistory, sweepTasks } from "./demoData";
-import { mobileNavEnterpriseMore, mobileNavEnterprisePrimary, mobileNavMore, mobileNavPrimary, moreItemsCore, moreItemsEnterprise, navItemsCore, navItemsEnterprise } from "./nav";
-import { lookupObservationIllustration } from "./observations";
+import { mobileNavMore, mobileNavPrimary, moreItemsCore, navItemsCore } from "./nav";
 import { parseCalendarEntry, parseComposer } from "./parser";
-import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "./recurrence";
+import { nextOccurrenceDate } from "./recurrence";
 import { C, THEME_CSS } from "./theme";
-import { detectThinkingVerb, getUserInitial, getWorkerInitials, localYmd, retColor, retGradient, splitLongTask, tzMidnightInstant, ymdInTz } from "./utils";
+import { getUserInitial, localYmd, retColor, splitLongTask, tzMidnightInstant, ymdInTz } from "./utils";
 
 
 
@@ -40,11 +33,9 @@ export default function App({ user }) {
     return <WorkerDashboard />;
   }
 
-  // Tier flag — currently fixed at "core" everywhere. Kept as a constant
-  // (not state) since setTier was never called and the value never
-  // changes at runtime. When enterprise toggling is wired up, restore
-  // useState here and add a setter call site.
-  const tier = "core";  // "core" | "enterprise"
+  // (Enterprise tier REMOVED June 2026 — Retayned is single-tier. The
+  // tier flag, enterprise nav variants, SweepsPage, ReferralIntelPage,
+  // and demoData were all excised; core paths are the only paths.)
   const [page, setPage] = useState("today");
 
   // Scroll to top on page change. .r-main is now a fixed-positioned scroll
@@ -3598,7 +3589,7 @@ export default function App({ user }) {
     }
     setPage(id);
   };
-  const allPages = [...(tier === "enterprise" ? navItemsEnterprise : navItemsCore), ...(tier === "enterprise" ? moreItemsEnterprise : moreItemsCore)];
+  const allPages = [...navItemsCore, ...moreItemsCore];
   const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
   const overdueChecks = hcQueue.filter(h => (h.overdue > 0 || h.due === "Today") && !hcDone[h.client]).length;
@@ -3868,7 +3859,6 @@ export default function App({ user }) {
     syncGoogleCalendar,
     taskOccurrences,
     tasks,
-    tier,
     todayCompletedOpen,
     todayComposerClient,
     todayComposerDue,
@@ -3978,16 +3968,8 @@ export default function App({ user }) {
           background-image: none !important;
         }
 
-        /* Kill the V1_GRAD warm rainbow gradients used on the calendar
-           strip and other places — they bake the old cream into hardcoded
-           strings, so the variable redirect can't reach them. Flat them
-           to canvas instead. */
-        [style*="V1_GRAD"],
-        [style*="rgba(124,92,243,0.10) 0%"],
-        [style*="#FAFAF7"] {
-          background: #FAFBFA !important;
-          background-image: none !important;
-        }
+        /* (V1_GRAD kill-rule removed June 2026 refactor — the gradients it
+           targeted are gone from the codebase.) */
 
         /* Today canvas backdrop — Variant A border-cool-strong wash.
            A soft cool-grey zone behind the task list. Top stop at 0.32. */
@@ -6252,7 +6234,7 @@ export default function App({ user }) {
 
         {/* Nav items — fixed, always visible */}
         <div style={{ padding: sidebarCollapsed ? "0 8px" : "0 10px", flexShrink: 0 }}>
-          {(tier === "enterprise" ? navItemsEnterprise : navItemsCore).map(n => {
+          {navItemsCore.map(n => {
             const active = page === n.id;
             return (
               <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} title={sidebarCollapsed ? n.label : undefined} style={{
@@ -6793,7 +6775,6 @@ export default function App({ user }) {
         {dataLoaded && page === "today" && <TodayPage app={pageCtx} />}
 
         {/* ═══ SWEEPS (ENTERPRISE) ═══ */}
-        {page === "sweeps" && tier === "enterprise" && <SweepsPage app={pageCtx} />}
 
         {/* ═══ CLIENTS v2 — compare-first ═══ */}
         {dataLoaded && page === "clients" && <ClientsPage app={pageCtx} />}
@@ -6802,7 +6783,6 @@ export default function App({ user }) {
         {dataLoaded && page === "health" && <HealthPage app={pageCtx} />}
 
         {/* ═══ REFERRAL INTELLIGENCE (ENTERPRISE) ═══ */}
-        {page === "referral_intel" && tier === "enterprise" && <ReferralIntelPage app={pageCtx} />}
 
         {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
         {dataLoaded && page === "workers" && <WorkersPage app={pageCtx} />}
@@ -9818,8 +9798,8 @@ export default function App({ user }) {
           equal to half the FAB's footprint so the first/last items can scroll
           fully into view without permanently sitting under the FAB. */}
       {(() => {
-        const primary = tier === "enterprise" ? mobileNavEnterprisePrimary : mobileNavPrimary;
-        const moreBase = tier === "enterprise" ? mobileNavEnterpriseMore : mobileNavMore;
+        const primary = mobileNavPrimary;
+        const moreBase = mobileNavMore;
         // REBUILT (June 2026): fixed light bar — 2 tabs, deep-green capture
         // FAB, 1 tab, More. Nothing scrolls, nothing hides under the FAB.
         // Portaled to <body> so no ancestor transform/stacking context can
