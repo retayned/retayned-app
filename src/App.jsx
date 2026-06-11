@@ -5661,16 +5661,20 @@ export default function App({ user }) {
            at the disc's bottom-center, so they scale with the dial.) */
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
-        /* Raised floor: events scale down too now, so the dial no longer
-           needs to collapse to make room for full-size cards. */
-        .rt-today-v4 { --dial-scale: 0.92; --dial-cs: 1.04; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.86; --dial-cs: 1.07; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.80; --dial-cs: 1.09; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.74; --dial-cs: 1.11; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.70; --dial-cs: 1.13; } }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.78; --dial-cs: 1.09; } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; --dial-cs: 1.12; } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.66; --dial-cs: 1.15; } }
+        /* Dial scale = ORIGINAL values. The content column's max-width is
+           derived from (720px × --dial-scale), so raising the dial floor
+           directly steals width from the task column — tried June 2026,
+           rejected. The event-proportion fix lives entirely in --dial-cs:
+           events compensate only ~35% toward constant size (was 100%),
+           so they shrink with the dial instead of towering over it. */
+        .rt-today-v4 { --dial-scale: 0.90; --dial-cs: 1.04; }
+        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.82; --dial-cs: 1.08; } }
+        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.74; --dial-cs: 1.12; } }
+        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.64; --dial-cs: 1.20; } }
+        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.56; --dial-cs: 1.28; } }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.72; --dial-cs: 1.14; } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.62; --dial-cs: 1.22; } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.52; --dial-cs: 1.32; } }
         /* Connect Google Calendar nudge — dotted underline on rest,
            solid on hover. Primary green to match the rest of the link
            treatment sitewide. */
