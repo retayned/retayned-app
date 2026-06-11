@@ -6,7 +6,7 @@ import { supabase } from './lib/supabase';
 // this standalone pre-auth page doesn't load the root themed stylesheet.
 const C = {
   primary: "#33543E", primaryDeep: "#1C3224", primarySoft: "#E6EFE9", primaryGhost: "#F3F8F5",
-  bg: "#FAFAF7", card: "#FFFFFF", surfaceWarm: "#F2EEE8",
+  bg: "#FAFBFA", card: "#FFFFFF", surfaceWarm: "#F4F6F4",
   text: "#1E261F", textSec: "#4A4F4A", textMuted: "#8A8F8A",
   border: "#D8DFD8", borderLight: "#E8ECE6",
   btn: "#5B21B6", btnHover: "#4C1D95",
