@@ -3966,15 +3966,14 @@ export default function App({ user }) {
           padding-left: 0 !important;
         }
 
-        /* Dotted links = Rai interactions = purple (June 2026 rule). */
         .rt-purple-link {
-          color: #7c5cf3 !important;
-          text-decoration-color: #7c5cf3 !important;
+          color: #33543E !important;
+          text-decoration-color: #33543E !important;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
-            color: #6a4ce8 !important;
-            text-decoration-color: #6a4ce8 !important;
+            color: #2D4A37 !important;
+            text-decoration-color: #2D4A37 !important;
             text-decoration-style: solid !important;
           }
         }
@@ -3982,7 +3981,7 @@ export default function App({ user }) {
         /* Client-name link color in the daily brief (.rt-today-lede a). */
         .rt-today-lede a,
         .rt-today-lede a:visited {
-          color: #7c5cf3 !important;
+          color: #33543E !important;
           text-decoration-color: rgba(51,84,62,0.5) !important;
         }
 
@@ -4543,24 +4542,23 @@ export default function App({ user }) {
            outline). A border-bottom-based version got wiped out by
            those resets — Connect Google Calendar rendered with no
            underline at all. */
-        /* RULE (June 2026): dotted-underline links are Rai interactions —
-           they get the purple experience, sitewide. (Was migrated to green
-           by a prior pass; reverted by design decision.) */
+        /* Navigation links (client names, connect actions) stay GREEN.
+           Purple is reserved for Rai interactions — see .is-discussable. */
         .rt-purple-link {
-          color: #7c5cf3;
+          color: #33543E;
           font-weight: 600;
           text-decoration: underline;
           text-decoration-style: dotted;
-          text-decoration-color: #7c5cf3;
+          text-decoration-color: #33543E;
           text-decoration-thickness: 1px;
           text-underline-offset: 3px;
           transition: color 0.12s, text-decoration-style 0.12s, text-decoration-color 0.12s;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
-            color: #6a4ce8;
+            color: #2D4A37;
             text-decoration-style: solid;
-            text-decoration-color: #6a4ce8;
+            text-decoration-color: #2D4A37;
           }
         }
 
@@ -5423,16 +5421,18 @@ export default function App({ user }) {
             display: none !important;
           }
         }
-        /* Dotted primary-green underline on task titles whose text contains
-           a thinking verb. Indicates "click me to discuss with Rai." Title
-           text stays black; only the underline goes from dotted-light to
-           solid-green on hover. Done tasks lose the affordance entirely.
-           Note: text-underline-offset is small (1px) because the parent div
-           has overflow:hidden — large offsets clip the dotted line out of view. */
+        /* Dotted underline on task titles whose text contains a thinking
+           verb. Indicates "click me to discuss with Rai" — a Rai
+           interaction, so it wears RAI PURPLE (June 2026 rule: purple is
+           reserved for Rai-authored intelligence and Rai interactions;
+           plain navigation links stay green). Title text stays black;
+           underline goes dotted→solid on hover. Done tasks lose the
+           affordance entirely. text-underline-offset stays small (parent
+           has overflow:hidden — large offsets clip the dots). */
         .rt-task-title.is-discussable {
           text-decoration: underline;
           text-decoration-style: dotted;
-          text-decoration-color: #33543E;
+          text-decoration-color: #7c5cf3;
           text-decoration-thickness: 2px;
           text-underline-offset: 2px;
           cursor: pointer;
@@ -5440,7 +5440,7 @@ export default function App({ user }) {
         }
         .rt-task-title.is-discussable:hover {
           text-decoration-style: solid;
-          text-decoration-color: #33543E;
+          text-decoration-color: #6a4ce8;
         }
         .rt-row.is-done .rt-task-title.is-discussable {
           text-decoration: none;
