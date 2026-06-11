@@ -1302,9 +1302,31 @@ export default function TodayPage({ app }) {
               <div className="rt-composer" style={{ gridArea: "composer", background: "transparent", borderRadius: 0, boxShadow: "none", borderBottom: "1.5px solid rgba(20,30,22,0.16)", position: "relative", containerType: "inline-size", zIndex: (composerMenuOpen || duePickerOpen || workerPickerOpen || typePickerOpen) ? 600 : 1 }}>
                 {/* Row 1: purple puck plus + input */}
                 <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px 8px" }}>
-                  <div className="rt-composer-plus" style={{ width: 28, height: 28, borderRadius: 14, background: C.btnLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Icon name="plus" size={14} color={C.btn} />
-                  </div>
+                  {/* Brain Dump — the composer's leading mark (replaced the
+                      decorative +). Filled silhouette so it reads "brain" at
+                      18px: white fissure + cortex folds. Rai purple = an
+                      intelligence feature, per the color doctrine. */}
+                  <button
+                    className="rt-composer-plus"
+                    onClick={() => setBrainDumpOpen(true)}
+                    title="Brain Dump — paste your call notes, Rai sorts them into tasks"
+                    aria-label="Brain Dump"
+                    style={{
+                      width: 30, height: 30, borderRadius: 15,
+                      background: "rgba(124,92,243,0.10)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      flexShrink: 0, border: "none", cursor: "pointer", padding: 0,
+                      transition: "background 120ms ease",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(124,92,243,0.18)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(124,92,243,0.10)"}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 4.3c1-1.1 2.7-1.4 4-.7 1.2.6 2 1.8 2.1 3.1 1 .5 1.9 1.6 1.9 2.9 0 .8-.3 1.5-.8 2.1.4.6.6 1.3.5 2-.2 1.5-1.3 2.7-2.8 3-.6 1.2-1.9 2-3.3 2-.6 0-1.1-.1-1.6-.4-.5.3-1 .4-1.6.4-1.4 0-2.7-.8-3.3-2-1.5-.3-2.6-1.5-2.8-3-.1-.7.1-1.4.5-2-.5-.6-.8-1.3-.8-2.1 0-1.3.9-2.4 1.9-2.9.1-1.3.9-2.5 2.1-3.1 1.3-.7 3-.4 4 .7Z" fill="#7c5cf3" />
+                      <path d="M12 4.6v13.8" stroke="#fff" strokeWidth="1.5" />
+                      <path d="M9.3 8c-1.1.2-1.9 1-2 2.1M9.6 12.4c-1.3.1-2.2.9-2.4 2M14.7 8c1.1.2 1.9 1 2 2.1M14.4 12.4c1.3.1 2.2.9 2.4 2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                    </svg>
+                  </button>
                   <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {/*
                       Smart composer input. As the user types, parseComposer() runs and:
@@ -1461,27 +1483,6 @@ export default function TodayPage({ app }) {
                       }}
                     />
                     </span>
-                    {/* Brain Dump — right edge of the composer, where the
-                        feature's input lives. Brain glyph in the Rai purple. */}
-                    <button
-                      onClick={() => setBrainDumpOpen(true)}
-                      title="Brain Dump — paste your call notes, Rai sorts them into tasks"
-                      aria-label="Brain Dump"
-                      style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        width: 32, height: 32, flexShrink: 0,
-                        border: "none", background: "transparent",
-                        borderRadius: 8, cursor: "pointer", padding: 0,
-                        transition: "background 120ms ease",
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = "rgba(124,92,243,0.10)"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.btn} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 4.5 18C3.12 18 2 16.88 2 15.5c0-.76.34-1.44.87-1.9A2.5 2.5 0 0 1 2 11.5c0-1.38 1.12-2.5 2.5-2.5.17 0 .34.02.5.05A2.5 2.5 0 0 1 7 6.5c0-.15.01-.3.04-.45A2.5 2.5 0 0 1 9.5 2Z" />
-                        <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 19.5 18c1.38 0 2.5-1.12 2.5-2.5 0-.76-.34-1.44-.87-1.9a2.5 2.5 0 0 0 .87-2.1c0-1.38-1.12-2.5-2.5-2.5-.17 0-.34.02-.5.05A2.5 2.5 0 0 0 17 6.5c0-.15-.01-.3-.04-.45A2.5 2.5 0 0 0 14.5 2Z" />
-                      </svg>
-                    </button>
                   </div>
                 </div>
 
