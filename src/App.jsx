@@ -3978,16 +3978,10 @@ export default function App({ user }) {
 
         /* Composer plus button → primarySoft locked as default. No
            separate hover treatment — the soft green stays regardless. */
-        .rt-composer-plus {
-          background: #E6EFE9 !important;
-        }
-        /* Icon inside the plus puck — primary green on the soft bg */
-        .rt-composer-plus svg,
-        .rt-composer-plus svg * {
-          color: #33543E !important;
-          stroke: #33543E !important;
-          fill: #33543E !important;
-        }
+        /* .rt-composer-plus green !important overrides REMOVED (June 2026).
+           The puck is now the Brain Dump button and styles itself inline —
+           purple silhouette with white fissure strokes. The old force-fill
+           turned the brain into a solid green blob. */
 
         /* Composer Add button — green when armed (button only shows the
            gradient when newTask.trim() is truthy; we override that armed
