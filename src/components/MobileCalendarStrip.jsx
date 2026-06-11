@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
-import { parseCalendarEntry } from "../parser";
 
 
 // ─── MobileCalendarStrip ────────────────────────────────────────────────
 // PALETTE NOTE: base/fade colors below are hardcoded (gradients can't use
-// C tokens). If the palette changes again, update #FAFBFA / rgba(250,251,250)
-// here — this file was missed in the June 2026 cream→sage migration.
+// C tokens). If the palette changes again, update #FAFBFA / rgba(250,251,250).
+// (V1_GRAD_H/V removed June 2026 refactor — an App-level CSS kill-rule had
+// been flattening them in production anyway; the flat bg is the real look.)
 // Mobile-only ambient calendar. Collapsed: a slim horizontal day-strip
 // (6am→midnight) with meetings as dots + a NOW tick + the next meeting named
 // underneath. Expanded (open=true): the strip stays pinned on top and the
@@ -14,14 +14,24 @@ import { parseCalendarEntry } from "../parser";
 // frosted inline composer at the foot. Uses the EXACT desktop V1 gradient,
 // horizontal for the strip and vertical for the expanded body, so it reads as
 // the same ambient day, just rotated. Reuses parseCalendarEntry for create.
-const V1_GRAD_H = "linear-gradient(90deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFBFA";
-const V1_GRAD_V = "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFBFA";
 
-function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "", googleConnected = false, onConnectGoogle = null }) {
-  const [composerText, setComposerText] = useState("");
-  const [composerError, setComposerError] = useState(null);
+function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "", googleConnected = false, onConnectGoogle = null, onRequestLink = null }) {
+  // "+ client" chip for any event with no client/rolodex linkage —
+  // mirrors the dial's restored affordance (mission-critical, June 2026).
+  const linkChip = (e, size = 10) => {
+    if (e.client_id || e.rolodex_id || e.client_name || !onRequestLink) return null;
+    return (
+      <button
+        onClick={(ev) => {
+          ev.stopPropagation();
+          const r = ev.currentTarget.getBoundingClientRect();
+          onRequestLink({ eventId: e.id, anchorRect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+        }}
+        style={{ background: "transparent", border: "1px dashed rgba(28,50,36,0.35)", borderRadius: 999, padding: "1px 8px", fontSize: size, fontWeight: 700, color: "#33543E", cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.3, flexShrink: 0 }}
+      >+ client</button>
+    );
+  };
   const [nowTick, setNowTick] = useState(Date.now());
-  const inputRef = useRef(null);
 
   useEffect(() => {
     const id = setInterval(() => setNowTick(Date.now()), 60 * 1000);
@@ -122,17 +132,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   };
   const minutesUntil = (d) => Math.round((d.getTime() - nowMs) / 60000);
 
-  const submit = () => {
-    if (!composerText.trim()) return;
-    const parseAnchor = new Date(now);
-    if (selectedDay === "tomorrow") parseAnchor.setDate(parseAnchor.getDate() + 1);
-    const parsed = parseCalendarEntry(composerText, parseAnchor, clients);
-    if (!parsed) { setComposerError("Add a time (e.g. 2pm, 9:30am, noon)"); return; }
-    setComposerError(null);
-    setComposerText("");
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    onCreate && onCreate(parsed);
-  };
 
   // Dot for a single event on the strip
   const renderDot = (e, i) => {
@@ -352,7 +351,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
   // ── EXPANDED ──
   return (
-    <div style={{ background: V1_GRAD_V, borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)" }}>
+    <div style={{ background: "#FAFBFA", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px 4px" }}>
         <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>{selectedDay === "today" ? "Today" : "Tomorrow"} · {dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}</span>
         <button onClick={onToggle} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, color: C.textMuted, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 3 }}>
@@ -391,6 +390,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
                   <div style={{ fontSize: 10, color: C.primaryLight, fontWeight: 700 }}>{fmtTime(e._start)}{mins > 0 && mins <= 120 ? ` · in ${mins} min` : ""}</div>
                   <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 1 }}>{e.title}</div>
                   {cname && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>{cname}</div>}
+                  {!cname && <div style={{ marginTop: 3 }}>{linkChip(e)}</div>}
                 </div>
               </div>
             );
@@ -399,6 +399,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
             <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid rgba(30,38,31,0.06)" }}>
               <span style={{ fontSize: 10, fontWeight: 700, width: 56, flexShrink: 0, color: isPast ? C.textMuted : C.primaryLight }}>{fmtTime(e._start)}</span>
               <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: isPast ? 500 : 600, color: isPast ? C.textMuted : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.title}</span>
+              {linkChip(e, 9.5)}
               {onDelete && e.source === "manual" && (
                 <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }} title="Delete">×</button>
               )}
@@ -408,31 +409,10 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       </div>
       {/* Frosted foot composer — HIDDEN: calendar entry happens via the + FAB
           / task composer only. Gated behind false (no deletion). */}
-      {false && (
-      <div
-        onClick={() => inputRef.current && inputRef.current.focus()}
-        style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", background: "rgba(255,255,255,0.55)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", borderTop: "1px solid rgba(20,30,22,0.05)", cursor: "text" }}
-      >
-        <span style={{ width: 22, height: 22, borderRadius: 11, background: "#EDE7FB", color: C.btn, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, flexShrink: 0, pointerEvents: "none" }}>+</span>
-        <input
-          ref={inputRef}
-          type="text"
-          value={composerText}
-          onChange={e => { setComposerText(e.target.value); if (composerError) setComposerError(null); }}
-          onKeyDown={e => { if (e.key === "Enter") submit(); }}
-          onClick={e => e.stopPropagation()}
-          autoComplete="off"
-          spellCheck={false}
-          placeholder={selectedDay === "tomorrow" ? "2pm Sarah · adds to tomorrow" : "Add an event — “call w/ Rose Babe 3pm”"}
-          style={{ flex: 1, border: "none", background: "transparent", fontFamily: "inherit", fontSize: 11.5, color: C.text, outline: "none", padding: "2px 0", minWidth: 0 }}
-        />
-      </div>
-      )}
-      {false && composerError && (
-        <div style={{ fontSize: 10.5, color: C.danger, padding: "0 14px 8px" }}>{composerError}</div>
-      )}
+      {/* (dead {false &&} block removed — June 2026 refactor: strip composer foot) */}
+      {/* (dead {false &&} block removed — June 2026 refactor: strip composer error) */}
     </div>
   );
 }
 
-export { V1_GRAD_H, V1_GRAD_V, MobileCalendarStrip };
+export { MobileCalendarStrip };
