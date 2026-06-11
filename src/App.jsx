@@ -11,7 +11,7 @@ import SettingsPage from "./pages/SettingsPage";
 import WorkerDashboard from "./WorkerDashboard";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
-import { clientAddons as clientAddonsDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, clientEngagementPausesDb, clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, raiPicks as raiPicksDb, raiUserState as raiUserStateDb, realtime as realtimeDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
+import { clientAddons as clientAddonsDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, clientEngagementPausesDb, clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb,z raiPicks as raiPicksDb, raiUserState as raiUserStateDb, realtime as realtimeDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
 import { MobileCalendarStrip } from "./components/MobileCalendarStrip";
@@ -3857,6 +3857,11 @@ export default function App({ user }) {
 
         body {
           background: #FAFBFA !important;
+          /* Brand font on body — portals (More sheet, modals, pickers) mount
+             on document.body and previously fell back to the UA default font
+             because Manrope only lived on .app-root. */
+          font-family: 'Manrope', system-ui, sans-serif;
+          color: #1E261F;
         }
         /* Content scroll container — force same bg as body so the
            area right of the sidebar reads as a single continuous surface. */
@@ -9761,14 +9766,22 @@ export default function App({ user }) {
             {mobileMoreOpen && (
               <div className="r-mob-bot-dock" style={{ position: "fixed", inset: 0, zIndex: 89 }}>
                 <div onClick={() => setMobileMoreOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(20,30,22,0.38)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }} />
+                {/* Dark frosted sheet — same material as the dock it rises
+                    from. Explicit Manrope (portal — body rule is the net,
+                    this is the belt). */}
                 <div style={{
                   position: "absolute", left: 0, right: 0, bottom: 0,
-                  background: C.card, borderRadius: "18px 18px 0 0",
+                  background: "rgba(30,38,31,0.92)",
+                  backdropFilter: "blur(16px) saturate(1.15)",
+                  WebkitBackdropFilter: "blur(16px) saturate(1.15)",
+                  borderTop: "1px solid rgba(255,255,255,0.10)",
+                  borderRadius: "18px 18px 0 0",
                   padding: "12px 16px calc(96px + env(safe-area-inset-bottom, 0px))",
-                  boxShadow: "0 -10px 36px rgba(20,30,22,0.16)",
+                  boxShadow: "0 -10px 36px rgba(20,30,22,0.30)",
+                  fontFamily: "'Manrope', system-ui, sans-serif",
                 }}>
-                  <div style={{ width: 32, height: 4, borderRadius: 999, background: C.borderLight, margin: "0 auto 12px" }} />
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.5, marginBottom: 9 }}>MORE</div>
+                  <div style={{ width: 32, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.22)", margin: "0 auto 12px" }} />
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1, marginBottom: 9 }}>MORE</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
                     {sheetItems.map(n => {
                       const dot = hasDot(n.id);
@@ -9776,11 +9789,13 @@ export default function App({ user }) {
                       return (
                         <button key={n.id} onClick={() => { setMobileMoreOpen(false); goTo(n.id); }} style={{
                           display: "flex", alignItems: "center", gap: 8,
-                          background: active ? C.primarySoft : C.surface, border: "none", borderRadius: 10,
-                          padding: "12px 13px", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                          background: active ? "rgba(85,139,104,0.30)" : "rgba(255,255,255,0.06)",
+                          border: "none", borderRadius: 10,
+                          padding: "12px 13px", cursor: "pointer",
+                          fontFamily: "'Manrope', system-ui, sans-serif", textAlign: "left",
                         }}>
-                          <Icon name={n.icon} size={17} color={active ? C.primary : C.textSec} accent={active ? C.primary : C.ink300} />
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: active ? C.primary : C.text }}>{n.label}</span>
+                          <Icon name={n.icon} size={17} color={active ? "#fff" : "rgba(255,255,255,0.72)"} accent={active ? "#9FE1CB" : "rgba(255,255,255,0.55)"} />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: active ? "#fff" : "rgba(255,255,255,0.85)" }}>{n.label}</span>
                           {dot && <span style={{ marginLeft: "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger }} />}
                         </button>
                       );
