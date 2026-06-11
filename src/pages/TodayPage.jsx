@@ -5,7 +5,6 @@ import { Icon } from "../components/Icon";
 import { MobileCalendarStrip } from "../components/MobileCalendarStrip";
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
 import { TimeDial } from "../components/TimeDial";
-import BrainDump from "../components/BrainDump";
 import { supabase } from "../lib/supabase.js";
 import { parseCalendarEntry, parseComposer } from "../parser";
 import { Fragment, useState } from "react";
@@ -154,10 +153,12 @@ export default function TodayPage({ app }) {
     userTimezone,
     workerPickerOpen,
     workersList,
+    brainDumpOpen,
+    setBrainDumpOpen,
   } = app;
 
   // ── Brain Dump + task-notes local UI state (page-local, not app state) ──
-  const [brainDumpOpen, setBrainDumpOpen] = useState(false);
+  // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
 
@@ -3745,17 +3746,6 @@ export default function TodayPage({ app }) {
               {/* Confetti layer removed (May 2026) — celebration is fireworks
                   only now. The `confetti` state still gates the fireworks. */}
 
-              {/* Brain Dump — review-before-commit extraction modal. */}
-              <BrainDump
-                open={brainDumpOpen}
-                onClose={() => setBrainDumpOpen(false)}
-                clients={clients}
-                user={user}
-                onCommitted={({ tasks: newTasks, failed }) => {
-                  if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
-                  if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
-                }}
-              />
             </div>
           );
         
