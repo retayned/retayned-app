@@ -17,7 +17,7 @@ import { parseCalendarEntry } from "../parser";
 const V1_GRAD_H = "linear-gradient(90deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFBFA";
 const V1_GRAD_V = "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFBFA";
 
-function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "" }) {
+function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "", googleConnected = false, onConnectGoogle = null }) {
   const [composerText, setComposerText] = useState("");
   const [composerError, setComposerError] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -362,7 +362,22 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       <div style={{ padding: "6px 14px 10px" }}>{strip}{ends}</div>
       <div style={{ padding: "0 14px 4px" }}>
         {dayEvents.length === 0 && (
-          <div style={{ textAlign: "center", padding: "14px 0", fontSize: 12, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No events yet — add one below.</div>
+          <div style={{ padding: "10px 0 6px" }}>
+            <div style={{ border: "1px dashed " + C.ink300, borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
+              Your day lives here.{!googleConnected && onConnectGoogle ? (
+                <>
+                  {" "}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onConnectGoogle(); }}
+                    style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontStyle: "italic", fontSize: 11.5, color: C.primary, fontWeight: 700, textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}
+                  >
+                    Connect Google Calendar
+                  </button>
+                  {" "}and it fills itself.
+                </>
+              ) : " Add one from the green + — \u201c2pm call with Maya.\u201d"}
+            </div>
+          </div>
         )}
         {dayEvents.map((e, i) => {
           const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
