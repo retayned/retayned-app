@@ -1,6 +1,6 @@
 import { C } from "./theme";
 
-
+ 
 const navItemsCore = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
