@@ -3,11 +3,12 @@
 import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
 import { Icon } from "../components/Icon";
 import { MobileCalendarStrip } from "../components/MobileCalendarStrip";
+import { ExamplePills, GettingStartedPill, RaiNightCard, TaskSpotlight, typeIntoComposer } from "../components/Onboarding";
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
 import { TimeDial } from "../components/TimeDial";
 import { supabase } from "../lib/supabase.js";
 import { parseCalendarEntry, parseComposer } from "../parser";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
 import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, splitLongTask, ymdInTz } from "../utils";
@@ -70,6 +71,7 @@ export default function TodayPage({ app }) {
     personalEvents,
     pulseChip,
     purgeTaskHistory,
+    onboardingStep,
     raiPicks,
     raiState,
     rankMode,
@@ -155,7 +157,31 @@ export default function TodayPage({ app }) {
     workersList,
     brainDumpOpen,
     setBrainDumpOpen,
+    setOnboardingStep,
   } = app;
+  // First-run example pills: on DESKTOP they type into the inline Today
+  // composer (parser chips light up live). On MOBILE that composer is
+  // display:none — the capture sheet is the composer — so the same tap
+  // opens the sheet and animates the text into it via state; the sheet's
+  // "Becomes →" ghost-parse readout plays the same magic.
+  const pickExampleTimerRef = useRef(null);
+  const pickOnboardingExample = (text) => {
+    if (isMobile) {
+      // Cancel any in-flight animation — a second tap restarts cleanly
+      // instead of interleaving two intervals into garbled text.
+      if (pickExampleTimerRef.current) { clearInterval(pickExampleTimerRef.current); pickExampleTimerRef.current = null; }
+      setQuickLogOpen(true);
+      setQuickLogText("");
+      let i = 0;
+      pickExampleTimerRef.current = setInterval(() => {
+        i += 1;
+        setQuickLogText(text.slice(0, i));
+        if (i >= text.length) { clearInterval(pickExampleTimerRef.current); pickExampleTimerRef.current = null; }
+      }, 26);
+      return;
+    }
+    typeIntoComposer(text);
+  };
 
   // ── Brain Dump + task-notes local UI state (page-local, not app state) ──
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
@@ -1049,6 +1075,8 @@ export default function TodayPage({ app }) {
               <div className="rt-mob-cal-sheet-band" style={{ display: "none" }}>
                 <MobileCalendarStrip
                   clients={clients}
+                  googleConnected={googleConnected}
+                  onConnectGoogle={connectGoogleCalendar}
                   events={personalEvents}
                   C={C}
                   open={todayStripOpen}
@@ -1080,6 +1108,43 @@ export default function TodayPage({ app }) {
               </div>
               {/* STATUS BAND */}
               <div className="rt-band" style={{ gridArea: "band", display: "flex", flexDirection: "column", alignItems: "stretch", gap: 4, padding: "4px 4px 20px", borderBottom: "1px solid " + C.borderLight, position: "relative", zIndex: 1 }}>
+                {/* ─── First-run: getting-started pill, Rai's overnight cards,
+                    and the step-2 task spotlight. All derived; all vanish on
+                    their own as the account fills in. Young account = first
+                    7 days (pill) / 3 days (Rai status cards). ─── */}
+                {(() => {
+                  const ageMs = user?.created_at ? Date.now() - new Date(user.created_at).getTime() : Infinity;
+                  let welcomed = false, pillDismissed = false;
+                  try {
+                    welcomed = !!window.localStorage.getItem("rt:welcomedAt");
+                    pillDismissed = !!window.localStorage.getItem("rt:gsPillDismissed");
+                  } catch (_) { /* unavailable */ }
+                  const showPill = welcomed && !pillDismissed && ageMs < 7 * 86400000
+                    && dataLoaded && (clients.length < 3 || tasks.length === 0);
+                  const showNight = dataLoaded && !raiPicks && ageMs < 3 * 86400000
+                    && (clients.length > 0 || tasks.length > 0)
+                    && !onboardingStep; // its moment is AFTER the flow — never stacked with the spotlight
+
+                  return (
+                    <>
+                      {showPill && (
+                        <div>
+                          <GettingStartedPill
+                            clientsCount={clients.length}
+                            tasksCount={tasks.length}
+                            onBook={() => setOnboardingStep("book")}
+                          />
+                        </div>
+                      )}
+                      {showNight && (
+                        <RaiNightCard variant={clients.length > 0 && tasks.length > 0 ? "night" : "nothing"} />
+                      )}
+                      {onboardingStep === "task" && (
+                        <TaskSpotlight clientName={clients[0]?.name} onSkip={() => setOnboardingStep("book")} onPick={pickOnboardingExample} />
+                      )}
+                    </>
+                  );
+                })()}
                 <div className="rt-band-greet">
                   <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>
                     {displayDate}
@@ -2371,6 +2436,19 @@ export default function TodayPage({ app }) {
                       }}>
                         Add the first one — a call, a check-in, a thing you've been meaning to do. I'll pick up from there.
                       </div>
+                      {/* First-run: tappable task examples that self-type into
+                          the composer (desktop) or capture sheet (mobile).
+                          Personalized once a client exists. Suppressed while
+                          the step-2 spotlight is up — it shows the SAME pills
+                          in the band, and two stacks of examples is clutter. */}
+                      {onboardingStep !== "task" && (
+                      <div style={{ marginTop: 18, maxWidth: 420, marginLeft: "auto", marginRight: "auto" }}>
+                        <ExamplePills clientName={clients[0]?.name} label="Try one — it types itself" onPick={pickOnboardingExample} />
+                        <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 10 }}>
+                          …or tap the <span style={{ color: "#7c5cf3", fontWeight: 700 }}>brain</span> for a full Brain Dump.
+                        </div>
+                      </div>
+                      )}
                     </div>
                   )}
 
