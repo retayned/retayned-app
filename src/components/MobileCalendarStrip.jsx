@@ -4,6 +4,9 @@ import { parseCalendarEntry } from "../parser";
 
 
 // ─── MobileCalendarStrip ────────────────────────────────────────────────
+// PALETTE NOTE: base/fade colors below are hardcoded (gradients can't use
+// C tokens). If the palette changes again, update #FAFBFA / rgba(250,251,250)
+// here — this file was missed in the June 2026 cream→sage migration.
 // Mobile-only ambient calendar. Collapsed: a slim horizontal day-strip
 // (6am→midnight) with meetings as dots + a NOW tick + the next meeting named
 // underneath. Expanded (open=true): the strip stays pinned on top and the
@@ -11,8 +14,8 @@ import { parseCalendarEntry } from "../parser";
 // frosted inline composer at the foot. Uses the EXACT desktop V1 gradient,
 // horizontal for the strip and vertical for the expanded body, so it reads as
 // the same ambient day, just rotated. Reuses parseCalendarEntry for create.
-const V1_GRAD_H = "linear-gradient(90deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7";
-const V1_GRAD_V = "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFAF7";
+const V1_GRAD_H = "linear-gradient(90deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFBFA";
+const V1_GRAD_V = "linear-gradient(180deg, rgba(124,92,243,0.10) 0%, rgba(150,170,235,0.08) 12%, rgba(190,205,200,0.06) 30%, rgba(122,170,140,0.07) 46%, rgba(150,185,150,0.06) 58%, rgba(216,180,120,0.09) 72%, rgba(200,140,90,0.10) 84%, rgba(90,80,110,0.12) 94%, rgba(40,45,70,0.14) 100%), #FAFBFA";
 
 function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "" }) {
   const [composerText, setComposerText] = useState("");
@@ -24,6 +27,50 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     const id = setInterval(() => setNowTick(Date.now()), 60 * 1000);
     return () => clearInterval(id);
   }, []);
+
+  // ── Time Band scrub (Phase 3) ─────────────────────────────────────
+  // The dial's signature interaction, translated: drag horizontally
+  // across the sky and a cursor rides the curve — a bubble shows the
+  // scrubbed time, or the nearest event's card when one is close.
+  // touch-action: pan-y keeps vertical page scroll native; only
+  // deliberate horizontal drags (>8px, more X than Y) become scrubs.
+  // A scrub suppresses the tap-to-expand click on release.
+  const bandRef = useRef(null);
+  const scrubGesture = useRef({ id: null, active: false, startX: 0, startY: 0 });
+  const suppressClickRef = useRef(false);
+  const [scrubFrac, setScrubFrac] = useState(null);
+  const fracFromClientX = (clientX) => {
+    const el = bandRef.current;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!r.width) return null;
+    return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  };
+  const onBandPointerDown = (e) => {
+    scrubGesture.current = { id: e.pointerId, active: false, startX: e.clientX, startY: e.clientY };
+  };
+  const onBandPointerMove = (e) => {
+    const s = scrubGesture.current;
+    if (s.id == null || e.pointerId !== s.id) return;
+    if (!s.active) {
+      const dx = e.clientX - s.startX, dy = e.clientY - s.startY;
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        s.active = true;
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* unsupported */ }
+      } else return;
+    }
+    const f = fracFromClientX(e.clientX);
+    if (f != null) setScrubFrac(f);
+  };
+  const endScrub = () => {
+    const s = scrubGesture.current;
+    if (s.active) {
+      suppressClickRef.current = true;
+      setTimeout(() => { suppressClickRef.current = false; }, 250);
+    }
+    scrubGesture.current = { id: null, active: false, startX: 0, startY: 0 };
+    setScrubFrac(null);
+  };
 
   // Day window: 6am → midnight (matches desktop field). Position is the
   // fraction across that window.
@@ -173,16 +220,23 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
     return (
       <div
-        onClick={onToggle}
-        style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px" }}
+        ref={bandRef}
+        onClick={() => { if (suppressClickRef.current) return; onToggle && onToggle(); }}
+        onPointerDown={onBandPointerDown}
+        onPointerMove={onBandPointerMove}
+        onPointerUp={endScrub}
+        onPointerCancel={endScrub}
+        style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px", touchAction: "pan-y" }}
       >
+        {/* NOW-pulse keyframes — once per render tree, scoped by name. */}
+        <style>{`@keyframes rtNowPulse { 0% { box-shadow: 0 0 0 0 rgba(51,84,62,0.32); } 70% { box-shadow: 0 0 0 9px rgba(51,84,62,0); } 100% { box-shadow: 0 0 0 0 rgba(51,84,62,0); } }`}</style>
         {/* Full-bleed time-of-day sky gradient: dawn lilac/peach (left) → cool
             midday blue → amber dusk → indigo night (right). Low opacity so it
             whispers against the cream; a vertical fade dissolves it into bg. */}
         <div aria-hidden style={{
           position: "absolute", top: -40, left: 0, right: 0, height: 200, zIndex: 0, pointerEvents: "none",
           background:
-            "linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(250,250,247,1) 100%), " +
+            "linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(250,251,250,1) 100%), " +
             "linear-gradient(90deg, rgba(160,150,190,0.20) 0%, rgba(220,185,160,0.17) 14%, rgba(190,215,225,0.15) 34%, rgba(185,212,218,0.14) 50%, rgba(218,170,145,0.16) 72%, rgba(130,122,165,0.19) 86%, rgba(60,70,110,0.22) 100%)",
         }} />
         {/* NOW — a soft daylight glow at the current-time x-position. */}
@@ -190,7 +244,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
           <div aria-hidden style={{
             position: "absolute", top: -40, height: 200, width: 72, zIndex: 1, pointerEvents: "none",
             left: `calc(${(nowFrac * 100).toFixed(1)}% - 36px)`,
-            background: "radial-gradient(ellipse 50% 55% at 50% 26%, rgba(255,250,235,0.30), transparent 70%)",
+            background: "radial-gradient(ellipse 50% 55% at 50% 26%, rgba(255,255,255,0.28), transparent 70%)",
           }} />
         )}
         {/* Refined timeline: a near-flat hairline curve. Full-bleed; the stroke
@@ -201,9 +255,40 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
           </svg>
           {/* NOW seeker — a small solid marker riding the curve at current time */}
           {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
-            <div aria-hidden style={{ position: "absolute", left: `${(nowFrac * 100).toFixed(2)}%`, top: curveY(nowFrac), transform: "translate(-50%, -50%)", width: 6, height: 6, borderRadius: "50%", background: C.primaryDeep, boxShadow: "0 0 0 3px rgba(250,250,247,0.9)" }} />
+            <div aria-hidden style={{ position: "absolute", left: `${(nowFrac * 100).toFixed(2)}%`, top: curveY(nowFrac), transform: "translate(-50%, -50%)", width: 12, height: 12, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 3px rgba(250,251,250,0.9)", background: "rgba(250,251,250,0.9)" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.primaryDeep, animation: "rtNowPulse 2.4s ease-out infinite" }} />
+            </div>
           )}
           {dotEls}
+          {/* Scrub overlay — cursor rides the curve; bubble shows the
+              scrubbed time, or the nearest event when within ~45 min. */}
+          {scrubFrac != null && (() => {
+            const hFloat = DAY_START + scrubFrac * SPAN;
+            const sd = new Date(dayBase);
+            sd.setHours(Math.floor(hFloat), Math.round((hFloat % 1) * 60), 0, 0);
+            let nearest = null, best = 0.045;
+            for (const ev of dayEvents) {
+              const d = Math.abs(fracFor(ev._start) - scrubFrac);
+              if (d < best) { best = d; nearest = ev; }
+            }
+            const y = curveY(scrubFrac);
+            const leftPct = scrubFrac * 100;
+            const tx = scrubFrac < 0.18 ? "translateX(-10px)" : scrubFrac > 0.82 ? "translateX(calc(-100% + 10px))" : "translateX(-50%)";
+            return (
+              <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 4, pointerEvents: "none" }}>
+                <div style={{ position: "absolute", left: `${leftPct}%`, top: y, transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: C.primaryDeep, boxShadow: "0 0 0 3px rgba(250,251,250,0.95), 0 0 0 4.5px rgba(51,84,62,0.30)" }} />
+                <div style={{ position: "absolute", top: -32, left: `${leftPct}%`, transform: tx, background: C.card, borderRadius: 8, padding: "4px 9px", boxShadow: "0 5px 16px rgba(20,30,22,0.16)", border: "1px solid " + C.border, whiteSpace: "nowrap", maxWidth: 210, overflow: "hidden" }}>
+                  {nearest ? (
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <span style={{ color: C.primary, fontWeight: 700 }}>{fmtTime(nearest._start)}</span> {nearest.title}{clientNameFor(nearest) ? <span style={{ color: C.textMuted, fontWeight: 500 }}> · {clientNameFor(nearest)}</span> : null}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtTime(sd)}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
         {/* Header row in the sky, sitting below the timeline band: date+greeting
             left, next-meeting right. */}
