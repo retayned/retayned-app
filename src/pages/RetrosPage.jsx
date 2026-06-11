@@ -460,8 +460,8 @@ export default function RetrosPage({ app }) {
                   {active && retroOpen && (
                     <div style={{ position: "relative", paddingBottom: 8 }}>
                       {/* Peek of next cards behind */}
-                      {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, borderRadius: 14, opacity: 0.5, zIndex: 0 }} />}
-                      {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, borderRadius: 14, opacity: 0.8, zIndex: 0 }} />}
+                      {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, border: "1px solid " + C.border, borderRadius: 14, opacity: 0.5, zIndex: 0 }} />}
+                      {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, border: "1px solid " + C.border, borderRadius: 14, opacity: 0.8, zIndex: 0 }} />}
                       <div style={{ position: "relative", zIndex: 1, background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "0 4px 12px rgba(10,10,10,0.06)", overflow: "hidden" }}>
                         {/* Header */}
                         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 20px 14px" }}>
