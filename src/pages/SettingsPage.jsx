@@ -139,14 +139,14 @@ export default function SettingsPage({ app }) {
               </div>
             </div>
 
-            {/* Calendar attribution queue. When Google sync runs, events
-                whose titles don't match a known client/rolodex name get
-                flagged as needs_link. Here we show them as a list with
-                quick pickers so the user can attribute them in one pass.
-                Linking learns aliases — future events with the same
-                tokens auto-match. Only renders when there are queued
-                events AND Google is connected; hidden otherwise. */}
-            {googleConnected && (() => {
+            {/* Calendar attribution queue RETIRED (June 2026). The matcher
+                re-runs on every 15-minute sync, so the durable fix for an
+                unmatched event is renaming it in Google Calendar — that
+                propagates to every future instance automatically. A manual
+                per-instance linking queue was a band-aid; gated off rather
+                than excised so the linking plumbing stays available if we
+                ever want it back. */}
+            {false && googleConnected && (() => {
               const needLinking = (personalEvents || []).filter(e =>
                 e && e.source === 'google' && e.needs_link && !e.link_dismissed
                 && !e.client_id && !e.rolodex_id
