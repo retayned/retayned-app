@@ -30,7 +30,7 @@ export default function SweepsPage({ app }) {
 
             {/* Priority Ranking */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>Priority Ranking</div>
-            <div style={{ background: C.card, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, overflow: "hidden" }}>
               {/* Header row */}
               <div style={{ display: "flex", padding: "10px 16px", borderBottom: "1px solid " + C.border, fontSize: 12, fontWeight: 600, color: C.textMuted }}>
                 <span style={{ width: 28 }}>#</span>
@@ -64,7 +64,7 @@ export default function SweepsPage({ app }) {
             {/* Tasks from Sweep */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, marginTop: 20 }}>Tasks Generated ({sweepTasks.length})</div>
             {sweepTasks.filter(t => t.priority !== "urgent").map(t => (
-              <div key={t.id} style={{ background: C.card, borderRadius: 12, padding: "14px 16px", marginBottom: 8 }}>
+              <div key={t.id} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "14px 16px", marginBottom: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{t.client}</span>
                   <span style={{ fontSize: 12, padding: "3px 10px", borderRadius: 4, fontWeight: 600, background: t.priority === "high" ? "#FEF3C7" : C.primarySoft, color: t.priority === "high" ? "#D97706" : C.primary }}>{t.priority === "high" ? "High" : "Medium"} · {t.timeframe}</span>
@@ -76,7 +76,7 @@ export default function SweepsPage({ app }) {
 
             {/* Sweep History */}
             <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, marginTop: 20 }}>Previous Sweeps</div>
-            <div style={{ background: C.card, borderRadius: 14, overflow: "hidden" }}>
+            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, overflow: "hidden" }}>
               {sweepHistory.map((s, i) => (
                 <div key={i} style={{ padding: "12px 16px", borderBottom: i < sweepHistory.length - 1 ? "1px solid " + C.borderLight : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{s.date}</span>
