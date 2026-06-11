@@ -15,6 +15,7 @@ import { clientAddons as clientAddonsDb, clientBillingDb, clientBillingMonthStat
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
 import { MobileCalendarStrip } from "./components/MobileCalendarStrip";
+import BrainDump from "./components/BrainDump";
 import { RaiMarkdown } from "./components/RaiMarkdown";
 import { ReferralNetworkD3 } from "./components/ReferralNetworkD3";
 import { EmptyState, SkeletonPage } from "./components/Skeletons";
@@ -123,6 +124,10 @@ export default function App({ user }) {
   // Mobile bottom-nav "More" sheet (overflow destinations). Part of the
   // rebuilt fixed nav bar.
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  // Brain Dump lifted to App level (June 2026) so the capture sheet can
+  // open it from ANY page, not just Today. TodayPage's brain button now
+  // drives this same state via pageCtx.
+  const [brainDumpOpen, setBrainDumpOpen] = useState(false);
   const [quickLogText, setQuickLogText] = useState("");
   // Toast shape: { id, taskId, taskRef } where taskRef is the optimistic
   // task object so undo can restore it precisely.
@@ -3536,6 +3541,8 @@ export default function App({ user }) {
   // render — same freshness semantics as the original inline JSX.
   const pageCtx = {
     addRef,
+    brainDumpOpen,
+    setBrainDumpOpen,
     aiAttachments,
     aiEndRef,
     aiInput,
@@ -5195,8 +5202,30 @@ export default function App({ user }) {
             font-size: 28px;
           }
         }
-        /* QuickLog popover + toast — anchored above the bottom-right FAB (desktop). */
+        /* QuickLog popover — desktop: anchored above the bottom-right FAB. */
         .rt-quicklog-popover { top: auto; bottom: 90px; }
+        /* QuickLog ON MOBILE = the capture SHEET (Phase 2): full-width
+           bottom sheet over a blurred backdrop, safe-area aware. Desktop
+           keeps the bottom-right popover (rule above). */
+        @media (max-width: 768px) {
+          .rt-quicklog-popover {
+            top: auto !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            border-radius: 18px 18px 0 0 !important;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+            max-height: 76vh;
+            overflow-y: auto;
+          }
+          .rt-quicklog-backdrop {
+            background: rgba(20,30,22,0.38) !important;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+          }
+        }
         .rt-quicklog-toast { top: auto; bottom: 90px; }
         /* Mobile pinned FAB lives in the docked nav; hide it on desktop. */
         .rt-mob-fab { display: flex; }
@@ -5618,25 +5647,30 @@ export default function App({ user }) {
            painting bg on the container shows a misaligned rectangle to
            the left of the event. The cursor change + slight title color
            shift on hover (set inline below) carry the click affordance. */
-        /* Counter-scale utility: elements inside the dial layer (which is scaled
-           by var(--dial-scale)) that should render at a CONSTANT on-screen size
-           regardless of scale. Cancels out the parent transform by 1/scale.
-           Per-element transform-origin is set inline so positioning anchors
-           correctly. */
-        .rt-dial-cs { transform: scale(calc(1 / var(--dial-scale, 1))); }
+        /* Counter-scale utility — SOFTENED (June 2026). The old rule pinned
+           events/controls at CONSTANT on-screen size (scale 1/s) while the
+           dial shrank around them; at laptop sizes events rendered ~156% of
+           proportional and the geometry broke. Now: a per-breakpoint
+           --dial-cs lets them shrink WITH the dial, just ~10% less, so the
+           composition stays proportional and the text stays readable.
+           Effective event size = --dial-scale × --dial-cs. Per-element
+           transform-origin stays inline so anchors hold. */
+        .rt-dial-cs { transform: scale(var(--dial-cs, 1)); }
         /* Controls sit in the gap, just left of the scaled dial's visible edge. */
         /* (Today/Tomorrow + Now controls now render inside the dial component
            at the disc's bottom-center, so they scale with the dial.) */
         /* Dial scales down on smaller screens (it's a fixed 720×888 composition;
            scaling the whole layer keeps every internal piece aligned). */
-        .rt-today-v4 { --dial-scale: 0.90; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.82; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.74; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.64; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.56; } }
-        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.72; } }
-        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.62; } }
-        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.52; } }
+        /* Raised floor: events scale down too now, so the dial no longer
+           needs to collapse to make room for full-size cards. */
+        .rt-today-v4 { --dial-scale: 0.92; --dial-cs: 1.04; }
+        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.86; --dial-cs: 1.07; } }
+        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.80; --dial-cs: 1.09; } }
+        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.74; --dial-cs: 1.11; } }
+        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.70; --dial-cs: 1.13; } }
+        @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.78; --dial-cs: 1.09; } }
+        @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.72; --dial-cs: 1.12; } }
+        @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.66; --dial-cs: 1.15; } }
         /* Connect Google Calendar nudge — dotted underline on rest,
            solid on hover. Primary green to match the rest of the link
            treatment sitewide. */
@@ -9823,6 +9857,7 @@ export default function App({ user }) {
         <>
           {/* Click-outside catcher */}
           <div
+            className="rt-quicklog-backdrop"
             onClick={() => { setQuickLogOpen(false); setQuickLogText(""); }}
             style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.18)", zIndex: 199 }}
           />
@@ -9838,7 +9873,23 @@ export default function App({ user }) {
             padding: 14,
             zIndex: 200,
           }}>
-            <div style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.5, fontWeight: 600, marginBottom: 8 }}>QUICK LOG</div>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: C.textMuted, letterSpacing: 0.5, fontWeight: 600 }}>CAPTURE</span>
+              <span style={{ flex: 1 }} />
+              {/* Brain Dump — long-form capture lives one tap away. */}
+              <button
+                onClick={() => { setQuickLogOpen(false); setQuickLogText(""); setBrainDumpOpen(true); }}
+                title="Brain Dump — paste your call notes, Rai sorts them into tasks"
+                aria-label="Brain Dump"
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 13, background: "rgba(124,92,243,0.10)", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4.3c1-1.1 2.7-1.4 4-.7 1.2.6 2 1.8 2.1 3.1 1 .5 1.9 1.6 1.9 2.9 0 .8-.3 1.5-.8 2.1.4.6.6 1.3.5 2-.2 1.5-1.3 2.7-2.8 3-.6 1.2-1.9 2-3.3 2-.6 0-1.1-.1-1.6-.4-.5.3-1 .4-1.6.4-1.4 0-2.7-.8-3.3-2-1.5-.3-2.6-1.5-2.8-3-.1-.7.1-1.4.5-2-.5-.6-.8-1.3-.8-2.1 0-1.3.9-2.4 1.9-2.9.1-1.3.9-2.5 2.1-3.1 1.3-.7 3-.4 4 .7Z" fill="#7c5cf3" />
+                  <path d="M12 4.6v13.8" stroke="#fff" strokeWidth="1.5" />
+                  <path d="M9.3 8c-1.1.2-1.9 1-2 2.1M9.6 12.4c-1.3.1-2.2.9-2.4 2M14.7 8c1.1.2 1.9 1 2 2.1M14.4 12.4c1.3.1 2.2.9 2.4 2" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                </svg>
+              </button>
+            </div>
             <textarea
               autoFocus
               value={quickLogText}
@@ -10015,6 +10066,51 @@ export default function App({ user }) {
               rows={3}
               style={{ width: "100%", padding: "8px 0", border: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", outline: "none", resize: "none", lineHeight: 1.5, color: C.text, minHeight: 60, boxSizing: "border-box" }}
             />
+            {/* Live ghost-parse readout — composer parity. Same parser the
+                submit handler uses, run per keystroke for the preview. */}
+            {(() => {
+              const raw = quickLogText.trim();
+              if (raw.length < 3) return null;
+              let p = null;
+              try { p = parseComposer(raw, clients, workersList); } catch (_) { return null; }
+              const lower = raw.toLowerCase();
+              const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lower);
+              const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lower);
+              let cal = null;
+              try { cal = parseCalendarEntry(raw, new Date(), clients); } catch (_) { /* no time token */ }
+              const route = (cal && cal.starts_at) ? "event" : (isCommNoun || isPastTouch) ? "touchpoint" : "task";
+              let dueLabel = null;
+              const md = p.matchedDate && p.matchedDate.date;
+              if (md instanceof Date && !isNaN(md)) {
+                try { dueLabel = md.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch (_) { /* noop */ }
+              }
+              const chips = [];
+              if (p.matchedClient?.name) chips.push({ k: "client", label: p.matchedClient.name, strong: true });
+              if (p.matchedWorker?.name) chips.push({ k: "worker", label: p.matchedWorker.name });
+              if (dueLabel) chips.push({ k: "date", label: dueLabel });
+              if (p.matchedRecurrence) chips.push({ k: "rec", label: "∞ repeats" });
+              chips.push({ k: "type", label: route === "event" ? "Event" : route === "touchpoint" ? "Touchpoint" : "Task" });
+              return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 10.5, color: C.textMuted, marginBottom: 6, lineHeight: 1.5 }}>
+                    <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}>Becomes</span>
+                    {" → "}{route === "event" ? "a calendar event" : route === "touchpoint" ? "a logged touchpoint" : "a task"}
+                    {p.matchedClient?.name ? <> for <b style={{ color: C.primary, fontWeight: 600 }}>{p.matchedClient.name}</b></> : null}
+                    {dueLabel && route !== "touchpoint" ? <>, <b style={{ color: C.primary, fontWeight: 600 }}>{dueLabel}</b></> : null}
+                  </div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                    {chips.map(c => (
+                      <span key={c.k} style={{
+                        display: "inline-flex", alignItems: "center",
+                        fontSize: 10, fontWeight: 600, borderRadius: 7, padding: "3px 8px",
+                        background: c.k === "type" ? C.primarySoft : C.surface,
+                        color: c.k === "type" ? C.primary : (c.strong ? C.text : C.textSec),
+                      }}>{c.label}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, paddingTop: 10, borderTop: "0.5px solid " + C.borderLight }}>
               <span style={{ fontSize: 11, color: C.textMuted }}>Past tense → touchpoint · future → task</span>
               <span style={{ fontSize: 11, color: C.textMuted }}>⏎ to log · Esc</span>
@@ -10024,6 +10120,19 @@ export default function App({ user }) {
       )}
 
 
+
+      {/* Brain Dump — review-before-commit extraction modal. App-level so
+          it works from every page (capture sheet, Today composer). */}
+      <BrainDump
+        open={brainDumpOpen}
+        onClose={() => setBrainDumpOpen(false)}
+        clients={clients}
+        user={user}
+        onCommitted={({ tasks: newTasks, failed }) => {
+          if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
+          if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
+        }}
+      />
 
       {/* Toast — bottom-right confirmation with undo */}
       {quickLogToast && (
