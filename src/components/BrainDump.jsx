@@ -87,33 +87,68 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
   const [manualPick, setManualPick] = useState(false);
 
   // ── Draft persistence ───────────────────────────────────────────────
-  // The dump is the user's asset — losing it to a stray navigation is
-  // unacceptable. Persist the whole session (dump, client, review items)
-  // to localStorage for 48h, restore on open, clear only on commit.
-  const DRAFT_TTL_MS = 48 * 60 * 60 * 1000;
+  // Adam's rule (June 2026): a dump survives an ACCIDENTAL exit only.
+  // Click out and come back within 5 minutes — everything's there.
+  // Beyond 5 minutes it wasn't an accident: fresh slate, every time.
+  // Old dumps (and their stale client context) must never resurface.
+  // The 5-minute clock anchors to the CLICK-OUT (we stamp savedAt on
+  // every change while open AND once more on close).
+  const DRAFT_TTL_MS = 5 * 60 * 1000;
   const draftKey = `rt:brainDumpDraft:${user?.id || "anon"}`;
   const draftRestored = useRef(false);
   useEffect(() => {
-    if (!open || draftRestored.current) return;
+    if (!open) { draftRestored.current = false; return; } // re-arm for the next open
+    if (draftRestored.current) return;
     draftRestored.current = true;
+    let restored = false;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.savedAt && Date.now() - d.savedAt <= DRAFT_TTL_MS) {
+          if (d.dump) setDump(d.dump);
+          if (d.clientId) setClientId(d.clientId);
+          if (Array.isArray(d.items) && d.items.length) { setItems(d.items); }
+          if (d.step === "review" && Array.isArray(d.items) && d.items.length) setStep("review");
+          restored = true;
+        } else {
+          window.localStorage.removeItem(draftKey);
+        }
+      }
+    } catch { /* corrupt draft — treat as absent */ }
+    if (!restored) {
+      // Expired or absent — ALSO reset the in-memory state. The component
+      // can stay mounted across open/close cycles, so React state would
+      // otherwise resurrect the old dump even with localStorage cleared.
+      setDump("");
+      setItems([]);
+      setStep("input");
+      setClientId(null);
+      setManualPick(false);
+    }
+  }, [open]);
+  // Final stamp on close — the 5-minute window starts at the click-out,
+  // not at the last keystroke.
+  useEffect(() => {
+    if (open) return;
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (!raw) return;
       const d = JSON.parse(raw);
-      if (!d.savedAt || Date.now() - d.savedAt > DRAFT_TTL_MS) {
-        window.localStorage.removeItem(draftKey);
-        return;
-      }
-      if (d.dump) setDump(d.dump);
-      if (d.clientId) setClientId(d.clientId);
-      if (Array.isArray(d.items) && d.items.length) { setItems(d.items); }
-      if (d.step === "review" && Array.isArray(d.items) && d.items.length) setStep("review");
-    } catch { /* corrupt draft — ignore */ }
+      d.savedAt = Date.now();
+      window.localStorage.setItem(draftKey, JSON.stringify(d));
+    } catch { /* unavailable */ }
   }, [open]);
   useEffect(() => {
     if (!open) return;
     try {
-      if (!dump && items.length === 0) return;
+      if (!dump && items.length === 0) {
+        // User cleared everything while open — intentional. Delete the
+        // stored draft too, or the close-stamp would refresh the OLD
+        // draft's clock and the deleted text would resurrect on reopen.
+        window.localStorage.removeItem(draftKey);
+        return;
+      }
       window.localStorage.setItem(draftKey, JSON.stringify({
         dump, clientId, items, step, savedAt: Date.now(),
       }));
@@ -467,7 +502,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             {/* ── Action bar ── */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px 16px" }}>
               <span style={{ fontSize: 11, color: C.textMuted, fontWeight: 500 }}>
-                {wordCount > 0 ? `${wordCount} word${wordCount === 1 ? "" : "s"} · draft saved` : ""}
+                {wordCount > 0 ? `${wordCount} word${wordCount === 1 ? "" : "s"} · held 5 min if you step out` : ""}
               </span>
               <span style={{ flex: 1 }} />
               <button
