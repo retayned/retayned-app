@@ -63,7 +63,10 @@ const THEME_CSS = `
     --rt-text-muted: #9A9A93;
     --rt-ink-500: #6B6B66;
     --rt-ink-300: #C4C4BD;
-    --rt-border: #ECEFEC;
+    /* Card edge — darkened Jun 2026. #ECEFEC sat ~14 RGB pts off the bg,
+       so 1px borders antialiased into invisibility on most displays and the
+       whole border-standardization pass read as "didn't take." */
+    --rt-border: #E1E5E1;
     --rt-border-light: #F2F4F2;
     --rt-border-soft: #F2F4F2;
     --rt-btn-light: #d6cbfb;
