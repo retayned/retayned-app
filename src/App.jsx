@@ -128,6 +128,28 @@ export default function App({ user }) {
   // open it from ANY page, not just Today. TodayPage's brain button now
   // drives this same state via pageCtx.
   const [brainDumpOpen, setBrainDumpOpen] = useState(false);
+  // Dock breathes with scroll: scrolling DOWN shrinks the pill out of the
+  // way; scrolling up (or nearing the top) restores it. Listens in capture
+  // phase so it catches the .r-main scroller as well as the window.
+  const [dockShrunk, setDockShrunk] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let lastY = 0;
+    const yOf = () => {
+      const m = document.querySelector(".r-main");
+      return Math.max(window.scrollY || 0, m ? m.scrollTop : 0);
+    };
+    const onScroll = () => {
+      const y = yOf();
+      const dy = y - lastY;
+      if (y < 40) setDockShrunk(false);
+      else if (dy > 6) setDockShrunk(true);
+      else if (dy < -6) setDockShrunk(false);
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", onScroll, { capture: true });
+  }, []);
   const [quickLogText, setQuickLogText] = useState("");
   // Toast shape: { id, taskId, taskRef } where taskRef is the optimistic
   // task object so undo can restore it precisely.
@@ -5255,6 +5277,13 @@ export default function App({ user }) {
            Falling back to the inline JSX position (absolute, dropping below
            the chip) makes the relationship clear and matches Worker. */
         .r-main { padding: 16px 16px 96px; scrollbar-gutter: stable; }
+        /* Mobile: the dock FLOATS (bottom 10px + safe-area + ~58px pill).
+           On phones with a home indicator that stack reaches ~100px, so a
+           fixed 96px clearance left the last row hidden until the URL bar
+           collapsed. Generous, safe-area-aware clearance. */
+        @media (max-width: 768px) {
+          .r-main { padding-bottom: calc(132px + env(safe-area-inset-bottom, 0px)) !important; }
+        }
         /* Today page: hide the scrollbar (and its gutter) for a clean edge. */
         .r-main:has(.rt-today-v4) { scrollbar-gutter: auto; }
         .r-main:has(.rt-today-v4)::-webkit-scrollbar { display: none; }
@@ -9700,6 +9729,8 @@ export default function App({ user }) {
         // thumb-sized object. Only the ACTIVE destination gets a labeled
         // pill; everything else is a quiet icon. Muted sage for inactive.
         const MUT = "#7d877f";
+        // Icons only — no labels anywhere (Adam, June 2026). Active =
+        // white icon + small sage dot beneath. 44px hit targets (HIG).
         const tabBtn = (n) => {
           const dot = hasDot(n.id);
           const active = page === n.id;
@@ -9709,18 +9740,19 @@ export default function App({ user }) {
               className={"nav-item-mobile" + (active ? " is-active" : "")}
               onClick={() => { setMobileMoreOpen(false); goTo(n.id); }}
               aria-label={n.label}
+              title={n.label}
               style={{
-                display: "flex", alignItems: "center", gap: 5,
-                background: active ? "rgba(85,139,104,0.22)" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                minWidth: 44, minHeight: 44,
+                background: "transparent",
                 border: "none", cursor: "pointer", fontFamily: "inherit",
-                borderRadius: 999, padding: active ? "6px 12px" : "6px 9px",
+                borderRadius: 999, padding: 0,
                 position: "relative",
-                transition: "background 150ms ease",
               }}
             >
-              <Icon name={n.icon} size={17} color={active ? "#fff" : MUT} accent={active ? C.primaryLight : MUT} />
-              {active && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{n.label}</span>}
-              {dot && <div style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.sidebar }} />}
+              <Icon name={n.icon} size={19} color={active ? "#fff" : MUT} accent={active ? C.primaryLight : MUT} />
+              {active && <div style={{ position: "absolute", bottom: 5, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: 999, background: "#9FE1CB" }} />}
+              {dot && <div style={{ position: "absolute", top: 6, right: 8, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px rgba(30,38,31,0.9)" }} />}
             </button>
           );
         };
@@ -9763,33 +9795,44 @@ export default function App({ user }) {
                 position: "fixed",
                 left: 12, right: 12,
                 bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-                background: C.sidebar,
+                background: "rgba(30,38,31,0.72)",
+                backdropFilter: "blur(12px) saturate(1.15)",
+                WebkitBackdropFilter: "blur(12px) saturate(1.15)",
+                border: "1px solid rgba(255,255,255,0.09)",
                 borderRadius: 999,
-                boxShadow: "0 10px 28px rgba(20,30,22,0.28)",
-                padding: "8px 10px",
+                boxShadow: "0 12px 32px rgba(20,30,22,0.30)",
+                padding: "5px 10px",
                 zIndex: 90,
                 display: keyboardOpen ? "none" : "flex",
                 alignItems: "center",
                 justifyContent: "space-around",
                 gap: 2,
+                transform: dockShrunk ? "scale(0.86)" : "none",
+                opacity: dockShrunk ? 0.92 : 1,
+                transformOrigin: "center bottom",
+                transition: "transform 240ms var(--rt-ease-out), opacity 240ms var(--rt-ease-out)",
               }}
             >
               {left.map(tabBtn)}
+              {/* The green + is THE action of the bar — same hero status as
+                  the desktop FAB. Slightly raised, glow ring, never muted. */}
               <button
                 onClick={() => { setMobileMoreOpen(false); setQuickLogOpen(v => !v); }}
                 aria-label="Quick capture"
                 className="rt-mob-fab"
                 style={{
-                  width: 40, height: 40, borderRadius: "50%", border: "none",
+                  width: 50, height: 50, borderRadius: "50%", border: "none",
                   background: C.primaryLight,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   cursor: "pointer", padding: 0, flexShrink: 0,
+                  marginTop: -16,
+                  boxShadow: "0 6px 18px rgba(85,139,104,0.50), 0 0 0 4px rgba(85,139,104,0.16)",
                   transform: quickLogOpen ? "rotate(45deg)" : "none",
                   transition: "transform 180ms ease-out",
                 }}
               >
-                <svg width="19" height="19" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                  <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                <svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
                 </svg>
               </button>
               {right.map(tabBtn)}
@@ -9802,21 +9845,21 @@ export default function App({ user }) {
                     className={"nav-item-mobile" + (moreActive ? " is-active" : "")}
                     aria-label="More pages"
                     style={{
-                      display: "flex", alignItems: "center", gap: 5,
-                      background: moreActive ? "rgba(85,139,104,0.22)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      minWidth: 44, minHeight: 44,
+                      background: "transparent",
                       border: "none", cursor: "pointer", fontFamily: "inherit",
-                      borderRadius: 999, padding: moreActive ? "6px 12px" : "6px 9px",
+                      borderRadius: 999, padding: 0,
                       position: "relative",
-                      transition: "background 150ms ease",
                     }}
                   >
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <circle cx="5" cy="12" r="1.9" fill={moreColor} />
                       <circle cx="12" cy="12" r="1.9" fill={moreColor} />
                       <circle cx="19" cy="12" r="1.9" fill={moreColor} />
                     </svg>
-                    {moreActive && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>More</span>}
-                    {sheetHasDot && !mobileMoreOpen && <div style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.sidebar }} />}
+                    {moreActive && <div style={{ position: "absolute", bottom: 5, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: 999, background: "#9FE1CB" }} />}
+                    {sheetHasDot && !mobileMoreOpen && <div style={{ position: "absolute", top: 6, right: 8, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px rgba(30,38,31,0.9)" }} />}
                   </button>
                 );
               })()}
