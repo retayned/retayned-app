@@ -19,7 +19,7 @@ export default function ReferralIntelPage({ app }) {
                 { l: "Building", v: referralReadiness.filter(r => r.tier === "building").length, c: C.warning },
                 { l: "Not Yet", v: referralReadiness.filter(r => r.tier === "not_yet").length, c: C.textMuted },
               ].map((s, i) => (
-                <div key={i} style={{ background: C.card, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
+                <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", marginBottom: 3 }}>{s.l}</div>
                   <div style={{ fontSize: 24, fontWeight: 800, color: s.c }}>{s.v}</div>
                 </div>
@@ -31,7 +31,7 @@ export default function ReferralIntelPage({ app }) {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.success, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🎯 Ready to Ask</div>
                 {referralReadiness.filter(r => r.tier === "ready").map(c => (
-                  <div key={c.id} style={{ background: C.card, borderRadius: 12, padding: "16px", marginBottom: 10, boxShadow: "var(--rt-sh-card)" }}>
+                  <div key={c.id} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "16px", marginBottom: 10, boxShadow: "var(--rt-sh-card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <div>
                         <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
@@ -62,7 +62,7 @@ export default function ReferralIntelPage({ app }) {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.warning, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>🔄 Building Toward It</div>
                 {referralReadiness.filter(r => r.tier === "building").map(c => (
-                  <div key={c.id} style={{ background: C.card, borderRadius: 12, padding: "16px", marginBottom: 10, boxShadow: "var(--rt-sh-card)" }}>
+                  <div key={c.id} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "16px", marginBottom: 10, boxShadow: "var(--rt-sh-card)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <div>
                         <span style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</span>
@@ -88,7 +88,7 @@ export default function ReferralIntelPage({ app }) {
             {referralReadiness.filter(r => r.tier === "not_yet").length > 0 && (
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>⏳ Not Yet</div>
-                <div style={{ background: C.card, borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, overflow: "hidden" }}>
                   {referralReadiness.filter(r => r.tier === "not_yet").map((c, i, arr) => (
                     <div key={c.id} style={{ padding: "12px 16px", borderBottom: i < arr.length - 1 ? "1px solid " + C.borderLight : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
