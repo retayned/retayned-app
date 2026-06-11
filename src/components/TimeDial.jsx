@@ -564,11 +564,23 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               {p.e.client_name ? (
                 <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.client_name}</span>
               ) : null}
-              {/* "Needs client" attribution affordance REMOVED (June 2026).
-                  The matcher re-runs on every 15-min sync, so the durable
-                  fix for an unmatched event is renaming it in Google
-                  Calendar — that propagates to every future instance.
-                  Per-instance in-app linking was a band-aid. */}
+              {/* "+ client" attribution affordance — RESTORED (June 2026,
+                  Adam: mission-critical). EVERY event with no client or
+                  rolodex linkage shows it; renaming in Google Calendar only
+                  helps Google events, and manual events have no other path.
+                  Clicking opens the floating link-picker (App-level portal)
+                  anchored to this chip; the edge function also learns title
+                  aliases so future instances auto-match. */}
+              {!p.e.client_id && !p.e.rolodex_id && !p.e.client_name && onRequestLink ? (
+                <button
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    const r = ev.currentTarget.getBoundingClientRect();
+                    onRequestLink({ eventId: p.e.id, anchorRect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+                  }}
+                  style={{ marginTop: 2, background: "transparent", border: "1px dashed rgba(28,50,36,0.35)", borderRadius: 999, padding: "1px 8px", fontSize: 9.5, fontWeight: 700, color: "#33543E", cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.3 }}
+                >+ client</button>
+              ) : null}
               {/* Prep pill REMOVED from the rail (June 2026). Prep count
                   surfaces only in the right-side hub now ("Prep · N open /
                   N open task for [client]"). The rail row was colliding
@@ -665,6 +677,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
               {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
+              {!hubEvent.client_id && !hubEvent.rolodex_id && !hubEvent.client_name && onRequestLink ? (
+                <button
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    const r = ev.currentTarget.getBoundingClientRect();
+                    onRequestLink({ eventId: hubEvent.id, anchorRect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+                  }}
+                  style={{ marginTop: 4, background: "transparent", border: "1px dashed rgba(28,50,36,0.35)", borderRadius: 999, padding: "2px 10px", fontSize: 10.5, fontWeight: 700, color: "#33543E", cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.3 }}
+                >+ client</button>
+              ) : null}
 
               {/* Body — either prep section OR reschedule editor. 22px
                   vertical breathing room above replaces the hairline +
@@ -806,6 +828,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
               {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
+              {!hubEvent.client_id && !hubEvent.rolodex_id && !hubEvent.client_name && onRequestLink ? (
+                <button
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    const r = ev.currentTarget.getBoundingClientRect();
+                    onRequestLink({ eventId: hubEvent.id, anchorRect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } });
+                  }}
+                  style={{ marginTop: 4, background: "transparent", border: "1px dashed rgba(28,50,36,0.35)", borderRadius: 999, padding: "2px 10px", fontSize: 10.5, fontWeight: 700, color: "#33543E", cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.3 }}
+                >+ client</button>
+              ) : null}
 
               {/* Prep section — copied from the selected-event branch
                   so the default state offers the same context. Shows
