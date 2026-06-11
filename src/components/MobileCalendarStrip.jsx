@@ -197,26 +197,54 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       const cy = BASE_Y - 2 * LIFT, mt = 1 - f;
       return mt * mt * BASE_Y + 2 * mt * f * cy + f * f * BASE_Y;
     };
+    // VISIBLE SCHEDULE (June 2026 redesign): dots carry their time beneath
+    // them (skipped when a neighbor's label is too close), and the NEXT
+    // event is rendered as a named mini-card riding the band instead of a
+    // dot — the band reads as a schedule at a glance, not decoration.
+    let lastLabeledF = -1;
     const dotEls = dayEvents.map((e, i) => {
       const f = fracFor(e._start);
       if (f < 0 || f > 1) return null;
-      const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
       const isNext = nextEvent && e.id === nextEvent.id;
+      if (isNext) return null; // rendered as the mini-card chip below
+      const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
       const y = curveY(f);
-      const sz = 5; // uniform diameter for all dots
+      const sz = 7;
+      const showLabel = f - lastLabeledF >= 0.085;
+      if (showLabel) lastLabeledF = f;
       return (
         <div key={e.id || i} aria-hidden style={{ position: "absolute", left: `${(f * 100).toFixed(2)}%`, top: y, transform: "translate(-50%, -50%)", width: sz, height: sz, pointerEvents: "none" }}>
-          {/* quiet halo for the next event */}
-          {isNext && <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: sz + 9, height: sz + 9, borderRadius: "50%", border: "1px solid rgba(51,84,62,0.25)" }} />}
           <div style={{
             width: sz, height: sz, borderRadius: "50%",
-            background: isPast ? C.bg : (isNext ? C.primary : C.primaryLight),
+            background: isPast ? C.bg : C.primaryLight,
             border: isPast ? "1.5px solid " + C.ink300 : "none",
             boxSizing: "border-box",
           }} />
+          {showLabel && (
+            <div style={{ position: "absolute", top: sz + 3, left: "50%", transform: "translateX(-50%)", fontSize: 8.5, fontWeight: 700, color: isPast ? C.ink300 : C.textSec, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {fmtTimeShort(e._start)}
+            </div>
+          )}
         </div>
       );
     });
+    // Next event — named mini-card anchored to its time position on the
+    // band. Edge-aware shift keeps it on-screen near 6am/midnight.
+    const nextChip = nextEvent ? (() => {
+      const f = fracFor(nextEvent._start);
+      if (f < 0 || f > 1) return null;
+      const y = curveY(f);
+      const tx = f < 0.2 ? "translateX(-12px)" : f > 0.8 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)";
+      return (
+        <div aria-hidden style={{ position: "absolute", left: `${(f * 100).toFixed(2)}%`, top: y, pointerEvents: "none", zIndex: 2 }}>
+          <div style={{ position: "absolute", left: 0, top: 0, transform: "translate(-50%,-50%)", width: 7, height: 7, borderRadius: "50%", background: C.primary, boxShadow: "0 0 0 3px rgba(51,84,62,0.16)" }} />
+          <div style={{ position: "absolute", top: -31, left: 0, transform: tx, background: C.card, borderRadius: 8, padding: "3px 8px", border: "1px solid rgba(85,139,104,0.45)", boxShadow: "0 3px 10px rgba(85,139,104,0.14)", whiteSpace: "nowrap", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, color: C.primary, fontVariantNumeric: "tabular-nums" }}>{fmtTimeShort(nextEvent._start)}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 600, color: C.text }}> {nextEvent.title}</span>
+          </div>
+        </div>
+      );
+    })() : null;
 
     return (
       <div
@@ -255,11 +283,13 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
           </svg>
           {/* NOW seeker — a small solid marker riding the curve at current time */}
           {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
-            <div aria-hidden style={{ position: "absolute", left: `${(nowFrac * 100).toFixed(2)}%`, top: curveY(nowFrac), transform: "translate(-50%, -50%)", width: 12, height: 12, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 3px rgba(250,251,250,0.9)", background: "rgba(250,251,250,0.9)" }}>
+            <div aria-hidden style={{ position: "absolute", left: `${(nowFrac * 100).toFixed(2)}%`, top: curveY(nowFrac), transform: "translate(-50%, -50%)", width: 12, height: 12, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 3px rgba(250,251,250,0.9)", background: "rgba(250,251,250,0.9)", zIndex: 3 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.primaryDeep, animation: "rtNowPulse 2.4s ease-out infinite" }} />
+              <div style={{ position: "absolute", top: 13, left: "50%", transform: "translateX(-50%)", fontSize: 7.5, fontWeight: 800, letterSpacing: 1.1, color: C.primaryDeep }}>NOW</div>
             </div>
           )}
           {dotEls}
+          {nextChip}
           {/* Scrub overlay — cursor rides the curve; bubble shows the
               scrubbed time, or the nearest event when within ~45 min. */}
           {scrubFrac != null && (() => {
