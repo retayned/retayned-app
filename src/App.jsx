@@ -9636,106 +9636,130 @@ export default function App({ user }) {
       {(() => {
         const primary = tier === "enterprise" ? mobileNavEnterprisePrimary : mobileNavPrimary;
         const moreBase = tier === "enterprise" ? mobileNavEnterpriseMore : mobileNavMore;
-        // All items inline now. Order matters: primary first (visible without
-        // scrolling on a typical phone), then overflow further right.
-        const allItems = [...primary, ...moreBase];
-        const navItem = (n) => {
+        // REBUILT (June 2026): fixed light bar — 2 tabs, deep-green capture
+        // FAB, 1 tab, More. Nothing scrolls, nothing hides under the FAB.
+        // Portaled to <body> so no ancestor transform/stacking context can
+        // make position:fixed wobble with page scroll (the trap that bit
+        // the Brain Dump overlay). The remaining destinations live in the
+        // More bottom sheet. To change which page holds the 4th slot,
+        // reorder mobileNavPrimary in nav.js — slot = primary[2].
+        // SSR/harness guard: portals need a REAL DOM node. The smoke
+        // harness shims `document` without element nodes, so check
+        // nodeType rather than mere existence.
+        if (typeof document === "undefined" || !document.body || document.body.nodeType !== 1) return null;
+        const left = primary.slice(0, 2);
+        const right = primary.slice(2, 3);
+        const sheetItems = [...primary.slice(3), ...moreBase];
+        const sheetHasDot = sheetItems.some(n => hasDot(n.id));
+        const tabBtn = (n) => {
           const dot = hasDot(n.id);
           const active = page === n.id;
           return (
-            <div
+            <button
               key={n.id}
               className={"nav-item-mobile" + (active ? " is-active" : "")}
-              onClick={() => goTo(n.id)}
+              onClick={() => { setMobileMoreOpen(false); goTo(n.id); }}
               style={{
-                flex: "0 0 64px", minWidth: 64,
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
-                cursor: "pointer", padding: "6px 2px", borderRadius: 12,
-                background: active ? "rgba(85,139,104,0.12)" : "transparent",
-                position: "relative",
-                transition: "background 160ms var(--rt-ease-out)",
-                scrollSnapAlign: "center",
+                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                background: "transparent", border: "none", cursor: "pointer",
+                padding: "7px 2px 5px", position: "relative", fontFamily: "inherit",
               }}
             >
-              <Icon name={n.icon} size={23} color={active ? C.primaryDeep : C.textSec} accent={active ? C.primary : C.ink500} />
-              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 600, color: active ? C.primaryDeep : C.textSec }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 2, right: 14, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2.5px " + C.sidebar }} />}
-            </div>
+              <Icon name={n.icon} size={21} color={active ? C.primary : C.textMuted} accent={active ? C.primary : C.ink300} />
+              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 500, color: active ? C.primary : C.textMuted }}>{n.label}</span>
+              {dot && <div style={{ position: "absolute", top: 4, left: "calc(50% + 8px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.card }} />}
+            </button>
           );
         };
-        // Single scrollable strip with the FAB overlaid absolutely on top
-        // of the dock — the prior split-halves design rendered as two
-        // visually-separate strips, which broke the read of a unified nav.
-        // The strip has a centered "gap reservation" (an empty flex spacer
-        // matching the FAB's footprint) so items never permanently sit
-        // under the FAB at rest, but can scroll past it freely.
-        const halfCount = Math.ceil(allItems.length / 2);
-        return (
-          <div
-            className="r-mob-bot-dock"
-            style={{
-              position: "fixed",
-              bottom: -2, left: 0, right: 0,
-              background: C.sidebar,
-              borderRadius: "18px 18px 0 0",
-              borderTop: "1px solid rgba(20,30,22,0.12)",
-              boxShadow: "0 -1px 2px rgba(20,30,22,0.04), 0 -6px 20px rgba(20,30,22,0.10)",
-              padding: "8px 0 calc(12px + env(safe-area-inset-bottom, 0px))",
-              zIndex: 50,
-              display: keyboardOpen ? "none" : "block",
-            }}
-          >
-            {/* Single horizontal scrollable strip containing every nav item.
-                A centered empty spacer (width = FAB diameter + breathing
-                room) reserves the slot the FAB sits over, so on first
-                paint items are evenly distributed and the FAB doesn't
-                land on any of them. As the user scrolls horizontally,
-                items pass behind the FAB but the FAB itself stays put. */}
+        return createPortal(
+          <>
+            {mobileMoreOpen && (
+              <div className="r-mob-bot-dock" style={{ position: "fixed", inset: 0, zIndex: 89 }}>
+                <div onClick={() => setMobileMoreOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(20,30,22,0.38)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }} />
+                <div style={{
+                  position: "absolute", left: 0, right: 0, bottom: 0,
+                  background: C.card, borderRadius: "18px 18px 0 0",
+                  padding: "12px 16px calc(86px + env(safe-area-inset-bottom, 0px))",
+                  boxShadow: "0 -10px 36px rgba(20,30,22,0.16)",
+                }}>
+                  <div style={{ width: 32, height: 4, borderRadius: 999, background: C.borderLight, margin: "0 auto 12px" }} />
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.5, marginBottom: 9 }}>MORE</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+                    {sheetItems.map(n => {
+                      const dot = hasDot(n.id);
+                      const active = page === n.id;
+                      return (
+                        <button key={n.id} onClick={() => { setMobileMoreOpen(false); goTo(n.id); }} style={{
+                          display: "flex", alignItems: "center", gap: 8,
+                          background: active ? C.primarySoft : C.surface, border: "none", borderRadius: 10,
+                          padding: "12px 13px", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                        }}>
+                          <Icon name={n.icon} size={17} color={active ? C.primary : C.textSec} accent={active ? C.primary : C.ink300} />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: active ? C.primary : C.text }}>{n.label}</span>
+                          {dot && <span style={{ marginLeft: "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
             <div
-              className="r-mob-nav-strip"
+              className="r-mob-bot-dock"
               style={{
-                display: "flex", alignItems: "center",
-                overflowX: "auto", overflowY: "hidden",
-                paddingLeft: 8, paddingRight: 8,
-                scrollbarWidth: "none",
-                WebkitOverflowScrolling: "touch",
-                gap: 2,
+                position: "fixed", bottom: 0, left: 0, right: 0,
+                background: C.card,
+                borderTop: "1px solid " + C.border,
+                boxShadow: "0 -4px 16px rgba(20,30,22,0.05)",
+                padding: "0 6px calc(6px + env(safe-area-inset-bottom, 0px))",
+                zIndex: 90,
+                display: keyboardOpen ? "none" : "flex",
+                alignItems: "center",
               }}
             >
-              {/* First half of items */}
-              {allItems.slice(0, halfCount).map(navItem)}
-              {/* FAB gap reservation — empty flex spacer the FAB hovers over.
-                  Width ≈ FAB diameter (46) + breathing room (16). */}
-              <div style={{ flex: "0 0 62px", minWidth: 62, height: 1 }} aria-hidden="true" />
-              {/* Second half of items */}
-              {allItems.slice(halfCount).map(navItem)}
+              {left.map(tabBtn)}
+              <div style={{ flex: "0 0 66px", display: "flex", justifyContent: "center" }}>
+                <button
+                  onClick={() => { setMobileMoreOpen(false); setQuickLogOpen(v => !v); }}
+                  aria-label="Quick capture"
+                  className="rt-mob-fab"
+                  style={{
+                    width: 48, height: 48, borderRadius: "50%", border: "4px solid " + C.bg,
+                    background: C.primaryDeep, marginTop: -22,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", padding: 0,
+                    boxShadow: "0 4px 14px rgba(28,50,36,0.30)",
+                    transform: quickLogOpen ? "rotate(45deg)" : "none",
+                    transition: "transform 180ms ease-out",
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                    <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+              {right.map(tabBtn)}
+              <button
+                onClick={() => setMobileMoreOpen(v => !v)}
+                className={"nav-item-mobile" + (mobileMoreOpen ? " is-active" : "")}
+                aria-label="More pages"
+                style={{
+                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  background: "transparent", border: "none", cursor: "pointer",
+                  padding: "7px 2px 5px", position: "relative", fontFamily: "inherit",
+                }}
+              >
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.8" fill={mobileMoreOpen ? C.primary : C.textMuted} />
+                  <circle cx="12" cy="12" r="1.8" fill={mobileMoreOpen ? C.primary : C.textMuted} />
+                  <circle cx="19" cy="12" r="1.8" fill={mobileMoreOpen ? C.primary : C.textMuted} />
+                </svg>
+                <span style={{ fontSize: 9.5, fontWeight: mobileMoreOpen ? 700 : 500, color: mobileMoreOpen ? C.primary : C.textMuted }}>More</span>
+                {sheetHasDot && !mobileMoreOpen && <div style={{ position: "absolute", top: 4, left: "calc(50% + 8px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.card }} />}
+              </button>
             </div>
-            {/* FAB — absolutely positioned to the dock, centered horizontally,
-                vertically aligned to the strip. Sits ABOVE the strip in z
-                order so it stays visible while items scroll behind. */}
-            <button
-              onClick={() => setQuickLogOpen(v => !v)}
-              aria-label="Quick log"
-              className="rt-mob-fab"
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)" + (quickLogOpen ? " rotate(45deg)" : ""),
-                marginTop: -6, // tug the visual center off the safe-area padding
-                width: 46, height: 46, borderRadius: "50%", border: "none",
-                background: "#7c5cf3", backgroundImage: "var(--rt-grad-btn)",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                boxShadow: "0 3px 10px rgba(124,92,243,0.35)",
-                transition: "transform 180ms ease-out", padding: 0,
-                zIndex: 2,
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
+          </>,
+          document.body
         );
       })()}
 
