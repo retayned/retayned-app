@@ -1077,6 +1077,10 @@ export default function TodayPage({ app }) {
                   clients={clients}
                   googleConnected={googleConnected}
                   onConnectGoogle={connectGoogleCalendar}
+                  onRequestLink={({ eventId, anchorRect }) => {
+                    setLinkPicker({ eventId, anchor: anchorRect });
+                    setLinkPickerSearch("");
+                  }}
                   events={personalEvents}
                   C={C}
                   open={todayStripOpen}
@@ -3671,8 +3675,9 @@ export default function TodayPage({ app }) {
                   to the right edge, bleeding past r-main's padding. A gentle
                   top fade (page-bg → transparent) dissolves the upper arc so it
                   tucks delicately under the composer + progress banner. Sits
-                  BEHIND the content (z-index 0). Desktop only. The old
-                  TodayTimeline + Rai brief stay gated (false) below. */}
+                  BEHIND the content (z-index 0). Desktop only. (The old
+                  TodayTimeline + Rai brief blocks were fully removed in the
+                  June 2026 refactor — nothing gated remains below.) */}
               <div
                 className="rt-dial-layer"
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
