@@ -7,6 +7,8 @@ import { lookupObservationIllustration } from "../observations";
 import { C } from "../theme";
 import { retColor, retGradient } from "../utils";
 
+import { ScoreFirstCard } from "../components/Onboarding";
+
 export default function HealthPage({ app }) {
   const {
     allCompletions,
@@ -220,7 +222,6 @@ export default function HealthPage({ app }) {
                             position: "relative",
                             overflow: "hidden",
                             border: "1px solid rgba(51,84,62,0.22)",
-                            border: "1px solid rgba(51,84,62,0.22)",
                             boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Corner ✕ dismiss — top-right notification pattern */}
@@ -401,7 +402,6 @@ export default function HealthPage({ app }) {
                             padding: "24px 28px 22px",
                             position: "relative",
                             overflow: "hidden",
-                            border: "1px solid rgba(51,84,62,0.22)",
                             border: "1px solid rgba(51,84,62,0.22)",
                             boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
@@ -731,6 +731,9 @@ export default function HealthPage({ app }) {
 
 
               {/* Mobile observation — placed ABOVE the calendar widget. Desktop renders the same observation inside the rc-grid main column below. Mutually exclusive via isMobile. */}
+              {isMobile && dataLoaded && clients.length > 0 && clients.every(c => !c.profileScores || Object.keys(c.profileScores || {}).length === 0) && (
+                <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
+              )}
               {isMobile && renderObserver()}
 
               {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
@@ -964,6 +967,9 @@ export default function HealthPage({ app }) {
                       Headline + body, then divider, then metric strip + actions.
                   ═══════════════════════════════════════════════════════════════ */}
                   {/* Observation — rendered TWICE (once for mobile above calendar, once for desktop in this main column). renderObserver returns null when conditions aren't met. */}
+                  {!isMobile && dataLoaded && clients.length > 0 && clients.every(c => !c.profileScores || Object.keys(c.profileScores || {}).length === 0) && (
+                    <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
+                  )}
                   {!isMobile && renderObserver()}
                   {activeQueue.length === 0 && justCompleted.length === 0 && (
                     <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
