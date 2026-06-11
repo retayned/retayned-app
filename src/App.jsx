@@ -768,6 +768,11 @@ export default function App({ user }) {
     if (page !== "retros") return;
     setRolodexRemindersSeen(true);
     try { window.localStorage.setItem(_rolodexSeenDayKey, _todayLocalYmd()); } catch (_) { /* unavailable */ }
+    // Cross-device persistence: stamp the profile row (fire-and-forget).
+    if (user?.id) {
+      supabase.from("profiles").update({ rolodex_seen_day: _todayLocalYmd() }).eq("id", user.id)
+        .then(() => {}, () => { /* column may not exist yet — harmless */ });
+    }
   }, [page]);
   // Cleared→set true when the user opens the Health page, so the "new
   // observation" red dot disappears on visit (without changing the
@@ -1579,7 +1584,7 @@ export default function App({ user }) {
         .then(r => r, () => ({ data: [], error: null })),
       supabase
         .from('profiles')
-        .select('occurrence_flags')
+        .select('occurrence_flags, rolodex_seen_day')
         .eq('id', uid)
         .single()
         .then(r => r, () => ({ data: { occurrence_flags: {} }, error: null })),
@@ -1931,6 +1936,12 @@ export default function App({ user }) {
     // Phase 3 occurrence-model hydration. Both are no-ops if the flags
     // for any reader are false (default) — state is set but unread.
     if (occurrencesRes?.data) setTaskOccurrences(occurrencesRes.data);
+    // Rolodex dot "seen" — DB is the source of truth (localStorage was
+    // per-device, so a new device resurrected the dot). If the profile
+    // says today is already seen, suppress the dot on this device too.
+    if (profileFlagsRes?.data?.rolodex_seen_day === _todayLocalYmd()) {
+      setRolodexRemindersSeen(true);
+    }
     if (profileFlagsRes?.data?.occurrence_flags) {
       setOccurrenceFlags(profileFlagsRes.data.occurrence_flags || {});
     }
@@ -3955,16 +3966,15 @@ export default function App({ user }) {
           padding-left: 0 !important;
         }
 
-        /* Link color — was purple (#7c5cf3). Now primary forest green
-           with dotted underline. Lighter than primaryDeep — reads warmer. */
+        /* Dotted links = Rai interactions = purple (June 2026 rule). */
         .rt-purple-link {
-          color: #33543E !important;
-          text-decoration-color: #33543E !important;
+          color: #7c5cf3 !important;
+          text-decoration-color: #7c5cf3 !important;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
-            color: #2D4A37 !important;
-            text-decoration-color: #2D4A37 !important;
+            color: #6a4ce8 !important;
+            text-decoration-color: #6a4ce8 !important;
             text-decoration-style: solid !important;
           }
         }
@@ -3972,7 +3982,7 @@ export default function App({ user }) {
         /* Client-name link color in the daily brief (.rt-today-lede a). */
         .rt-today-lede a,
         .rt-today-lede a:visited {
-          color: #33543E !important;
+          color: #7c5cf3 !important;
           text-decoration-color: rgba(51,84,62,0.5) !important;
         }
 
@@ -4533,21 +4543,24 @@ export default function App({ user }) {
            outline). A border-bottom-based version got wiped out by
            those resets — Connect Google Calendar rendered with no
            underline at all. */
+        /* RULE (June 2026): dotted-underline links are Rai interactions —
+           they get the purple experience, sitewide. (Was migrated to green
+           by a prior pass; reverted by design decision.) */
         .rt-purple-link {
-          color: #33543E;
+          color: #7c5cf3;
           font-weight: 600;
           text-decoration: underline;
           text-decoration-style: dotted;
-          text-decoration-color: #33543E;
+          text-decoration-color: #7c5cf3;
           text-decoration-thickness: 1px;
           text-underline-offset: 3px;
           transition: color 0.12s, text-decoration-style 0.12s, text-decoration-color 0.12s;
         }
         @media (hover: hover) {
           .rt-purple-link:hover {
-            color: #2D4A37;
+            color: #6a4ce8;
             text-decoration-style: solid;
-            text-decoration-color: #2D4A37;
+            text-decoration-color: #6a4ce8;
           }
         }
 
@@ -9645,6 +9658,10 @@ export default function App({ user }) {
         const right = primary.slice(2, 3);
         const sheetItems = [...primary.slice(3), ...moreBase];
         const sheetHasDot = sheetItems.some(n => hasDot(n.id));
+        // Floating pill dock (design B): dark sidebar chrome folded into a
+        // thumb-sized object. Only the ACTIVE destination gets a labeled
+        // pill; everything else is a quiet icon. Muted sage for inactive.
+        const MUT = "#7d877f";
         const tabBtn = (n) => {
           const dot = hasDot(n.id);
           const active = page === n.id;
@@ -9653,15 +9670,19 @@ export default function App({ user }) {
               key={n.id}
               className={"nav-item-mobile" + (active ? " is-active" : "")}
               onClick={() => { setMobileMoreOpen(false); goTo(n.id); }}
+              aria-label={n.label}
               style={{
-                flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                background: "transparent", border: "none", cursor: "pointer",
-                padding: "7px 2px 5px", position: "relative", fontFamily: "inherit",
+                display: "flex", alignItems: "center", gap: 5,
+                background: active ? "rgba(85,139,104,0.22)" : "transparent",
+                border: "none", cursor: "pointer", fontFamily: "inherit",
+                borderRadius: 999, padding: active ? "6px 12px" : "6px 9px",
+                position: "relative",
+                transition: "background 150ms ease",
               }}
             >
-              <Icon name={n.icon} size={21} color={active ? C.primary : C.textMuted} accent={active ? C.primary : C.ink300} />
-              <span style={{ fontSize: 9.5, fontWeight: active ? 700 : 500, color: active ? C.primary : C.textMuted }}>{n.label}</span>
-              {dot && <div style={{ position: "absolute", top: 4, left: "calc(50% + 8px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.card }} />}
+              <Icon name={n.icon} size={17} color={active ? "#fff" : MUT} accent={active ? C.primaryLight : MUT} />
+              {active && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{n.label}</span>}
+              {dot && <div style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.sidebar }} />}
             </button>
           );
         };
@@ -9673,7 +9694,7 @@ export default function App({ user }) {
                 <div style={{
                   position: "absolute", left: 0, right: 0, bottom: 0,
                   background: C.card, borderRadius: "18px 18px 0 0",
-                  padding: "12px 16px calc(86px + env(safe-area-inset-bottom, 0px))",
+                  padding: "12px 16px calc(96px + env(safe-area-inset-bottom, 0px))",
                   boxShadow: "0 -10px 36px rgba(20,30,22,0.16)",
                 }}>
                   <div style={{ width: 32, height: 4, borderRadius: 999, background: C.borderLight, margin: "0 auto 12px" }} />
@@ -9701,56 +9722,66 @@ export default function App({ user }) {
             <div
               className="r-mob-bot-dock"
               style={{
-                position: "fixed", bottom: 0, left: 0, right: 0,
-                background: C.card,
-                borderTop: "1px solid " + C.border,
-                boxShadow: "0 -4px 16px rgba(20,30,22,0.05)",
-                padding: "0 6px calc(6px + env(safe-area-inset-bottom, 0px))",
+                position: "fixed",
+                left: 12, right: 12,
+                bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+                background: C.sidebar,
+                borderRadius: 999,
+                boxShadow: "0 10px 28px rgba(20,30,22,0.28)",
+                padding: "8px 10px",
                 zIndex: 90,
                 display: keyboardOpen ? "none" : "flex",
                 alignItems: "center",
+                justifyContent: "space-around",
+                gap: 2,
               }}
             >
               {left.map(tabBtn)}
-              <div style={{ flex: "0 0 66px", display: "flex", justifyContent: "center" }}>
-                <button
-                  onClick={() => { setMobileMoreOpen(false); setQuickLogOpen(v => !v); }}
-                  aria-label="Quick capture"
-                  className="rt-mob-fab"
-                  style={{
-                    width: 48, height: 48, borderRadius: "50%", border: "4px solid " + C.bg,
-                    background: C.primaryDeep, marginTop: -22,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", padding: 0,
-                    boxShadow: "0 4px 14px rgba(28,50,36,0.30)",
-                    transform: quickLogOpen ? "rotate(45deg)" : "none",
-                    transition: "transform 180ms ease-out",
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                    <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
-              </div>
-              {right.map(tabBtn)}
               <button
-                onClick={() => setMobileMoreOpen(v => !v)}
-                className={"nav-item-mobile" + (mobileMoreOpen ? " is-active" : "")}
-                aria-label="More pages"
+                onClick={() => { setMobileMoreOpen(false); setQuickLogOpen(v => !v); }}
+                aria-label="Quick capture"
+                className="rt-mob-fab"
                 style={{
-                  flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                  background: "transparent", border: "none", cursor: "pointer",
-                  padding: "7px 2px 5px", position: "relative", fontFamily: "inherit",
+                  width: 40, height: 40, borderRadius: "50%", border: "none",
+                  background: C.primaryLight,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: "pointer", padding: 0, flexShrink: 0,
+                  transform: quickLogOpen ? "rotate(45deg)" : "none",
+                  transition: "transform 180ms ease-out",
                 }}
               >
-                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="5" cy="12" r="1.8" fill={mobileMoreOpen ? C.primary : C.textMuted} />
-                  <circle cx="12" cy="12" r="1.8" fill={mobileMoreOpen ? C.primary : C.textMuted} />
-                  <circle cx="19" cy="12" r="1.8" fill={mobileMoreOpen ? C.primary : C.textMuted} />
+                <svg width="19" height="19" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                  <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                <span style={{ fontSize: 9.5, fontWeight: mobileMoreOpen ? 700 : 500, color: mobileMoreOpen ? C.primary : C.textMuted }}>More</span>
-                {sheetHasDot && !mobileMoreOpen && <div style={{ position: "absolute", top: 4, left: "calc(50% + 8px)", width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.card }} />}
               </button>
+              {right.map(tabBtn)}
+              {(() => {
+                const moreActive = mobileMoreOpen || sheetItems.some(n => n.id === page);
+                const moreColor = moreActive ? "#fff" : "#7d877f";
+                return (
+                  <button
+                    onClick={() => setMobileMoreOpen(v => !v)}
+                    className={"nav-item-mobile" + (moreActive ? " is-active" : "")}
+                    aria-label="More pages"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      background: moreActive ? "rgba(85,139,104,0.22)" : "transparent",
+                      border: "none", cursor: "pointer", fontFamily: "inherit",
+                      borderRadius: 999, padding: moreActive ? "6px 12px" : "6px 9px",
+                      position: "relative",
+                      transition: "background 150ms ease",
+                    }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="5" cy="12" r="1.9" fill={moreColor} />
+                      <circle cx="12" cy="12" r="1.9" fill={moreColor} />
+                      <circle cx="19" cy="12" r="1.9" fill={moreColor} />
+                    </svg>
+                    {moreActive && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>More</span>}
+                    {sheetHasDot && !mobileMoreOpen && <div style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px " + C.sidebar }} />}
+                  </button>
+                );
+              })()}
             </div>
           </>,
           document.body
