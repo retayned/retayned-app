@@ -4,9 +4,15 @@ import { Icon } from "../components/Icon";
 import { RaiMarkdown } from "../components/RaiMarkdown";
 import { C } from "../theme";
 
+import { SpecialistGate } from "../components/Onboarding";
+
 export default function CoachPage({ app }) {
   const {
     aiAttachments,
+    clients,
+    dataLoaded,
+    setBrainDumpOpen,
+    setOnboardingStep,
     aiEndRef,
     aiInput,
     aiMessages,
@@ -19,6 +25,19 @@ export default function CoachPage({ app }) {
     setAiInput,
     user,
   } = app;
+  // ─── Specialist's gate — Rai won't watch an empty roster. The gate
+  // IS the personality: a retention specialist with standards. Opens
+  // the roster builder or a Brain Dump; lifts the moment a client exists.
+  if (dataLoaded && clients.length === 0) {
+    return (
+      <div className="r-rai-page r-rai-intro" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        <SpecialistGate
+          onAddBook={() => setOnboardingStep("book")}
+          onBrainDump={() => setBrainDumpOpen(true)}
+        />
+      </div>
+    );
+  }
   return (<div className={"r-rai-page " + (aiMessages.length === 0 ? "r-rai-intro" : "r-rai-chat")} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
             <div className="r-rai-scroll" style={{ flex: 1, overflow: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div className="r-rai-inner" style={{ width: "100%", maxWidth: aiMessages.length === 0 ? 760 : 720, margin: "0 auto", padding: "24px 24px 0", flex: aiMessages.length === 0 ? 1 : "0 0 auto", display: aiMessages.length === 0 ? "flex" : "block", flexDirection: "column", justifyContent: aiMessages.length === 0 ? "center" : "flex-start", paddingBottom: aiMessages.length === 0 ? 80 : 0 }}>
