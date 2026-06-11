@@ -523,7 +523,7 @@ export default function WorkersPage({ app }) {
                   {workersList.length >= 2 && (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20 }}>
                       {/* Impact leaderboard */}
-                      <div style={{ background: C.card, borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "14px 16px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Impact · last 90 days</div>
                         {sortedByImpact.length === 0 ? (
                           <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic" }}>Not enough completed tasks yet</div>
@@ -536,7 +536,7 @@ export default function WorkersPage({ app }) {
                         ))}
                       </div>
                       {/* Volume leaderboard */}
-                      <div style={{ background: C.card, borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "14px 16px" }}>
                         <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted, marginBottom: 8 }}>Throughput · last 30 days</div>
                         {sortedByVolume.slice(0, 3).map(({ w, s }, i) => (
                           <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
