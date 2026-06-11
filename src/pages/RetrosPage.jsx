@@ -1,7 +1,6 @@
 // AUTO-EXTRACTED from App.jsx (page === "retros" block) — body is
 // verbatim; only the surrounding component shell + imports are generated.
 import { rolodex as rolodexDb } from "../lib/db";
-import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
 import { createPortal } from "react-dom";
 import { C } from "../theme";
@@ -413,7 +412,16 @@ export default function RetrosPage({ app }) {
                       left rail. Observation-green surface (primarySoft),
                       matching the Health observation cards. */}
                   {dueReminders.length > 0 && !checkinDismissed && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 12, padding: "13px 16px" }}>
+                    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 12, padding: "13px 38px 13px 16px" }}>
+                      {/* Corner ✕ dismiss — SAME spec as the Health observation
+                          card (28×28, top-right, transparent, textMuted). One
+                          dismiss pattern across every green card. */}
+                      <button
+                        type="button"
+                        onClick={() => { setCheckinDismissed(true); try { window.localStorage.setItem(_checkinDismissKey, _checkinTodayYmd); } catch (_) { /* unavailable */ } }}
+                        aria-label="Dismiss check-in reminder"
+                        style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: 14, background: "transparent", border: "none", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+                      >✕</button>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {dueReminders.length === 1 ? (
                           <>
@@ -429,10 +437,6 @@ export default function RetrosPage({ app }) {
                           </>
                         )}
                       </div>
-                      <button
-                        onClick={() => { setCheckinDismissed(true); try { window.localStorage.setItem(_checkinDismissKey, _checkinTodayYmd); } catch (_) { /* unavailable */ } }}
-                        style={{ background: "transparent", border: "none", color: C.textSec, fontFamily: "Fraunces, Georgia, serif", fontStyle: "italic", fontSize: 13.5, cursor: "pointer", padding: "8px 6px", flexShrink: 0 }}
-                      >Dismiss</button>
                       <button
                         onClick={() => setSelectedRolodex(dueReminders[0])}
                         style={{ background: C.card, color: C.primary, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
@@ -460,9 +464,9 @@ export default function RetrosPage({ app }) {
                   {active && retroOpen && (
                     <div style={{ position: "relative", paddingBottom: 8 }}>
                       {/* Peek of next cards behind */}
-                      {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, border: "1px solid " + C.border, borderRadius: 14, opacity: 0.5, zIndex: 0 }} />}
-                      {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, border: "1px solid " + C.border, borderRadius: 14, opacity: 0.8, zIndex: 0 }} />}
-                      <div style={{ position: "relative", zIndex: 1, background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "0 4px 12px rgba(10,10,10,0.06)", overflow: "hidden" }}>
+                      {queued.length > 1 && <div style={{ position: "absolute", top: 8, left: 8, right: 8, bottom: 16, background: C.card, border: "1px solid " + C.border, borderRadius: 12, opacity: 0.5, zIndex: 0 }} />}
+                      {queued.length > 2 && <div style={{ position: "absolute", top: 4, left: 4, right: 4, bottom: 12, background: C.card, border: "1px solid " + C.border, borderRadius: 12, opacity: 0.8, zIndex: 0 }} />}
+                      <div style={{ position: "relative", zIndex: 1, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                         {/* Header */}
                         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "18px 20px 14px" }}>
                           <Avatar id={active.id} name={active.client_name || active.client} size={44} />
