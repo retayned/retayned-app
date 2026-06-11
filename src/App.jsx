@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
 import { MobileCalendarStrip } from "./components/MobileCalendarStrip";
 import BrainDump from "./components/BrainDump";
+import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
 import { RaiMarkdown } from "./components/RaiMarkdown";
 import { ReferralNetworkD3 } from "./components/ReferralNetworkD3";
 import { EmptyState, SkeletonPage } from "./components/Skeletons";
@@ -128,6 +129,23 @@ export default function App({ user }) {
   // open it from ANY page, not just Today. TodayPage's brain button now
   // drives this same state via pageCtx.
   const [brainDumpOpen, setBrainDumpOpen] = useState(false);
+  // ─── FIRST-RUN ONBOARDING (June 2026) ─────────────────────────────
+  // Derived, zero-SQL flow: welcome overlay → quick-add client →
+  // first task (TodayPage spotlight) → roster builder ("your book").
+  // welcomed flag lives in localStorage (rt:welcomedAt = epoch ms);
+  // everything else derives from clients/tasks length, so Lane B
+  // (skipped) users get ambient empty states and can merge in anytime.
+  const [onboardingStep, setOnboardingStep] = useState(null); // null | "client" | "task" | "book"
+  const [welcomed, setWelcomed] = useState(() => {
+    try { return !!window.localStorage.getItem("rt:welcomedAt"); } catch (_) { return true; }
+  });
+  const markWelcomed = () => {
+    try { window.localStorage.setItem("rt:welcomedAt", String(Date.now())); } catch (_) { /* unavailable */ }
+    setWelcomed(true);
+  };
+  // (Trigger + advance effects live AFTER the tasks declaration below —
+  // they read dataLoaded/clients/tasks, which are declared later in this
+  // component; placing them here was a temporal-dead-zone crash.)
   // Dock breathes with scroll: scrolling DOWN shrinks the pill out of the
   // way; scrolling up (or nearing the top) restores it. Listens in capture
   // phase so it catches the .r-main scroller as well as the window.
@@ -864,6 +882,40 @@ export default function App({ user }) {
     setRolodexMoveConfirm(false);
     setRolodexMenuOpen(false);
   };
+  // Onboarding quick-create: name-only (contact/retainer optional) at the
+  // neutral 50 baseline — same essential writes as submitNewClient minus
+  // the profile quiz + review scheduling. The Health empty state drives
+  // scoring later; Rai treats unscored clients at baseline until then.
+  const quickCreateClient = async (name, contact = "", revenue = 0) => {
+    if (!user || !name || !name.trim()) return null;
+    const monthlyRate = parseInt(revenue) || 0;
+    const todayYmd = localYmd(new Date());
+    const { data: created, error } = await clientsDb.create(user.id, {
+      name: name.trim(), contact: (contact || "").trim(), role: "", tag: "",
+      revenue: monthlyRate, months: 0,
+      engagement_started_at: todayYmd,
+      lifetime_revenue_at_entry: 0,
+      retention_score: 50, profile_scores: {}, qualifying_flags: {},
+    });
+    if (error) { console.error("Quick client create failed:", error); return null; }
+    if (created?.id && monthlyRate > 0) {
+      try {
+        await supabase.from('client_revenue_history').insert({
+          user_id: user.id, client_id: created.id, monthly_rate: monthlyRate,
+          started_at: new Date().toISOString(), ended_at: null,
+        });
+      } catch (e) { console.warn("Quick-add revenue history seed failed:", e); }
+    }
+    const client = {
+      id: created?.id || Date.now(), name: name.trim(), contact: (contact || "").trim(),
+      role: "", tag: "", revenue: monthlyRate, months: 0,
+      engagement_started_at: todayYmd, lifetime_revenue_at_entry: 0, ltv: 0,
+      velocity: "normal", lastHC: null, lastContact: "—", referrals: 0,
+      ret: 50, profileScores: {}, qualifyingFlags: {}, daysOld: 0,
+    };
+    setClients(prev => [...prev, client].sort((a, b) => (b.ret || 0) - (a.ret || 0)));
+    return client;
+  };
   const [showAddClient, setShowAddClient] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [clientsSort, setClientsSort] = useState("retention");
@@ -1253,6 +1305,24 @@ export default function App({ user }) {
 
   // Today — task manager
   const [tasks, setTasks] = useState([]);
+  // ─── First-run onboarding effects (state lives near brainDumpOpen) ───
+  // Welcome: once per device, only for zero-client zero-task accounts.
+  const onbCheckedRef = useRef(false);
+  useEffect(() => {
+    if (onbCheckedRef.current || !dataLoaded) return;
+    onbCheckedRef.current = true;
+    if (!welcomed && clients.length === 0 && tasks.length === 0) {
+      setOnboardingStep("welcome");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoaded]);
+  // Advance task → book on the FIRST task created via ANY path
+  // (composer, capture sheet, Brain Dump) — watching tasks.length
+  // covers them all without touching each submit handler.
+  useEffect(() => {
+    if (onboardingStep === "task" && tasks.length > 0) setOnboardingStep("book");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboardingStep, tasks.length]);
   // Task IDs whose done-state is mid-write to the DB. loadData (which fires on
   // tab focus / visibilitychange) must NOT overwrite these with stale DB rows,
   // or an optimistic check gets silently reverted — the intermittent
@@ -3651,6 +3721,7 @@ export default function App({ user }) {
     obsMobileExpanded,
     observation,
     occurrenceFlags,
+    onboardingStep,
     openDismissFlow,
     parserSetDueDateRef,
     parserSetRecurrenceRef,
@@ -3731,6 +3802,7 @@ export default function App({ user }) {
     setObsMobileExpanded,
     setObservation,
     setObservationContext,
+    setOnboardingStep,
     setPage,
     setPauseConfirm,
     setPersonalEvents,
@@ -3828,6 +3900,39 @@ export default function App({ user }) {
         rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap"
       />
+      {/* ─── First-run onboarding overlays (see components/Onboarding) ─── */}
+      {onboardingStep === "welcome" && (
+        <WelcomeOverlay
+          onStart={() => setOnboardingStep("client")}
+          onSkip={() => { markWelcomed(); setOnboardingStep(null); }}
+        />
+      )}
+      {onboardingStep === "client" && (
+        <QuickAddClientCard
+          onSubmit={async (f) => {
+            const c = await quickCreateClient(f.name, f.contact, f.revenue);
+            markWelcomed();
+            if (c) {
+              setOnboardingStep("task");
+              setPage("today");
+            }
+            // On failure: stay on the card (it resets its busy state and
+            // the user retries) rather than silently closing the overlay.
+            return !!c;
+          }}
+          onSkip={() => { markWelcomed(); setOnboardingStep(null); }}
+        />
+      )}
+      {onboardingStep === "book" && (
+        <RosterBuilder
+          existingNames={clients.map(c => c.name)}
+          onAdd={(name) => quickCreateClient(name)}
+          onClose={() => {
+            try { window.localStorage.setItem("rt:onboarded", "1"); } catch (_) { /* unavailable */ }
+            setOnboardingStep(null);
+          }}
+        />
+      )}
       <style>{`
         ${THEME_CSS}
 
