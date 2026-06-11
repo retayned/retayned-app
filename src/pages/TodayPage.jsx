@@ -2471,6 +2471,16 @@ export default function TodayPage({ app }) {
                         const offset = swipeOffset[t.id] || 0;
                         const SWIPE_THRESHOLD = 90;
                         const SWIPE_MAX = 130;
+                        // Phase 4 (June 2026) — approved gesture map:
+                        //   RIGHT past 90px  → COMPLETE (green). Highest-frequency
+                        //     action gets the easiest gesture.
+                        //   LEFT zone 1 (90–179px) → PUSH to next bucket (amber).
+                        //   LEFT zone 2 (≥180px)   → DELETE (red) — keep pulling,
+                        //     the background flips amber→red (iOS Mail pattern).
+                        //   Recurring: right-complete works; left is delete-only
+                        //     (no bucket concept), at the normal 90px threshold.
+                        const DELETE_THRESHOLD = 180;
+                        const SWIPE_MAX_LEFT = 220;
                         // Industry-standard gesture defaults (iOS Mail / Things / Linear):
                         //   DEAD_ZONE — finger must travel this many px before any
                         //     row movement begins. Filters micro-jitter from finger
@@ -2526,8 +2536,8 @@ export default function TodayPage({ app }) {
                           // Recurring tasks can be deleted (left swipe) but not pushed
                           // to another bucket (right swipe blocked — they have no due_date
                           // and the bucket concept doesn't apply).
-                          const minDelta = t.recurring ? -SWIPE_MAX : -SWIPE_MAX;
-                          const maxDelta = t.recurring ? 0 : SWIPE_MAX;
+                          const minDelta = t.recurring ? -SWIPE_MAX : -SWIPE_MAX_LEFT;
+                          const maxDelta = SWIPE_MAX; // right = complete, valid for all
                           // Subtract the dead zone from the displayed offset so the
                           // row starts at 0 visually when the swipe is just-committed,
                           // not at +/- DEAD_ZONE (which would be a visual jump).
@@ -2543,9 +2553,10 @@ export default function TodayPage({ app }) {
                           // starts fresh.
                           setSwipeStartY(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                           setSwipeLock(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-                          if (off <= -SWIPE_THRESHOLD) {
-                            // Left swipe past threshold → DELETE the task. Slide off-screen left, then remove.
-                            setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
+                          const wantsDelete = t.recurring ? off <= -SWIPE_THRESHOLD : off <= -DELETE_THRESHOLD;
+                          if (wantsDelete) {
+                            // Left zone 2 (or recurring left) → DELETE. Slide off-screen left, then remove.
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX_LEFT }));
                             // Phase 9: if Rai task, open feedback modal; the
                             // actual delete is deferred to the modal's confirm.
                             // For non-Rai tasks, openDismissFlow runs the
@@ -2566,10 +2577,9 @@ export default function TodayPage({ app }) {
                             } else {
                               setTimeout(performDelete, 180);
                             }
-                          } else if (off >= SWIPE_THRESHOLD && !t.recurring) {
-                            // Right swipe past threshold → PUSH to next bucket. Recurring tasks
-                            // skip this branch — they don't move between buckets.
-                            setSwipeOffset(prev => ({ ...prev, [t.id]: SWIPE_MAX }));
+                          } else if (off <= -SWIPE_THRESHOLD && !t.recurring) {
+                            // Left zone 1 → PUSH to next bucket.
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
                             setTimeout(() => {
                               if (bucketKey === "today") pushToTomorrow(t.id);
                               else if (bucketKey === "tomorrow") pushToLater(t.id);
@@ -2577,6 +2587,16 @@ export default function TodayPage({ app }) {
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                             }, 180);
+                          } else if (off >= SWIPE_THRESHOLD) {
+                            // Right swipe → COMPLETE. Brief green commit slide, then
+                            // the normal done flow (toggleTask owns the exit animation,
+                            // streaks, confetti gating — same path as tapping the box).
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: SWIPE_MAX }));
+                            setTimeout(() => {
+                              toggleTask(t.id);
+                              setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                              setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                            }, 140);
                           } else {
                             // Snap back
                             setSwipeOffset(prev => ({ ...prev, [t.id]: 0 }));
@@ -2602,30 +2622,34 @@ export default function TodayPage({ app }) {
                                 - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
                                 - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
                                 Only renders when actively swiping. */}
-                            {swipeable && offset < 0 && (
-                              <div style={{
-                                position: "absolute",
-                                inset: 0,
-                                background: C.danger,
-                                borderRadius: 12,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-end",
-                                paddingRight: 22,
-                                gap: 8,
-                                color: "#fff",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                pointerEvents: "none",
-                              }}>
-                                <span>Delete</span>
-                              </div>
-                            )}
+                            {swipeable && offset < 0 && (() => {
+                              const inDeleteZone = t.recurring || offset <= -DELETE_THRESHOLD;
+                              return (
+                                <div style={{
+                                  position: "absolute",
+                                  inset: 0,
+                                  background: inDeleteZone ? C.danger : C.retWarn,
+                                  borderRadius: 12,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "flex-end",
+                                  paddingRight: 22,
+                                  gap: 8,
+                                  color: "#fff",
+                                  fontSize: 13,
+                                  fontWeight: 600,
+                                  pointerEvents: "none",
+                                  transition: "background 120ms ease",
+                                }}>
+                                  <span>{inDeleteZone ? "Delete" : swipeActionLabel}</span>
+                                </div>
+                              );
+                            })()}
                             {swipeable && offset > 0 && (
                               <div style={{
                                 position: "absolute",
                                 inset: 0,
-                                background: C.btn,
+                                background: C.primary,
                                 borderRadius: 12,
                                 display: "flex",
                                 alignItems: "center",
@@ -2637,7 +2661,7 @@ export default function TodayPage({ app }) {
                                 fontWeight: 600,
                                 pointerEvents: "none",
                               }}>
-                                <span>{swipeActionLabel}</span>
+                                <span>✓ Done</span>
                               </div>
                             )}
                           <div
