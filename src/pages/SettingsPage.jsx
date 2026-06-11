@@ -34,7 +34,7 @@ export default function SettingsPage({ app }) {
                 their day rolls over. This block exists only so the
                 user (or support) can verify what the system
                 currently thinks the TZ is. */}
-            <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Timezone</div>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{userTimezone || "(loading...)"}</div>
               <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>
@@ -49,7 +49,7 @@ export default function SettingsPage({ app }) {
               const aiTasksOn = raiState?.ai_tasks_enabled !== false; // default ON
               const toggle = () => { setAiTasks(!aiTasksOn); };
               return (
-                <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Rai</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                     <div style={{ minWidth: 0 }}>
@@ -73,7 +73,7 @@ export default function SettingsPage({ app }) {
                 Calendar. This is the permanent home for the connection:
                 the Today-page nudge can be dismissed, but this row is
                 always here. */}
-            <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Integrations</div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
@@ -156,7 +156,7 @@ export default function SettingsPage({ app }) {
               // are at the top of the queue.
               needLinking.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
               return (
-                <div style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 4 }}>
                     Calendar · attribution queue
                   </div>
@@ -238,7 +238,7 @@ export default function SettingsPage({ app }) {
             })()}
 
             {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
-              <div key={i} className="row-hover" style={{ background: C.card, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div key={i} className="row-hover" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
                 <Icon name="chevron" size={16} color={C.border} />
               </div>
@@ -249,7 +249,7 @@ export default function SettingsPage({ app }) {
               <div style={{ marginTop: 20 }}>
                 {/* Sweep Schedule */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12 }}>Automated Sweep</div>
-                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "16px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: 14, fontWeight: 600 }}>Frequency</span>
@@ -277,7 +277,7 @@ export default function SettingsPage({ app }) {
 
                 {/* Output Routing */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>Output Routing</div>
-                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "16px" }}>
                   {[
                     { label: "Retayned Dashboard", checked: true, disabled: true, meta: "Always on" },
                     { label: "Slack Channel", checked: false, meta: "#retention-alerts" },
@@ -294,7 +294,7 @@ export default function SettingsPage({ app }) {
 
                 {/* API Access */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>API Access</div>
-                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "16px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>API Key</div>
@@ -345,7 +345,7 @@ export default function SettingsPage({ app }) {
 
                 {/* MCP Server */}
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 12, marginTop: 20 }}>MCP Server</div>
-                <div style={{ background: C.card, borderRadius: 12, padding: "16px" }}>
+                <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "16px" }}>
                   <p style={{ fontSize: 14, color: C.text, lineHeight: 1.5, marginBottom: 12 }}>Expose Retayned as a tool server for your AI agents. Any MCP-compatible agent can connect and call Retayned tools directly.</p>
                   
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "10px 14px", background: C.bg, borderRadius: 8 }}>
