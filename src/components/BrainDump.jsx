@@ -493,7 +493,9 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
               {chosenClient ? <>For <strong>{chosenClient.name}</strong>. </> : null}
               Uncheck anything wrong. Double-click a title or note to edit. Nothing is added until you approve.
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "10px 18px", minHeight: 0 }}>
+            {/* Bottom padding clears the due/type dropdowns on the last
+                item — without it the menu clipped at the card edge. */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "10px 18px 130px", minHeight: 0 }}>
               {items.map((it) => {
                 const meta = TYPE_META[it.type] || TYPE_META.task;
                 const isEditTitle = editingField?.key === it.key && editingField.field === "title";
