@@ -220,6 +220,7 @@ export default function HealthPage({ app }) {
                             position: "relative",
                             overflow: "hidden",
                             border: "1px solid rgba(51,84,62,0.22)",
+                            border: "1px solid rgba(51,84,62,0.22)",
                             boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Corner ✕ dismiss — top-right notification pattern */}
@@ -400,6 +401,7 @@ export default function HealthPage({ app }) {
                             padding: "24px 28px 22px",
                             position: "relative",
                             overflow: "hidden",
+                            border: "1px solid rgba(51,84,62,0.22)",
                             border: "1px solid rgba(51,84,62,0.22)",
                             boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
@@ -761,7 +763,7 @@ export default function HealthPage({ app }) {
                   while (cells.length % 7 !== 0) cells.push(null);
                   const daysHdr = ["S", "M", "T", "W", "T", "F", "S"];
                   return (
-                    <div style={{ background: C.card, borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div onClick={() => setHealthStripOpen(!healthStripOpen)} style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                           <div style={{ width: 28, height: 28, borderRadius: 8, background: C.primaryGhost, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -988,7 +990,7 @@ export default function HealthPage({ app }) {
                         } catch (e) { console.warn("Review reschedule failed:", e); }
                       };
                       return (
-                        <div key={i} style={{ background: C.card, borderRadius: 12, boxShadow: isOpen ? "0 0 0 1px " + C.primary + "55, var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "box-shadow 150ms" }}>
+                        <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: isOpen ? "0 0 0 1px " + C.primary + "55, var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "box-shadow 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 18, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
                               {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
@@ -1181,12 +1183,12 @@ export default function HealthPage({ app }) {
                   {/* Upcoming */}
                   {upcomingQueue.length > 0 && (
                     <div style={{ marginTop: 24 }}>
-                      <div onClick={() => setShowUpcoming(!showUpcoming)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 8, cursor: "pointer", background: C.card }}>
+                      <div onClick={() => setShowUpcoming(!showUpcoming)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, cursor: "pointer", background: C.card, boxShadow: "var(--rt-sh-card)" }}>
                         <span style={{ fontSize: 12.5, fontWeight: 600, color: C.textSec }}>Upcoming · {upcomingQueue.length}</span>
                         <span style={{ fontSize: 12, color: C.textMuted }}>{showUpcoming ? "Hide" : "Show"}</span>
                       </div>
                       {showUpcoming && (
-                        <div style={{ background: C.card, borderRadius: 12, overflow: "hidden", marginTop: 6 }}>
+                        <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden", marginTop: 6 }}>
                           {upcomingQueue.map((h, i) => (
                             <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", borderBottom: i < upcomingQueue.length - 1 ? "1px solid " + C.borderLight : "none", opacity: 0.6 }}>
                               <span style={{ fontSize: 13, color: C.textSec }}>{h.client}</span>
