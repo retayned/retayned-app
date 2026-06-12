@@ -11,14 +11,13 @@ export default function RetrosPage({ app }) {
   // Check-in banner dismissal — per LOCAL DAY, persisted, so "Dismiss"
   // means "not today" rather than "until next render". The reminder
   // itself is untouched; acting on it still goes through the contact.
-  const _checkinDismissKey = "rt:rolodexBannerDismissedDay";
   const _checkinTodayYmd = (() => {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
   })();
-  const [checkinDismissed, setCheckinDismissed] = useState(() => {
-    try { return window.localStorage.getItem(_checkinDismissKey) === _checkinTodayYmd; } catch { return false; }
-  });
+  // (Dismissal state lifted to App, Jun 12: the sidebar red dot and this
+  // banner share one per-day dismissal. _checkinTodayYmd stays local for
+  // the date math below.)
   // Retro flow is collapsed into a compact prompt by default; the full
   // five-step card only takes over the page when the user opts in.
   const [retroOpen, setRetroOpen] = useState(false);
@@ -47,6 +46,8 @@ export default function RetrosPage({ app }) {
     setShowAddRolodex,
     showAddRolodex,
     user,
+    rolodexCheckinDismissed,
+    dismissRolodexCheckin,
   } = app;
 
           try {
@@ -410,14 +411,14 @@ export default function RetrosPage({ app }) {
                       it shares the content margin and never overlaps the
                       left rail. Observation-green surface (primarySoft),
                       matching the Health observation cards. */}
-                  {dueReminders.length > 0 && !checkinDismissed && (
-                    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 12, padding: "13px 38px 13px 16px" }}>
+                  {dueReminders.length > 0 && !rolodexCheckinDismissed && (
+                    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "13px 38px 13px 16px" }}>
                       {/* Corner ✕ dismiss — SAME spec as the Health observation
                           card (28×28, top-right, transparent, textMuted). One
                           dismiss pattern across every green card. */}
                       <button
                         type="button"
-                        onClick={() => { setCheckinDismissed(true); try { window.localStorage.setItem(_checkinDismissKey, _checkinTodayYmd); } catch (_) { /* unavailable */ } }}
+                        onClick={dismissRolodexCheckin}
                         aria-label="Dismiss check-in reminder"
                         style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: 14, background: "transparent", border: "none", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
                       >✕</button>
