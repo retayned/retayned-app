@@ -2640,6 +2640,12 @@ export default function TodayPage({ app }) {
                           setSwipeOffset(prev => ({ ...prev, [t.id]: clamped }));
                         };
                         const handleTouchEnd = () => {
+                          // If the gesture never engaged (checkbox tap, stray
+                          // touchcancel), touch NOTHING — any setState here
+                          // re-renders between touchend and the synthesized
+                          // click and the tap dies. (Jun 12: the half of the
+                          // tap-kill bug the first fix missed.)
+                          if (swipeStartX[t.id] == null) return;
                           const off = swipeOffset[t.id] || 0;
                           // Always clear the lock + startY on end so the next touch
                           // starts fresh.
@@ -2830,7 +2836,34 @@ export default function TodayPage({ app }) {
                               </div>
                             )}
                             <button
-                              onClick={(e) => { e.stopPropagation(); toggleTask(t.id); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // If the touch path just handled this tap, the
+                                // synthesized click must be a no-op (double
+                                // toggle = instant un-complete).
+                                const h = e.currentTarget._rtTouchHandledAt;
+                                if (h && Date.now() - h < 600) { e.currentTarget._rtTouchHandledAt = 0; return; }
+                                toggleTask(t.id);
+                              }}
+                              onTouchStart={(e) => {
+                                // Keep the row's swipe machinery out entirely.
+                                e.stopPropagation();
+                                const t0 = e.touches[0];
+                                e.currentTarget._rtTapStart = { x: t0.clientX, y: t0.clientY };
+                              }}
+                              onTouchEnd={(e) => {
+                                e.stopPropagation();
+                                const s = e.currentTarget._rtTapStart;
+                                e.currentTarget._rtTapStart = null;
+                                if (!s) return;
+                                const t0 = e.changedTouches[0];
+                                if (!t0 || Math.abs(t0.clientX - s.x) > 10 || Math.abs(t0.clientY - s.y) > 10) return;
+                                // Complete directly on touchend — mobile taps no
+                                // longer depend on click synthesis surviving the
+                                // row's render churn. Flag guards the click path.
+                                e.currentTarget._rtTouchHandledAt = Date.now();
+                                toggleTask(t.id);
+                              }}
                               aria-label={isDone ? "mark incomplete" : "mark complete"}
                               className="rt-check"
                               style={{
