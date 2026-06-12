@@ -2551,18 +2551,21 @@ export default function TodayPage({ app }) {
                         };
   
                         const offset = swipeOffset[t.id] || 0;
-                        const SWIPE_THRESHOLD = 90;
+                        const SWIPE_THRESHOLD = 110;
                         const SWIPE_MAX = 130;
-                        // Phase 4 (June 2026) — approved gesture map:
-                        //   RIGHT past 90px  → COMPLETE (green). Highest-frequency
-                        //     action gets the easiest gesture.
-                        //   LEFT zone 1 (90–179px) → PUSH to next bucket (amber).
-                        //   LEFT zone 2 (≥180px)   → DELETE (red) — keep pulling,
+                        // Phase 12 (Jun 2026) — one-way gesture map. Right swipe
+                        // REMOVED: completion belongs to the checkbox (tap),
+                        // which is the reliable, deliberate affordance. Swipe
+                        // is LEFT-only and deliberately harder to trigger
+                        // (bigger dead zone, steeper angle, higher thresholds)
+                        // so accidental contact while scrolling does nothing.
+                        //   LEFT zone 1 (110–209px) → PUSH to next bucket (amber).
+                        //   LEFT zone 2 (≥210px)    → DELETE (red) — keep pulling,
                         //     the background flips amber→red (iOS Mail pattern).
-                        //   Recurring: right-complete works; left is delete-only
-                        //     (no bucket concept), at the normal 90px threshold.
-                        const DELETE_THRESHOLD = 180;
-                        const SWIPE_MAX_LEFT = 220;
+                        //   Recurring: left is delete-only (no bucket concept),
+                        //     at the normal 110px threshold.
+                        const DELETE_THRESHOLD = 210;
+                        const SWIPE_MAX_LEFT = 250;
                         // Industry-standard gesture defaults (iOS Mail / Things / Linear):
                         //   DEAD_ZONE — finger must travel this many px before any
                         //     row movement begins. Filters micro-jitter from finger
@@ -2576,11 +2579,18 @@ export default function TodayPage({ app }) {
                         // The lock holds until touchEnd. This prevents the row from
                         // accidentally tracking sideways while the user is just
                         // scrolling the task list.
-                        const DEAD_ZONE = 12;
-                        const ANGLE_RATIO = 1.0; // dx must exceed dy to commit to swipe
+                        const DEAD_ZONE = 22;
+                        const ANGLE_RATIO = 1.4; // dx must clearly dominate dy to commit to swipe
 
                         const handleTouchStart = (e) => {
                           if (e.touches.length !== 1) return;
+                          // Taps on the checkbox must never touch swipe state:
+                          // the setState here re-renders the row between
+                          // touchend and the synthesized click, and the click
+                          // can land on a replaced node and silently die.
+                          // (Jun 2026 — root cause of "can't check off tasks
+                          // on mobile".)
+                          if (e.target && e.target.closest && e.target.closest(".rt-check")) return;
                           setSwipeStartX(prev => ({ ...prev, [t.id]: e.touches[0].clientX }));
                           // Stash startY in a ref-like field on the same map so we
                           // don't need a second state hook just for this.
@@ -2619,7 +2629,7 @@ export default function TodayPage({ app }) {
                           // to another bucket (right swipe blocked — they have no due_date
                           // and the bucket concept doesn't apply).
                           const minDelta = t.recurring ? -SWIPE_MAX : -SWIPE_MAX_LEFT;
-                          const maxDelta = SWIPE_MAX; // right = complete, valid for all
+                          const maxDelta = 0; // right swipe removed — checkbox owns complete
                           // Subtract the dead zone from the displayed offset so the
                           // row starts at 0 visually when the swipe is just-committed,
                           // not at +/- DEAD_ZONE (which would be a visual jump).
@@ -2669,16 +2679,6 @@ export default function TodayPage({ app }) {
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                             }, 180);
-                          } else if (off >= SWIPE_THRESHOLD) {
-                            // Right swipe → COMPLETE. Brief green commit slide, then
-                            // the normal done flow (toggleTask owns the exit animation,
-                            // streaks, confetti gating — same path as tapping the box).
-                            setSwipeOffset(prev => ({ ...prev, [t.id]: SWIPE_MAX }));
-                            setTimeout(() => {
-                              toggleTask(t.id);
-                              setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-                              setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-                            }, 140);
                           } else {
                             // Snap back
                             setSwipeOffset(prev => ({ ...prev, [t.id]: 0 }));
@@ -2700,9 +2700,8 @@ export default function TodayPage({ app }) {
 
                         return (
                           <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible", zIndex: rowDuePickerId === t.id ? 500 : undefined }}>
-                            {/* Swipe action background. Two directions:
-                                - LEFT (offset < 0): red bg with delete signal. Row sliding left = delete.
-                                - RIGHT (offset > 0): purple bg with destination bucket. Row sliding right = push.
+                            {/* Swipe action background — LEFT only (one-way swipe, Jun 2026).
+                                Zone 1 amber = push to next bucket; zone 2 red = delete.
                                 Only renders when actively swiping. */}
                             {swipeable && offset < 0 && (() => {
                               const inDeleteZone = t.recurring || offset <= -DELETE_THRESHOLD;
@@ -2727,25 +2726,7 @@ export default function TodayPage({ app }) {
                                 </div>
                               );
                             })()}
-                            {swipeable && offset > 0 && (
-                              <div style={{
-                                position: "absolute",
-                                inset: 0,
-                                background: C.primary,
-                                borderRadius: 12,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "flex-start",
-                                paddingLeft: 22,
-                                gap: 8,
-                                color: "#fff",
-                                fontSize: 13,
-                                fontWeight: 600,
-                                pointerEvents: "none",
-                              }}>
-                                <span>✓ Done</span>
-                              </div>
-                            )}
+                            {/* (right-swipe "Done" background removed Jun 2026 — one-way swipe) */}
                           <div
                             className={cls}
                             data-task-id={t.id}
