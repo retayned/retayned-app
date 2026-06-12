@@ -25,7 +25,7 @@ import { formatTimeLabel } from "../timeFormat";
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
-function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {}, onRequestLink = null }) {
+function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {}, onRequestLink = null, gcalNudge = null }) {
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Reschedule editor state — when the user clicks Reschedule inside the
@@ -904,6 +904,31 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               </div>
             </>
           )
+        ) : gcalNudge ? (
+          /* Calendar not connected: the empty-state slot IS the connect
+             prompt (Jun 12). Replaces "No upcoming events" rather than
+             floating elsewhere on the dial. */
+          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13.5, fontWeight: 500, color: C.textMuted, lineHeight: 1.5 }}>
+            <button
+              type="button"
+              onClick={gcalNudge.connect}
+              className="rt-gcal-connect-link"
+              style={{ background: "transparent", border: "none", padding: 0, fontFamily: "inherit", fontStyle: "italic", fontSize: 13.5, fontWeight: 600, color: "#33543E", cursor: "pointer", textDecoration: "underline dotted", textDecorationColor: "rgba(51,84,62,0.55)", textUnderlineOffset: 4, textDecorationThickness: 1.5 }}
+            >
+              Connect Google Calendar
+            </button>
+            <span> to see your meetings on the dial.</span>
+            <div>
+              <button
+                type="button"
+                onClick={gcalNudge.dismiss}
+                style={{ background: "transparent", border: "none", padding: "2px 0 0", marginTop: 2, color: C.textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontStyle: "italic" }}
+                aria-label="Dismiss"
+              >
+                not now
+              </button>
+            </div>
+          </div>
         ) : (
           <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>No upcoming events</div>
         )}
