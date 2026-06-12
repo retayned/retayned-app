@@ -9,7 +9,6 @@ import { supabase } from "../lib/supabase";
 
 export function useDataLoad(app) {
   const {
-    _todayLocalYmd,
     clients,
     getAdjustedLTV,
     googleConnected,
@@ -47,7 +46,6 @@ export function useDataLoad(app) {
     setRefs,
     setRetroAnswers,
     setRolodex,
-    setRolodexRemindersSeen,
     setTaskCompletedCounts,
     setTaskOccurrences,
     setTasks,
@@ -157,7 +155,7 @@ export function useDataLoad(app) {
         .then(r => r, () => ({ data: [], error: null })),
       supabase
         .from('profiles')
-        .select('occurrence_flags, rolodex_seen_day')
+        .select('occurrence_flags')
         .eq('id', uid)
         .single()
         .then(r => r, () => ({ data: { occurrence_flags: {} }, error: null })),
@@ -510,13 +508,12 @@ export function useDataLoad(app) {
     // for any reader are false (default) — state is set but unread.
     if (occurrencesRes?.data) setTaskOccurrences(occurrencesRes.data);
     // Rolodex dot "seen" — DB is the source of truth (localStorage was
-    // Missing-column resilience (Jun 2026): supabase-js returns schema
-    // errors as RESOLVED { data: null, error } — the rejection fallback
-    // above never fires for them. Before rolodex_seen_day existed, the
-    // combined select errored on every load and silently took
-    // occurrence_flags hydration down with it. If the combined select
-    // errored, refetch the flags alone so one bad column can never
-    // blank the other again.
+    // Schema-error resilience (Jun 2026): supabase-js returns schema
+    // errors as RESOLVED { data: null, error }, so the rejection fallback
+    // above never fires for them. If the select errored, refetch once so
+    // a failure can't silently blank the flags. (rolodex_seen_day handling
+    // removed Jun 12: the dot is an action badge now and no longer tracks
+    // page views, so nothing reads that column.)
     let profileFlags = profileFlagsRes;
     if (profileFlags?.error) {
       profileFlags = await supabase
@@ -525,11 +522,6 @@ export function useDataLoad(app) {
         .eq('id', user.id)
         .single()
         .then(r => (r?.error ? { data: { occurrence_flags: {} } } : r), () => ({ data: { occurrence_flags: {} } }));
-    }
-    // per-device, so a new device resurrected the dot). If the profile
-    // says today is already seen, suppress the dot on this device too.
-    if (profileFlags?.data?.rolodex_seen_day === _todayLocalYmd()) {
-      setRolodexRemindersSeen(true);
     }
     if (profileFlags?.data?.occurrence_flags) {
       setOccurrenceFlags(profileFlags.data.occurrence_flags || {});
