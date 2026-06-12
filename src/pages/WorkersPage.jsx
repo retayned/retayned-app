@@ -1,8 +1,10 @@
 // AUTO-EXTRACTED from App.jsx (page === "workers" block) — body is
 // verbatim; only the surrounding component shell + imports are generated.
+import { useState, useEffect } from "react";
 import { workers as workersDb } from "../lib/db";
 import { Icon } from "../components/Icon";
 import { C } from "../theme";
+import { supabase } from "../lib/supabase";
 import { getWorkerInitials, ymdInTz } from "../utils";
 
 export default function WorkersPage({ app }) {
@@ -19,7 +21,66 @@ export default function WorkersPage({ app }) {
     userTimezone,
     workerCompletions,
     workersList,
+    org,
+    orgRole,
+    user,
   } = app;
+  // ─── SEATS (Agency, Jun 12) — owner-role only ──────────────────────
+  const isOwnerRole = org && (orgRole === "owner");
+  const isRoot = org && user && org.owner_user_id === user.id;
+  const [seatMembers, setSeatMembers] = useState(null);
+  const [seatInviteEmail, setSeatInviteEmail] = useState("");
+  const [seatInviteLink, setSeatInviteLink] = useState(null);
+  const [seatBusy, setSeatBusy] = useState(false);
+  const loadSeats = async () => {
+    if (!isOwnerRole) return;
+    const { data } = await supabase
+      .from("org_members")
+      .select("id, user_id, invited_email, role, status, created_at")
+      .eq("org_id", org.id)
+      .in("status", ["invited", "active"])
+      .order("created_at", { ascending: true });
+    setSeatMembers(data || []);
+  };
+  useEffect(() => { loadSeats(); }, [org?.id, orgRole]);
+  const callOrgFn = async (fn, body) => {
+    const { data: sess } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(out?.error || `${fn} failed (${res.status})`);
+    return out;
+  };
+  const inviteSeat = async () => {
+    const email = seatInviteEmail.trim().toLowerCase();
+    if (!email || seatBusy) return;
+    setSeatBusy(true); setSeatInviteLink(null);
+    try {
+      const out = await callOrgFn("org-invite", { email });
+      setSeatInviteLink(out.invite_url);
+      setSeatInviteEmail("");
+      loadSeats();
+    } catch (e) { alert(e.message); }
+    setSeatBusy(false);
+  };
+  const removeSeat = async (memberUserId) => {
+    if (!window.confirm("Remove this seat? Their assignments are released immediately.")) return;
+    await supabase.rpc("rt_remove_seat", { p_org: org.id, p_member: memberUserId });
+    loadSeats();
+  };
+  const revokeInvite = async (memberId) => {
+    await supabase.from("org_members").update({ status: "removed", removed_at: new Date().toISOString() }).eq("id", memberId);
+    loadSeats();
+  };
+  const setRole = async (memberUserId, role) => {
+    const { error } = await supabase.rpc("rt_set_member_role", { p_org: org.id, p_member: memberUserId, p_role: role });
+    if (error) alert(error.message);
+    loadSeats();
+  };
+  const activeSeatCount = (seatMembers || []).filter(m => m.status === "active").length;
 
           // Inline mini Stat component for the per-worker stat grid
           const Stat = ({ label, value, sub, tone = "default", isText = false }) => {
@@ -387,6 +448,50 @@ export default function WorkersPage({ app }) {
                 </div>
               </div>
 
+                {isOwnerRole && (
+                  <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "16px 18px", marginBottom: 20 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted }}>Seats</div>
+                      <div style={{ fontSize: 12, color: C.textMuted }}>{activeSeatCount} of 5 included · extra seats $19/mo</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: (seatMembers || []).length ? 12 : 0 }}>
+                      <input
+                        value={seatInviteEmail}
+                        onChange={e => setSeatInviteEmail(e.target.value)}
+                        placeholder="teammate@agency.com"
+                        style={{ flex: 1, minWidth: 200, padding: "9px 12px", border: "1px solid " + C.border, borderRadius: 10, fontFamily: "inherit", fontSize: 13, background: C.bg, color: C.text }}
+                      />
+                      <button onClick={inviteSeat} disabled={seatBusy} className="r-btn" data-tone="green" style={{ padding: "9px 16px", color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: seatBusy ? 0.6 : 1 }}>
+                        Invite
+                      </button>
+                    </div>
+                    {seatInviteLink && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 10, marginBottom: 12, fontSize: 12.5, color: C.text, flexWrap: "wrap" }}>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{seatInviteLink}</span>
+                        <button onClick={() => { try { navigator.clipboard.writeText(seatInviteLink); } catch (_) {} }} style={{ background: "transparent", border: "none", color: C.primary, fontWeight: 600, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>Copy link</button>
+                      </div>
+                    )}
+                    {(seatMembers || []).map(m => (
+                      <div key={m.id} className="rt-divider-inset" style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 2px" }}>
+                        <span style={{ flex: 1, fontSize: 13, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{m.invited_email || m.user_id}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: m.role === "owner" ? C.primary : C.textMuted }}>{m.status === "invited" ? "invited" : m.role}</span>
+                        {m.status === "invited" && (
+                          <button onClick={() => revokeInvite(m.id)} style={{ background: "transparent", border: "none", color: "#A03422", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Revoke</button>
+                        )}
+                        {m.status === "active" && m.user_id !== org.owner_user_id && (
+                          <>
+                            {isRoot && (
+                              <button onClick={() => setRole(m.user_id, m.role === "owner" ? "am" : "owner")} style={{ background: "transparent", border: "none", color: C.textSec, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                                {m.role === "owner" ? "Make AM" : "Make owner"}
+                              </button>
+                            )}
+                            <button onClick={() => removeSeat(m.user_id)} style={{ background: "transparent", border: "none", color: "#A03422", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Remove</button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               {workersList.length === 0 ? (
                 <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14 }}>
                   <div style={{
