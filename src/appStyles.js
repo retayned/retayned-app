@@ -970,6 +970,30 @@ export const APP_CSS = `
            backgrounds still light edge-to-edge — while the divider
            itself stops short of the corners. Inset defaults to 14px,
            overridable per-container via --rt-inset to match padding. */
+        /* ── .rt-msg-act — draft action chips under Rai replies ────
+           (Jun 2026) Quiet bordered chips in the app's pill language:
+           hairline border, muted label, sage hover, green confirmed
+           state for Copy. Rendered only under replies containing an
+           actual draft (see RaiMessageActions). */
+        .rt-msg-act {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 5px 11px; border-radius: 8px;
+          border: 1px solid var(--rt-border-light);
+          background: transparent; color: #8A8F8A;
+          font-family: inherit; font-size: 11.5px; font-weight: 600;
+          letter-spacing: 0.01em; cursor: pointer; text-decoration: none;
+          transition: background 140ms, color 140ms, border-color 140ms;
+        }
+        .rt-msg-act:hover {
+          background: var(--rt-primary-soft, #E6EFE9);
+          color: var(--rt-primary, #33543E);
+          border-color: transparent;
+        }
+        .rt-msg-act.is-done {
+          color: var(--rt-primary, #33543E);
+          border-color: var(--rt-primary-soft, #E6EFE9);
+          background: var(--rt-primary-soft, #E6EFE9);
+        }
         .rt-divider-inset { position: relative; }
         .rt-divider-inset::after {
           content: ""; position: absolute; bottom: 0; height: 1px;
