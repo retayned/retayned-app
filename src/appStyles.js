@@ -1834,6 +1834,14 @@ export const APP_CSS = `
           pointer-events: none !important;
           transition: opacity 280ms ease;
         }
+        /* Dim the bucket empty states ("No tasks tomorrow." / "No tasks
+           scheduled.") in focus mode. They live inside the tasks column
+           but aren't rows, so without this they stay bright. */
+        .rt-focus-on .rt-bucket-empty {
+          opacity: 0.06 !important;
+          pointer-events: none !important;
+          transition: opacity 280ms ease;
+        }
         /* Dim the Tomorrow / Later bucket calendar widgets in focus mode.
            Wraps the Calendar toggle pill + its expanded event grid as a
            single unit, so the whole calendar surface fades together
