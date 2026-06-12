@@ -963,6 +963,25 @@ export const APP_CSS = `
            The :not selector ensures hover doesn't override the active
            treatment when the row is also active. */
         .rt-soft-row { transition: background 140ms, border-left-color 140ms; cursor: pointer; background: transparent; }
+        /* ── .rt-divider-inset — in-card hairlines (Jun 2026) ──────
+           Full-bleed borders against rounded card corners read as a
+           defect next to the inset hairlines used elsewhere (see the
+           Warmth card footer). This keeps the ROW full width — hover
+           backgrounds still light edge-to-edge — while the divider
+           itself stops short of the corners. Inset defaults to 14px,
+           overridable per-container via --rt-inset to match padding. */
+        .rt-divider-inset { position: relative; }
+        .rt-divider-inset::after {
+          content: ""; position: absolute; bottom: 0; height: 1px;
+          left: var(--rt-inset, 14px); right: var(--rt-inset, 14px);
+          background: var(--rt-border-light);
+        }
+        .rt-divider-inset-top { position: relative; }
+        .rt-divider-inset-top::before {
+          content: ""; position: absolute; top: 0; height: 1px;
+          left: var(--rt-inset, 14px); right: var(--rt-inset, 14px);
+          background: var(--rt-border-light);
+        }
         .rt-soft-row:not(.is-active):hover { background: #EAEDE9 !important; }
 
         /* ════════════════════════════════════════════════════
