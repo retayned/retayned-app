@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase";
 
 export function useDataLoad(app) {
   const {
+    bookOwnerId,
     clients,
     getAdjustedLTV,
     googleConnected,
@@ -67,17 +68,22 @@ export function useDataLoad(app) {
     // ~2s "everything jumbled then sorts" jank Adam was seeing. The
     // skeleton state covers the (very brief) gap.
     if (!userTimezone) return;
-    const uid = user.id;
+    const uid = user.id;                    // SELF: my intelligence, profile, calendar, tokens
+    // BOOK: the client data I work in. Solo users and root owners work
+    // in their own book (bookId === uid, byte-identical behavior). A
+    // seat works in the org owner's book; RLS trims what they see to
+    // their assignment. (Agency spine, scope §4.1 / A2-3.)
+    const bookId = bookOwnerId || user.id;
     
     const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
-      clientsDb.list(uid),
-      tasksDb.listToday(uid),
-      referralsDb.list(uid),
-      rolodexDb.list(uid),
-      hcDb.listPending(uid),
-      touchpointsDb.listToday(uid),
+      clientsDb.list(bookId),
+      tasksDb.listToday(bookId),
+      referralsDb.list(bookId),
+      rolodexDb.list(bookId),
+      hcDb.listPending(bookId),
+      touchpointsDb.listToday(bookId),
       (typeof hcDb.countCompletedByClient === "function")
-        ? hcDb.countCompletedByClient(uid)
+        ? hcDb.countCompletedByClient(bookId)
         : Promise.resolve({ data: {}, error: null }),
       (typeof convoDb.list === "function")
         ? convoDb.list(uid, 250)
@@ -100,7 +106,7 @@ export function useDataLoad(app) {
       supabase
         .from('client_revenue_history')
         .select('client_id, monthly_rate, started_at, ended_at, change_reason, change_note')
-        .eq('user_id', uid)
+        .eq('user_id', bookId)
         .then(r => r, () => ({ data: [], error: null })),
       // Engagement pauses — same batch pattern. Drives monthsTogether and
       // is_currently_paused on every client. Empty array on failure (table
@@ -108,20 +114,20 @@ export function useDataLoad(app) {
       supabase
         .from('client_engagement_pauses')
         .select('id, client_id, paused_at, resumed_at, reason, note')
-        .eq('user_id', uid)
+        .eq('user_id', bookId)
         .then(r => r, () => ({ data: [], error: null })),
       // Promoted from sequential awaits to parallel. Each wrapped in .catch
       // so a missing function or empty table doesn't reject the whole batch;
       // null data on failure is the same as the previous try/catch behavior.
       // Cadence — 90-day touchpoint history for client cards.
       (typeof touchpointsDb.list === "function")
-        ? touchpointsDb.list(uid, 90).catch(e => { console.warn("Cadence data failed to load:", e); return { data: null, error: e }; })
+        ? touchpointsDb.list(bookId, 90).catch(e => { console.warn("Cadence data failed to load:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
       // Cadence — 90-day task-completion history (per-client) for the
       // Clients-page cadence + last-touch. tasks[] is today-only, so past
       // completions must come from task_completions.
       (typeof tasksDb.listCompletionsForCadence === "function")
-        ? tasksDb.listCompletionsForCadence(uid, 90).catch(e => { console.warn("Completion history failed to load:", e); return { data: null, error: e }; })
+        ? tasksDb.listCompletionsForCadence(bookId, 90).catch(e => { console.warn("Completion history failed to load:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
       // Observer card — weekly observation, may not exist.
       (typeof observationsDb?.getCurrent === "function")
@@ -131,15 +137,15 @@ export function useDataLoad(app) {
       Promise.resolve({ data: null, error: null }),
       // Workers list + per-worker completion counts. Optional table — empty
       // arrays on failure so the composer worker chip just shows zero options.
-      workersDb.list(uid).catch(e => { console.warn("Workers load failed:", e); return { data: null, error: e }; }),
-      workersDb.getAllCompletions(uid).catch(e => { console.warn("Worker completions load failed:", e); return { data: null, error: e }; }),
+      workersDb.list(bookId).catch(e => { console.warn("Workers load failed:", e); return { data: null, error: e }; }),
+      workersDb.getAllCompletions(bookId).catch(e => { console.warn("Worker completions load failed:", e); return { data: null, error: e }; }),
       // Personal calendar events (Today timeline) + sidebar completion counts.
       // Both render on the default landing page so they belong in critical
       // path. As fire-and-forget they hydrated late, causing visible pop-in
       // on the Today calendar widget and the sidebar Portfolio widget.
       personalCalendarDb.listUpcoming(uid).catch(e => { console.warn("personal calendar load failed:", e); return { data: null, error: e }; }),
       (typeof tasksDb.getCompletedCounts === "function")
-        ? tasksDb.getCompletedCounts(uid).catch(e => { console.warn("task completion counts failed:", e); return { data: null, error: e }; })
+        ? tasksDb.getCompletedCounts(bookId).catch(e => { console.warn("task completion counts failed:", e); return { data: null, error: e }; })
         : Promise.resolve({ data: null, error: null }),
       // Phase 3 occurrence-model — fetch last 90 days of task_occurrences
       // (covers any reader's window need; smallest window is 7d, biggest
@@ -149,7 +155,7 @@ export function useDataLoad(app) {
       supabase
         .from('task_occurrences')
         .select('*')
-        .eq('user_id', uid)
+        .eq('user_id', bookId)
         .gte('occurrence_date', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
         .order('occurrence_date', { ascending: false })
         .then(r => r, () => ({ data: [], error: null })),
@@ -594,17 +600,17 @@ export function useDataLoad(app) {
     // Billing data — only visible on the Billing tab. Three fetches that
     // hydrate independently. Each can render empty on failure (user re-adds).
     if (typeof clientBillingDb?.listAll === "function") {
-      clientBillingDb.listAll(uid)
+      clientBillingDb.listAll(bookId)
         .then(r => { if (r?.data) setClientBilling(r.data); })
         .catch(e => console.warn("billing items hydrate failed:", e));
     }
     if (typeof clientBillingMonthStatusDb?.listAll === "function") {
-      clientBillingMonthStatusDb.listAll(uid)
+      clientBillingMonthStatusDb.listAll(bookId)
         .then(r => { if (r?.data) setBillingMonthStatus(r.data); })
         .catch(e => console.warn("billing month status hydrate failed:", e));
     }
     if (typeof clientBillingTermsDb?.listAll === "function") {
-      clientBillingTermsDb.listAll(uid)
+      clientBillingTermsDb.listAll(bookId)
         .then(r => { if (r?.data) setBillingTerms(r.data); })
         .catch(e => console.warn("billing terms hydrate failed:", e));
     }
@@ -612,7 +618,7 @@ export function useDataLoad(app) {
     // Same lazy timing as billing data: only visible on the Billing
     // tab, so we don't block initial paint with it.
     if (typeof clientAddonsDb?.listAllByClient === "function") {
-      clientAddonsDb.listAllByClient(uid)
+      clientAddonsDb.listAllByClient(bookId)
         .then(r => { if (r?.data) setClientAddons(r.data); })
         .catch(e => console.warn("addons hydrate failed:", e));
     }
