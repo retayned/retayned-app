@@ -405,13 +405,20 @@ export function useDataLoad(app) {
       // row and the user's check silently disappears.
       setTasks(prev => {
         if (inFlightToggles.current.size === 0) return loadedTasks;
-        const prevById = new Map(prev.map(t => [t.id, t]));
+        // Recent-toggles ledger: a hydration whose SELECT predates a
+        // toggle must not stomp it. For recently toggled ids, local
+        // truth wins; the entry clears as soon as the server row
+        // agrees (confirmed) or after 15s (expiry — later legitimate
+        // server-side flips, e.g. midnight rollover, then apply).
+        const _now = Date.now();
         return loadedTasks.map(t => {
-          if (inFlightToggles.current.has(t.id)) {
-            const p = prevById.get(t.id);
-            if (p) return { ...t, done: p.done, completed_at: p.completed_at };
+          const entry = inFlightToggles.current.get(t.id);
+          if (!entry) return t;
+          if (_now - entry.ts > 15000 || t.done === entry.done) {
+            inFlightToggles.current.delete(t.id);
+            return t;
           }
-          return t;
+          return { ...t, done: entry.done, completed_at: entry.completed_at };
         });
       });
       // Tasks that were already completed before this page load skip the
