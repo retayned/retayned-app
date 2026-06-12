@@ -1,29 +1,22 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="theme-color" content="#FAFBFA" />
-    <meta name="rt-build" content="2026-06-11.1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="retayned-build" content="2026-06-12.1" />
     <title>Retayned</title>
-    <script>
-      console.log("Retayned build 2026-06-12.1");
-    </script>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <script>console.log("Retayned build 2026-06-12.1");window.__RETAYNED_BUILD__="2026-06-12.1";</script>
+    <script type="module" src="/src/main.jsx"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
     <script>
-      /* White-screen watchdog (Jun 2026). If the main bundle itself 404s
-         after a deploy (restored tab + stale cached HTML), no JS ever
-         runs, so the in-app self-heal can't fire and #root stays empty
-         forever. This inline script needs no bundle: after 6s, if the
-         root is still empty, force one reload to fetch fresh HTML.
-         Session-guarded against loops. The 6s grace is generous — when
-         JS is healthy the loading screen mounts in well under a second. */
+      /* White-screen watchdog (Jun 2026). If the main bundle 404s after a
+         deploy (restored tab + stale cached HTML), no JS ever runs and
+         #root stays empty forever. This inline script needs no bundle:
+         after 6s, if the root is still empty, force one reload to fetch
+         fresh HTML. Session-guarded against loops. */
       (function () {
         try {
           var k = "rt:wsReloadAt";
@@ -35,7 +28,7 @@
               location.reload();
             }
           }, 6000);
-        } catch (e) { /* sessionStorage unavailable — do nothing */ }
+        } catch (e) { /* sessionStorage unavailable */ }
       })();
     </script>
   </body>
