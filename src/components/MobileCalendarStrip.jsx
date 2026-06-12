@@ -257,23 +257,11 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       >
         {/* NOW-pulse keyframes — once per render tree, scoped by name. */}
         <style>{`@keyframes rtNowPulse { 0% { box-shadow: 0 0 0 0 rgba(51,84,62,0.32); } 70% { box-shadow: 0 0 0 9px rgba(51,84,62,0); } 100% { box-shadow: 0 0 0 0 rgba(51,84,62,0); } }`}</style>
-        {/* Full-bleed time-of-day sky gradient: dawn lilac/peach (left) → cool
-            midday blue → amber dusk → indigo night (right). Low opacity so it
-            whispers against the cream; a vertical fade dissolves it into bg. */}
-        <div aria-hidden style={{
-          position: "absolute", top: -40, left: 0, right: 0, height: 200, zIndex: 0, pointerEvents: "none",
-          background:
-            "linear-gradient(180deg, rgba(0,0,0,0) 58%, rgba(250,251,250,1) 100%), " +
-            "linear-gradient(90deg, rgba(160,150,190,0.20) 0%, rgba(220,185,160,0.17) 14%, rgba(190,215,225,0.15) 34%, rgba(185,212,218,0.14) 50%, rgba(218,170,145,0.16) 72%, rgba(130,122,165,0.19) 86%, rgba(60,70,110,0.22) 100%)",
-        }} />
-        {/* NOW — a soft daylight glow at the current-time x-position. */}
-        {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
-          <div aria-hidden style={{
-            position: "absolute", top: -40, height: 200, width: 72, zIndex: 1, pointerEvents: "none",
-            left: `calc(${(nowFrac * 100).toFixed(1)}% - 36px)`,
-            background: "radial-gradient(ellipse 50% 55% at 50% 26%, rgba(255,255,255,0.28), transparent 70%)",
-          }} />
-        )}
+        {/* (v1 "time-of-day sky" rainbow gradient + daylight glow REMOVED
+            June 2026 — the cream/purple wash was the old design's skin and
+            survived every prior cleanup because it was a third, unnamed
+            copy of the V1 gradient family. The band is FLAT #FAFBFA per
+            the locked palette. Curve, dots, NOW seeker, next-card stay.) */}
         {/* Refined timeline: a near-flat hairline curve. Full-bleed; the stroke
             stays uniform via non-scaling-stroke even when stretched. */}
         <div style={{ position: "absolute", top: 21, left: 0, right: 0, height: BAND_H, zIndex: 1, pointerEvents: "none" }}>
