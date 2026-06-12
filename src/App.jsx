@@ -482,34 +482,26 @@ export default function App({ user }) {
   const [retroDeleteConfirm, setRetroDeleteConfirm] = useState(false);
   const [rolodexFiledFilter, setRolodexFiledFilter] = useState("all");
   const [showReminderPicker, setShowReminderPicker] = useState(false);
-  // Rolodex check-in dot "seen" — persisted per LOCAL DAY so a refresh
-  // doesn't resurrect the dot (the in-memory flag reset on every reload).
-  // New due reminders tomorrow re-light it naturally.
-  const _rolodexSeenDayKey = "rt:rolodexSeenDay";
+  // Rolodex dot is an ACTION badge (Jun 12, semantics reversed): it
+  // persists, across days and page visits, until the due reminder is
+  // acted on (the dot recomputes from data) or the check-in banner is
+  // dismissed for the day. Merely viewing the Rolodex never clears it.
+  // Shares the banner's dismissal key so dot and banner always agree.
+  const _rolodexCheckinDismissKey = "rt:rolodexBannerDismissedDay";
   const _todayLocalYmd = () => {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
   };
-  const [rolodexRemindersSeen, setRolodexRemindersSeen] = useState(() => {
-    try { return window.localStorage.getItem(_rolodexSeenDayKey) === _todayLocalYmd(); } catch { return false; }
+  const [rolodexCheckinDismissed, setRolodexCheckinDismissed] = useState(() => {
+    try { return window.localStorage.getItem(_rolodexCheckinDismissKey) === _todayLocalYmd(); } catch { return false; }
   });
+  const dismissRolodexCheckin = () => {
+    setRolodexCheckinDismissed(true);
+    try { window.localStorage.setItem(_rolodexCheckinDismissKey, _todayLocalYmd()); } catch (_) { /* unavailable */ }
+  };
 
   // (moved into useGoogleCalendar — June 2026)
 
-  // Belt-and-suspenders for the rolodex dot: stamp "seen" whenever the
-  // Rolodex page IS active, not only via goTo — covers any entry path
-  // (restored sessions, programmatic navigation) so the dot can never
-  // resurface after the page has actually been viewed today.
-  useEffect(() => {
-    if (page !== "retros") return;
-    setRolodexRemindersSeen(true);
-    try { window.localStorage.setItem(_rolodexSeenDayKey, _todayLocalYmd()); } catch (_) { /* unavailable */ }
-    // Cross-device persistence: stamp the profile row (fire-and-forget).
-    if (user?.id) {
-      supabase.from("profiles").update({ rolodex_seen_day: _todayLocalYmd() }).eq("id", user.id)
-        .then(() => {}, () => { /* column may not exist yet — harmless */ });
-    }
-  }, [page]);
   // Cleared→set true when the user opens the Health page, so the "new
   // observation" red dot disappears on visit (without changing the
   // observation's own status — it still shows on the page until unpacked/
@@ -1280,7 +1272,7 @@ export default function App({ user }) {
   const [refs, setRefs] = useState([]);
   const [raiConvoList, setRaiConvoList] = useState([]);
   // Hydration layer lives in src/hooks/useDataLoad (extracted June 2026).
-  const loadData = useDataLoad({ _todayLocalYmd, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setRolodexRemindersSeen, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ clients, getAdjustedLTV, googleConnected, googleEmail, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -2562,10 +2554,6 @@ export default function App({ user }) {
   // ─── DAYBOOK PANEL — replaces Talk to Rai on Today's right rail ─────
   const goTo = (id) => {
     if (page === "health" && id !== "health") { setHcDone({}); setHcOpen(null); }
-    if (id === "retros") {
-      setRolodexRemindersSeen(true);
-      try { window.localStorage.setItem(_rolodexSeenDayKey, _todayLocalYmd()); } catch (_) { /* unavailable */ }
-    }
     if (id === "health") {
       // Persist observation-viewed state to DB so the red dot doesn't
       // resurrect on page refresh. Updates viewed_at = NOW() on the
@@ -2617,7 +2605,7 @@ export default function App({ user }) {
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
   })();
   const rolodexHasDueReminder = (rolodex || []).some(r => r.reminder && String(r.reminder).slice(0, 10) <= _rolodexReminderToday);
-  const rolodexDot = rolodexHasDueReminder && !rolodexRemindersSeen && page !== "retros";
+  const rolodexDot = rolodexHasDueReminder && !rolodexCheckinDismissed && page !== "retros";
   const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot) || (id === "retros" && rolodexDot);
 
   // All state/handlers the extracted page components read. Rebuilt each
@@ -2738,6 +2726,8 @@ export default function App({ user }) {
     retroDeleteConfirm,
     reviewQueueMoreOpen,
     rolodex,
+    rolodexCheckinDismissed,
+    dismissRolodexCheckin,
     rolodexFiledFilter,
     rolodexFlowOpen,
     rolodexSearch,
