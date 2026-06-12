@@ -370,7 +370,7 @@ export default function ReferralsPage({ app }) {
 
                   {/* Who to ask next */}
                   <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
-                    <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
+                    <div className="rt-divider-inset" style={{ padding: "12px 14px 10px" }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Who to ask next</div>
                       <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 3 }}>Strongest signals first</div>
                     </div>
@@ -385,7 +385,7 @@ export default function ReferralsPage({ app }) {
                           const isActive = activeAsk?.name === q.name;
                           const st = strengthFor(q.askScore);
                           return (
-                            <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "none", borderBottom: i === askQueue.length - 1 ? "none" : "1px solid " + C.borderLight, borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", ...(isActive ? { background: C.primarySoft } : {}) }}>
+                            <button key={q.name} onClick={() => { setAskActiveId(q.name); setAskDraft(""); }} className={"rt-soft-row" + (isActive ? " is-active" : "") + (i === askQueue.length - 1 ? "" : " rt-divider-inset")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: "none", borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", ...(isActive ? { background: C.primarySoft } : {}) }}>
                               <div style={{ width: 30, height: 30, borderRadius: 15, background: retGradient(q.ret || 0), color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>{q.name.split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase()}</div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
@@ -636,7 +636,7 @@ export default function ReferralsPage({ app }) {
                         {refs.map((r, i) => {
                           const isActive = r.status === "converted" || r.status === "active";
                           return (
-                            <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: i === refs.length - 1 ? "none" : "1px solid " + C.borderLight }}>
+                            <div key={r.id} className={i === refs.length - 1 ? undefined : "rt-divider-inset"} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", "--rt-inset": "16px" }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 13.5, color: C.text, fontWeight: 600 }}>{r.name}</div>
                                 <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>Referred by {r.from} · {r.on || "recent"}</div>
