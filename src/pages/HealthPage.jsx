@@ -222,7 +222,7 @@ export default function HealthPage({ app }) {
                             position: "relative",
                             overflow: "hidden",
                             border: "1px solid rgba(51,84,62,0.22)",
-                            boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
+                            boxShadow: "0 0 0 1px rgba(20,30,22,0.12), 0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Corner ✕ dismiss — top-right notification pattern */}
                             <button
@@ -403,7 +403,7 @@ export default function HealthPage({ app }) {
                             position: "relative",
                             overflow: "hidden",
                             border: "1px solid rgba(51,84,62,0.22)",
-                            boxShadow: "0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
+                            boxShadow: "0 0 0 1px rgba(20,30,22,0.12), 0 2px 0 -1px rgba(51,84,62,0.06), 0 4px 12px rgba(20,30,22,0.04)",
                           }}>
                             {/* Illustration — absolute corner placement */}
                             {illoSrc && (
