@@ -9895,7 +9895,7 @@ export default function App({ user }) {
                 position: "fixed",
                 left: 12, right: 12,
                 bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-                background: "rgba(30,38,31,0.72)",
+                background: "rgba(30,38,31,0.92)",
                 backdropFilter: "blur(12px) saturate(1.15)",
                 WebkitBackdropFilter: "blur(12px) saturate(1.15)",
                 border: "1px solid rgba(255,255,255,0.09)",
