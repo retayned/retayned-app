@@ -5,6 +5,7 @@ import { RaiMarkdown } from "../components/RaiMarkdown";
 import { C } from "../theme";
 
 import { SpecialistGate } from "../components/Onboarding";
+import RaiMessageActions from "../components/RaiMessageActions";
 
 export default function CoachPage({ app }) {
   const {
@@ -152,6 +153,7 @@ export default function CoachPage({ app }) {
                           {aiStreaming && i === aiMessages.length - 1 && (
                             <span className="rt-stream-caret" aria-hidden="true" style={{ display: "inline-block", width: 8, height: 17, marginLeft: 1, verticalAlign: "-3px", borderRadius: 1, background: C.primary }} />
                           )}
+                          {!(aiStreaming && i === aiMessages.length - 1) && <RaiMessageActions text={m.text} />}
                         </div>
                       );
                     })}
