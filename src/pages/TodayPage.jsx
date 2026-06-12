@@ -8,7 +8,7 @@ import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "..
 import { TimeDial } from "../components/TimeDial";
 import { supabase } from "../lib/supabase.js";
 import { parseCalendarEntry, parseComposer } from "../parser";
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
 import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, splitLongTask, ymdInTz } from "../utils";
@@ -1043,31 +1043,30 @@ export default function TodayPage({ app }) {
             }
           };
 
+          // ─── FOCUS MODE EXIT (Jun 12) ────────────────────────────────────
+          // One mechanism, document level. The old pair was broken: the
+          // full-viewport scrim was a direct child of .rt-focus-on, so the
+          // dim rule's pointer-events:none !important made it inert from the
+          // day it shipped; and the container onClick couldn't see clicks
+          // outside the container's box (sidebar, gutters, header were dead
+          // zones). pointerdown anywhere now exits unless the press is inside
+          // the focused task or an explicitly protected [data-focus-keep] zone.
+          useEffect(() => {
+            if (!focusMode) return;
+            const exit = (e) => {
+              const t = e.target;
+              if (t && t.closest && (t.closest(".rt-focus-top-wrap") || t.closest("[data-focus-keep]"))) return;
+              setFocusMode(false);
+            };
+            document.addEventListener("pointerdown", exit, true);
+            return () => document.removeEventListener("pointerdown", exit, true);
+          }, [focusMode]);
+
           // ─── RENDER ──────────────────────────────────────────────────────
           return (
             <div
               className={"rt-today-v4" + (focusMode ? " rt-focus-on" : "")}
-              onClick={focusMode ? (e) => {
-                // Exit focus if click target is the wrapper itself (background area), not bubbled from inside a task or button.
-                // We use a data attribute on focus-protected zones; if no protected ancestor, exit.
-                const t = e.target;
-                if (t && t.closest && t.closest("[data-focus-keep]")) return;
-                setFocusMode(false);
-              } : undefined}
               style={{ width: "100%", display: "grid", gap: 20, alignItems: "start", position: "relative" }}>
-              {/* Focus-mode exit scrim — a full-viewport tap target behind the
-                  focused task. The dimmed rows/areas have pointer-events:none,
-                  so on mobile taps never reached the grid wrapper's onClick;
-                  this scrim guarantees a tap anywhere outside the focused task
-                  exits focus. The focused row paints above it (higher z-index in
-                  the .rt-focus-on rules). */}
-              {focusMode && (
-                <div
-                  onClick={() => setFocusMode(false)}
-                  style={{ position: "fixed", inset: 0, zIndex: 5, background: "transparent" }}
-                  aria-hidden="true"
-                />
-              )}
               {/* Mobile ambient calendar strip — pinned at the very top of the
                   mobile Today page, above the greeting/band. Collapsed by
                   default (B1 sequence-dots + next + countdown), expands in
@@ -2398,7 +2397,7 @@ export default function TodayPage({ app }) {
               </div>
 
               {/* TASKS COLUMN */}
-              <div className="rt-tasks-col" data-focus-keep style={{ gridArea: "tasks", minWidth: 0, paddingTop: 12 }}>
+              <div className="rt-tasks-col" style={{ gridArea: "tasks", minWidth: 0, paddingTop: 12 }}>
                   {/* (Removed: rt-toolbar — the segmented control + Focus
                       button row. Mode selector and Focus link moved INTO
                       the "Today" bucket header per option #5 of the
@@ -3546,7 +3545,7 @@ export default function TodayPage({ app }) {
                                 {_tomorrowBucket.map(t => renderRow(t, "tomorrow"))}
                               </div>
                             ) : (
-                              <div style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks tomorrow.</div>
+                              <div className="rt-bucket-empty" style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks tomorrow.</div>
                             )}
                             {/* Calendar toggle + content — wrapped in
                                 .rt-bucket-cal so focus-mode CSS can dim
@@ -3593,7 +3592,7 @@ export default function TodayPage({ app }) {
                                 {_laterBucket.map(t => renderRow(t, "later"))}
                               </div>
                             ) : (
-                              <div style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks scheduled.</div>
+                              <div className="rt-bucket-empty" style={{ padding: "2px 6px 0", fontFamily: "'Manrope', sans-serif", fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>No tasks scheduled.</div>
                             )}
                             {/* Calendar toggle + content — wrapped in
                                 .rt-bucket-cal so focus-mode CSS can dim
@@ -3704,10 +3703,18 @@ export default function TodayPage({ app }) {
                     an editorial link, not UI chrome. */}
                 {!googleConnected && !googleConnectPromptDismissed && (
                   <div style={{
+                    /* Centered in the visible dial body (Jun 12): the dial is
+                       a half-disc with its center on the wrapper's right edge
+                       and a 140px hub there; this sits at the vertical middle,
+                       horizontally centered in the disc area left of the hub.
+                       For an unconnected user the dial is empty, so the nudge
+                       owns the space instead of hiding at the top corner. */
                     position: "absolute",
-                    top: 28,
-                    left: 36,
-                    maxWidth: 360,
+                    top: "50%",
+                    right: 130,
+                    transform: "translateY(-50%)",
+                    width: 300,
+                    textAlign: "center",
                     pointerEvents: "auto",
                     zIndex: 4,
                     fontFamily: "inherit",
