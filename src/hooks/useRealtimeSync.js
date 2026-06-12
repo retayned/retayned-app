@@ -18,6 +18,7 @@ export function useRealtimeSync(app) {
     setWorkerCompletions,
     userTimezone,
     user,
+    bookOwnerId,
     raiBurstTrackerRef,
   } = app;
   // ─── Realtime task sync ─────────────────────────────────────
@@ -28,7 +29,7 @@ export function useRealtimeSync(app) {
   useEffect(() => {
     if (!user?.id) return;
 
-    const subscription = realtimeDb.onTaskChange(user.id, (payload) => {
+    const subscription = realtimeDb.onTaskChange(bookOwnerId || user.id, (payload) => {
       // payload.eventType: "INSERT" | "UPDATE" | "DELETE"
       // payload.new: the new row (for INSERT/UPDATE)
       // payload.old: the old row (for UPDATE/DELETE)
@@ -132,7 +133,7 @@ export function useRealtimeSync(app) {
     // clients.rai_nudge, and we need the sort to update without a refresh.
     // Also handles general client edits (name change, score change, etc.)
     // made from another tab.
-    const clientSubscription = realtimeDb.onClientChange(user.id, (payload) => {
+    const clientSubscription = realtimeDb.onClientChange(bookOwnerId || user.id, (payload) => {
       const ev = payload.eventType;
       if (ev === "DELETE") {
         const oldId = payload.old?.id;
