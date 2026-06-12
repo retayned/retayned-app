@@ -368,7 +368,7 @@ export default function RetrosPage({ app }) {
                   {/* CHECK-IN QUEUE — due/upcoming reminders, soonest first.
                       Mirrors the Health queue pattern; rows open the contact. */}
                   <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
-                    <div style={{ padding: "12px 14px 10px", borderBottom: "1px solid " + C.borderLight }}>
+                    <div className="rt-divider-inset" style={{ padding: "12px 14px 10px" }}>
                       <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Check-in queue</div>
                     </div>
                     {(() => {
@@ -389,11 +389,10 @@ export default function RetrosPage({ app }) {
                         const sub = diff < 0 ? `${Math.abs(diff)}d overdue` : diff === 0 ? "due today" : `in ${diff}d`;
                         const subColor = diff < 0 ? C.retCrit : diff === 0 ? C.retWarn : C.textMuted;
                         return (
-                          <button key={r.id} onClick={() => setSelectedRolodex(r)} className="rt-soft-row" style={{
+                          <button key={r.id} onClick={() => setSelectedRolodex(r)} className={"rt-soft-row" + (i === withReminder.length - 1 ? "" : " rt-divider-inset")} style={{
                             display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, width: "100%",
                             padding: "10px 14px", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
                             background: "transparent",
-                            borderBottom: i === withReminder.length - 1 ? "none" : "1px solid " + C.borderLight,
                           }}>
                             <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{name}</span>
                             <span style={{ fontSize: 10.5, fontWeight: 600, color: subColor }}>{sub}</span>
@@ -539,7 +538,7 @@ export default function RetrosPage({ app }) {
                         {/* Footer nav — hidden on priority step (buttons ARE the actions) */}
                         {currentStepDef.kind !== "priority" && (
                           retroDeleteConfirm ? (
-                            <div style={{ padding: "16px 18px 18px", borderTop: "1px solid " + C.borderLight, background: C.card }}>
+                            <div className="rt-divider-inset-top" style={{ padding: "16px 18px 18px", background: C.card, "--rt-inset": "18px" }}>
                               <div style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>Delete <b>{active.client_name || active.client}</b> from your rolodex? This is permanent — you won't be able to get this contact back.</div>
                               <div style={{ display: "flex", gap: 8 }}>
                                 <button onClick={() => { setRolodex(prev => prev.filter(x => x.id !== active.id)); rolodexDb.delete(active.id); setRetroDeleteConfirm(false); advanceAfterRetro(); }} style={{ flex: 1, padding: "11px", background: C.danger, color: "#fff", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
@@ -547,7 +546,7 @@ export default function RetrosPage({ app }) {
                               </div>
                             </div>
                           ) : (
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px 15px", borderTop: "1px solid " + C.borderLight }}>
+                          <div className="rt-divider-inset-top" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px 15px", "--rt-inset": "18px" }}>
                             <div style={{ display: "flex", gap: 4 }}>
                               <button onClick={() => setRetroOpen(false)} style={{ fontSize: 12.5, color: C.textMuted, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Minimize</button>
                               <button onClick={advanceAfterRetro} style={{ fontSize: 12.5, color: C.textMuted, padding: "8px 12px", borderRadius: 8, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Skip for now</button>
