@@ -3695,86 +3695,9 @@ export default function TodayPage({ app }) {
                 className="rt-dial-layer"
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
-                {/* Connect Google Calendar nudge — overlays the dial
-                    area at top-left. Pointer-events scoped to just the
-                    affordance so dial scrub/click pass through.
-                    Visible only when not connected and not dismissed.
-                    Dotted purple underline → solid on hover; reads as
-                    an editorial link, not UI chrome. */}
-                {!googleConnected && !googleConnectPromptDismissed && (
-                  <div style={{
-                    /* Centered in the visible dial body (Jun 12): the dial is
-                       a half-disc with its center on the wrapper's right edge
-                       and a 140px hub there; this sits at the vertical middle,
-                       horizontally centered in the disc area left of the hub.
-                       For an unconnected user the dial is empty, so the nudge
-                       owns the space instead of hiding at the top corner. */
-                    position: "absolute",
-                    top: "50%",
-                    right: 130,
-                    transform: "translateY(-50%)",
-                    width: 300,
-                    textAlign: "center",
-                    pointerEvents: "auto",
-                    zIndex: 4,
-                    fontFamily: "inherit",
-                  }}>
-                    <div style={{
-                      fontFamily: "'Fraunces', Georgia, serif",
-                      fontStyle: "italic",
-                      fontSize: 14,
-                      fontWeight: 500,
-                      color: C.textMuted,
-                      letterSpacing: "-0.005em",
-                      lineHeight: 1.5,
-                    }}>
-                      <button
-                        type="button"
-                        onClick={connectGoogleCalendar}
-                        className="rt-gcal-connect-link"
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          padding: 0,
-                          fontFamily: "inherit",
-                          fontStyle: "italic",
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "#33543E",
-                          cursor: "pointer",
-                          textDecoration: "underline dotted",
-                          textDecorationColor: "rgba(51,84,62,0.55)",
-                          textUnderlineOffset: 4,
-                          textDecorationThickness: 1.5,
-                          transition: "text-decoration-style 120ms ease",
-                        }}
-                      >
-                        Connect Google Calendar
-                      </button>
-                      <span> to see your meetings on the dial.</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={dismissGoogleConnectPrompt}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        padding: "2px 0 0",
-                        marginTop: 4,
-                        color: C.textMuted,
-                        cursor: "pointer",
-                        fontFamily: "inherit",
-                        fontSize: 11,
-                        fontStyle: "italic",
-                      }}
-                      aria-label="Dismiss"
-                    >
-                      not now
-                    </button>
-                  </div>
-                )}
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
                   <TimeDial
+                    gcalNudge={!googleConnected && !googleConnectPromptDismissed ? { connect: connectGoogleCalendar, dismiss: dismissGoogleConnectPrompt } : null}
                     events={(() => {
                       // Enrich each event with _prepCount = open tasks for that
                       // event's client. Used to render the "N tasks before" chip
