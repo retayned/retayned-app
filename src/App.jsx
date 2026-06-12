@@ -18,6 +18,7 @@ import RolodexModal from "./components/RolodexModal";
 import ShellOverlays from "./components/ShellOverlays";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useDataLoad } from "./hooks/useDataLoad";
+import { useOrg, can } from "./hooks/useOrg";
 import { useShellViewport } from "./hooks/useShellViewport";
 import { useGoogleCalendar } from "./hooks/useGoogleCalendar";
 import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
@@ -1272,10 +1273,15 @@ export default function App({ user }) {
   const [refs, setRefs] = useState([]);
   const [raiConvoList, setRaiConvoList] = useState([]);
   // Hydration layer lives in src/hooks/useDataLoad (extracted June 2026).
-  const loadData = useDataLoad({ clients, getAdjustedLTV, googleConnected, googleEmail, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  // ─── AGENCY SPINE (Jun 12) ──────────────────────────────────────────
+  // org/role/bookOwnerId resolve once per session. Solo users: org is
+  // null, bookOwnerId === user.id, and every path below is byte-
+  // identical to pre-Agency behavior (verified by exact-delta SSR).
+  const { org, orgRole, bookOwnerId, orgLoading } = useOrg(user);
+  const loadData = useDataLoad({ bookOwnerId, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
 
   // ─── LTV addon adjustment ─────────────────────────────────────
   // The main clients hydration computes LTV from retainer history
@@ -2613,7 +2619,8 @@ export default function App({ user }) {
   // Realtime subscriptions (worker completions, multi-device edits,
   // Rai pick/state changes). Hook lives in src/hooks/useRealtimeSync.
   // Called here — after every referenced declaration — to avoid TDZ.
-  useRealtimeSync({ inFlightToggles, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user, raiBurstTrackerRef });
+  useRealtimeSync({ inFlightToggles, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user,
+    bookOwnerId, raiBurstTrackerRef });
   const pageCtx = {
     addRef,
     brainDumpOpen,
@@ -2725,6 +2732,10 @@ export default function App({ user }) {
     refs,
     retroDeleteConfirm,
     reviewQueueMoreOpen,
+    org,
+    orgRole,
+    bookOwnerId,
+    can,
     rolodex,
     rolodexCheckinDismissed,
     dismissRolodexCheckin,
@@ -3586,7 +3597,7 @@ export default function App({ user }) {
         {/* ═══ REFERRAL INTELLIGENCE (ENTERPRISE) ═══ */}
 
         {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
-        {dataLoaded && page === "workers" && <WorkersPage app={pageCtx} />}
+        {dataLoaded && page === "workers" && can("manage_workers", orgRole) && <WorkersPage app={pageCtx} />}
 
         {/* Add-worker modal */}
         {addWorkerOpen && (
@@ -3664,10 +3675,10 @@ export default function App({ user }) {
         )}
 
         {/* ═══ REFERRALS v2 — "The Network Map" ═══ */}
-        {dataLoaded && page === "referrals" && <ReferralsPage app={pageCtx} />}
+        {dataLoaded && page === "referrals" && can("view_referrals", orgRole) && <ReferralsPage app={pageCtx} />}
 
         {/* ═══ ROLODEX v2 — "The Deck" ═══ */}
-        {dataLoaded && page === "retros" && <RetrosPage app={pageCtx} />}
+        {dataLoaded && page === "retros" && can("view_rolodex", orgRole) && <RetrosPage app={pageCtx} />}
         {/* ═══ COACH / TALK TO RAI — Claude-style chat ═══ */}
         {dataLoaded && page === "coach" && <CoachPage app={pageCtx} />}
 
