@@ -19,6 +19,7 @@ import ShellOverlays from "./components/ShellOverlays";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useDataLoad } from "./hooks/useDataLoad";
 import { useOrg, can } from "./hooks/useOrg";
+import { setActorContext as dbSetActorContext } from "./lib/db";
 import { useShellViewport } from "./hooks/useShellViewport";
 import { useGoogleCalendar } from "./hooks/useGoogleCalendar";
 import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
@@ -1278,6 +1279,33 @@ export default function App({ user }) {
   // null, bookOwnerId === user.id, and every path below is byte-
   // identical to pre-Agency behavior (verified by exact-delta SSR).
   const { org, orgRole, bookOwnerId, orgLoading } = useOrg(user);
+  // Boundary mapping for writes: db.js stamps created_by and routes
+  // seat writes into the owner's book (setActorContext in db.js).
+  useEffect(() => {
+    if (!orgLoading) dbSetActorContext(bookOwnerId, user?.id || null);
+  }, [orgLoading, bookOwnerId, user?.id]);
+  // Org invite acceptance: /?join=<token> survives the auth gate; once
+  // signed in, accept server-side and reload into the org.
+  useEffect(() => {
+    if (orgLoading || !user?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("join");
+    if (!token) return;
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/org-accept`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
+          body: JSON.stringify({ token }),
+        });
+        const out = await res.json().catch(() => ({}));
+        window.history.replaceState({}, "", window.location.pathname);
+        if (res.ok) { window.location.reload(); }
+        else { console.warn("org-accept failed:", out?.error || res.status); }
+      } catch (e) { console.warn("org-accept error:", e); }
+    })();
+  }, [orgLoading, user?.id]);
   const loadData = useDataLoad({ bookOwnerId, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
