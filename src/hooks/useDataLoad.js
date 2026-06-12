@@ -510,13 +510,29 @@ export function useDataLoad(app) {
     // for any reader are false (default) — state is set but unread.
     if (occurrencesRes?.data) setTaskOccurrences(occurrencesRes.data);
     // Rolodex dot "seen" — DB is the source of truth (localStorage was
+    // Missing-column resilience (Jun 2026): supabase-js returns schema
+    // errors as RESOLVED { data: null, error } — the rejection fallback
+    // above never fires for them. Before rolodex_seen_day existed, the
+    // combined select errored on every load and silently took
+    // occurrence_flags hydration down with it. If the combined select
+    // errored, refetch the flags alone so one bad column can never
+    // blank the other again.
+    let profileFlags = profileFlagsRes;
+    if (profileFlags?.error) {
+      profileFlags = await supabase
+        .from('profiles')
+        .select('occurrence_flags')
+        .eq('id', user.id)
+        .single()
+        .then(r => (r?.error ? { data: { occurrence_flags: {} } } : r), () => ({ data: { occurrence_flags: {} } }));
+    }
     // per-device, so a new device resurrected the dot). If the profile
     // says today is already seen, suppress the dot on this device too.
-    if (profileFlagsRes?.data?.rolodex_seen_day === _todayLocalYmd()) {
+    if (profileFlags?.data?.rolodex_seen_day === _todayLocalYmd()) {
       setRolodexRemindersSeen(true);
     }
-    if (profileFlagsRes?.data?.occurrence_flags) {
-      setOccurrenceFlags(profileFlagsRes.data.occurrence_flags || {});
+    if (profileFlags?.data?.occurrence_flags) {
+      setOccurrenceFlags(profileFlags.data.occurrence_flags || {});
     }
 
     // Visible-on-load surfaces — calendar widget + sidebar Portfolio.
