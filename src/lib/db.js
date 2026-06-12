@@ -197,12 +197,25 @@ export const clients = {
 // TASKS
 // ============================================================
 
+// ─── Agency actor context (Jun 12, step 3) ──────────────────────────
+// Set once by App after the org resolves. Maps the acting user to the
+// book they write into, at the db boundary, so no page-level call site
+// changes. Solo users and root owners: bookOwnerId === selfId, every
+// function below behaves byte-identically to before.
+let _actor = { bookOwnerId: null, selfId: null };
+export const setActorContext = (bookOwnerId, selfId) => { _actor = { bookOwnerId, selfId }; };
+const _isSeat = (userId) => _actor.bookOwnerId && _actor.selfId === userId && _actor.bookOwnerId !== userId;
+// Book id for writes/reads passed the actor's own id:
+const _bookFor = (userId) => (_isSeat(userId) ? _actor.bookOwnerId : userId);
+// Attribution stamp on created rows when acting in someone else's book:
+const _stamp = (userId, obj) => (_isSeat(userId) ? { ...obj, created_by: userId } : obj);
+
 export const tasks = {
   list: async (userId) => {
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
-      .eq('user_id', userId)
+      .or(_isSeat(_actor.selfId) ? `user_id.eq.${userId},user_id.eq.${_actor.selfId}` : `user_id.eq.${userId}`)
       .eq('is_done', false)
       .order('sort_order', { ascending: true });
     return { data: data || [], error };
@@ -221,7 +234,7 @@ export const tasks = {
     const { data, error } = await supabase
       .from('tasks')
       .select('*')
-      .eq('user_id', userId)
+      .or(_isSeat(_actor.selfId) ? `user_id.eq.${userId},user_id.eq.${_actor.selfId}` : `user_id.eq.${userId}`)
       .is('cleared_at', null)  // exclude soft-cleared (post-2am rollover) tasks
       .or(`is_done.eq.false,completed_at.gte.${localMidnightIso},is_recurring.eq.true`)
       .order('sort_order', { ascending: true });
@@ -229,6 +242,7 @@ export const tasks = {
   },
 
   create: async (userId, task) => {
+    const _book = _bookFor(userId); task = _stamp(userId, task); userId = _book;
     const { data, error } = await supabase
       .from('tasks')
       .insert({ user_id: userId, ...task })
@@ -2041,6 +2055,8 @@ export const touchpoints = {
   },
 
   create: async (userId, { client_id, client_name, channel, notes }) => {
+    const _cb = _isSeat(userId) ? userId : null;
+    if (_cb) userId = _actor.bookOwnerId;
     const { data, error } = await supabase
       .from('touchpoints')
       .insert({
@@ -2048,6 +2064,7 @@ export const touchpoints = {
         client_id,
         channel,
         notes: notes || null,
+        created_by: _cb,
         occurred_at: new Date().toISOString()
       })
       .select()
