@@ -1012,7 +1012,15 @@ export default function App({ user }) {
   // tab focus / visibilitychange) must NOT overwrite these with stale DB rows,
   // or an optimistic check gets silently reverted — the intermittent
   // "I checked it and it didn't take" bug.
-  const inFlightToggles = useRef(new Set());
+  // Recent-toggles ledger (RCA Jun 12): id → { done, completed_at, ts }.
+  // Local truth wins over any stale hydration or realtime echo for 15s
+  // after a toggle. Entries clear early the moment a server row CONFIRMS
+  // the toggled state (useDataLoad merge / useRealtimeSync), and
+  // immediately on write failure (toggleTask revert). Replaces the old
+  // in-flight Set, whose protection ended when the toggle's HTTP call
+  // returned — leaving hydrations that resolved AFTER the toggle free to
+  // stomp the check with a pre-toggle snapshot (the vanishing-check bug).
+  const inFlightToggles = useRef(new Map());
 
   // 30s priority hold tick: when a new task is added in Rai mode, it floats
   // to top for 30 seconds (see raiCompare). Once that window expires we need
@@ -1729,10 +1737,10 @@ export default function App({ user }) {
     // show a phantom (un)check that a later hydration would silently undo —
     // the intermittent "I checked it and it stayed" bug. We snapshot the
     // pre-toggle task and restore it on error.
-    inFlightToggles.current.add(id);
+    inFlightToggles.current.set(id, { done: newDone, completed_at: newDone ? nowIso : null, ts: Date.now() });
     const { error: toggleErr } = await tasksDb.toggle(id, newDone);
-    inFlightToggles.current.delete(id);
     if (toggleErr) {
+      inFlightToggles.current.delete(id);
       setTasks(prev => prev.map(t => t.id === id ? { ...t, done: task.done, completed_at: task.completed_at } : t));
       // Undo the optimistic count bump (mirror of the increment above).
       if (newDone) {
@@ -2639,7 +2647,11 @@ export default function App({ user }) {
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
   })();
   const rolodexHasDueReminder = (rolodex || []).some(r => r.reminder && String(r.reminder).slice(0, 10) <= _rolodexReminderToday);
-  const rolodexDot = rolodexHasDueReminder && !rolodexCheckinDismissed && page !== "retros";
+  // Action badge semantics (matches Today, RCA Jun 12): the dot stays
+  // until the reminder is acted on or the banner dismissed — visiting
+  // the tab does NOT clear it. The old `page !== "retros"` clause hid
+  // it while on the tab and let it reappear on leave.
+  const rolodexDot = rolodexHasDueReminder && !rolodexCheckinDismissed;
   const hasDot = (id) => (id === "today" && todayDot) || (id === "health" && healthDot) || (id === "retros" && rolodexDot);
 
   // All state/handlers the extracted page components read. Rebuilt each
