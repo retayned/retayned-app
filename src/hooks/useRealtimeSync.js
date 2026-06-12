@@ -91,7 +91,16 @@ export function useRealtimeSync(app) {
         // toggle write completes (inFlightToggles.delete fires), any
         // subsequent realtime echo will reflect the post-write state
         // and is safe to apply.
-        if (inFlightToggles.current.has(mapped.id)) return;
+        const _entry = inFlightToggles.current.get(mapped.id);
+        if (_entry) {
+          if (mapped.done === _entry.done || Date.now() - _entry.ts > 15000) {
+            // Server confirmed the toggle (or the window expired): the
+            // ledger has done its job — apply rows normally again.
+            inFlightToggles.current.delete(mapped.id);
+          } else {
+            return; // stale echo from before the toggle: ignore
+          }
+        }
         setTasks(prev => prev.map(t => {
           if (t.id !== mapped.id) return t;
           // Preserve any local-only fields by spreading mapped over t
