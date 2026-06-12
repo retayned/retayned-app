@@ -3495,7 +3495,7 @@ export default function TodayPage({ app }) {
                           if (todayEventCount > 0) segs.push(`${todayEventCount} ${todayEventCount === 1 ? "event" : "events"}`);
                           const firstUp = _tomorrowBucket[0]?.text || null;
                           return (
-                            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 14, boxShadow: "var(--rt-sh-card)", padding: "26px 24px", textAlign: "center" }}>
+                            <div style={{ background: "transparent", padding: "32px 24px", textAlign: "center" }}>
                               <div style={{ width: 34, height: 34, borderRadius: 999, background: C.primarySoft, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
                                 <Icon name="check" size={16} color={C.primary} />
                               </div>
@@ -3506,7 +3506,7 @@ export default function TodayPage({ app }) {
                                 {segs.join(" · ")}{topClientLine}
                               </div>
                               {_tomorrowBucket.length > 0 && (
-                                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textMuted, background: C.surface, borderRadius: 999, padding: "5px 13px", maxWidth: "100%" }}>
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: C.textMuted, background: C.card, border: "1px solid " + C.border, borderRadius: 999, padding: "5px 13px", maxWidth: "100%" }}>
                                   <span style={{ whiteSpace: "nowrap" }}>Tomorrow holds <b style={{ color: C.primary, fontWeight: 600 }}>{_tomorrowBucket.length} {_tomorrowBucket.length === 1 ? "task" : "tasks"}</b></span>
                                   {firstUp && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 260 }}>— first up: {firstUp}</span>}
                                 </div>
