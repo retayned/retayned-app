@@ -702,14 +702,18 @@ export default function HealthPage({ app }) {
                       right = action" rhythm on every page header.
                       Replaces the previous "of book checked" progress
                       bar, which was always 0% on new accounts and not
-                      actionable. Routes to Clients with a flag so the
-                      page opens its client picker primed for starting
-                      a Health Check. */}
+                      actionable. Opens the next available health
+                      check in place (the first runnable item in the
+                      active queue, same ordering the queue renders in).
+                      When nothing is runnable the button is inert and
+                      reads disabled. */}
                   <button
                     className="r-btn"
                     data-tone="green"
-                    onClick={() => goTo("clients")}
+                    disabled={activeQueue.length === 0}
+                    onClick={() => { if (activeQueue.length > 0) setHcOpen(activeQueue[0].client); }}
                     style={{
+                      opacity: activeQueue.length === 0 ? 0.45 : 1,
                       display: "inline-flex", alignItems: "center", gap: 6,
                       padding: "10px 16px",
                       color: "#fff",
@@ -717,9 +721,9 @@ export default function HealthPage({ app }) {
                       borderRadius: 10,
                       fontSize: 13.5,
                       fontWeight: 600,
-                      cursor: "pointer",
+                      cursor: activeQueue.length === 0 ? "default" : "pointer",
                       fontFamily: "inherit",
-                      boxShadow: "var(--rt-sh-purple)",
+                      boxShadow: activeQueue.length === 0 ? "none" : "var(--rt-sh-purple)",
                       whiteSpace: "nowrap",
                     }}
                   >
