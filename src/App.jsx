@@ -535,7 +535,9 @@ export default function App({ user }) {
     if (!sr || !user) return;
     const months = sr.months > 0 ? sr.months : 0;
     const engagementStartedAt = new Date(Date.now() - months * 30 * 24 * 3600 * 1000).toISOString();
+    const _capped = soloAtCap();
     const { data: created, error } = await clientsDb.create(user.id, {
+      ...(_capped ? { rai_mode: "advisory" } : {}),
       name: sr.client,
       contact: sr.contact || "",
       role: "",
@@ -549,8 +551,10 @@ export default function App({ user }) {
       qualifying_flags: {},
     });
     if (error) { console.error("Move to clients failed:", error); return; }
+    if (_capped && created) setCapNotice(created.name || "New client");
     const client = {
       id: created?.id || Date.now(),
+      ...(created?.rai_mode ? { rai_mode: created.rai_mode } : {}),
       name: sr.client,
       contact: sr.contact || "",
       role: "", tag: "",
@@ -575,7 +579,9 @@ export default function App({ user }) {
     if (!user || !name || !name.trim()) return null;
     const monthlyRate = parseInt(revenue) || 0;
     const todayYmd = localYmd(new Date());
+    const _capped = soloAtCap();
     const { data: created, error } = await clientsDb.create(user.id, {
+      ...(_capped ? { rai_mode: "advisory" } : {}),
       name: name.trim(), contact: (contact || "").trim(), role: "", tag: "",
       revenue: monthlyRate, months: 0,
       engagement_started_at: todayYmd,
@@ -583,6 +589,7 @@ export default function App({ user }) {
       retention_score: 50, profile_scores: {}, qualifying_flags: {},
     });
     if (error) { console.error("Quick client create failed:", error); return null; }
+    if (_capped && created) setCapNotice(created.name || "New client");
     if (created?.id && monthlyRate > 0) {
       try {
         await supabase.from('client_revenue_history').insert({
@@ -874,7 +881,9 @@ export default function App({ user }) {
     const engagementStartedAt = localYmd(engagementStart);
 
     // Insert into Supabase first
+    const _capped = soloAtCap();
     const { data: created, error } = await clientsDb.create(user.id, {
+      ...(_capped ? { rai_mode: "advisory" } : {}),
       name: newClient.name,
       contact: newClient.contact,
       role: newClient.role || "",
@@ -889,6 +898,7 @@ export default function App({ user }) {
     });
 
     if (error) { console.error("Failed to create client:", error); return; }
+    if (_capped && created) setCapNotice(created.name || "New client");
 
     // Open initial revenue history row. started_at is now() — going forward,
     // Retayned tracks the truth. Pre-Retayned earnings live in
@@ -1282,6 +1292,16 @@ export default function App({ user }) {
   const [refs, setRefs] = useState([]);
   const [raiConvoList, setRaiConvoList] = useState([]);
   // Hydration layer lives in src/hooks/useDataLoad (extracted June 2026).
+  // ─── SOLO 25-CLIENT CAP (Jun 12) ────────────────────────────────────
+  // Solo includes 25 clients Rai actively manages (rai_mode 'managed').
+  // The 26th and beyond are created as Advisory automatically, with a
+  // notice explaining the Managed/Advisory toggle in each client's
+  // profile and the Agency option. Org accounts have no cap. Counting
+  // uses local state (the loaded active book), cheap and current.
+  const [capNotice, setCapNotice] = useState(null);
+  const soloAtCap = () =>
+    !org && clients.filter(cl => cl.rai_mode !== "advisory").length >= 25;
+
   // ─── AGENCY SPINE (Jun 12) ──────────────────────────────────────────
   // org/role/bookOwnerId resolve once per session. Solo users: org is
   // null, bookOwnerId === user.id, and every path below is byte-
@@ -3727,7 +3747,28 @@ export default function App({ user }) {
       </div>
 
       {/* CLIENT SLIDE-OVER */}
-      {selectedClient && <ClientModal app={{ ...pageCtx, active, angle, c, d, months, next, now, payload, total, updated, val, engagementPausesByClient, billingAddOpen, billingMonthStatus, billingNewItem, billingTerms, client, clientBilling, clientMenuOpen, clientTab, confidantEndRef, confidantInput, confidantLastActivity, confidantLoadingThread, confidantMessages, confidantTyping, data, day, editScores, editingOverview, editingProfile, history, id, overviewEditData, pauseConfirm, r, radarHoverDim, removeConfirm, resumeConfirm, ret, rolodexConfirm, selectedClient, sendConfidantMessage, setBillingAddOpen, setBillingMonthStatus, setBillingNewItem, setBillingTerms, setClientBilling, setClientMenuOpen, setClients, setConfidantInput, setEditScores, setEditingOverview, setEditingProfile, setEngagementPausesByClient, setOverviewEditData, setRadarHoverDim, setRenewalModal, setRenewalModalMonth, setShowBaselineEdit, setTermsAddingNew, setTermsEditDraft, setTermsEditingId, setTermsHistoryOpen, showBaselineEdit, size, t, termsAddingNew, termsEditDraft, termsEditingId, termsHistoryOpen, title, value, clientAddons, anchor, baseline, completed, editingAddon, events, fmtDate, idx, isActive, lines, newAddon, other, page, pauses, pinned, section, setClientAddons, setEditingAddon, setEditingAddonId, setNewAddon, task, text, today, triggered, updates, without }} />}
+      {capNotice && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(20,28,22,0.45)", zIndex: 320, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={() => setCapNotice(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, boxShadow: "var(--rt-sh-card)", border: "1px solid " + C.border, maxWidth: 440, width: "100%", padding: "22px 24px" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>You're at 25 managed clients</div>
+            <div style={{ fontSize: 13.5, color: C.textSec, lineHeight: 1.55 }}>
+              <strong>{capNotice}</strong> was added as <strong>Advisory</strong>, so Rai keeps score but won't suggest tasks or flag risks. Solo includes 25 managed clients.
+            </div>
+            <div style={{ fontSize: 13.5, color: C.textSec, lineHeight: 1.55, marginTop: 10 }}>
+              You choose who Rai manages: open any client and switch <strong>Rai's role</strong> between Managed and Advisory. Want everyone managed? Agency has no cap.
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "flex-end" }}>
+              <button onClick={() => { try { window.open("https://retayned.com/pricing", "_blank"); } catch (_) {} }} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid " + C.border, background: "transparent", color: C.textSec, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                See Agency
+              </button>
+              <button onClick={() => setCapNotice(null)} className="r-btn" data-tone="green" style={{ padding: "9px 16px", borderRadius: 10, border: "none", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedClient && <ClientModal app={{ ...pageCtx, billingAddOpen, billingMonthStatus, billingNewItem, billingTerms, clientAddons, clientBilling, clientMenuOpen, clientTab, confidantEndRef, confidantInput, confidantLastActivity, confidantLoadingThread, confidantMessages, confidantTyping, editScores, editingAddon, editingOverview, editingProfile, engagementPausesByClient, newAddon, overviewEditData, page, pauseConfirm, radarHoverDim, removeConfirm, resumeConfirm, rolodexConfirm, selectedClient, sendConfidantMessage, setBillingAddOpen, setBillingMonthStatus, setBillingNewItem, setBillingTerms, setClientAddons, setClientBilling, setClientMenuOpen, setClients, setConfidantInput, setEditScores, setEditingAddon, setEditingAddonId, setEditingOverview, setEditingProfile, setEngagementPausesByClient, setNewAddon, setOverviewEditData, setRadarHoverDim, setRenewalModal, setRenewalModalMonth, setShowBaselineEdit, setTermsAddingNew, setTermsEditDraft, setTermsEditingId, setTermsHistoryOpen, showBaselineEdit, termsAddingNew, termsEditDraft, termsEditingId, termsHistoryOpen }} />}
 
 
       {/* ROLODEX SLIDE-OVER */}
