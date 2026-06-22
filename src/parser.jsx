@@ -2,6 +2,63 @@ import { expandWeekday, nextWeekdayDate, weekdayIndex } from "./recurrence";
 import { addDays, escapeRegexChars, todayAnchored } from "./utils";
 
 
+// ─── Past-tense detection (touchpoint routing) ──────────────────────────
+// The composer routes input to TASK / TOUCHPOINT / EVENT. The touchpoint
+// signal is "this already happened" — i.e. past tense. Earlier versions used
+// a hand-curated allowlist of ~13 communication verbs (called, emailed, met…)
+// which could never be complete: "sent terrika a report" fell through to TASK
+// because "sent" wasn't on the list. This detects past tense GENERALLY:
+//   1. multiword past phrases  ("reached out", "followed up", "got off")
+//   2. irregular past verbs     ("sent", "told", "wrote", "met"…)
+//   3. regular -ed verbs        ("emailed", "finished", "delivered"…)
+// guarded by a stoplist so common -ed adjectives/nouns don't misfire and so
+// imperatives ("send the report", "create ads") stay TASK.
+//
+// IMPORTANT: this only answers "is it past tense?" The CALLER applies the
+// routing rule (Option 3): past tense + matched client → touchpoint, UNLESS a
+// future date is present (then it's a scheduled task). So "email the invoice
+// Friday" stays a task even though a future date sits beside imperative verb.
+const PAST_IRREGULAR = new Set([
+  // communication / interaction
+  "sent","told","spoke","spoken","met","wrote","written","said","gave","given",
+  "rang","read","heard","saw","seen","spent","sat","made","took","taken","brought",
+  "caught","taught","thought","got","gotten","began","ran","drove","drew","held","kept",
+  "left","lent","let","lost","paid","put","quit","set","shut","sold","shook","showed","shown",
+  "spread","stood","won","forgot","forgotten","dealt","felt","found","fought","flew","forgave",
+  "built","bought","came","did","fell","led","laid","lay","meant","rode","rose","sought","swam","wore",
+]);
+const PAST_PHRASES = [
+  "reached out","followed up","followed-up","checked in","checked-in","caught up","caught-up",
+  "got off","got on","hopped on","jumped on","circled back","touched base","heard back",
+  "dropped off","handed off","handed over","signed off","wrapped up","closed out","kicked off",
+];
+// -ed words that are NOT past-tense action verbs (adjectives, nouns, or words
+// that would misfire). Kept small and specific.
+const PAST_ED_STOP = new Set([
+  "red","bed","bled","fed","sled","wed","need","feed","seed","weed","speed","indeed",
+  "embed","exceed","proceed","succeed","agreed","freed","greed","breed","creed","deed",
+  "advanced","detailed","limited","related","dedicated",
+  "interested","excited","tired","scared","bored","based","mixed",
+]);
+
+function detectPastTense(text) {
+  if (!text) return false;
+  const lower = " " + String(text).toLowerCase().trim() + " ";
+  // 1. multiword past phrases
+  for (const p of PAST_PHRASES) {
+    if (lower.includes(" " + p + " ") || lower.endsWith(" " + p + " ")) return true;
+  }
+  const words = lower.match(/[a-z']+/g) || [];
+  // 2. irregular single-word past
+  for (const w of words) { if (PAST_IRREGULAR.has(w)) return true; }
+  // 3. regular -ed verbs (length>=4 to skip "red/bed", excl. stoplist)
+  for (const w of words) {
+    if (w.length >= 4 && w.endsWith("ed") && !PAST_ED_STOP.has(w)) return true;
+  }
+  return false;
+}
+
+
 // ─── Composer lexicon dictionaries ──────────────────────────────────────
 // Used by parseComposer's normalization phase to fix common typos and
 // auto-cap industry acronyms / proper nouns. Small lists by design — the
@@ -1136,4 +1193,4 @@ function parseCalendarEntry(rawText, anchorDate = new Date(), clients = null) {
   };
 }
 
-export { COMPOSER_TYPO_DICT, COMPOSER_CASING_DICT, TRAILING_PHRASE_REGEX, TRAILING_PREP_REGEX, COMPOSER_STOP_WORDS, COMPOSER_COMMON_WORDS, computeAbbreviations, normalizeComposerText, levenshtein, isFuzzyMatch, parseComposer, parseCalendarEntry };
+export { COMPOSER_TYPO_DICT, COMPOSER_CASING_DICT, TRAILING_PHRASE_REGEX, TRAILING_PREP_REGEX, COMPOSER_STOP_WORDS, COMPOSER_COMMON_WORDS, computeAbbreviations, normalizeComposerText, levenshtein, isFuzzyMatch, parseComposer, parseCalendarEntry, detectPastTense };
