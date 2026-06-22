@@ -393,7 +393,7 @@ export default function ClientModal({ app }) {
 
               <div style={{ padding: "16px 20px 0" }}>
                 <div style={{ display: "flex", gap: 0, background: C.surface, borderRadius: 10, padding: 3 }}>
-                  {["Overview", "Profile", "Billing", "Flags", "Rai"].map(t => {
+                  {["Overview", "Profile", "Billing", "Flags"].map(t => {
                     const isActive = clientTab === t.toLowerCase();
                     return (
                       <button key={t} onClick={() => setClientTab(t.toLowerCase())} style={{
