@@ -4078,7 +4078,7 @@ export default function App({ user }) {
         document.body
       )}
 
-      {selectedRolodex && <RolodexModal app={{ ...pageCtx, answers, d, n, p, sel, t, total, updated, rolodexRemoveConfirm, setRolodexRemoveConfirm, active, day, gap, history, id, kept, left, months, on, q, r, reminderDate, reminderRecur, reminderRepeatOn, retroAnswers, right, rolodexEditData, rolodexEditing, rolodexMenuOpen, rolodexMoveConfirm, selectedRolodex, setReminderDate, setReminderRecur, setReminderRepeatOn, setRetroAnswers, setRolodexEditData, setRolodexEditing, setRolodexMenuOpen, setRolodexMoveConfirm, setShowReminderPicker, showReminderPicker, size, title, value, x }} />}
+      {selectedRolodex && <RolodexModal app={{ ...pageCtx, moveRolodexToClients, rolodexRemoveConfirm, setRolodexRemoveConfirm, reminderDate, reminderRecur, reminderRepeatOn, retroAnswers, rolodexEditData, rolodexEditing, rolodexMenuOpen, rolodexMoveConfirm, selectedRolodex, setReminderDate, setReminderRecur, setReminderRepeatOn, setRetroAnswers, setRolodexEditData, setRolodexEditing, setRolodexMenuOpen, setRolodexMoveConfirm, setShowReminderPicker, showReminderPicker }} />}
 
 
       {/* REFERRAL SLIDE-OVER */}
