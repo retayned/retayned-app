@@ -321,7 +321,7 @@ export default function ClientsPage({ app }) {
             const q = (clientSearch || "").trim().toLowerCase();
             if (q) {
               xs = xs.filter(c =>
-                c.name.toLowerCase().includes(q) ||
+                (c.name || "").toLowerCase().includes(q) ||
                 (c.contact || "").toLowerCase().includes(q) ||
                 (c.tag || "").toLowerCase().includes(q)
               );
