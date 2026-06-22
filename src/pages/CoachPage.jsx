@@ -106,6 +106,7 @@ export default function CoachPage({ app }) {
                         {starters.map(s => (
                           <button
                             key={s}
+                            className="rt-composer-pill"
                             onClick={() => {
                               setAiInput(s);
                               setTimeout(() => {
@@ -115,19 +116,12 @@ export default function CoachPage({ app }) {
                             }}
                             style={{
                               padding: "8px 16px",
-                              background: C.card,
-                              border: "none",
-                              borderRadius: 999,
                               fontSize: 13,
                               fontWeight: 500,
                               color: C.textSec,
                               cursor: "pointer",
                               fontFamily: "inherit",
-                              boxShadow: "var(--rt-sh-xs)",
-                              transition: "all 180ms var(--rt-ease-out)",
                             }}
-                            onMouseEnter={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-card)"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.color = C.text; }}
-                            onMouseLeave={e => { e.currentTarget.style.boxShadow = "var(--rt-sh-xs)"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.color = C.textSec; }}
                           >
                             {s}
                           </button>
