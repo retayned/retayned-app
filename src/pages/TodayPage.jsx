@@ -566,7 +566,7 @@ export default function TodayPage({ app }) {
           // Client avatar (letters, color)
           const ClientAvatar = ({ client, size = 32 }) => {
             if (!client) return null;
-            const initials = client.name.split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
+            const initials = (client.name || "?").split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
             // Score-driven retention base color + sheen overlay via retGradient.
             // Single source of truth so this matches every avatar site-wide.
             return (
