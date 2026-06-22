@@ -23,9 +23,6 @@ export default function ShellOverlays({ app }) {
     page,
     quickLogOpen,
     quickLogText,
-    registerInFlightCreate,
-    rekeyInFlightCreate,
-    clearInFlightCreate,
     setBrainDumpOpen,
     setMobileMoreOpen,
     setPersonalEvents,
@@ -424,12 +421,6 @@ export default function ShellOverlays({ app }) {
                     assigned_worker_id: null,
                   };
                   setTasks(prev => [optimisticTask, ...prev]);
-                  // Protect this optimistic task from a loadData refetch that
-                  // races the INSERT (mobile keyboard dismiss / visibilitychange
-                  // fire loadData; if its SELECT predates the commit, the task
-                  // would be wiped). Registered under the optimistic id, rekeyed
-                  // to the real id on success, cleared on failure.
-                  registerInFlightCreate?.(optimisticTask);
                   try {
                     const { data: created } = await tasksDb.create(user.id, {
                       text: longSplit.text,
@@ -460,14 +451,12 @@ export default function ShellOverlays({ app }) {
                     const relog = matchedClient ? { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel, dueDate: dueDateForCreate } : null;
                     if (created?.id) {
                       setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
-                      rekeyInFlightCreate?.(optimisticId, created.id);
                       setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: toastLabel, relog });
                     } else {
                       setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: toastLabel, relog });
                     }
                   } catch (err) {
                     setTasks(prev => prev.filter(t => t.id !== optimisticId));
-                    clearInFlightCreate?.(optimisticId);
                     setQuickLogToast({ id: Date.now(), error: true });
                   }
                 }
