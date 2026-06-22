@@ -12,7 +12,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
 import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, splitLongTask, ymdInTz } from "../utils";
- 
+
 export default function TodayPage({ app }) {
   const {
     allTouchpoints,
@@ -187,6 +187,23 @@ export default function TodayPage({ app }) {
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
+  // Tasks whose title is ACTUALLY truncated in the DOM right now (scrollWidth >
+  // clientWidth), measured per-render via a ref callback on the title span.
+  // Keyed by task id. This is how we guarantee "if it shows an ellipsis, it can
+  // be expanded" on every screen width — we measure real pixel truncation
+  // rather than guessing from a character count (which never matches the
+  // variable pixel width on different phones / with different client names).
+  const [truncatedIds, setTruncatedIds] = useState({});
+  const markTruncated = (id, el) => {
+    if (!el) return;
+    const isTrunc = el.scrollWidth > el.clientWidth + 1; // +1 absorbs sub-pixel rounding
+    setTruncatedIds(prev => {
+      if (!!prev[id] === isTrunc) return prev; // no change → no re-render
+      const next = { ...prev };
+      if (isTrunc) next[id] = true; else delete next[id];
+      return next;
+    });
+  };
 
           // ─── LOCAL ALIASES ───────────────────────────────────────────────
           const focusId = todayFocusId, setFocusId = setTodayFocusId;
@@ -3061,6 +3078,7 @@ export default function TodayPage({ app }) {
                                           }
                                         }}
                                         style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
+                                        ref={(el) => markTruncated(t.id, el)}
                                       >
                                         {t.text}
                                       </span>
@@ -3074,6 +3092,7 @@ export default function TodayPage({ app }) {
                                     onPointerUp={lpCancel}
                                     onPointerMove={lpCancel}
                                     onPointerLeave={lpCancel}
+                                    ref={(el) => markTruncated(t.id, el)}
                                     style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                   >{t.text}</span>;
                                 })()}
@@ -3083,10 +3102,10 @@ export default function TodayPage({ app }) {
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
-                                {t.notes && (
+                                {(t.notes || truncatedIds[t.id]) && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === t.id ? null : t.id); }}
-                                    title={openNoteId === t.id ? "Hide note" : "Show note"}
+                                    title={openNoteId === t.id ? "Hide" : (t.notes ? "Show note" : "Show full text")}
                                     style={{
                                       display: "inline-flex", alignItems: "center",
                                       border: "none", cursor: "pointer", flexShrink: 0,
@@ -3096,7 +3115,7 @@ export default function TodayPage({ app }) {
                                       background: openNoteId === t.id ? C.primarySoft : C.surface,
                                       color: openNoteId === t.id ? C.primary : C.textSec,
                                     }}
-                                  >Note</button>
+                                  >{t.notes ? "Note" : (openNoteId === t.id ? "Less" : "More")}</button>
                                 )}
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
@@ -3155,6 +3174,18 @@ export default function TodayPage({ app }) {
                                     style={{ marginTop: 6, padding: "5px 9px", borderLeft: "2px solid " + C.borderLight, fontSize: 12, lineHeight: 1.5, color: C.textSec, whiteSpace: "pre-wrap", cursor: "text" }}
                                   >{t.notes}</div>
                                 )
+                              )}
+                              {/* Full-title reveal: a truncated task with NO separate
+                                  note. Tapping "More" shows the complete title text so
+                                  it's always readable, even on a narrow phone where the
+                                  ellipsis hits well before the 75-char note threshold.
+                                  Read-only here — title editing stays on the title's own
+                                  double-click / long-press flow. */}
+                              {!t.notes && truncatedIds[t.id] && openNoteId === t.id && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{ marginTop: 6, padding: "5px 9px", borderLeft: "2px solid " + C.borderLight, fontSize: 12, lineHeight: 1.5, color: C.textSec, whiteSpace: "pre-wrap" }}
+                                >{t.text}</div>
                               )}
                             </div>
 
