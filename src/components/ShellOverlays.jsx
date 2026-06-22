@@ -6,7 +6,7 @@
 // (props, over-inclusion, template interpolations).
 import { personalCalendar as personalCalendarDb } from "../lib/db";
 import { mobileNavMore, mobileNavPrimary } from "../nav";
-import { parseCalendarEntry, parseComposer } from "../parser";
+import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { C } from "../theme";
 import { Icon } from "./Icon";
 import { createPortal } from "react-dom";
@@ -323,15 +323,28 @@ export default function ShellOverlays({ app }) {
                   }
 
                   // ─── Intent detection — same routing as the main composer.
-                  // DEFAULT IS TASK. Route to touchpoint ONLY on explicit
-                  // past-tense ("called", "met") or comm-noun ("call with X")
-                  // phrasing AND a matched client. (Previously QuickLog inverted
-                  // this and defaulted to touchpoint — that mis-logged tasks like
-                  // "create ads." Now both surfaces classify identically.)
+                  // RULE (Option 3): past tense → TOUCHPOINT (it already
+                  // happened), UNLESS a future date is present (then it's a
+                  // scheduled TASK). Past tense is detected GENERALLY via
+                  // detectPastTense (sent, told, wrote, finished, -ed verbs,
+                  // "reached out"…), not a finite verb allowlist — that
+                  // allowlist is what let "sent terrika a report" fall through
+                  // to TASK. Comm-noun phrasing ("call with X") still counts.
+                  // A touchpoint requires a matched client; without one it
+                  // falls through to TASK regardless of tense.
                   const lower = rawText.toLowerCase();
                   const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lower);
-                  const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lower);
-                  const isTask = !(isCommNoun || isPastTouch);
+                  // Run tense detection on the client-stripped title so a client
+                  // or worker name ending in -ed can't trip the regular-verb rule.
+                  const isPastTouch = detectPastTense(cleanedText) || detectPastTense(rawText && cleanedText !== rawText ? cleanedText : rawText);
+                  // Future-date guard (Option 3): a future due date signals a
+                  // SCHEDULED action, not a completed one — overrides past tense.
+                  const _md = parsed.matchedDate && parsed.matchedDate.date;
+                  const _todayY = userTimezone ? ymdInTz(userTimezone, new Date()) : localYmd(new Date());
+                  const hasFutureDate = _md instanceof Date && !isNaN(_md) &&
+                    (userTimezone ? ymdInTz(userTimezone, _md) : localYmd(_md)) > _todayY;
+                  const isTouch = (isCommNoun || isPastTouch) && !hasFutureDate;
+                  const isTask = !isTouch;
 
                   // Channel detection (for nice touchpoint display) — derived
                   // from the words present regardless of routing.
@@ -458,10 +471,20 @@ export default function ShellOverlays({ app }) {
               try { p = parseComposer(raw, clients, workersList); } catch (_) { return null; }
               const lower = raw.toLowerCase();
               const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lower);
-              const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lower);
+              const _cleaned = (p && p.title) || raw;
+              const isPastTouch = detectPastTense(_cleaned);
               let cal = null;
               try { cal = parseCalendarEntry(raw, new Date(), clients); } catch (_) { /* no time token */ }
-              const route = (cal && cal.starts_at) ? "event" : (isCommNoun || isPastTouch) ? "touchpoint" : "task";
+              // Future-date guard (Option 3): a future due date keeps it a task.
+              const _mdR = p && p.matchedDate && p.matchedDate.date;
+              const _todayYR = userTimezone ? ymdInTz(userTimezone, new Date()) : localYmd(new Date());
+              const _hasFutureDate = _mdR instanceof Date && !isNaN(_mdR) &&
+                (userTimezone ? ymdInTz(userTimezone, _mdR) : localYmd(_mdR)) > _todayYR;
+              const route = (cal && cal.starts_at)
+                ? "event"
+                : ((isCommNoun || isPastTouch) && !_hasFutureDate && p.matchedClient?.name)
+                  ? "touchpoint"
+                  : "task";
               let dueLabel = null;
               const md = p.matchedDate && p.matchedDate.date;
               if (md instanceof Date && !isNaN(md)) {
