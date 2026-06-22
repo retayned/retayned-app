@@ -1040,6 +1040,29 @@ export default function App({ user }) {
   // stomp the check with a pre-toggle snapshot (the vanishing-check bug).
   const inFlightToggles = useRef(new Map());
 
+  // In-flight CREATES ledger — the create-side analog of inFlightToggles.
+  // A newly created task (from any composer) is added optimistically, but a
+  // loadData refetch triggered in the gap before the INSERT is visible to a
+  // fresh SELECT (e.g. mobile keyboard dismiss / tab visibilitychange) would
+  // REPLACE the tasks array with a snapshot that lacks the new row, wiping it.
+  // Realtime INSERT echo is supposed to re-add it, but that depends on the
+  // tasks table being in the realtime publication — infra that isn't
+  // guaranteed. So we protect creates locally: register the optimistic task
+  // here, and loadData re-appends any in-flight create missing from its
+  // snapshot. Entry: realId(or optimisticId) → { task, until }. Cleared once
+  // the server snapshot contains the row, or after the `until` safety window.
+  const inFlightCreates = useRef(new Map());
+  const registerInFlightCreate = (task, ttlMs = 15000) => {
+    inFlightCreates.current.set(task.id, { task, until: Date.now() + ttlMs });
+  };
+  const rekeyInFlightCreate = (oldId, newId, patch = {}) => {
+    const entry = inFlightCreates.current.get(oldId);
+    if (!entry) return;
+    inFlightCreates.current.delete(oldId);
+    inFlightCreates.current.set(newId, { task: { ...entry.task, ...patch, id: newId }, until: entry.until });
+  };
+  const clearInFlightCreate = (id) => { inFlightCreates.current.delete(id); };
+
   // 30s priority hold tick: when a new task is added in Rai mode, it floats
   // to top for 30 seconds (see raiCompare). Once that window expires we need
   // a re-render so it sorts naturally. This effect schedules a tick at the
@@ -1342,7 +1365,7 @@ export default function App({ user }) {
       } catch (e) { console.warn("org-accept error:", e); }
     })();
   }, [orgLoading, user?.id]);
-  const loadData = useDataLoad({ bookOwnerId, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ bookOwnerId, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
@@ -2569,36 +2592,29 @@ export default function App({ user }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientTab, selectedClient?.id]);
 
-  // ─── GLOBAL RAI CHAT: auto-resume most recent thread on page open ─
-  // Without this, the user opens the Rai page and starts a blank chat
-  // every time — even though their previous thread is one click away
-  // in the sidebar. Confusing. This effect auto-loads the most recent
-  // non-Confidant thread (client_id IS NULL) on page entry, IF the
-  // user hasn't already manually picked a chat. The ref guard ensures
-  // we only fire once per visit — re-renders while on the page won't
-  // re-trigger after the user opens a different chat.
-  const autoResumedRef = useRef(false);
+  // ─── GLOBAL RAI CHAT: fresh chat on page entry ───────────────────
+  // Clicking Rai opens a NEW chat every time — matching the universal
+  // assistant-UI convention (ChatGPT/Claude/messaging apps): the nav
+  // icon means "start talking," and past threads are one click away in
+  // the sidebar history list. The previous behavior auto-resumed the
+  // most recent thread, which dropped the user into the middle of an
+  // old conversation — surprising, and easy to mistake for a new chat.
+  // We reset to a blank chat ONCE per page entry (entryHandledRef), so
+  // re-renders while on the page don't wipe a chat the user has since
+  // opened or started typing.
+  const raiEntryHandledRef = useRef(false);
   useEffect(() => {
     if (page !== "coach") {
-      // Reset the guard so a future Rai-page visit auto-resumes again.
-      autoResumedRef.current = false;
+      raiEntryHandledRef.current = false; // re-arm for the next visit
       return;
     }
-    if (autoResumedRef.current) return;
-    if (aiConvoId) return; // user has a chat loaded (manual or fresh)
-    if (aiMessages.length > 0) return; // mid-conversation, don't clobber
-    if (raiConvoList.length === 0) return; // no past chats to resume
-    // Pick the most-recently-updated GLOBAL chat (client_id null).
-    // Confidant threads live on client profiles and shouldn't surface
-    // here — D=No call from the spec discussion.
-    const globalChats = raiConvoList
-      .filter(c => !c.client_id)
-      .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-    if (globalChats.length === 0) return;
-    autoResumedRef.current = true;
-    openRaiChat(globalChats[0].id);
+    if (raiEntryHandledRef.current) return; // already handled this visit
+    raiEntryHandledRef.current = true;
+    // Fresh slate. startNewRaiChat clears messages, convo id, input,
+    // attachments, and any task/observation focus.
+    startNewRaiChat();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, raiConvoList.length]);
+  }, [page]);
 
   // Autoscroll to bottom of Confidant chat when messages update.
   useEffect(() => {
@@ -2746,6 +2762,9 @@ export default function App({ user }) {
     bookOwnerId, raiBurstTrackerRef });
   const pageCtx = {
     addRef,
+    registerInFlightCreate,
+    rekeyInFlightCreate,
+    clearInFlightCreate,
     brainDumpOpen,
     setBrainDumpOpen,
     aiAttachments,
