@@ -7,7 +7,7 @@ import { ExamplePills, GettingStartedPill, RaiNightCard, TaskSpotlight, typeInto
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
 import { TimeDial } from "../components/TimeDial";
 import { supabase } from "../lib/supabase.js";
-import { parseCalendarEntry, parseComposer } from "../parser";
+import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
@@ -778,10 +778,14 @@ export default function TodayPage({ app }) {
             }
             const calEntry = parseCalendarEntry(calText, new Date(), clients);
             if (calEntry) return "event";
-            // Touchpoint: past-tense / comm-noun + matched client.
+            // Touchpoint: past tense (general detection) + matched client,
+            // UNLESS a future date is present (Option 3 — then scheduled task).
             const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
-            const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
-            if ((isCommNoun || isPastTouch) && client) return "touchpoint";
+            const isPastTouch = detectPastTense(parsed.title || input);
+            const _mdP = parsed.matchedDate && parsed.matchedDate.date;
+            const _todayYP = userTimezone ? ymdInTz(userTimezone, new Date()) : (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; })();
+            const _futP = _mdP instanceof Date && !isNaN(_mdP) && (userTimezone ? ymdInTz(userTimezone, _mdP) : `${_mdP.getFullYear()}-${String(_mdP.getMonth()+1).padStart(2,"0")}-${String(_mdP.getDate()).padStart(2,"0")}`) > _todayYP;
+            if ((isCommNoun || isPastTouch) && client && !_futP) return "touchpoint";
             return "task";
           };
           // Auto-detected type (ignoring override) — used for displaying
@@ -927,10 +931,14 @@ export default function TodayPage({ app }) {
               // comm-noun gate). Falls through to ROUTE 2 task if no client.
               const lowerC = rawComposer.toLowerCase();
               const isCommNoun = /\bcall with\b|\bmet with\b|\bmeeting with\b|\bspoke (?:to|with)\b|\bcaught up with\b|\bcall w\/|\blunch with\b|\bcoffee with\b/i.test(lowerC);
-              const isPastTouch = /\b(called|emailed|texted|messaged|pinged|spoke|met|caught up|chatted|rang|reached out|followed up|checked in)\b/i.test(lowerC);
+              const isPastTouch = detectPastTense(finalParse.title || rawComposer);
               const matchedClientC = finalParse.matchedClient || clientObj || null;
+              // Future-date guard (Option 3): a future due date keeps it a task.
+              const _mdC = finalParse.matchedDate && finalParse.matchedDate.date;
+              const _todayYC = userTimezone ? ymdInTz(userTimezone, new Date()) : (() => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`; })();
+              const _futC = _mdC instanceof Date && !isNaN(_mdC) && (userTimezone ? ymdInTz(userTimezone, _mdC) : `${_mdC.getFullYear()}-${String(_mdC.getMonth()+1).padStart(2,"0")}-${String(_mdC.getDate()).padStart(2,"0")}`) > _todayYC;
               const forceTouchpoint = typeOverride === "touchpoint" && matchedClientC;
-              if ((forceTouchpoint || ((isCommNoun || isPastTouch) && matchedClientC))) {
+              if ((forceTouchpoint || ((isCommNoun || isPastTouch) && matchedClientC && !_futC))) {
                 let ch = "note";
                 if (/\bcall|\bspoke|got off|\brang|phone/i.test(lowerC)) ch = "call";
                 else if (/\bemail/i.test(lowerC)) ch = "email";
