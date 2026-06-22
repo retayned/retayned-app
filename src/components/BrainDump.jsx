@@ -410,7 +410,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                   display: "inline-flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {chosenClient
-                    ? chosenClient.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()
+                    ? (chosenClient.name || "").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase()
                     : ""}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: chosenClient ? C.text : C.textSec }}>
@@ -456,7 +456,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                       No client / personal
                     </button>
                     {activeClients
-                      .filter((c) => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+                      .filter((c) => !clientSearch || (c.name || "").toLowerCase().includes(clientSearch.toLowerCase()))
                       .map((c) => (
                         <button
                           key={c.id}
