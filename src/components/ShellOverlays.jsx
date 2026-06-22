@@ -10,7 +10,7 @@ import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { C } from "../theme";
 import { Icon } from "./Icon";
 import { createPortal } from "react-dom";
-
+ 
 export default function ShellOverlays({ app }) {
   const {
     clients,
