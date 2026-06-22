@@ -14,7 +14,6 @@ export function useDataLoad(app) {
     getAdjustedLTV,
     googleConnected,
     googleEmail,
-    inFlightCreates,
     inFlightToggles,
     isCurrentlyPaused,
     monthsTogether,
@@ -405,34 +404,7 @@ export function useDataLoad(app) {
       // writing to the DB — otherwise this hydration clobbers it with a stale
       // row and the user's check silently disappears.
       setTasks(prev => {
-        // ─── Preserve in-flight CREATES ───────────────────────────────
-        // A task created moments ago may not yet be visible to THIS
-        // refetch's SELECT (INSERT not yet committed/replicated). Without
-        // this, loadData replaces `tasks` with a snapshot missing the new
-        // row and the task vanishes (the + composer data-loss bug). For
-        // each in-flight create: if the snapshot already contains it, the
-        // server has caught up → clear the guard. If the guard expired →
-        // clear (stop protecting). Otherwise → re-append it so it survives.
-        let baseTasks = loadedTasks;
-        if (inFlightCreates && inFlightCreates.current.size > 0) {
-          const _now = Date.now();
-          const loadedIds = new Set(loadedTasks.map(t => t.id));
-          const toReadd = [];
-          for (const [id, entry] of inFlightCreates.current) {
-            if (loadedIds.has(id)) { inFlightCreates.current.delete(id); continue; }
-            if (_now > (entry.until || 0)) { inFlightCreates.current.delete(id); continue; }
-            // Carry forward the live local copy if we still have it (preserves
-            // any local edits since create); else fall back to the stored task.
-            const localCopy = prev.find(t => t.id === id);
-            toReadd.push(localCopy || entry.task);
-          }
-          if (toReadd.length > 0) {
-            // New tasks go on top, matching the optimistic-add order.
-            baseTasks = [...toReadd, ...loadedTasks];
-          }
-        }
-
-        if (inFlightToggles.current.size === 0) return baseTasks;
+        if (inFlightToggles.current.size === 0) return loadedTasks;
         // Recent-toggles ledger: a hydration whose SELECT predates a
         // toggle must not stomp it. For recently toggled ids, local truth
         // wins. Clearing rules:
@@ -446,7 +418,7 @@ export function useDataLoad(app) {
         //     or after the entry's `until` window (legitimate later server
         //     flips, e.g. midnight rollover, then apply).
         const _now = Date.now();
-        return baseTasks.map(t => {
+        return loadedTasks.map(t => {
           const entry = inFlightToggles.current.get(t.id);
           if (!entry) return t;
           const _expired = _now > (entry.until || (entry.ts + 15000));
