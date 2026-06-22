@@ -596,13 +596,6 @@ export default function TodayPage({ app }) {
           const _todayStr = userTimezone ? ymdInTz(userTimezone, _now) : `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
           const _tomorrow = new Date(_now.getTime() + 86400000);
           const _tomorrowStr = userTimezone ? ymdInTz(userTimezone, _tomorrow) : `${_tomorrow.getFullYear()}-${String(_tomorrow.getMonth() + 1).padStart(2, "0")}-${String(_tomorrow.getDate()).padStart(2, "0")}`;
-          // End of the Later window: today + 6 days (matches the "later"
-          // convention used elsewhere and the Later calendar strip, which
-          // spans day-after-tomorrow through today+6). Non-daily recurring
-          // tasks whose next occurrence falls in (_tomorrowStr, _laterEndStr]
-          // surface in Later; anything past it stays hidden until it rolls in.
-          const _laterEnd = new Date(_now.getTime() + 6 * 86400000);
-          const _laterEndStr = userTimezone ? ymdInTz(userTimezone, _laterEnd) : `${_laterEnd.getFullYear()}-${String(_laterEnd.getMonth() + 1).padStart(2, "0")}-${String(_laterEnd.getDate()).padStart(2, "0")}`;
 
           const bucketOf = (t) => {
             // Recurring tasks are standing work with a "next occurrence"
@@ -628,13 +621,12 @@ export default function TodayPage({ app }) {
               // from the future view; they're implicit.
               const isDaily = !t.recurrence_pattern || !t.recurrence_pattern.kind || t.recurrence_pattern.kind === "daily";
               if (nextStr === _tomorrowStr) return isDaily ? "hidden" : "tomorrow";
-              // Non-daily recurring more than 1 day out: show in Later ONLY if
-              // the next occurrence falls within the Later window (day-after-
-              // tomorrow through today+6, matching the Later calendar strip).
-              // Each task contributes at most one Later row (its soonest
-              // occurrence). Anything past the window stays hidden until it
-              // rolls into range, so Later never clogs with far-future work.
-              if (!isDaily && nextStr > _tomorrowStr && nextStr <= _laterEndStr) return "later";
+              // Non-daily recurring tasks more than 1 day out do NOT surface in
+              // Later. Standing weekly/monthly work (e.g. "Create paid social
+              // report every Thursday") would otherwise take over the Later
+              // section every time its next occurrence fell within 6 days. They
+              // stay hidden until they roll into Today on their actual due day
+              // (midnight rollover handles that). Today / Tomorrow only.
               return "hidden";
             }
             if (!t.due_date) return "today";
