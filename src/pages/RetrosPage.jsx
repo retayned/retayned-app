@@ -458,7 +458,7 @@ export default function RetrosPage({ app }) {
                         </div>
                         <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 1 }}>Capture the lesson while it's fresh · {activeSteps.length} steps</div>
                       </div>
-                      <button onClick={() => setRetroOpen(true)} style={{ background: C.primaryDeep, color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Start retro</button>
+                      <button className="r-btn" data-tone="green" onClick={() => setRetroOpen(true)} style={{ color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>Start Retro</button>
                     </div>
                   )}
                   {active && retroOpen && (
