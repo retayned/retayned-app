@@ -4,10 +4,10 @@
 // platforms: the dock is mobile, the FAB + capture sheet also power
 // desktop's ⌘K quick log. Contract scanned with the v3 pipeline
 // (props, over-inclusion, template interpolations).
-import { personalCalendar as personalCalendarDb } from "../lib/db";
+import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
 import { mobileNavMore, mobileNavPrimary } from "../nav";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
-import { ymdInTz, localYmd } from "../utils";
+import { ymdInTz, localYmd, splitLongTask } from "../utils";
 import { C } from "../theme";
 import { Icon } from "./Icon";
 import { createPortal } from "react-dom";
@@ -32,6 +32,7 @@ export default function ShellOverlays({ app }) {
     setQuickLogOpen,
     setQuickLogText,
     setQuickLogToast,
+    setTasks,
     setTpLogged,
     user,
     userTimezone,
