@@ -613,7 +613,7 @@ export default function ReferralsPage({ app }) {
                           </a>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button className="r-btn" data-tone="purple" onClick={() => markAsked(activeAsk)} style={{ padding: "8px 18px", fontSize: 12.5, color: "#fff", background: C.btn, borderRadius: 8, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-purple)" }}>Mark Asked</button>
+                          <button className="r-btn" data-tone="green" onClick={() => markAsked(activeAsk)} style={{ padding: "8px 18px", fontSize: 12.5, color: "#fff", borderRadius: 8, fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>Mark Asked</button>
                         </div>
                       </div>
                     </div>
