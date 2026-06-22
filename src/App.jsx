@@ -1650,6 +1650,26 @@ export default function App({ user }) {
     const wasTopTask = topTaskIdRef.current === id;
     const newDone = !task.done;
     const nowIso = new Date().toISOString();
+    // ── Animation-guard ledger (set BEFORE the optimistic setTasks) ──────
+    // The completion animation (glow → strikethrough → 3.5s hold → shrink)
+    // only plays if the row's DOM node stays mounted the whole time. A
+    // background hydration or realtime echo that calls setTasks with a fresh
+    // object reconciles the row and can remount it mid-animation — which is
+    // the "instant snap, no animation" (Bug A) and "vanishes too fast"
+    // (Bug B) failure. The fix: the ledger entry now OWNS the row's done
+    // state for the entire animation window, not just until the server
+    // confirms. We stamp it first (so even a refetch that fires in the same
+    // tick can't win the race), mark it `animating` while completing, and it
+    // is cleared by the animation's own collapse step (or by un-check), NOT
+    // by server-confirm. The hydration/realtime guards check `animating` and
+    // hold local truth until the animation releases it.
+    inFlightToggles.current.set(id, {
+      done: newDone,
+      completed_at: newDone ? nowIso : null,
+      ts: Date.now(),
+      animating: newDone,            // true only while a completion animation is in flight
+      until: Date.now() + (newDone ? 4200 : 15000), // covers glow(720) + hold(3500) + shrink margin
+    });
     // Optimistic update
     const updated = tasks.map(t => t.id === id ? { ...t, done: newDone, completed_at: newDone ? nowIso : null } : t);
     setTasks(updated);
@@ -1735,12 +1755,21 @@ export default function App({ user }) {
               delete next[id];
               return next;
             });
+            // Animation finished and the row now lives in the collapsed log.
+            // Release the ledger guard — but only if the server already
+            // confirmed (or the row is still locally done). If the row was
+            // un-checked during the animation, the un-complete branch already
+            // cleared it. This is the ONLY place a completion's guard is
+            // released, so no mid-animation refetch can remount the row.
+            inFlightToggles.current.delete(id);
             return prev;
           });
         }, 240);
       }, 3500);
     } else {
-      // Un-completing: if it was collapsed, bring it back out of the log
+      // Un-completing: release any animation guard and, if it was collapsed,
+      // bring it back out of the log.
+      inFlightToggles.current.delete(id);
       setCollapsedDoneIds(prev => {
         if (!prev[id]) return prev;
         const next = { ...prev };
@@ -1757,7 +1786,12 @@ export default function App({ user }) {
     // show a phantom (un)check that a later hydration would silently undo —
     // the intermittent "I checked it and it stayed" bug. We snapshot the
     // pre-toggle task and restore it on error.
-    inFlightToggles.current.set(id, { done: newDone, completed_at: newDone ? nowIso : null, ts: Date.now() });
+    // NOTE: the in-flight ledger entry was already set at the TOP of this
+    // function (before the optimistic setTasks) so it guards the row for the
+    // whole animation. We do NOT re-set it here — doing so would overwrite
+    // the animation-aware entry ({animating, until}) with a bare one and
+    // re-open the mid-animation remount hole. Completion entries are cleared
+    // by the animation's collapse step; un-complete clears immediately above.
     const { error: toggleErr } = await tasksDb.toggle(id, newDone);
     if (toggleErr) {
       inFlightToggles.current.delete(id);
