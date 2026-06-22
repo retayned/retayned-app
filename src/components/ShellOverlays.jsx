@@ -7,6 +7,7 @@
 import { personalCalendar as personalCalendarDb } from "../lib/db";
 import { mobileNavMore, mobileNavPrimary } from "../nav";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
+import { ymdInTz, localYmd } from "../utils";
 import { C } from "../theme";
 import { Icon } from "./Icon";
 import { createPortal } from "react-dom";
@@ -33,6 +34,7 @@ export default function ShellOverlays({ app }) {
     setQuickLogToast,
     setTpLogged,
     user,
+    userTimezone,
     workersList,
   } = app;
   return (<>
