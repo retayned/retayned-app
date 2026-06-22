@@ -509,6 +509,14 @@ export default function App({ user }) {
   // observation's own status — it still shows on the page until unpacked/
   // dropped). Reset to false when a NEW observation arrives.
   const [healthObsSeen, setHealthObsSeen] = useState(false);
+  // Tracks WHICH observation id the healthObsSeen flag currently applies to.
+  // healthObsSeen is a same-session optimistic flag (the DB viewed_at handles
+  // cross-refresh persistence). The bug it fixes: without this, visiting Health
+  // for observation A set healthObsSeen=true for the whole session, so when a
+  // NEW observation B arrived mid-session (viewed_at null, genuinely new), the
+  // dot stayed OFF because the stale session flag was still true. We reset the
+  // flag whenever the live observation id changes away from the seen one.
+  const healthObsSeenIdRef = useRef(null);
   const [reminderDate, setReminderDate] = useState("");
   const [reminderRecur, setReminderRecur] = useState("1m"); // last-picked interval code
   const [reminderRepeatOn, setReminderRepeatOn] = useState(false);
@@ -1338,6 +1346,23 @@ export default function App({ user }) {
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
+
+  // ─── Health dot: reset the same-session "seen" flag per observation ────
+  // healthObsSeen is an optimistic flag that hides the red dot the moment the
+  // user opens Health, without waiting for the viewed_at DB round-trip. But it
+  // must be scoped to the observation it was set for: when a genuinely new
+  // observation arrives mid-session (different id, viewed_at still null), the
+  // flag from the PREVIOUS observation would otherwise keep the dot suppressed.
+  // Here we detect that id change and clear the flag so the dot re-lights for
+  // the new observation. (Cross-refresh persistence is handled separately by
+  // observation.viewed_at; this only governs the in-session flag.)
+  useEffect(() => {
+    const liveId = observation?.id ?? null;
+    if (liveId && healthObsSeenIdRef.current && liveId !== healthObsSeenIdRef.current) {
+      setHealthObsSeen(false);
+      healthObsSeenIdRef.current = null;
+    }
+  }, [observation?.id]);
 
   // ─── LTV addon adjustment ─────────────────────────────────────
   // The main clients hydration computes LTV from retainer history
@@ -2656,6 +2681,10 @@ export default function App({ user }) {
       // current observation row. Best-effort: if the write fails the
       // in-session healthObsSeen still hides the dot for this tab.
       setHealthObsSeen(true);
+      // Record which observation this "seen" applies to. If a different
+      // observation later arrives, the reset effect flips healthObsSeen back
+      // to false so the dot re-lights for the new one.
+      healthObsSeenIdRef.current = observation?.id ?? null;
       if (observation && observation.id) {
         observationsDb.markViewed(observation.id)
           .then(({ data, error }) => {
