@@ -93,7 +93,14 @@ export function useRealtimeSync(app) {
         // and is safe to apply.
         const _entry = inFlightToggles.current.get(mapped.id);
         if (_entry) {
-          if (mapped.done === _entry.done || Date.now() - _entry.ts > 15000) {
+          // A completion animation in flight owns this row: ignore the echo
+          // entirely and keep the guard. Applying the echo (or clearing the
+          // guard so a later hydration applies its snapshot) risks remounting
+          // the row mid-animation. The animation's collapse step releases it.
+          if (_entry.animating && Date.now() <= (_entry.until || (_entry.ts + 15000))) {
+            return;
+          }
+          if (mapped.done === _entry.done || Date.now() > (_entry.until || (_entry.ts + 15000))) {
             // Server confirmed the toggle (or the window expired): the
             // ledger has done its job — apply rows normally again.
             inFlightToggles.current.delete(mapped.id);
