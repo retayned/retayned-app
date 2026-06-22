@@ -17,9 +17,6 @@ export default function TodayPage({ app }) {
   const {
     allTouchpoints,
     beginTaskEdit,
-    registerInFlightCreate,
-    rekeyInFlightCreate,
-    clearInFlightCreate,
     calcNewClientBoost,
     calcProfileScore,
     calcProfileScoreRaw,
@@ -1029,10 +1026,6 @@ export default function TodayPage({ app }) {
               assigned_worker_id: newTaskWorkerId || null,
             };
             setTasks(prev => [task, ...prev]);
-            // Protect against a loadData refetch racing the INSERT (parity with
-            // the + composer). If the task has a real id, register under it; the
-            // guard clears once the server snapshot includes it or it expires.
-            if (created?.id) registerInFlightCreate?.(task);
             setQuickLogToast({ id: Date.now(), kind: "task", recordId: task.id, label: clientName || text });
 
             // Fire email send if assigned to a worker (non-blocking).
