@@ -406,15 +406,27 @@ export function useDataLoad(app) {
       setTasks(prev => {
         if (inFlightToggles.current.size === 0) return loadedTasks;
         // Recent-toggles ledger: a hydration whose SELECT predates a
-        // toggle must not stomp it. For recently toggled ids, local
-        // truth wins; the entry clears as soon as the server row
-        // agrees (confirmed) or after 15s (expiry — later legitimate
-        // server-side flips, e.g. midnight rollover, then apply).
+        // toggle must not stomp it. For recently toggled ids, local truth
+        // wins. Clearing rules:
+        //   - animating === true: a completion animation is mid-flight. We
+        //     must NOT replace the row object (even if the server already
+        //     agrees) because a fresh object reconciles the node and remounts
+        //     it, killing the glow/strikethrough/shrink. Hold local truth and
+        //     keep the guard until the animation's collapse step clears it,
+        //     or `until` expires as a safety net.
+        //   - otherwise: clear as soon as the server row agrees (confirmed),
+        //     or after the entry's `until` window (legitimate later server
+        //     flips, e.g. midnight rollover, then apply).
         const _now = Date.now();
         return loadedTasks.map(t => {
           const entry = inFlightToggles.current.get(t.id);
           if (!entry) return t;
-          if (_now - entry.ts > 15000 || t.done === entry.done) {
+          const _expired = _now > (entry.until || (entry.ts + 15000));
+          if (entry.animating) {
+            if (_expired) { inFlightToggles.current.delete(t.id); return t; }
+            return { ...t, done: entry.done, completed_at: entry.completed_at };
+          }
+          if (_expired || t.done === entry.done) {
             inFlightToggles.current.delete(t.id);
             return t;
           }
@@ -424,11 +436,29 @@ export function useDataLoad(app) {
       // Tasks that were already completed before this page load skip the
       // 5-second satisfaction window and go straight into the collapsed log.
       // (User wasn't here to see the celebration — no point preserving it.)
-      const preCollapsed = {};
-      for (const t of loadedTasks) {
-        if (t.done) preCollapsed[t.id] = true;
-      }
-      setCollapsedDoneIds(preCollapsed);
+      // This REBUILDS the collapsed set from server truth each hydration, so a
+      // task un-completed elsewhere correctly un-collapses here.
+      // EXCEPTION: a row whose completion animation is currently in flight
+      // (animating guard present and unexpired) is preserved in whatever
+      // collapse state it already holds — a mid-animation refetch must not
+      // force-collapse it early (yanking it out of the today bucket before
+      // its glow/hold/shrink can play — the "checks, then vanishes" symptom).
+      // The animation's own collapse step will set it when it finishes.
+      const _hydNow = Date.now();
+      setCollapsedDoneIds(prevCollapsed => {
+        const next = {};
+        for (const t of loadedTasks) {
+          const g = inFlightToggles.current.get(t.id);
+          const animatingGuard = g && g.animating && _hydNow <= (g.until || (g.ts + 15000));
+          if (animatingGuard) {
+            // keep the row's current collapse state untouched during animation
+            if (prevCollapsed[t.id]) next[t.id] = true;
+          } else if (t.done) {
+            next[t.id] = true;
+          }
+        }
+        return next;
+      });
     }
 
     if (refRes.data) setRefs(refRes.data.map(r => ({
