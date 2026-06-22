@@ -658,7 +658,7 @@ export default function HealthPage({ app }) {
             clients: clients
               .map(c => ({ c, cad: healthCadence(c) }))
               .filter(x => x.cad.state === b.key)
-              .sort((a, z) => a.c.name.localeCompare(z.c.name)),
+              .sort((a, z) => (a.c.name || "").localeCompare(z.c.name || "")),
           }));
           const totalPlotted = cadenceBuckets.reduce((s, b) => s + b.clients.length, 0);
 
@@ -949,7 +949,7 @@ export default function HealthPage({ app }) {
                                 <span style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: 4, background: C.retCrit }} />
                               )}
                               <div style={{ width: 30, height: 30, borderRadius: 15, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
-                                {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
+                                {(h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.client}</div>
@@ -1003,7 +1003,7 @@ export default function HealthPage({ app }) {
                         <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: isOpen ? "0 0 0 1px " + C.primary + "55, var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "box-shadow 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 18, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
-                              {h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
+                              {(h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -1140,7 +1140,7 @@ export default function HealthPage({ app }) {
                             </div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                               {b.clients.map(({ c }) => {
-                                const initials = c.name.split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
+                                const initials = (c.name || "?").split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
                                 return (
                                   <button
                                     key={c.id}
@@ -1169,7 +1169,7 @@ export default function HealthPage({ app }) {
                       {justCompleted.map((h, i) => {
                         const tier = toDriftTier(clientDrift[h.client]);
                         const tc = driftTierColor(tier);
-                        const initials = h.client.split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase();
+                        const initials = (h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase();
                         return (
                           <div key={"done-" + i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px 12px 16px", borderBottom: i < justCompleted.length - 1 ? "1px solid " + C.borderLight : "none" }}>
                             {/* Left priority bar */}
