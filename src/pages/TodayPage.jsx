@@ -3048,7 +3048,7 @@ export default function TodayPage({ app }) {
                                           // text, not just a bare "Draft this for me."
                                           const taskLine = (t.text || "").trim().replace(/\s+/g, " ");
                                           const autoMsg = taskLine
-                                            ? `${taskLine} — ${instruction}`
+                                            ? `"${taskLine}" — ${instruction}`
                                             : instruction;
                                           pendingAutoSendRef.current = autoMsg;
                                           {
