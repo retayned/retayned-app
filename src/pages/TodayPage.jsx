@@ -2974,70 +2974,17 @@ export default function TodayPage({ app }) {
                                           // AI suggestion + the most recent daily brief that
                                           // mentioned this client. Cost is trivial (a few
                                           // hundred input tokens per chat opened).
+                                          // Open the task chat in ONE synchronous setup so
+                                          // there is no intermediate render. We previously
+                                          // navigated to "coach" first, then awaited fetches
+                                          // whose results were discarded (the server-side
+                                          // focusedTaskId fetch does the real context load) —
+                                          // that gap rendered the chat HOME for a frame before
+                                          // the task chat resolved. All state below is set
+                                          // before setPage so coach mounts already-configured.
                                           setAiConvoId(null);
-                                          // Reset to a temporary "loading" greeting so the
-                                          // chat opens immediately instead of blocking on
-                                          // the fetch. The real greeting + context replace
-                                          // this once the data lands.
-                                          setAiMessages([{
-                                            role: "ai",
-                                            text: `Pulling up what I know about ${client.name}…`,
-                                          }]);
-                                          setPage("coach");
-                                          // Fetch the per-client data we don't already have
-                                          // in component state. Touchpoints aren't kept in
-                                          // state (too volatile to memo); fetch per-client.
-                                          // The suggestion lookup is conditional — only AI
-                                          // tasks carry rai_suggestion_id.
-                                          let touchpointList = [];
-                                          let suggestion = null;
-                                          try {
-                                            const tpRes = await touchpointsDb.listForClient(client.id);
-                                            touchpointList = tpRes?.data || [];
-                                          } catch (err) {
-                                            console.warn("touchpoints fetch failed for chat preload:", err);
-                                          }
-                                          if (t.ai && t.rai_suggestion_id) {
-                                            try {
-                                              const { data: sug } = await supabase
-                                                .from("rai_suggestions")
-                                                .select("title, why, signal")
-                                                .eq("id", t.rai_suggestion_id)
-                                                .maybeSingle();
-                                              suggestion = sug || null;
-                                            } catch (err) {
-                                              console.warn("suggestion fetch failed for chat preload:", err);
-                                            }
-                                          }
-                                          // recentPick: only include if THIS client is the
-                                          // anchor of the most recent brief (avoid loading
-                                          // unrelated brief text into the chat).
-                                          const recentPick = (raiPicks && raiPicks.client_id === client.id)
-                                            ? raiPicks
-                                            : null;
-                                          // Architectural fix (Jun 6 2026): we no longer
-                                          // build a frontend-side observationContext string
-                                          // and forge it into chat history. Instead, set
-                                          // focusedTaskId — the edge function fetches the
-                                          // task + 30d activity signature + workflow profile
-                                          // + suggestion + recent pick server-side and
-                                          // injects them as a structured context block.
-                                          // The old buildTaskDiscussionContext was capped at
-                                          // 14d + 20 tasks + 15 touchpoints from frontend
-                                          // state (touchpoints-and-tasks only — no calendar,
-                                          // observations, health checks). The server-side
-                                          // fetch reads the full picture.
-                                          void touchpointList;
-                                          void suggestion;
-                                          void recentPick;
                                           setFocusedTaskId(t.id);
-                                          // Decide the auto-fire user message based on the verb
-                                          // family. Composition verbs (write/draft/send/recap)
-                                          // → ask Rai to produce the artifact. Analysis verbs
-                                          // (analyze/review/assess) → ask her to walk through.
-                                          // Deliberation verbs (decide/plan/strategize) → ask
-                                          // her to help decide. The detected verb already came
-                                          // from THINKING_VERBS up top; map it to an intent.
+                                          // Auto-fire message based on the verb family.
                                           const verb = (detectThinkingVerb(t.text) || "").toLowerCase();
                                           const COMPOSITION = new Set([
                                             "write","draft","compose","send","prepare","propose",
@@ -3052,20 +2999,15 @@ export default function TodayPage({ app }) {
                                           } else if (ANALYSIS.has(verb)) {
                                             autoMsg = "Walk me through this.";
                                           } else {
-                                            // Deliberation default: decide / figure out / plan /
-                                            // strategize / approach / think through
                                             autoMsg = "Help me think this through.";
                                           }
-                                          // Clear the loading bubble — we want Rai's response to
-                                          // arrive RIGHT AFTER the user's auto-fired message, not
-                                          // after the placeholder. The useEffect picks up the ref
-                                          // once observationContext + aiMessages have flushed.
+                                          // Empty messages: Rai's response arrives right after
+                                          // the auto-fired user message (the useEffect picks up
+                                          // the ref once aiMessages flushes). No loading bubble.
                                           setAiMessages([]);
                                           pendingAutoSendRef.current = autoMsg;
-                                          // Title this chat from the task (+ client) instead of
-                                          // the generic autoMsg, so the RECENT list is scannable
-                                          // ("Send Janet the Q3 report · Acme" not "Draft this
-                                          // for me."). Trimmed to a sane length downstream.
+                                          // Title the chat from task (+ client) for a scannable
+                                          // RECENT list.
                                           {
                                             const taskText = (t.text || "").trim();
                                             const cli = (t.client_name || client?.name || "").trim();
@@ -3073,6 +3015,8 @@ export default function TodayPage({ app }) {
                                               ? (cli ? `${taskText} · ${cli}` : taskText)
                                               : null;
                                           }
+                                          // Navigate LAST — coach mounts already configured.
+                                          setPage("coach");
                                         }}
                                         style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                         ref={(el) => markTruncated(t.id, el)}
