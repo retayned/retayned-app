@@ -2983,8 +2983,52 @@ export default function TodayPage({ app }) {
                                           // the task chat resolved. All state below is set
                                           // before setPage so coach mounts already-configured.
                                           setAiConvoId(null);
+                                          // Reset to a temporary "loading" greeting so the
+                                          // chat opens immediately instead of blocking on
+                                          // the fetch. The real greeting + context replace
+                                          // this once the data lands.
+                                          setAiMessages([{
+                                            role: "ai",
+                                            text: `Pulling up what I know about ${client.name}…`,
+                                          }]);
+                                          setPage("coach");
+                                          // Fetch the per-client data we don't already have
+                                          // in component state. Touchpoints aren't kept in
+                                          // state (too volatile to memo); fetch per-client.
+                                          // The suggestion lookup is conditional — only AI
+                                          // tasks carry rai_suggestion_id.
+                                          let touchpointList = [];
+                                          let suggestion = null;
+                                          try {
+                                            const tpRes = await touchpointsDb.listForClient(client.id);
+                                            touchpointList = tpRes?.data || [];
+                                          } catch (err) {
+                                            console.warn("touchpoints fetch failed for chat preload:", err);
+                                          }
+                                          if (t.ai && t.rai_suggestion_id) {
+                                            try {
+                                              const { data: sug } = await supabase
+                                                .from("rai_suggestions")
+                                                .select("title, why, signal")
+                                                .eq("id", t.rai_suggestion_id)
+                                                .maybeSingle();
+                                              suggestion = sug || null;
+                                            } catch (err) {
+                                              console.warn("suggestion fetch failed for chat preload:", err);
+                                            }
+                                          }
+                                          // recentPick: only include if THIS client is the
+                                          // anchor of the most recent brief (avoid loading
+                                          // unrelated brief text into the chat).
+                                          const recentPick = (raiPicks && raiPicks.client_id === client.id)
+                                            ? raiPicks
+                                            : null;
+                                          void touchpointList;
+                                          void suggestion;
+                                          void recentPick;
                                           setFocusedTaskId(t.id);
-                                          // Auto-fire message based on the verb family.
+                                          // Decide the auto-fire user message based on the verb
+                                          // family.
                                           const verb = (detectThinkingVerb(t.text) || "").toLowerCase();
                                           const COMPOSITION = new Set([
                                             "write","draft","compose","send","prepare","propose",
@@ -3001,13 +3045,10 @@ export default function TodayPage({ app }) {
                                           } else {
                                             autoMsg = "Help me think this through.";
                                           }
-                                          // Empty messages: Rai's response arrives right after
-                                          // the auto-fired user message (the useEffect picks up
-                                          // the ref once aiMessages flushes). No loading bubble.
+                                          // Clear the loading bubble — Rai's response arrives
+                                          // right after the user's auto-fired message.
                                           setAiMessages([]);
                                           pendingAutoSendRef.current = autoMsg;
-                                          // Title the chat from task (+ client) for a scannable
-                                          // RECENT list.
                                           {
                                             const taskText = (t.text || "").trim();
                                             const cli = (t.client_name || client?.name || "").trim();
@@ -3015,8 +3056,6 @@ export default function TodayPage({ app }) {
                                               ? (cli ? `${taskText} · ${cli}` : taskText)
                                               : null;
                                           }
-                                          // Navigate LAST — coach mounts already configured.
-                                          setPage("coach");
                                         }}
                                         style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                         ref={(el) => markTruncated(t.id, el)}
