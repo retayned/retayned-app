@@ -1519,7 +1519,18 @@ export const APP_CSS = `
            content-sized parent and the input floats mid-screen. dvh handles the
            mobile URL bar. Scoped to mobile so desktop's sidebar layout is untouched. */
         @media (max-width: 767px) {
-          .r-rai-page { height: calc(100dvh - 60px) !important; }
+          /* Mirror the desktop chat fix: .r-main must be a fixed-height,
+             non-scrolling shell so the chat page's flex column can pin the
+             composer to the true bottom. Without overflow:hidden + height,
+             .r-main stays content-sized and the input bar floats mid-screen
+             (Jun 2026 mobile bug). 100dvh tracks the real viewport incl. the
+             collapsing URL bar. */
+          .r-main:has(.r-rai-page) {
+            height: 100dvh !important;
+            overflow: hidden !important;
+            min-height: 0 !important;
+          }
+          .r-rai-page { height: 100dvh !important; }
           /* Break-out task on mobile: the desktop -24px shift pops into the
              64px page padding, which mobile doesn't have — at -24px the row +
              its purple rai ring clipped off the left edge. Scale the shift to
@@ -1542,7 +1553,7 @@ export const APP_CSS = `
         .r-rai-inner { padding-top: 56px !important; }
         .r-chat-msg-user { scroll-margin-top: 56px !important; }
         /* Mobile: tighten chat input bar bottom padding — clear mobile nav (60px) + breathing room */
-        .r-rai-inputbar { padding: 10px 16px 88px !important; }
+        .r-rai-inputbar { padding: 10px 16px calc(86px + env(safe-area-inset-bottom, 0px)) !important; }
         /* Rai page surface — flat bg. The purple radial-gradient wash was
            removed: send button + chrome are green now, the purple page
            glow was the last thing making Rai read as purple. Flat bg also
