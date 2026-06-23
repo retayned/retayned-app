@@ -188,16 +188,15 @@ export default function TodayPage({ app }) {
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
-  // Tasks whose title is ACTUALLY truncated in the DOM right now (scrollWidth >
-  // clientWidth), measured per-render via a ref callback on the title span.
-  // Keyed by task id. This is how we guarantee "if it shows an ellipsis, it can
-  // be expanded" on every screen width — we measure real pixel truncation
-  // rather than guessing from a character count (which never matches the
-  // variable pixel width on different phones / with different client names).
+  // Tasks whose title is ACTUALLY clipped in the DOM right now. The title now
+  // uses a 2-line clamp (-webkit-line-clamp: 2), so truncation is VERTICAL
+  // overflow (scrollHeight > clientHeight), not horizontal. Measured per-render
+  // via a ref callback on the title element. Keyed by task id — guarantees "if
+  // it's clipped, the expand chevron shows" on every screen width / client name.
   const [truncatedIds, setTruncatedIds] = useState({});
   const markTruncated = (id, el) => {
     if (!el) return;
-    const isTrunc = el.scrollWidth > el.clientWidth + 1; // +1 absorbs sub-pixel rounding
+    const isTrunc = el.scrollHeight > el.clientHeight + 1; // +1 absorbs sub-pixel rounding
     setTruncatedIds(prev => {
       if (!!prev[id] === isTrunc) return prev; // no change → no re-render
       const next = { ...prev };
@@ -2613,6 +2612,9 @@ export default function TodayPage({ app }) {
                           // consumed the first tap, so the link only opened on
                           // the SECOND tap (Jun 2026 mobile regression).
                           if (e.target && e.target.closest && e.target.closest(".is-discussable")) return;
+                          // Expand chevron + Note pill: same tap-protection so the
+                          // swipe handler doesn't eat the first tap.
+                          if (e.target && e.target.closest && e.target.closest(".rt-expand")) return;
                           setSwipeStartX(prev => ({ ...prev, [t.id]: e.touches[0].clientX }));
                           // Stash startY in a ref-like field on the same map so we
                           // don't need a second state hook just for this.
@@ -2900,7 +2902,7 @@ export default function TodayPage({ app }) {
                               {/* [Removed Jun 2026] "Rai's pick" per-task badge —
                                   deprecated alongside the badge state manager. Picks
                                   are now client-level only. */}
-                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.25, paddingBottom: 2, overflow: "hidden", display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.4, paddingBottom: 2, display: "flex", alignItems: "flex-start", gap: 6, minWidth: 0 }}>
                                 {/* Inline Rai star — sits immediately before
                                     the task title text on AI-suggested rows.
                                     Replaces the previous bobbing-medallion
@@ -2921,6 +2923,7 @@ export default function TodayPage({ app }) {
                                     style={{
                                       display: "block",
                                       flexShrink: 0,
+                                      marginTop: 3,
                                     }}
                                   >
                                     <path
@@ -3059,11 +3062,9 @@ export default function TodayPage({ app }) {
                                               : null;
                                           }
                                         }}
-                                        style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
                                         ref={(el) => markTruncated(t.id, el)}
-                                      >
-                                        {t.text}
-                                      </span>
+                                        style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 2, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
+                                      >{t.text}</span>
                                     );
                                   }
                                   return <span
@@ -3075,21 +3076,35 @@ export default function TodayPage({ app }) {
                                     onPointerMove={lpCancel}
                                     onPointerLeave={lpCancel}
                                     ref={(el) => markTruncated(t.id, el)}
-                                    style={{ display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "bottom" }}
+                                    style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 2, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
                                   >{t.text}</span>;
                                 })()}
+                                {truncatedIds[t.id] && (
+                                  <button
+                                    className="rt-expand"
+                                    onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === t.id ? null : t.id); }}
+                                    aria-label={openNoteId === t.id ? "Collapse task" : "Show full task"}
+                                    title={openNoteId === t.id ? "Collapse" : "Show full text"}
+                                    style={{ flexShrink: 0, width: 30, height: 30, margin: "-6px -4px -6px auto", display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", borderRadius: 6, cursor: "pointer", color: C.textSec }}
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: openNoteId === t.id ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>
+                                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
                                 {client
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
                                   : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
                                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
-                                {(t.notes || truncatedIds[t.id]) && (
+                                {t.notes && (
                                   <button
+                                    className="rt-expand"
                                     onClick={(e) => { e.stopPropagation(); setOpenNoteId(openNoteId === t.id ? null : t.id); }}
-                                    title={openNoteId === t.id ? "Hide" : (t.notes ? "Show note" : "Show full text")}
+                                    title={openNoteId === t.id ? "Hide note" : "Show note"}
                                     style={{
-                                      display: "inline-flex", alignItems: "center",
+                                      display: "inline-flex", alignItems: "center", gap: 3,
                                       border: "none", cursor: "pointer", flexShrink: 0,
                                       padding: "1px 8px", borderRadius: 999,
                                       fontSize: 10, fontWeight: 600, fontFamily: "inherit",
@@ -3097,7 +3112,7 @@ export default function TodayPage({ app }) {
                                       background: openNoteId === t.id ? C.primarySoft : C.surface,
                                       color: openNoteId === t.id ? C.primary : C.textSec,
                                     }}
-                                  >{t.notes ? "Note" : (openNoteId === t.id ? "Less" : "More")}</button>
+                                  >Note</button>
                                 )}
                                 {debugScores && client && (() => {
                                   const psFloat = calcProfileScore(client.ret || 50, client, clients);
@@ -3156,18 +3171,6 @@ export default function TodayPage({ app }) {
                                     style={{ marginTop: 6, padding: "5px 9px", borderLeft: "2px solid " + C.borderLight, fontSize: 12, lineHeight: 1.5, color: C.textSec, whiteSpace: "pre-wrap", cursor: "text" }}
                                   >{t.notes}</div>
                                 )
-                              )}
-                              {/* Full-title reveal: a truncated task with NO separate
-                                  note. Tapping "More" shows the complete title text so
-                                  it's always readable, even on a narrow phone where the
-                                  ellipsis hits well before the 75-char note threshold.
-                                  Read-only here — title editing stays on the title's own
-                                  double-click / long-press flow. */}
-                              {!t.notes && truncatedIds[t.id] && openNoteId === t.id && (
-                                <div
-                                  onClick={(e) => e.stopPropagation()}
-                                  style={{ marginTop: 6, padding: "5px 9px", borderLeft: "2px solid " + C.borderLight, fontSize: 12, lineHeight: 1.5, color: C.textSec, whiteSpace: "pre-wrap" }}
-                                >{t.text}</div>
                               )}
                             </div>
 
