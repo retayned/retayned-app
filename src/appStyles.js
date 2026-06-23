@@ -1665,7 +1665,7 @@ export const APP_CSS = `
              WebkitLineClamp to "unset" when expanded. */
           display: -webkit-box;
           -webkit-box-orient: vertical;
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp: 1;
           max-width: 100%;
           overflow: hidden;
           font-size: 14px;
