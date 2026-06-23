@@ -45,9 +45,7 @@ export default function CoachPage({ app }) {
   // chat home flashes for a beat before the task chat appears.
   if (raiLaunching && aiMessages.length === 0) {
     return (
-      <div className="r-rai-page r-rai-chat" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 14, color: C.textMuted, fontStyle: "italic" }}>Pulling up the conversation…</div>
-      </div>
+      <div className="r-rai-page r-rai-chat" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }} />
     );
   }
   return (<div className={"r-rai-page " + (aiMessages.length === 0 ? "r-rai-intro" : "r-rai-chat")} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -170,7 +168,7 @@ export default function CoachPage({ app }) {
             </div>
             {/* Input bar — fixed bottom once conversation started */}
             {aiMessages.length > 0 && (
-              <div className="r-rai-inputbar" style={{ background: C.bg, padding: "12px 24px 16px" }}>
+              <div className="r-rai-inputbar" style={{ background: C.bg, padding: "12px 24px 16px", flexShrink: 0 }}>
                 <div style={{ maxWidth: 720, margin: "0 auto" }}>
                   <div className="rt-rai-inputbox" style={{ background: C.card, border: "1px solid rgba(20,30,22,0.10)", boxShadow: "0 1px 3px rgba(20,30,22,0.04), 0 8px 24px rgba(20,30,22,0.06)", borderRadius: 16, padding: "14px 16px 10px" }}>
                     {aiAttachments.length > 0 && (
