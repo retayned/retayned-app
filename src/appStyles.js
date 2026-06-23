@@ -1553,7 +1553,7 @@ export const APP_CSS = `
         .r-rai-inner { padding-top: 56px !important; }
         .r-chat-msg-user { scroll-margin-top: 56px !important; }
         /* Mobile: tighten chat input bar bottom padding — clear mobile nav (60px) + breathing room */
-        .r-rai-inputbar { padding: 10px 16px calc(86px + env(safe-area-inset-bottom, 0px)) !important; }
+        .r-rai-inputbar { flex-shrink: 0; padding: 10px 16px calc(86px + env(safe-area-inset-bottom, 0px)) !important; }
         /* Rai page surface — flat bg. The purple radial-gradient wash was
            removed: send button + chrome are green now, the purple page
            glow was the last thing making Rai read as purple. Flat bg also
