@@ -2607,6 +2607,11 @@ export default function TodayPage({ app }) {
                           // (Jun 2026 — root cause of "can't check off tasks
                           // on mobile".)
                           if (e.target && e.target.closest && e.target.closest(".rt-check")) return;
+                          // Same tap-protection for the discussable title (the
+                          // Rai-chat link). Without this the row swipe handler
+                          // consumed the first tap, so the link only opened on
+                          // the SECOND tap (Jun 2026 mobile regression).
+                          if (e.target && e.target.closest && e.target.closest(".is-discussable")) return;
                           setSwipeStartX(prev => ({ ...prev, [t.id]: e.touches[0].clientX }));
                           // Stash startY in a ref-like field on the same map so we
                           // don't need a second state hook just for this.
