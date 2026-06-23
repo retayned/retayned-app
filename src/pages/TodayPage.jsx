@@ -194,8 +194,13 @@ export default function TodayPage({ app }) {
   // via a ref callback on the title element. Keyed by task id — guarantees "if
   // it's clipped, the expand chevron shows" on every screen width / client name.
   const [truncatedIds, setTruncatedIds] = useState({});
-  const markTruncated = (id, el) => {
+  const markTruncated = (id, el, isExpanded) => {
     if (!el) return;
+    // While expanded the clamp is "unset", so the box grows to fit and
+    // scrollHeight === clientHeight — measuring now would falsely report
+    // "not truncated" and remove the chevron mid-expand. Only measure in the
+    // clamped (collapsed) state; keep the prior value while expanded.
+    if (isExpanded) return;
     const isTrunc = el.scrollHeight > el.clientHeight + 1; // +1 absorbs sub-pixel rounding
     setTruncatedIds(prev => {
       if (!!prev[id] === isTrunc) return prev; // no change → no re-render
@@ -3062,8 +3067,8 @@ export default function TodayPage({ app }) {
                                               : null;
                                           }
                                         }}
-                                        ref={(el) => markTruncated(t.id, el)}
-                                        style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 2, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
+                                        ref={(el) => markTruncated(t.id, el, openNoteId === t.id)}
+                                        style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 1, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
                                       >{t.text}</span>
                                     );
                                   }
@@ -3075,8 +3080,8 @@ export default function TodayPage({ app }) {
                                     onPointerUp={lpCancel}
                                     onPointerMove={lpCancel}
                                     onPointerLeave={lpCancel}
-                                    ref={(el) => markTruncated(t.id, el)}
-                                    style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 2, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
+                                    ref={(el) => markTruncated(t.id, el, openNoteId === t.id)}
+                                    style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 1, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
                                   >{t.text}</span>;
                                 })()}
                                 {truncatedIds[t.id] && (
