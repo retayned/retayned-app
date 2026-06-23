@@ -1519,18 +1519,17 @@ export const APP_CSS = `
            content-sized parent and the input floats mid-screen. dvh handles the
            mobile URL bar. Scoped to mobile so desktop's sidebar layout is untouched. */
         @media (max-width: 767px) {
-          /* Mirror the desktop chat fix: .r-main must be a fixed-height,
-             non-scrolling shell so the chat page's flex column can pin the
-             composer to the true bottom. Without overflow:hidden + height,
-             .r-main stays content-sized and the input bar floats mid-screen
-             (Jun 2026 mobile bug). 100dvh tracks the real viewport incl. the
-             collapsing URL bar. */
+          /* iOS fix: 100svh (small viewport height — assumes browser chrome is
+             visible) is STABLE. 100dvh changes as Safari's URL bar/nav collapses
+             on scroll, which resized the page mid-scroll and let the whole chat
+             be dragged (the "nav pulls the chat down" bug). svh never moves, so
+             the page stays fixed and only r-rai-scroll scrolls. */
           .r-main:has(.r-rai-page) {
-            height: 100dvh !important;
+            height: 100svh !important;
             overflow: hidden !important;
             min-height: 0 !important;
           }
-          .r-rai-page { height: 100dvh !important; }
+          .r-rai-page { height: 100svh !important; }
           /* Break-out task on mobile: the desktop -24px shift pops into the
              64px page padding, which mobile doesn't have — at -24px the row +
              its purple rai ring clipped off the left edge. Scale the shift to
@@ -1546,11 +1545,15 @@ export const APP_CSS = `
           .rt-today-breakout-animate { animation: rt-breakout-in-mobile 200ms cubic-bezier(.22,.61,.36,1) both !important; }
           /* Band More/Less expand is the wrong UX on mobile — hide it. */
           .rt-band-more { display: none !important; }
+          /* Hide the per-row calendar/due pill on mobile — swipe-right pushes a
+             task forward (today→tomorrow→later), so the button is redundant and
+             wastes row space. (Desktop keeps it.) */
+          .rt-row-due { display: none !important; }
         }
         .r-today-panel { display: none !important; }
         .r-client-modal { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; transform: none !important; max-width: 100% !important; max-height: 100% !important; border-radius: 0 !important; }
         /* Mobile: chat user-message clearance from sticky top bar when scrolled */
-        .r-rai-inner { padding-top: 56px !important; }
+        .r-rai-inner { padding-top: 32px !important; }
         .r-chat-msg-user { scroll-margin-top: 56px !important; }
         /* Mobile: tighten chat input bar bottom padding — clear mobile nav (60px) + breathing room */
         .r-rai-inputbar { flex-shrink: 0; padding: 10px 16px calc(86px + env(safe-area-inset-bottom, 0px)) !important; }
