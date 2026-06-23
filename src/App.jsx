@@ -2009,6 +2009,10 @@ export default function App({ user }) {
   // truncated frontend-state data was stuffed into chat history as a forged
   // assistant message. Cleared when a fresh conversation starts.
   const [focusedTaskId, setFocusedTaskId] = useState(null);
+  // True from the instant a task link is clicked until the auto-send fires.
+  // Lets CoachPage show a "pulling up" loading state instead of the intro/home
+  // view during the launch gap (prevents the chat-home flash on link click).
+  const [raiLaunching, setRaiLaunching] = useState(false);
   const [aiTyping, setAiTyping] = useState(false);
   const [aiStreaming, setAiStreaming] = useState(false);
   // Attachments staged for next send. Shape: { id, name, type (image|document), media_type, data (base64), size }
@@ -2364,6 +2368,7 @@ export default function App({ user }) {
     const text = pendingAutoSendRef.current;
     pendingAutoSendRef.current = null;
     sendAi(text);
+    setRaiLaunching(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedTaskId, observationContext, aiMessages]);
 
@@ -2771,6 +2776,7 @@ export default function App({ user }) {
     aiEndRef,
     aiInput,
     aiMessages,
+    raiLaunching,
     aiStreaming,
     aiTyping,
     aiUserRef,
@@ -2918,6 +2924,7 @@ export default function App({ user }) {
     setEditingTaskText,
     setFocusMode,
     setFocusedTaskId,
+    setRaiLaunching,
     setHcDone,
     setHcOpen,
     setHealthStripOpen,
