@@ -1657,22 +1657,20 @@ export const APP_CSS = `
         /* (rt-check rules consolidated above in DESIGN LANGUAGE block) */
         .rt-row .rt-task-title {
           position: relative;
-          /* Single-line truncation with ellipsis. Tasks are capped at 75
-             chars at save time (both user-typed and Rai-generated), and
-             75 chars at 14px Manrope fits one line on desktop and just
-             under two lines on mobile. This style ensures legacy tasks
-             written before the cap (or any future overrun) display
-             cleanly without exploding row height. The full text is
-             reachable via the title tooltip + the edit affordance. */
-          display: inline-block;
+          /* Two-line clamp (Jun 2026). Tasks are capped at 75 chars at save
+             time; at 14px Manrope that's up to ~two lines on mobile. Clamp to
+             2 lines so the full title is visible without exploding row height;
+             a chevron (rendered in JSX when the title still overflows 2 lines)
+             lifts the clamp to show the rest. The per-row inline style sets
+             WebkitLineClamp to "unset" when expanded. */
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
           max-width: 100%;
           overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          vertical-align: bottom;
           font-size: 14px;
           font-weight: 500;
-          line-height: 1.3;
+          line-height: 1.4;
           transition: color 320ms ease;
         }
         .rt-row .rt-task-title::after {
