@@ -95,6 +95,7 @@ export default function TodayPage({ app }) {
     setEditingTaskText,
     setFocusMode,
     setFocusedTaskId,
+    setRaiLaunching,
     setLaterCalOpen,
     setLinkPicker,
     setLinkPickerSearch,
@@ -2982,15 +2983,13 @@ export default function TodayPage({ app }) {
                                           // that gap rendered the chat HOME for a frame before
                                           // the task chat resolved. All state below is set
                                           // before setPage so coach mounts already-configured.
+                                          // Mark the chat as launching so CoachPage shows a
+                                          // "pulling up" loading state instead of the intro/home
+                                          // view during the gap before the auto-send fires.
+                                          // Cleared in the auto-send useEffect once sendAi runs.
+                                          setRaiLaunching(true);
                                           setAiConvoId(null);
-                                          // Reset to a temporary "loading" greeting so the
-                                          // chat opens immediately instead of blocking on
-                                          // the fetch. The real greeting + context replace
-                                          // this once the data lands.
-                                          setAiMessages([{
-                                            role: "ai",
-                                            text: `Pulling up what I know about ${client.name}…`,
-                                          }]);
+                                          setAiMessages([]);
                                           setPage("coach");
                                           // Fetch the per-client data we don't already have
                                           // in component state. Touchpoints aren't kept in
@@ -3017,9 +3016,6 @@ export default function TodayPage({ app }) {
                                               console.warn("suggestion fetch failed for chat preload:", err);
                                             }
                                           }
-                                          // recentPick: only include if THIS client is the
-                                          // anchor of the most recent brief (avoid loading
-                                          // unrelated brief text into the chat).
                                           const recentPick = (raiPicks && raiPicks.client_id === client.id)
                                             ? raiPicks
                                             : null;
@@ -3037,17 +3033,23 @@ export default function TodayPage({ app }) {
                                           const ANALYSIS = new Set([
                                             "analyze","assess","evaluate","review","read","check",
                                           ]);
-                                          let autoMsg;
+                                          let instruction;
                                           if (COMPOSITION.has(verb)) {
-                                            autoMsg = "Draft this for me.";
+                                            instruction = "Draft this for me.";
                                           } else if (ANALYSIS.has(verb)) {
-                                            autoMsg = "Walk me through this.";
+                                            instruction = "Walk me through this.";
                                           } else {
-                                            autoMsg = "Help me think this through.";
+                                            instruction = "Help me think this through.";
                                           }
-                                          // Clear the loading bubble — Rai's response arrives
-                                          // right after the user's auto-fired message.
-                                          setAiMessages([]);
+                                          // Lead the bubble with the task itself, then the
+                                          // instruction — so the chat reads "{task} — Draft
+                                          // this for me" and is self-documenting. This is also
+                                          // what Rai receives, so her input carries the task
+                                          // text, not just a bare "Draft this for me."
+                                          const taskLine = (t.text || "").trim().replace(/\s+/g, " ");
+                                          const autoMsg = taskLine
+                                            ? `${taskLine} — ${instruction}`
+                                            : instruction;
                                           pendingAutoSendRef.current = autoMsg;
                                           {
                                             const taskText = (t.text || "").trim();
