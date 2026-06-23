@@ -2654,11 +2654,14 @@ export default function TodayPage({ app }) {
                             setSwipeLock(prev => ({ ...prev, [t.id]: "swipe" }));
                           }
 
-                          // Recurring tasks can be deleted (left swipe) but not pushed
-                          // to another bucket (right swipe blocked — they have no due_date
-                          // and the bucket concept doesn't apply).
-                          const minDelta = t.recurring ? -SWIPE_MAX : -SWIPE_MAX_LEFT;
-                          const maxDelta = 0; // right swipe removed — checkbox owns complete
+                          // Two-direction swipe (Jun 2026 redo):
+                          //   RIGHT (positive) → push forward (today→tomorrow→later).
+                          //   LEFT  (negative) → delete.
+                          // Recurring tasks have no bucket, so right-push is blocked
+                          // for them (clamp right to 0); left-delete still works.
+                          const SWIPE_MAX_RIGHT = 130;
+                          const minDelta = -SWIPE_MAX_LEFT;          // left = delete
+                          const maxDelta = t.recurring ? 0 : SWIPE_MAX_RIGHT; // right = push
                           // Subtract the dead zone from the displayed offset so the
                           // row starts at 0 visually when the swipe is just-committed,
                           // not at +/- DEAD_ZONE (which would be a visual jump).
@@ -2680,9 +2683,11 @@ export default function TodayPage({ app }) {
                           // starts fresh.
                           setSwipeStartY(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                           setSwipeLock(prev => { const n = { ...prev }; delete n[t.id]; return n; });
-                          const wantsDelete = t.recurring ? off <= -SWIPE_THRESHOLD : off <= -DELETE_THRESHOLD;
+                          // LEFT past threshold → DELETE. RIGHT past threshold → PUSH forward.
+                          const wantsDelete = off <= -SWIPE_THRESHOLD;
+                          const wantsPush = !t.recurring && off >= SWIPE_THRESHOLD;
                           if (wantsDelete) {
-                            // Left zone 2 (or recurring left) → DELETE. Slide off-screen left, then remove.
+                            // Slide off-screen left, then remove.
                             setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX_LEFT }));
                             // Phase 9: if Rai task, open feedback modal; the
                             // actual delete is deferred to the modal's confirm.
@@ -2695,22 +2700,18 @@ export default function TodayPage({ app }) {
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                             };
-                            // Wait for the slide-off animation before deleting
-                            // when no modal will appear. If a modal opens, the
-                            // delete waits on user confirm — and the swipe
-                            // visual stays at -SWIPE_MAX until they decide.
                             if (t.ai && t.rai_suggestion_id) {
                               openDismissFlow(t, performDelete);
                             } else {
                               setTimeout(performDelete, 180);
                             }
-                          } else if (off <= -SWIPE_THRESHOLD && !t.recurring) {
-                            // Left zone 1 → PUSH to next bucket.
-                            setSwipeOffset(prev => ({ ...prev, [t.id]: -SWIPE_MAX }));
+                          } else if (wantsPush) {
+                            // RIGHT → push forward to the next bucket.
+                            setSwipeOffset(prev => ({ ...prev, [t.id]: SWIPE_MAX }));
                             setTimeout(() => {
                               if (bucketKey === "today") pushToTomorrow(t.id);
                               else if (bucketKey === "tomorrow") pushToLater(t.id);
-                              else if (bucketKey === "later") pullToToday(t.id);
+                              else if (bucketKey === "later") pushToLater(t.id);
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                             }, 180);
@@ -2724,7 +2725,7 @@ export default function TodayPage({ app }) {
                         // Action label per bucket — shown when swiping right (push)
                         const swipeActionLabel = bucketKey === "today" ? "Tomorrow"
                           : bucketKey === "tomorrow" ? "Later"
-                          : "Today";
+                          : "Later";
 
                         // Swipeable = any task that's not done. Recurring is allowed
                         // (left-swipe delete works); right-swipe push is gated separately
@@ -2735,33 +2736,31 @@ export default function TodayPage({ app }) {
 
                         return (
                           <div key={t.id} className={"rt-row-wrap" + (isFocusTop && focusMode ? " rt-focus-top-wrap" : "") + (isExiting ? " is-exiting" : "")} style={{ position: "relative", borderRadius: 12, overflow: offset !== 0 ? "hidden" : "visible", zIndex: rowDuePickerId === t.id ? 500 : undefined }}>
-                            {/* Swipe action background — LEFT only (one-way swipe, Jun 2026).
-                                Zone 1 amber = push to next bucket; zone 2 red = delete.
-                                Only renders when actively swiping. */}
-                            {swipeable && offset < 0 && (() => {
-                              const inDeleteZone = t.recurring || offset <= -DELETE_THRESHOLD;
-                              return (
-                                <div style={{
-                                  position: "absolute",
-                                  inset: 0,
-                                  background: inDeleteZone ? C.danger : C.retWarn,
-                                  borderRadius: 12,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "flex-end",
-                                  paddingRight: 22,
-                                  gap: 8,
-                                  color: "#fff",
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  pointerEvents: "none",
-                                  transition: "background 120ms ease",
-                                }}>
-                                  <span>{inDeleteZone ? "Delete" : swipeActionLabel}</span>
-                                </div>
-                              );
-                            })()}
-                            {/* (right-swipe "Done" background removed Jun 2026 — one-way swipe) */}
+                            {/* Swipe action backgrounds (Jun 2026 two-direction):
+                                LEFT (offset<0) = red Delete, label pinned right.
+                                RIGHT (offset>0) = amber push-forward, label pinned left. */}
+                            {swipeable && offset < 0 && (
+                              <div style={{
+                                position: "absolute", inset: 0,
+                                background: C.danger, borderRadius: 12,
+                                display: "flex", alignItems: "center", justifyContent: "flex-end",
+                                paddingRight: 22, gap: 8, color: "#fff",
+                                fontSize: 13, fontWeight: 600, pointerEvents: "none",
+                              }}>
+                                <span>Delete</span>
+                              </div>
+                            )}
+                            {swipeable && offset > 0 && !t.recurring && (
+                              <div style={{
+                                position: "absolute", inset: 0,
+                                background: C.retWarn, borderRadius: 12,
+                                display: "flex", alignItems: "center", justifyContent: "flex-start",
+                                paddingLeft: 22, gap: 8, color: "#fff",
+                                fontSize: 13, fontWeight: 600, pointerEvents: "none",
+                              }}>
+                                <span>{swipeActionLabel}</span>
+                              </div>
+                            )}
                           <div
                             className={cls}
                             data-task-id={t.id}
