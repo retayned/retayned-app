@@ -17,6 +17,7 @@ export default function CoachPage({ app }) {
     aiEndRef,
     aiInput,
     aiMessages,
+    raiLaunching,
     aiStreaming,
     aiTyping,
     aiUserRef,
@@ -36,6 +37,16 @@ export default function CoachPage({ app }) {
           onAddBook={() => setOnboardingStep("book")}
           onBrainDump={() => setBrainDumpOpen(true)}
         />
+      </div>
+    );
+  }
+  // A task link was clicked and we're in the gap before the auto-send fires.
+  // Show a quiet loading state, NOT the intro/home composer — otherwise the
+  // chat home flashes for a beat before the task chat appears.
+  if (raiLaunching && aiMessages.length === 0) {
+    return (
+      <div className="r-rai-page r-rai-chat" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, alignItems: "center", justifyContent: "center" }}>
+        <div style={{ fontSize: 14, color: C.textMuted, fontStyle: "italic" }}>Pulling up the conversation…</div>
       </div>
     );
   }
