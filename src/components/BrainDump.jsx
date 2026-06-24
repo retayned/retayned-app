@@ -296,8 +296,11 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
           });
           if (e) failed++; else ev++;
         } else {
+          // Match the app's task convention: titles read as sentences ending
+          // in a period. Add one unless it already ends in sentence punctuation.
+          const taskText = /[.!?]$/.test(title) ? title : `${title}.`;
           const { data: created, error: e } = await tasksDb.create(user.id, {
-            text: title,
+            text: taskText,
             client_name: chosenClient?.name || null,
             client_id: chosenClient?.id || null,
             is_recurring: false,
@@ -309,7 +312,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
           if (e) { failed++; continue; }
           createdTasks.push({
             id: created?.id || "bd" + Date.now() + Math.random().toString(36).slice(2, 6),
-            text: title,
+            text: taskText,
             client: chosenClient?.name || null,
             client_id: chosenClient?.id || null,
             notes: it.notes || null,
@@ -517,7 +520,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                   color: dump.trim().length < 10 || loading ? C.textMuted : "#fff",
                 }}
               >
-                {loading ? "Rai is sorting…" : "Extract tasks"}
+                {loading ? "Rai is making sense of it…" : "Extract tasks"}
               </button>
             </div>
           </>
@@ -747,7 +750,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                   color: keptCount === 0 || committing ? C.textMuted : "#fff",
                 }}
               >
-                {committing ? "Adding…" : `Add ${keptCount} item${keptCount === 1 ? "" : "s"}`}
+                {committing ? "Adding…" : `Add ${keptCount} Item${keptCount === 1 ? "" : "s"}`}
               </button>
             </div>
           </>
