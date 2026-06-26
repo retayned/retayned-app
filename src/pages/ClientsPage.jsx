@@ -663,7 +663,7 @@ export default function ClientsPage({ app }) {
                             // text, the same selected language the rest of the
                             // site uses. Hover state untouched.
                             ...(sortId === s.id
-                              ? { background: C.primarySoft, color: C.primary, fontWeight: 700 }
+                              ? { background: C.primarySoft, color: C.text, fontWeight: 700 }
                               : { color: C.textSec, fontWeight: 500 }),
                           }}>{s.label}</button>
                         ))}
