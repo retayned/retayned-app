@@ -80,8 +80,8 @@ const THEME_CSS = `
     --rt-sh-xs: 0 1px 2px rgba(20,30,22,0.05);
     --rt-sh-row: 0 0 0 1px rgba(20,30,22,0.12), 0 1px 2px rgba(20,30,22,0.04), 0 1px 6px rgba(20,30,22,0.025);
     --rt-sh-row-hover: 0 0 0 1px rgba(20,30,22,0.12), 0 2px 4px rgba(20,30,22,0.05), 0 6px 16px rgba(20,30,22,0.06);
-    --rt-sh-card: 0 0 0 1px rgba(20,30,22,0.12), 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.04);
-    --rt-sh-card-hover: 0 0 0 1px rgba(20,30,22,0.12), 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.05);
+    --rt-sh-card: 0 2px 0 -1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.05);
+    --rt-sh-card-hover: 0 2px 4px rgba(20,30,22,0.05), 0 8px 20px rgba(20,30,22,0.06);
     --rt-sh-purple: 0 0 0 1px rgba(124,92,243,0.10), 0 2px 8px rgba(124,92,243,0.20), 0 1px 2px rgba(124,92,243,0.10);
     --rt-sh-purple-hover: 0 0 0 1px rgba(124,92,243,0.22), 0 8px 22px rgba(124,92,243,0.34), 0 2px 4px rgba(124,92,243,0.16);
     --rt-sh-green-glow: 0 0 0 1px rgba(51,84,62,0.10), 0 2px 6px rgba(51,84,62,0.16);
