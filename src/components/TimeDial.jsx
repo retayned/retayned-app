@@ -675,7 +675,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
               {/* Time hero + title + client. Same hierarchy as before but
                   with the bigger 24px hero time from the V2 mock. */}
               <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }} title={hubEvent.title}>{hubEvent.title}</div>
               {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
               {!hubEvent.client_id && !hubEvent.rolodex_id && !hubEvent.client_name && onRequestLink ? (
                 <button
@@ -826,7 +826,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                 Next{countdown ? ` · ${countdown}` : ""}
               </div>
               <div style={{ fontSize: 24, fontWeight: 700, color: C.primaryDeep, lineHeight: 1.05, letterSpacing: "-0.01em" }}>{formatTimeLabel(hubEvent._start)}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3 }}>{hubEvent.title}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginTop: 4, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }} title={hubEvent.title}>{hubEvent.title}</div>
               {hubEvent.client_name && <div style={{ fontSize: 12, color: C.textSec, marginTop: 1 }}>{hubEvent.client_name}</div>}
               {!hubEvent.client_id && !hubEvent.rolodex_id && !hubEvent.client_name && onRequestLink ? (
                 <button
