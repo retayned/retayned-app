@@ -1597,6 +1597,36 @@ export default function App({ user }) {
     };
   }, [user, loadData, userTimezone]);
 
+  // ═══ REALTIME: live observation arrival ═══
+  // The weekly observation is written by the daily sweep (server-side) and
+  // can land while this tab is already open and focused. loadData only
+  // refetches on mount, midnight, and tab-focus — so a new observation that
+  // arrives while the user is sitting on the page would not light the Health
+  // red dot until a manual refresh. Subscribe to inserts/updates on the
+  // observations table for this user and refetch the current observation when
+  // one arrives, so the dot appears live. Requires the `observations` table to
+  // be in the Supabase realtime publication.
+  useEffect(() => {
+    if (!user?.id) return;
+    const refetchObservation = async () => {
+      try {
+        const { data, error } = await observationsDb.getCurrent(user.id);
+        if (!error) setObservation(data ?? null);
+      } catch (err) {
+        console.warn("Realtime observation refetch failed:", err);
+      }
+    };
+    const channel = supabase
+      .channel(`observations-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "observations", filter: `user_id=eq.${user.id}` },
+        () => { refetchObservation(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
   // ═══ SUPABASE-BACKED MUTATIONS ═══
   // When a Rai-added task is deleted, close the learning loop: mark the
   // originating rai_suggestions row dismissed so the next sweep (which
