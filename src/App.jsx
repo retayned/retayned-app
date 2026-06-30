@@ -87,6 +87,11 @@ export default function App({ user }) {
   // Mobile bottom-nav "More" sheet (overflow destinations). Part of the
   // rebuilt fixed nav bar.
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  // Mobile-only: slide-out drawer for past Rai conversations. Desktop has the
+  // sidebar convo list; on mobile the sidebar is hidden, so this drawer is the
+  // only way to reach past chats / start a new one. Reuses raiConvoList,
+  // openRaiChat, startNewRaiChat directly — no desktop impact.
+  const [mobileRaiHistoryOpen, setMobileRaiHistoryOpen] = useState(false);
   // Brain Dump lifted to App level (June 2026) so the capture sheet can
   // open it from ANY page, not just Today. TodayPage's brain button now
   // drives this same state via pageCtx.
@@ -4260,6 +4265,105 @@ export default function App({ user }) {
           fully into view without permanently sitting under the FAB. */}
       {/* Shell overlays: dock + More sheet + quick-log FAB + capture sheet (extracted June 2026) */}
       <ShellOverlays app={{ ...pageCtx, dockShrunk, hasDot, keyboardOpen, mobileMoreOpen, page, quickLogOpen, quickLogText, setMobileMoreOpen }} />
+
+      {/* ═══ MOBILE RAI HISTORY ═══ Mobile-only past-chats drawer. Desktop uses
+          the sidebar convo list; this surfaces the same raiConvoList +
+          handlers on mobile, where the sidebar is hidden. Trigger button sits
+          top-left of the Rai page; drawer slides from the left. */}
+      {isMobile && page === "coach" && (
+        <>
+          {/* Trigger: history button, top-left, above the chat */}
+          <button
+            onClick={() => setMobileRaiHistoryOpen(true)}
+            aria-label="Past conversations"
+            style={{
+              position: "fixed", top: "calc(env(safe-area-inset-top, 0px) + 12px)", left: 14, zIndex: 70,
+              width: 40, height: 40, borderRadius: 12, border: "none",
+              background: "rgba(255,255,255,0.9)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+              boxShadow: "0 1px 3px rgba(20,30,22,0.10), 0 4px 12px rgba(20,30,22,0.06)",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            }}
+          >
+            <Icon name="chat" size={18} color={C.text} />
+          </button>
+
+          {mobileRaiHistoryOpen && (
+            <div style={{ position: "fixed", inset: 0, zIndex: 95 }}>
+              {/* Backdrop */}
+              <div
+                onClick={() => setMobileRaiHistoryOpen(false)}
+                style={{ position: "absolute", inset: 0, background: "rgba(20,30,22,0.38)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)", animation: "rt-fade-in 180ms ease-out" }}
+              />
+              {/* Drawer panel — slides from left */}
+              <div
+                style={{
+                  position: "absolute", top: 0, left: 0, bottom: 0,
+                  width: "84%", maxWidth: 340,
+                  background: C.sidebar,
+                  display: "flex", flexDirection: "column",
+                  paddingTop: "calc(env(safe-area-inset-top, 0px) + 16px)",
+                  boxShadow: "4px 0 24px rgba(20,30,22,0.25)",
+                  animation: "rt-drawer-in 240ms var(--rt-ease-out)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.55)", letterSpacing: "0.16em", textTransform: "uppercase" }}>Chats</span>
+                  <button onClick={() => setMobileRaiHistoryOpen(false)} aria-label="Close" style={{ background: "none", border: "none", padding: 6, cursor: "pointer", display: "flex", color: "rgba(255,255,255,0.7)" }}>
+                    <Icon name="x" size={18} color="currentColor" />
+                  </button>
+                </div>
+                {/* New Chat */}
+                <div style={{ padding: "0 12px 8px", flexShrink: 0 }}>
+                  <button
+                    className="rt-rai-pop-btn"
+                    onClick={() => { startNewRaiChat(); setMobileRaiHistoryOpen(false); }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 500, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 11 }}
+                  >
+                    <Icon name="plus" size={17} color="currentColor" />
+                    <span>New Chat</span>
+                  </button>
+                </div>
+                {/* Convo list */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "4px 8px 16px" }}>
+                  {raiConvoList.length === 0 && (
+                    <div style={{ padding: "24px 14px", fontSize: 13, color: "rgba(255,255,255,0.4)", textAlign: "center" }}>No past chats yet.</div>
+                  )}
+                  {(() => {
+                    const starred = raiConvoList.filter(c => c.is_starred);
+                    const recent = raiConvoList.filter(c => !c.is_starred);
+                    const section = (label, items) => items.length === 0 ? null : (
+                      <>
+                        <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.4)", letterSpacing: "0.18em", textTransform: "uppercase", padding: "14px 10px 6px" }}>{label}</div>
+                        {items.map(c => {
+                          const isActive = c.id === aiConvoId;
+                          const title = c.title || c.client?.name || "Untitled chat";
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => { openRaiChat(c.id); setMobileRaiHistoryOpen(false); }}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 8,
+                                padding: "11px 12px", borderRadius: 10, cursor: "pointer", marginBottom: 2,
+                                background: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+                                color: isActive ? "#fff" : "rgba(255,255,255,0.78)",
+                                fontSize: 14, fontWeight: isActive ? 600 : 400,
+                              }}
+                            >
+                              {c.is_starred && <Icon name="starFill" size={13} color="#E8C977" />}
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{title}</span>
+                            </div>
+                          );
+                        })}
+                      </>
+                    );
+                    return <>{section("Starred", starred)}{section("Recent", recent)}</>;
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
 
       {/* Brain Dump — review-before-commit extraction modal. App-level so
