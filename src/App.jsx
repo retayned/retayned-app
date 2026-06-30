@@ -4312,12 +4312,15 @@ export default function App({ user }) {
                     <Icon name="x" size={18} color="currentColor" />
                   </button>
                 </div>
-                {/* New Chat */}
+                {/* New Chat — matches the desktop .rt-rai-pop-btn treatment
+                    (transparent, subtle white text, soft green hover). The
+                    desktop CSS is scoped to .r-desk, which this mobile drawer
+                    isn't inside, so styles are set inline here to match. */}
                 <div style={{ padding: "0 12px 8px", flexShrink: 0 }}>
                   <button
-                    className="rt-rai-pop-btn"
+                    className="rt-rai-new-mobile"
                     onClick={() => { startNewRaiChat(); setMobileRaiHistoryOpen(false); }}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 500, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 11 }}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, background: "transparent", border: "none", color: "rgba(255,255,255,0.78)", fontSize: 14, fontWeight: 500, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 11 }}
                   >
                     <Icon name="plus" size={17} color="currentColor" />
                     <span>New Chat</span>
