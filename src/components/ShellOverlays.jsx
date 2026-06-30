@@ -5,7 +5,8 @@
 // desktop's ⌘K quick log. Contract scanned with the v3 pipeline
 // (props, over-inclusion, template interpolations).
 import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
-import { mobileNavMore, mobileNavPrimary } from "../nav";
+import { useRef, useEffect, Fragment } from "react";
+import { mobileNavMore, mobileNavPrimary, mobileNavStrip } from "../nav";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { ymdInTz, localYmd, splitLongTask } from "../utils";
 import { C } from "../theme";
@@ -35,175 +36,118 @@ export default function ShellOverlays({ app }) {
     userTimezone,
     workersList,
   } = app;
+
+  // Scrollable dock: ref to the strip so the active destination can be
+  // auto-scrolled into a visible spot whenever the page changes.
+  const dockStripRef = useRef(null);
+  useEffect(() => {
+    const strip = dockStripRef.current;
+    if (!strip) return;
+    const el = strip.querySelector('[data-active="1"]');
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [page]);
   return (<>
       {(() => {
-        const primary = mobileNavPrimary;
-        const moreBase = mobileNavMore;
-        // REBUILT (June 2026): fixed light bar — 2 tabs, deep-green capture
-        // FAB, 1 tab, More. Nothing scrolls, nothing hides under the FAB.
-        // Portaled to <body> so no ancestor transform/stacking context can
-        // make position:fixed wobble with page scroll (the trap that bit
-        // the Brain Dump overlay). The remaining destinations live in the
-        // More bottom sheet. To change which page holds the 4th slot,
-        // reorder mobileNavPrimary in nav.js — slot = primary[2].
-        // SSR/harness guard: portals need a REAL DOM node. The smoke
-        // harness shims `document` without element nodes, so check
-        // nodeType rather than mere existence.
+        // ═══ SCROLLABLE STRIP DOCK (June 2026 redesign) ═══
+        // All destinations live on ONE horizontally-scrollable track. The
+        // capture "+" FAB is pinned dead-center on its own layer; the strip
+        // scrolls BEHIND it. Fade masks (center + both edges) dissolve items
+        // rather than hard-clipping. No More sheet, no three-dot menu. On a
+        // ~390px phone only ~2 items show each side of the centered FAB; the
+        // rest are reached by swiping the track. Active item auto-scrolls into
+        // a visible spot. Portaled to <body> so no ancestor transform breaks
+        // position:fixed (the trap that bit Brain Dump).
         if (typeof document === "undefined" || !document.body || document.body.nodeType !== 1) return null;
-        const left = primary.slice(0, 2);
-        const right = primary.slice(2, 3);
-        const sheetItems = [...primary.slice(3), ...moreBase];
-        const sheetHasDot = sheetItems.some(n => hasDot(n.id));
-        // Floating pill dock (design B): dark sidebar chrome folded into a
-        // thumb-sized object. Only the ACTIVE destination gets a labeled
-        // pill; everything else is a quiet icon. Muted sage for inactive.
-        const MUT = "#7d877f";
-        // Icons only — no labels anywhere (Adam, June 2026). Active =
-        // white icon + small sage dot beneath. 44px hit targets (HIG).
-        const tabBtn = (n) => {
-          const dot = hasDot(n.id);
-          const active = page === n.id;
-          return (
-            <button
-              key={n.id}
-              className={"nav-item-mobile" + (active ? " is-active" : "")}
-              onClick={() => { setMobileMoreOpen(false); goTo(n.id); }}
-              aria-label={n.label}
-              title={n.label}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                minWidth: 44, minHeight: 44,
-                background: "transparent",
-                border: "none", cursor: "pointer", fontFamily: "inherit",
-                borderRadius: 999, padding: 0,
-                position: "relative",
-              }}
-            >
-              <Icon name={n.icon} size={19} color={active ? "#fff" : MUT} accent={active ? C.primaryLight : MUT} />
-              {active && <div style={{ position: "absolute", bottom: 5, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: 999, background: "#9FE1CB" }} />}
-              {dot && <div style={{ position: "absolute", top: 6, right: 8, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px rgba(30,38,31,0.9)" }} />}
-            </button>
-          );
-        };
+
+        const stripRef = dockStripRef;
+        const dotFor = (id) => hasDot(id);
+
         return createPortal(
-          <>
-            {mobileMoreOpen && (
-              <div className="r-mob-bot-dock" style={{ position: "fixed", inset: 0, zIndex: 89 }}>
-                <div onClick={() => setMobileMoreOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(20,30,22,0.38)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }} />
-                {/* Dark frosted sheet — same material as the dock it rises
-                    from. Explicit Manrope (portal — body rule is the net,
-                    this is the belt). */}
-                <div style={{
-                  position: "absolute", left: 0, right: 0, bottom: 0,
-                  background: "rgba(30,38,31,0.92)",
-                  backdropFilter: "blur(16px) saturate(1.15)",
-                  WebkitBackdropFilter: "blur(16px) saturate(1.15)",
-                  borderTop: "1px solid rgba(255,255,255,0.10)",
-                  borderRadius: "18px 18px 0 0",
-                  padding: "12px 16px calc(96px + env(safe-area-inset-bottom, 0px))",
-                  boxShadow: "0 -10px 36px rgba(20,30,22,0.30)",
-                  fontFamily: "'Manrope', system-ui, sans-serif",
-                }}>
-                  <div style={{ width: 32, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.22)", margin: "0 auto 12px" }} />
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1, marginBottom: 9 }}>MORE</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-                    {sheetItems.map(n => {
-                      const dot = hasDot(n.id);
-                      const active = page === n.id;
-                      return (
-                        <button key={n.id} onClick={() => { setMobileMoreOpen(false); goTo(n.id); }} style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          background: active ? "rgba(85,139,104,0.30)" : "rgba(255,255,255,0.06)",
-                          border: "none", borderRadius: 10,
-                          padding: "12px 13px", cursor: "pointer",
-                          fontFamily: "'Manrope', system-ui, sans-serif", textAlign: "left",
-                        }}>
-                          <Icon name={n.icon} size={17} color={active ? "#fff" : "rgba(255,255,255,0.72)"} accent={active ? "#9FE1CB" : "rgba(255,255,255,0.55)"} />
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: active ? "#fff" : "rgba(255,255,255,0.85)" }}>{n.label}</span>
-                          {dot && <span style={{ marginLeft: "auto", width: 7, height: 7, borderRadius: "50%", background: C.danger }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div
-              className="r-mob-bot-dock"
-              style={{
-                position: "fixed",
-                left: 12, right: 12,
-                bottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
-                background: "rgba(30,38,31,0.92)",
-                backdropFilter: "blur(12px) saturate(1.15)",
-                WebkitBackdropFilter: "blur(12px) saturate(1.15)",
-                border: "1px solid rgba(255,255,255,0.09)",
-                borderRadius: 999,
-                boxShadow: "0 12px 32px rgba(20,30,22,0.30)",
-                padding: "5px 10px",
-                zIndex: 90,
-                display: keyboardOpen ? "none" : "flex",
-                alignItems: "center",
-                justifyContent: "space-around",
-                gap: 2,
-                transform: dockShrunk ? "scale(0.86)" : "none",
-                opacity: dockShrunk ? 0.92 : 1,
-                transformOrigin: "center bottom",
-                transition: "transform 240ms var(--rt-ease-out), opacity 240ms var(--rt-ease-out)",
-              }}
-            >
-              {left.map(tabBtn)}
-              {/* The green + is THE action of the bar — same hero status as
-                  the desktop FAB. Slightly raised, glow ring, never muted. */}
-              <button
-                onClick={() => { setMobileMoreOpen(false); setQuickLogOpen(v => !v); }}
-                aria-label="Quick capture"
-                className="rt-mob-fab"
+          <div
+            className="rt-dock-wrap"
+            style={{
+              position: "fixed", left: 0, right: 0,
+              bottom: keyboardOpen ? -120 : "calc(env(safe-area-inset-bottom, 0px) + 10px)",
+              zIndex: 500, display: "flex", justifyContent: "center",
+              padding: "0 12px", pointerEvents: "none",
+              transition: "bottom 240ms var(--rt-ease-out), opacity 200ms ease",
+              opacity: dockShrunk ? 0 : 1,
+            }}
+          >
+            <div style={{ position: "relative", width: "100%", maxWidth: 480, height: 64, pointerEvents: "auto" }}>
+              {/* scrollable strip */}
+              <div
+                ref={stripRef}
+                className="rt-dock-strip"
                 style={{
-                  width: 50, height: 50, borderRadius: "50%", border: "none",
-                  background: C.primaryLight,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", padding: 0, flexShrink: 0,
-                  marginTop: -16,
-                  boxShadow: "0 6px 18px rgba(85,139,104,0.50), 0 0 0 4px rgba(85,139,104,0.16)",
-                  transform: quickLogOpen ? "rotate(45deg)" : "none",
-                  transition: "transform 180ms ease-out",
+                  position: "absolute", inset: 0,
+                  background: "#FFFFFF",
+                  border: "1px solid rgba(20,30,22,0.08)",
+                  borderRadius: 22,
+                  boxShadow: "0 8px 24px rgba(20,30,22,0.10)",
+                  overflowX: "auto", overflowY: "hidden",
+                  display: "flex", alignItems: "center",
+                  WebkitOverflowScrolling: "touch",
+                  scrollbarWidth: "none",
                 }}
               >
-                <svg width="22" height="22" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                  <path d="M9 3.5V14.5M3.5 9H14.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", height: "100%" }}>
+                  {mobileNavStrip.map((item, i) => {
+                    const active = page === item.id;
+                    const half = Math.ceil(mobileNavStrip.length / 2);
+                    return (
+                      <Fragment key={item.id}>
+                        {i === half && <div style={{ width: 64, flexShrink: 0 }} />}
+                        <button
+                          onClick={() => goTo(item.id)}
+                          className="rt-dock-item"
+                          data-active={active ? "1" : undefined}
+                          style={{
+                            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                            gap: 3, minWidth: 56, flexShrink: 0, height: 56,
+                            border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
+                            color: active ? C.primary : "#9AA39B",
+                            position: "relative",
+                          }}
+                        >
+                          <span style={{ position: "relative", display: "flex" }}>
+                            <Icon name={item.icon} size={18} color="currentColor" />
+                            {dotFor(item.id) && (
+                              <span style={{ position: "absolute", top: -2, right: -3, width: 7, height: 7, borderRadius: "50%", background: "#C0654A", border: "1.5px solid #FFFFFF" }} />
+                            )}
+                          </span>
+                          <span style={{ fontSize: 9.5, fontWeight: active ? 600 : 500, letterSpacing: "0.01em" }}>{item.label}</span>
+                        </button>
+                      </Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* edge + center fade masks (non-interactive) */}
+              <div style={{ position: "absolute", top: 1, bottom: 1, left: 1, width: 28, borderRadius: "22px 0 0 22px", background: "linear-gradient(90deg, #FFFFFF 35%, rgba(255,255,255,0))", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", top: 1, bottom: 1, right: 1, width: 28, borderRadius: "0 22px 22px 0", background: "linear-gradient(270deg, #FFFFFF 35%, rgba(255,255,255,0))", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", transform: "translateX(-50%)", width: 84, background: "linear-gradient(90deg, rgba(255,255,255,0), #FFFFFF 32%, #FFFFFF 68%, rgba(255,255,255,0))", pointerEvents: "none" }} />
+
+              {/* pinned capture FAB — dead center, own layer */}
+              <button
+                onClick={() => setQuickLogOpen(true)}
+                aria-label="Quick capture"
+                style={{
+                  position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+                  width: 54, height: 54, borderRadius: 18, border: "none",
+                  background: C.primary, color: "#fff", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 6px 16px rgba(51,84,62,0.35), 0 0 0 5px #FAFAF7",
+                  zIndex: 2,
+                }}
+              >
+                <Icon name="plus" size={24} color="currentColor" />
               </button>
-              {right.map(tabBtn)}
-              {(() => {
-                const moreActive = mobileMoreOpen || sheetItems.some(n => n.id === page);
-                const moreColor = moreActive ? "#fff" : "#7d877f";
-                return (
-                  <button
-                    onClick={() => setMobileMoreOpen(v => !v)}
-                    className={"nav-item-mobile" + (moreActive ? " is-active" : "")}
-                    aria-label="More pages"
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      minWidth: 44, minHeight: 44,
-                      background: "transparent",
-                      border: "none", cursor: "pointer", fontFamily: "inherit",
-                      borderRadius: 999, padding: 0,
-                      position: "relative",
-                    }}
-                  >
-                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <circle cx="5" cy="12" r="1.9" fill={moreColor} />
-                      <circle cx="12" cy="12" r="1.9" fill={moreColor} />
-                      <circle cx="19" cy="12" r="1.9" fill={moreColor} />
-                    </svg>
-                    {moreActive && <div style={{ position: "absolute", bottom: 5, left: "50%", transform: "translateX(-50%)", width: 4, height: 4, borderRadius: 999, background: "#9FE1CB" }} />}
-                    {sheetHasDot && !mobileMoreOpen && <div style={{ position: "absolute", top: 6, right: 8, width: 7, height: 7, borderRadius: "50%", background: C.danger, boxShadow: "0 0 0 2px rgba(30,38,31,0.9)" }} />}
-                  </button>
-                );
-              })()}
             </div>
-          </>,
+          </div>,
           document.body
         );
       })()}
