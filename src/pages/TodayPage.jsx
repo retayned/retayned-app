@@ -2248,7 +2248,7 @@ export default function TodayPage({ app }) {
                           }}>
                             {[
                               { value: "task",       label: "Task",       hint: "Something to do" },
-                              { value: "touchpoint", label: "Touchpoint", hint: "Past contact, log it" },
+                              { value: "touchpoint", label: "Touchpoint", hint: "Any completed action" },
                               { value: "event",      label: "Event",      hint: "Scheduled time" },
                             ].map(opt => {
                               const isActive = composerTypeOverride === opt.value;
