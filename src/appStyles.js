@@ -1431,8 +1431,10 @@ export const APP_CSS = `
            sidebar, so hide the whole dock wrap at >=768px. (It's portaled to
            <body>, so this rule must target the wrap class directly, not an
            ancestor.) */
-        .rt-dock-wrap { display: flex; }
-        @media (min-width: 768px) { .rt-dock-wrap { display: none !important; } }
+        .rt-dock-wrap { display: flex; }        @media (min-width: 768px) { .rt-dock-wrap { display: none !important; } }
+        /* Mobile Rai-history New Chat button — mirrors desktop .rt-rai-pop-btn. */
+        .rt-rai-new-mobile:active { background: rgba(80,130,95,0.26) !important; }
+        @media (hover: hover) { .rt-rai-new-mobile:hover { background: rgba(80,130,95,0.18) !important; } }
         /* Active dock item: subtle press feedback only; color is set inline. */
         .rt-dock-item { transition: opacity 160ms ease, transform 120ms ease; }
         .rt-dock-item:active { transform: scale(0.92); }
