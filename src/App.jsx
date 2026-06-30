@@ -1,11 +1,16 @@
 import TodayPage from "./pages/TodayPage";
-import ClientsPage from "./pages/ClientsPage";
-import HealthPage from "./pages/HealthPage";
-import WorkersPage from "./pages/WorkersPage";
-import ReferralsPage from "./pages/ReferralsPage";
-import RetrosPage from "./pages/RetrosPage";
-import CoachPage from "./pages/CoachPage";
-import SettingsPage from "./pages/SettingsPage";
+// Non-landing pages are lazy-loaded so they (and their heavy deps — notably
+// d3, used only by the referral graph inside ReferralsPage) stay OUT of the
+// initial bundle. Each only downloads when the user first navigates to it.
+// TodayPage stays eager because it's the default landing page.
+import { lazy, Suspense } from "react";
+const ClientsPage = lazy(() => import("./pages/ClientsPage"));
+const HealthPage = lazy(() => import("./pages/HealthPage"));
+const WorkersPage = lazy(() => import("./pages/WorkersPage"));
+const ReferralsPage = lazy(() => import("./pages/ReferralsPage"));
+const RetrosPage = lazy(() => import("./pages/RetrosPage"));
+const CoachPage = lazy(() => import("./pages/CoachPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 import WorkerDashboard from "./WorkerDashboard";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
@@ -3768,15 +3773,15 @@ export default function App({ user }) {
         {/* ═══ SWEEPS (ENTERPRISE) ═══ */}
 
         {/* ═══ CLIENTS v2 — compare-first ═══ */}
-        {dataLoaded && page === "clients" && <ClientsPage app={pageCtx} />}
+        {dataLoaded && page === "clients" && <Suspense fallback={<SkeletonPage />}><ClientsPage app={pageCtx} /></Suspense>}
 
         {/* ═══ HEALTH CHECKS ═══ */}
-        {dataLoaded && page === "health" && <HealthPage app={pageCtx} />}
+        {dataLoaded && page === "health" && <Suspense fallback={<SkeletonPage />}><HealthPage app={pageCtx} /></Suspense>}
 
         {/* ═══ REFERRAL INTELLIGENCE (ENTERPRISE) ═══ */}
 
         {/* ═══ WORKERS — delegate tasks to team / freelancers ═══ */}
-        {dataLoaded && page === "workers" && can("manage_workers", orgRole) && <WorkersPage app={pageCtx} />}
+        {dataLoaded && page === "workers" && can("manage_workers", orgRole) && <Suspense fallback={<SkeletonPage />}><WorkersPage app={pageCtx} /></Suspense>}
 
         {/* Add-worker modal */}
         {addWorkerOpen && (
@@ -3854,15 +3859,15 @@ export default function App({ user }) {
         )}
 
         {/* ═══ REFERRALS v2 — "The Network Map" ═══ */}
-        {dataLoaded && page === "referrals" && can("view_referrals", orgRole) && <ReferralsPage app={pageCtx} />}
+        {dataLoaded && page === "referrals" && can("view_referrals", orgRole) && <Suspense fallback={<SkeletonPage />}><ReferralsPage app={pageCtx} /></Suspense>}
 
         {/* ═══ ROLODEX v2 — "The Deck" ═══ */}
-        {dataLoaded && page === "retros" && can("view_rolodex", orgRole) && <RetrosPage app={pageCtx} />}
+        {dataLoaded && page === "retros" && can("view_rolodex", orgRole) && <Suspense fallback={<SkeletonPage />}><RetrosPage app={pageCtx} /></Suspense>}
         {/* ═══ COACH / TALK TO RAI — Claude-style chat ═══ */}
-        {dataLoaded && page === "coach" && <CoachPage app={pageCtx} />}
+        {dataLoaded && page === "coach" && <Suspense fallback={<SkeletonPage />}><CoachPage app={pageCtx} /></Suspense>}
 
         {/* ═══ SETTINGS ═══ */}
-        {dataLoaded && page === "settings" && <SettingsPage app={pageCtx} />}
+        {dataLoaded && page === "settings" && <Suspense fallback={<SkeletonPage />}><SettingsPage app={pageCtx} /></Suspense>}
       </div>
 
       {/* CLIENT SLIDE-OVER */}
