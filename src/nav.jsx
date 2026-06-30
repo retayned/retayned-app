@@ -32,6 +32,12 @@ const mobileNavMore = [
   { id: "workers", icon: "workers", label: "Workers" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
+// Unified scrollable strip (June 2026 redesign): ALL destinations live on one
+// horizontally-scrollable track. The center "+" FAB is pinned on its own layer
+// and items scroll BEHIND it (fade masks dissolve them at the center and edges
+// rather than hard-clipping). No "More" sheet, no three-dot menu — every page
+// is one swipe away. Order = frequency: the 4 primary first, then the rest.
+const mobileNavStrip = [...mobileNavPrimary, ...mobileNavMore];
 // Legacy "More" item lists — kept (empty-ish) so any straggler reference doesn't
 // crash. The mobile More popup has been removed in favor of the swipeable strip.
 const moreItemsCore = [];
@@ -72,4 +78,4 @@ const moreItemsCore = [];
 // HAVEN'T referred but score high on likely-to-refer dimensions.
 // Rendered as ghost nodes — dashed border, faded fill, "Ask?" CTA.
 
-export { navItemsCore, mobileNavPrimary, mobileNavMore, moreItemsCore };
+export { navItemsCore, mobileNavPrimary, mobileNavMore, mobileNavStrip, moreItemsCore };
