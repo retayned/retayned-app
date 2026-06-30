@@ -3541,7 +3541,7 @@ export default function TodayPage({ app }) {
                                 <Icon name="check" size={16} color={C.primary} />
                               </div>
                               <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 21, color: C.primaryDeep, marginBottom: 8, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0" }}>
-                                The day is signed.
+                                That's a wrap.
                               </div>
                               <div style={{ fontSize: 12.5, color: C.textSec, marginBottom: _tomorrowBucket.length > 0 ? 14 : 0 }}>
                                 {segs.join(" · ")}{topClientLine}
