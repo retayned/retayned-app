@@ -1427,6 +1427,12 @@ export const APP_CSS = `
         .r-mob-nav-strip::-webkit-scrollbar { display: none; }
         .rt-dock-strip::-webkit-scrollbar { display: none; }
         .rt-dock-strip { scrollbar-width: none; -ms-overflow-style: none; }
+        /* The scrollable mobile dock is MOBILE-ONLY. Desktop navigates via the
+           sidebar, so hide the whole dock wrap at >=768px. (It's portaled to
+           <body>, so this rule must target the wrap class directly, not an
+           ancestor.) */
+        .rt-dock-wrap { display: flex; }
+        @media (min-width: 768px) { .rt-dock-wrap { display: none !important; } }
         /* Active dock item: subtle press feedback only; color is set inline. */
         .rt-dock-item { transition: opacity 160ms ease, transform 120ms ease; }
         .rt-dock-item:active { transform: scale(0.92); }
