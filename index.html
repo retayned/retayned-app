@@ -10,7 +10,18 @@
     <script type="module" src="/src/main.jsx"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Boot splash (Jun 2026): #root is empty until the JS bundle loads,
+           parses, and React mounts — on mobile that's several seconds of blank
+           white. This static splash needs no JS: it shows the logo, but only
+           AFTER a 400ms delay (CSS animation-delay), so fast desktop loads
+           where React mounts first never flash it. React replaces all of #root
+           on mount, so it vanishes automatically once the app is ready. -->
+      <div id="boot-splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#FAFAF7;opacity:0;animation:bootfade .3s ease-out .4s forwards;">
+        <img src="/favicon.png" alt="Retayned" width="48" height="48" style="border-radius:12px;" />
+      </div>
+      <style>@keyframes bootfade{to{opacity:1}}</style>
+    </div>
     <script>
       /* White-screen watchdog (Jun 2026). If the main bundle 404s after a
          deploy (restored tab + stale cached HTML), no JS ever runs and
@@ -23,7 +34,11 @@
           var last = Number(sessionStorage.getItem(k) || 0);
           setTimeout(function () {
             var r = document.getElementById("root");
-            if (r && r.childElementCount === 0 && Date.now() - last > 60000) {
+            // App mounted = React replaced #root's contents, so the boot-splash
+            // is gone. If the splash is still present after 6s, the bundle
+            // never ran (e.g. 404'd after a deploy) — force one fresh reload.
+            var stillBooting = r && document.getElementById("boot-splash");
+            if (stillBooting && Date.now() - last > 60000) {
               sessionStorage.setItem(k, String(Date.now()));
               location.reload();
             }
