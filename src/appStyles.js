@@ -1425,6 +1425,11 @@ export const APP_CSS = `
         /* Hide WebKit scrollbars on the horizontal nav strips so the bar
            reads as a clean dock. Firefox uses scrollbarWidth: none inline. */
         .r-mob-nav-strip::-webkit-scrollbar { display: none; }
+        .rt-dock-strip::-webkit-scrollbar { display: none; }
+        .rt-dock-strip { scrollbar-width: none; -ms-overflow-style: none; }
+        /* Active dock item: subtle press feedback only; color is set inline. */
+        .rt-dock-item { transition: opacity 160ms ease, transform 120ms ease; }
+        .rt-dock-item:active { transform: scale(0.92); }
         /* Mobile-only Revenue-from-referrals card. The desktop version
            lives in the .rc-rail sticky column, which is display:none
            below 768px — so on phones the $ widget vanished entirely.
@@ -2177,11 +2182,14 @@ export const APP_CSS = `
           .rt-today-v4 {
             grid-template-areas: "calstrip" "band" "tasks" !important;
           }
-          /* Composer hidden on mobile — the center "+" FAB in the bottom nav
-             covers quick-capture, so the inline composer is redundant and eats
-             vertical space. Hidden only (no deletion); removed from the grid
+          /* Composer hidden on mobile FOR THE TODAY PAGE ONLY — the center "+"
+             FAB in the bottom nav covers quick-capture there, so Today's inline
+             composer is redundant. Scoped to .rt-today-v4 because .rt-composer
+             is ALSO the Rai chat input class; an unscoped hide here removed the
+             only way to type to Rai on mobile (left users stuck with canned
+             starter chips). Hidden only (no deletion); removed from the grid
              template above so its row collapses rather than leaving a gap. */
-          .rt-composer { display: none !important; }
+          .rt-today-v4 > .rt-composer { display: none !important; }
           .rt-composer-hint { display: none !important; }
           /* Composer selected-client chip: avatar only on mobile, name hidden */
           .rt-composer-client-name { display: none !important; }
@@ -2248,6 +2256,14 @@ export const APP_CSS = `
         @keyframes rt-slideover-in {
           from { transform: translateX(40px); opacity: 0.5; }
           to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes rt-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes rt-drawer-in {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
         }
         @keyframes fwLaunch {
           0% { transform: translateY(0); opacity: 1; }
