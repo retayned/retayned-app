@@ -12,7 +12,7 @@ import { ymdInTz, localYmd, splitLongTask } from "../utils";
 import { C } from "../theme";
 import { Icon } from "./Icon";
 import { createPortal } from "react-dom";
-  
+ 
 export default function ShellOverlays({ app }) {
   const {
     clients,
@@ -40,14 +40,21 @@ export default function ShellOverlays({ app }) {
   // Scrollable dock: ref to the strip so the active destination can be
   // auto-scrolled into a visible spot whenever the page changes.
   const dockStripRef = useRef(null);
-  useEffect(() => {
+  const centerDockGap = (behavior = "auto") => {
     const strip = dockStripRef.current;
     if (!strip) return;
-    const el = strip.querySelector('[data-active="1"]');
-    if (el && el.scrollIntoView) {
-      el.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const gap = strip.querySelector('[aria-hidden="true"]');
+    if (gap && gap.offsetParent) {
+      const target = gap.offsetLeft + gap.offsetWidth / 2 - strip.clientWidth / 2;
+      strip.scrollTo({ left: Math.max(0, target), behavior });
     }
-  }, [page]);
+  };
+  // Rest state = the FAB gap centered, so the "+" has equal margins on both
+  // sides (4 destinations visible-ish each side). Re-center on mount and on
+  // page change; the active item is highlighted by color, no need to scroll it
+  // under the FAB. User can still free-scroll to reach any item.
+  useEffect(() => { centerDockGap("auto"); }, []);
+  useEffect(() => { centerDockGap("smooth"); }, [page]);
   return (<>
       {(() => {
         // ═══ SCROLLABLE STRIP DOCK (June 2026 redesign) ═══
@@ -93,13 +100,13 @@ export default function ShellOverlays({ app }) {
                   scrollbarWidth: "none",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", height: "100%" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", height: "100%", margin: "0 auto", minWidth: "min-content" }}>
                   {mobileNavStrip.map((item, i) => {
                     const active = page === item.id;
-                    const half = Math.ceil(mobileNavStrip.length / 2);
+                    const half = mobileNavStrip.length / 2;  // 8 items → gap after index 3 (4 left / 4 right)
                     return (
                       <Fragment key={item.id}>
-                        {i === half && <div style={{ width: 64, flexShrink: 0 }} />}
+                        {i === half && <div style={{ width: 68, flexShrink: 0 }} aria-hidden="true" />}
                         <button
                           onClick={() => goTo(item.id)}
                           className="rt-dock-item"
