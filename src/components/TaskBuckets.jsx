@@ -121,7 +121,7 @@ function QuickLogToast({ toast, onUndo, onCorrect, onDismiss, C }) {
   if (toast.error) {
     return (
       <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: C.danger, color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
-        <span>Couldn't save — try again</span>
+        <span>{toast.message || "Couldn't save — try again"}</span>
       </div>
     );
   }
