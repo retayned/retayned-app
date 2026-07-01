@@ -358,17 +358,19 @@ function ScreenWrap({ children }) {
   );
 }
 
-// Day boundaries anchored to 2am local time.
-// Between midnight and 2am, "today" still refers to yesterday's calendar date —
-// matches the Operator side's day-rollover rule (tasks reset at 2am, not at 12am).
+// Day boundaries anchored to LOCAL MIDNIGHT (Jul 2026 fix).
+// This previously rolled back before 2am "to match the Operator side's
+// day-rollover rule" — but no 2am rule exists on the operator side:
+// useDataLoad's rollover cutoff is midnight in the user's stored
+// timezone, and TodayPage's bucket math is plain midnight. The 2am
+// offset meant a worker between 12–2am saw yesterday's buckets while
+// the owner's app had already rolled — the day-boundary drift bug.
 function todayStr() {
   const n = new Date();
-  if (n.getHours() < 2) n.setDate(n.getDate() - 1);
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 function tomorrowStr() {
   const n = new Date();
-  if (n.getHours() < 2) n.setDate(n.getDate() - 1);
   n.setDate(n.getDate() + 1);
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
