@@ -58,6 +58,8 @@ export default function TodayPage({ app }) {
     googleConnectPromptDismissed,
     googleConnected,
     isMobile,
+    org,
+    orgRole,
     justCompletedIds,
     justPromoted,
     laterCalOpen,
@@ -1331,6 +1333,14 @@ export default function TodayPage({ app }) {
                         position: "relative",
                       }}
                     >
+                      {/* AGENCY: org owners read the book roll-up, not a
+                          single-client note — label it so the shape of the
+                          brief reads as intentional. */}
+                      {org && orgRole === "owner" && (
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3", fontFamily: "'Manrope', system-ui, sans-serif", fontStyle: "normal", marginBottom: 4 }}>
+                          OWNER'S BRIEF
+                        </div>
+                      )}
                       {/* Rai's daily brief — one blurb, her read of the book.
                           Every client name Rai mentions is a purple link
                           that seeds the composer with that client. Same
@@ -3721,9 +3731,13 @@ export default function TodayPage({ app }) {
                   to the right edge, bleeding past r-main's padding. A gentle
                   top fade (page-bg → transparent) dissolves the upper arc so it
                   tucks delicately under the composer + progress banner. Sits
-                  BEHIND the content (z-index 0). Desktop only. (The old
-                  TodayTimeline + Rai brief blocks were fully removed in the
-                  June 2026 refactor — nothing gated remains below.) */}
+                  BEHIND the content (z-index 0). Desktop only — the !isMobile
+                  guard (not just the CSS hide) keeps the lazy chunk from ever
+                  downloading on mobile and stops TimeDial's intervals/listeners
+                  from running invisibly there. (The old TodayTimeline + Rai
+                  brief blocks were fully removed in the June 2026 refactor —
+                  nothing gated remains below.) */}
+              {!isMobile && (
               <div
                 className="rt-dial-layer"
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
@@ -3822,6 +3836,7 @@ export default function TodayPage({ app }) {
                     over the dial's tint that read as a shaded slab. The disc's
                     feathered rim already softens the upper arc.) */}
               </div>
+              )}
 
               {/* (Removed: two dead {false && …} render blocks that previously
                   held a gated TodayTimeline focus-column and a gated
