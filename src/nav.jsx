@@ -10,37 +10,21 @@ const navItemsCore = [
   { id: "workers", icon: "workers", label: "Workers" },
   { id: "coach", icon: "rai", label: "Rai" },
 ];
-// Mobile bottom nav — single horizontally-scrollable strip instead of a "More"
-// popup. All destinations sit inline; user swipes the strip left/right to
-// reveal additional items. The strip auto-scrolls to keep the active item in
-// view when navigation happens. Order matters — primary destinations first
-// (Today, Clients, Rai, Health) so they're visible without scrolling on
-// typical phone widths.
-// Mobile bottom nav — REBUILT as a fixed bar (no horizontal scroll, no JS
-// positioning). 4 primary destinations flank a center capture FAB; everything
-// else lives in the "More" sheet. Best-practice iOS pattern: rock-solid
-// position:fixed bottom:0 + safe-area inset, nothing to lag on scroll.
-const mobileNavPrimary = [
+// Mobile bottom nav (June 2026 redesign): ALL destinations live on one
+// horizontally-scrollable track. The center "+" FAB is pinned on its own layer
+// and items scroll BEHIND it (fade masks dissolve them at the center and edges
+// rather than hard-clipping). No "More" sheet, no three-dot menu — every page
+// is one swipe away. Order = frequency: the 4 most-used first, then the rest.
+const mobileNavStrip = [
   { id: "today", icon: "today", label: "Today" },
   { id: "clients", icon: "clients", label: "Clients" },
   { id: "health", icon: "health", label: "Health" },
   { id: "coach", icon: "rai", label: "Rai" },
-];
-const mobileNavMore = [
   { id: "retros", icon: "rolodex", label: "Rolodex" },
   { id: "referrals", icon: "referrals", label: "Referrals" },
   { id: "workers", icon: "workers", label: "Workers" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
-// Unified scrollable strip (June 2026 redesign): ALL destinations live on one
-// horizontally-scrollable track. The center "+" FAB is pinned on its own layer
-// and items scroll BEHIND it (fade masks dissolve them at the center and edges
-// rather than hard-clipping). No "More" sheet, no three-dot menu — every page
-// is one swipe away. Order = frequency: the 4 primary first, then the rest.
-const mobileNavStrip = [...mobileNavPrimary, ...mobileNavMore];
-// Legacy "More" item lists — kept (empty-ish) so any straggler reference doesn't
-// crash. The mobile More popup has been removed in favor of the swipeable strip.
-const moreItemsCore = [];
 
 
 
@@ -78,4 +62,4 @@ const moreItemsCore = [];
 // HAVEN'T referred but score high on likely-to-refer dimensions.
 // Rendered as ghost nodes — dashed border, faded fill, "Ask?" CTA.
 
-export { navItemsCore, mobileNavPrimary, mobileNavMore, mobileNavStrip, moreItemsCore };
+export { navItemsCore, mobileNavStrip };
