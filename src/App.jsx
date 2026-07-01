@@ -35,7 +35,6 @@ import { useGoogleCalendar } from "./hooks/useGoogleCalendar";
 import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
 import { SkeletonPage } from "./components/Skeletons";
 import { QuickLogToast } from "./components/TaskBuckets";
-import { TimeDial } from "./components/TimeDial";
 import { moreItemsCore, navItemsCore } from "./nav";
 import { parseComposer } from "./parser";
 import { nextOccurrenceDate } from "./recurrence";
