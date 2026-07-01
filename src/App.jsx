@@ -1370,7 +1370,7 @@ export default function App({ user }) {
           .select("user_id, invited_email, role, status")
           .eq("org_id", org.id).eq("status", "active"),
         supabase.from("client_assignments")
-          .select("id, client_id, member_user_id, created_at")
+          .select("client_id, member_user_id, assigned_at")
           .eq("org_id", org.id),
         supabase.from("client_handoff_briefs")
           .select("id, client_id, to_member_user_id, from_member_user_id, brief_text, created_at")
