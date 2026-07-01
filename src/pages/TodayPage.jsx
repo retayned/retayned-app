@@ -727,7 +727,18 @@ export default function TodayPage({ app }) {
                     Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                   },
                   body: JSON.stringify({ task_id: taskId, kind: "date_change" }),
-                }).catch(e => console.warn("Worker date-change notify failed:", e));
+                }).then(resp => {
+                  // Surface send failures (Jul 2026): a Resend 500 used to
+                  // die in the console — the owner believed the worker was
+                  // emailed. The task change itself already saved.
+                  if (!resp.ok) {
+                    console.warn("Worker date-change notify failed:", resp.status);
+                    setQuickLogToast({ id: Date.now(), error: true, message: "Date saved — worker email didn't send" });
+                  }
+                }).catch(e => {
+                  console.warn("Worker date-change notify failed:", e);
+                  setQuickLogToast({ id: Date.now(), error: true, message: "Date saved — worker email didn't send" });
+                });
               } catch (e) { console.warn("Worker date-change notify error:", e); }
             }
           };
@@ -1050,7 +1061,15 @@ export default function TodayPage({ app }) {
                     Authorization: `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
                   },
                   body: JSON.stringify({ task_id: created.id }),
-                }).catch(e => console.warn("Worker notify failed:", e));
+                }).then(resp => {
+                  if (!resp.ok) {
+                    console.warn("Worker notify failed:", resp.status);
+                    setQuickLogToast({ id: Date.now(), error: true, message: "Task saved — worker email didn't send" });
+                  }
+                }).catch(e => {
+                  console.warn("Worker notify failed:", e);
+                  setQuickLogToast({ id: Date.now(), error: true, message: "Task saved — worker email didn't send" });
+                });
               } catch (e) { console.warn("Worker notify error:", e); }
             }
 
