@@ -1,11 +1,15 @@
 // AUTO-EXTRACTED from App.jsx (page === "retros" block) — body is
 // verbatim; only the surrounding component shell + imports are generated.
-import { rolodex as rolodexDb } from "../lib/db";
+import { referrals as referralsDb, rolodex as rolodexDb } from "../lib/db";
+import { supabase } from "../lib/supabase";
 import { EmptyState } from "../components/Skeletons";
 import { createPortal } from "react-dom";
 import { C } from "../theme";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { retGradient } from "../utils";
+
+// Fraunces observer idiom — same voice surface Rai uses elsewhere.
+const FR = { fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0" };
 
 export default function RetrosPage({ app }) {
   // Check-in banner dismissal — per LOCAL DAY, persisted, so "Dismiss"
@@ -21,6 +25,43 @@ export default function RetrosPage({ app }) {
   // Retro flow is collapsed into a compact prompt by default; the full
   // five-step card only takes over the page when the user opts in.
   const [retroOpen, setRetroOpen] = useState(false);
+  // ─── Reach-back engine state (Jul 2026) ──────────────────────────
+  // The Workbench: Rai-prepared outreach (comebacks + lead touches),
+  // loaded straight from rolodex_reachbacks. Deck review = quarterly
+  // State of the Deck. Dossier = on-demand pre-call brief.
+  const [reachbacks, setReachbacks] = useState([]);
+  const [deckReview, setDeckReview] = useState(null);
+  const [dossier, setDossier] = useState(null); // { name, loading, text }
+  const [rbEditing, setRbEditing] = useState(null); // { id, text }
+  const [leadIntake, setLeadIntake] = useState({ source: "inbound", refFrom: "", need: "", urgency: "quarter", value: "" });
+  const _userId = app.user?.id;
+  useEffect(() => {
+    let cancelled = false;
+    if (!_userId) return;
+    (async () => {
+      try {
+        const [{ data: rbs }, { data: rev }] = await Promise.all([
+          supabase.from("rolodex_reachbacks").select("*")
+            .eq("user_id", _userId).order("prepared_at", { ascending: false }).limit(200),
+          supabase.from("rolodex_deck_reviews").select("*")
+            .eq("user_id", _userId).order("created_at", { ascending: false }).limit(1),
+        ]);
+        if (cancelled) return;
+        setReachbacks(rbs || []);
+        setDeckReview((rev && rev[0]) || null);
+      } catch (e) { console.warn("Reach-back load failed:", e); }
+    })();
+    return () => { cancelled = true; };
+  }, [_userId]);
+  // Event path (B1): the moment a lead is filed, its first touch gets
+  // prepared — supabase.functions.invoke carries the user's JWT.
+  const prepReachback = async (rolodexId) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("rolodex-sweep", { body: { rolodex_id: rolodexId, mode: "contact" } });
+      if (error) console.warn("Reach-back prep returned error:", error);
+      if (data?.reachback) setReachbacks(prev => [data.reachback, ...prev]);
+    } catch (e) { console.warn("Reach-back prep failed:", e); }
+  };
   const {
     clients,
     dataLoaded,
@@ -48,6 +89,7 @@ export default function RetrosPage({ app }) {
     user,
     rolodexCheckinDismissed,
     dismissRolodexCheckin,
+    quickCreateClient,
   } = app;
 
           try {
@@ -144,6 +186,113 @@ export default function RetrosPage({ app }) {
             if (days < 365) return `${Math.floor(days / 30)}mo ago`;
             return `${Math.floor(days / 365)}y ago`;
           };
+
+          // ─── Reach-back actions (Jul 2026) ─────────────────────────
+          const entryById = (id) => rolodex.find(r => r.id === id) || null;
+          const entryName = (e) => e ? (e.contact_name || e.contact || e.client_name || e.client || "Contact") : "Contact";
+          // Lead cadence mirror of the edge function: gap AFTER a step.
+          const stepGapDays = (step, urgency) => {
+            const base = step <= 1 ? 4 : step === 2 ? 7 : 14;
+            if (urgency === "now") return Math.max(2, Math.ceil(base * 0.75));
+            if (urgency === "someday") return base * 2;
+            return base;
+          };
+          const rbUpdate = async (id, patch) => {
+            setReachbacks(prev => prev.map(b => b.id === id ? { ...b, ...patch } : b));
+            try { await supabase.from("rolodex_reachbacks").update(patch).eq("id", id); }
+            catch (e) { console.warn("Reach-back update failed:", e); }
+          };
+          const rolodexPatch = async (id, patch) => {
+            setRolodex(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+            try { await rolodexDb.update(id, patch); } catch (e) { console.warn("Rolodex update failed:", e); }
+          };
+          // Send: opens mail prefilled, stamps the touch, arms the next
+          // sequence step's clock for leads.
+          const sendReachback = (rb) => {
+            const e = entryById(rb.rolodex_id);
+            const now = new Date().toISOString();
+            rbUpdate(rb.id, { status: "sent", acted_at: now });
+            const patch = { last_touch: now };
+            if (rb.lane === "lead" && e) {
+              const gap = stepGapDays(rb.sequence_step || 1, e.lead_urgency);
+              patch.next_touch_at = new Date(Date.now() + gap * 86400000).toISOString();
+            }
+            if (e) rolodexPatch(e.id, patch);
+          };
+          const notNowReachback = (rb) => {
+            rbUpdate(rb.id, { status: "dismissed", acted_at: new Date().toISOString() });
+            // Leads: "not now" means later, not never — arm the clock so
+            // the engine re-prepares this touch in two weeks. Without this
+            // a dismissed first touch stalls the sequence permanently
+            // (the due-check reads next_touch_at once history exists).
+            const e = entryById(rb.rolodex_id);
+            if (e && rb.lane === "lead" && e.lead_status === "active") {
+              rolodexPatch(e.id, { next_touch_at: new Date(Date.now() + 14 * 86400000).toISOString() });
+            }
+          };
+          const repliedReachback = (rb) => {
+            rbUpdate(rb.id, { status: "replied", acted_at: new Date().toISOString() });
+            const e = entryById(rb.rolodex_id);
+            if (e && rb.lane === "lead") rolodexPatch(e.id, { next_touch_at: null }); // sequence pauses on reply
+          };
+          const deadReachback = (rb) => {
+            rbUpdate(rb.id, { status: "dismissed", acted_at: new Date().toISOString() });
+            const e = entryById(rb.rolodex_id);
+            if (e && rb.lane === "lead") {
+              // Parked ≠ dead — the Lead Radar resurfaces it later.
+              rolodexPatch(e.id, { lead_status: "parked", next_touch_at: new Date(Date.now() + 75 * 86400000).toISOString() });
+            }
+          };
+          // Rebooked (former) / Signed (lead): one tap → a client exists.
+          const winReachback = async (rb) => {
+            const e = entryById(rb.rolodex_id);
+            if (!e) return;
+            const name = e.client_name || e.client || entryName(e);
+            const value = rb.lane === "lead" ? (e.lead_value || 0) : 0;
+            rbUpdate(rb.id, { status: "won", acted_at: new Date().toISOString() });
+            const created = quickCreateClient ? await quickCreateClient(name, e.contact_name || e.contact || "", value) : null;
+            const patch = { last_touch: new Date().toISOString() };
+            if (rb.lane === "lead") { patch.lead_status = "won"; patch.next_touch_at = null; }
+            rolodexPatch(e.id, patch);
+            // Referral lineage + thank loop: a referred lead that signs
+            // writes the referrals row, which lights the thank button on
+            // the Referrals page.
+            if (rb.lane === "lead" && (e.lead_source || "").startsWith("referral:") && created) {
+              const referrer = e.lead_source.slice("referral:".length).trim();
+              if (referrer) {
+                try {
+                  await referralsDb.create(user.id, {
+                    referred_to: name, referred_by: referrer, status: "converted",
+                    status_changed_at: new Date().toISOString(),
+                    revenue: value, date_added: new Date().toISOString().slice(0, 10),
+                  });
+                } catch (err) { console.warn("Referral lineage write failed:", err); }
+              }
+            }
+          };
+          const openDossier = async (rolodexId) => {
+            const e = entryById(rolodexId);
+            setDossier({ name: entryName(e), loading: true, text: "" });
+            try {
+              const { data, error } = await supabase.functions.invoke("rolodex-sweep", { body: { rolodex_id: rolodexId, mode: "dossier" } });
+              if (error) console.warn("Dossier returned error:", error);
+              setDossier({ name: entryName(e), loading: false, text: data?.dossier || "Couldn't build the dossier right now." });
+            } catch (err) {
+              console.warn("Dossier failed:", err);
+              setDossier({ name: entryName(e), loading: false, text: "Couldn't build the dossier right now." });
+            }
+          };
+          const logTouch = (e) => rolodexPatch(e.id, { last_touch: new Date().toISOString() });
+          // Workbench slices
+          const preparedRbs = reachbacks.filter(b => b.status === "prepared").slice(0, 5);
+          const sentRbs = reachbacks.filter(b => b.status === "sent" || b.status === "bumped" || b.status === "replied").slice(0, 4);
+          // Sequence position per contact (max step across lead reachbacks)
+          const seqStepFor = (rolodexId) => reachbacks.reduce((m, b) =>
+            b.rolodex_id === rolodexId && b.lane === "lead" ? Math.max(m, b.sequence_step || 0) : m, 0);
+          // Header metrics
+          const wonRbs = reachbacks.filter(b => b.status === "won");
+          const wonValue = rolodex.filter(r => r.lead_status === "won").reduce((a, r) => a + (r.lead_value || 0), 0);
+          const parkedValue = rolodex.filter(r => r.lead_status === "parked").reduce((a, r) => a + (r.lead_value || 0), 0);
 
           // Retro step definitions
           const RETRO_STEPS_FORMER = [
@@ -291,6 +440,8 @@ export default function RetrosPage({ app }) {
             if (filedFilter === "former") return r.type === "former";
             if (filedFilter === "oneoff") return r.type !== "former";
             if (filedFilter === "refer") return deriveTags(r).includes("Would refer");
+            if (filedFilter === "comeback") return deriveTags(r).includes("Would come back");
+            if (filedFilter === "parked") return r.lead_status === "parked";
             if (byPrio[filedFilter]) return r.priority === filedFilter;
             return true;
           });
@@ -325,6 +476,8 @@ export default function RetrosPage({ app }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Rolodex</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{saved.length}</b> filed</span>
+                    {(wonRbs.length > 0 || wonValue > 0) && <><span className="rt-sep" /><span><b style={{ color: C.retGood, fontWeight: 700 }}>{wonValue > 0 ? `$${wonValue.toLocaleString()}/mo` : wonRbs.length}</b> won off the deck</span></>}
+                    {parkedValue > 0 && <><span className="rt-sep" /><span><b style={{ color: C.text, fontWeight: 700 }}>${parkedValue.toLocaleString()}/mo</b> parked</span></>}
                     {queued.length > 0 && <><span className="rt-sep" /><span><b style={{ color: C.retGood, fontWeight: 700 }}>{queued.length}</b> awaiting retro</span></>}
                     {referReady > 0 && <><span className="rt-sep" /><span><b style={{ color: C.retGood, fontWeight: 700 }}>{referReady}</b> would refer</span></>}
                   </div>
@@ -402,10 +555,116 @@ export default function RetrosPage({ app }) {
                       });
                     })()}
                   </div>
+
+                  {/* STATE OF THE DECK — Rai's quarterly read. Generated by
+                      the weekly sweep once per quarter; rendered in the
+                      observer idiom. */}
+                  {deckReview && (
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "13px 14px" }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 7 }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3" }}>✦ RAI</span>
+                        <span style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>State of the deck · {deckReview.quarter}</span>
+                      </div>
+                      <div style={{ ...FR, fontSize: 13, color: C.text, lineHeight: 1.55 }}>{deckReview.review_text}</div>
+                    </div>
+                  )}
                 </div>
 
                 {/* MAIN COLUMN */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+
+                  {/* ─── WORKBENCH (Jul 2026) — the page's opening beat.
+                      Rai-prepared reach-backs: who, why now, the written
+                      message, one tap to send. Comebacks come from the
+                      weekly sweep; lead touches are event-driven. Never
+                      more than 5; never auto-sends. ─── */}
+                  {preparedRbs.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "0 4px" }}>
+                        <span style={{ ...FR, fontSize: 15, color: C.text }}>workbench</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999 }}>{preparedRbs.length}</span>
+                        <span style={{ fontSize: 10.5, color: C.textMuted }}>written and waiting — nothing sends without you</span>
+                      </div>
+                      {preparedRbs.map(rb => {
+                        const e = entryById(rb.rolodex_id);
+                        const name = entryName(e);
+                        const company = e && (e.client_name || e.client) !== name ? (e.client_name || e.client) : null;
+                        const worth = rb.lane === "lead" ? (e?.lead_value || 0) : 0;
+                        const isEditing = rbEditing?.id === rb.id;
+                        const mailBody = encodeURIComponent(isEditing ? rbEditing.text : rb.draft_text);
+                        return (
+                          <div key={rb.id} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "13px 15px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.4, color: rb.lane === "lead" ? "#3E2F72" : C.primaryDeep, background: rb.lane === "lead" ? "#EFE9FB" : C.primarySoft }}>
+                                {rb.lane === "lead" ? (rb.sequence_step ? `LEAD · TOUCH ${rb.sequence_step}/4` : "LEAD") : "FORMER"}
+                              </span>
+                              <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{name}</span>
+                              {company && <span style={{ fontSize: 11.5, color: C.textMuted }}>{company}</span>}
+                              {worth > 0 && <span style={{ fontSize: 11.5, fontWeight: 700, color: C.primary, fontVariantNumeric: "tabular-nums" }}>~${worth.toLocaleString()}/mo</span>}
+                              <span style={{ flex: 1 }} />
+                              <button onClick={() => openDossier(rb.rolodex_id)} style={{ background: "transparent", border: "none", fontSize: 10.5, color: C.textMuted, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Dossier</button>
+                            </div>
+                            {rb.trigger_reason && (
+                              <div style={{ ...FR, fontSize: 12.5, color: C.textSec, lineHeight: 1.5, margin: "7px 0 8px" }}>{rb.trigger_reason}</div>
+                            )}
+                            {isEditing ? (
+                              <textarea
+                                value={rbEditing.text}
+                                onChange={ev => setRbEditing({ id: rb.id, text: ev.target.value })}
+                                rows={5}
+                                style={{ width: "100%", boxSizing: "border-box", border: "none", boxShadow: "inset 0 0 0 1px " + C.primary, borderRadius: 9, padding: "9px 11px", background: C.bg, fontFamily: "inherit", fontSize: 12.5, color: C.text, outline: "none", resize: "vertical", lineHeight: 1.5 }}
+                              />
+                            ) : (
+                              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, whiteSpace: "pre-wrap", background: C.bg, borderRadius: 9, padding: "9px 11px" }}>{rb.draft_text}</div>
+                            )}
+                            <div style={{ display: "flex", gap: 6, marginTop: 9, flexWrap: "wrap" }}>
+                              {isEditing ? (
+                                <>
+                                  <button onClick={() => { rbUpdate(rb.id, { draft_text: rbEditing.text }); setRbEditing(null); }} style={{ padding: "7px 13px", background: C.btn, color: "#fff", border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Save draft</button>
+                                  <button onClick={() => setRbEditing(null)} style={{ padding: "7px 12px", background: "transparent", color: C.textMuted, border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <a href={"mailto:?subject=" + encodeURIComponent(rb.lane === "lead" ? "Following our conversation" : "Catching up") + "&body=" + mailBody}
+                                    onClick={() => sendReachback(rb)}
+                                    style={{ display: "inline-flex", alignItems: "center", padding: "7px 14px", background: C.btn, color: "#fff", border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}>Send</a>
+                                  <button onClick={() => setRbEditing({ id: rb.id, text: rb.draft_text })} style={{ padding: "7px 12px", background: C.card, color: C.textSec, border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-xs)" }}>Edit</button>
+                                  <button onClick={() => notNowReachback(rb)} style={{ padding: "7px 12px", background: "transparent", color: C.textMuted, border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Not now</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Follow-through — sent reach-backs awaiting an outcome.
+                      Compact rows: the engine bumps quiet ones on its own
+                      clock; these buttons record what actually happened. */}
+                  {sentRbs.length > 0 && (
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
+                      <div className="rt-divider-inset" style={{ padding: "11px 14px 9px" }}>
+                        <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>Out the door</div>
+                      </div>
+                      {sentRbs.map((rb, i) => {
+                        const e = entryById(rb.rolodex_id);
+                        const days = rb.acted_at ? Math.max(0, Math.floor((Date.now() - new Date(rb.acted_at).getTime()) / 86400000)) : 0;
+                        return (
+                          <div key={rb.id} className={i === sentRbs.length - 1 ? undefined : "rt-divider-inset"} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{entryName(e)}</span>
+                            <span style={{ fontSize: 10.5, color: C.textMuted }}>{rb.status === "replied" ? "replied" : "sent"} {days === 0 ? "today" : `${days}d ago`}{rb.lane === "lead" && rb.sequence_step ? ` · touch ${rb.sequence_step}/4` : ""}</span>
+                            <span style={{ flex: 1 }} />
+                            {rb.status !== "replied" && (
+                              <button onClick={() => repliedReachback(rb)} style={{ padding: "5px 10px", background: C.primarySoft, color: C.primaryDeep, border: "none", borderRadius: 999, fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>They replied</button>
+                            )}
+                            <button onClick={() => winReachback(rb)} style={{ padding: "5px 10px", background: "#E8F3EC", color: C.retGood, border: "none", borderRadius: 999, fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>{rb.lane === "lead" ? "Signed" : "Rebooked"}</button>
+                            <button onClick={() => deadReachback(rb)} style={{ padding: "5px 10px", background: "transparent", color: C.textMuted, border: "none", borderRadius: 999, fontSize: 10.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{rb.lane === "lead" ? "Park it" : "No response"}</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* CHECK-IN REMINDER BANNER — lives in the main column so
                       it shares the content margin and never overlaps the
@@ -573,10 +832,12 @@ export default function RetrosPage({ app }) {
                       <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, padding: "1px 8px", background: C.borderLight, borderRadius: 999 }}>{filteredFiled.length}</span>
                       <span style={{ flex: 1 }} />
                       {[
-                        { v: "all",    label: "All" },
-                        { v: "former", label: "Former" },
-                        { v: "oneoff", label: "Leads" },
-                        { v: "refer",  label: "Would refer" },
+                        { v: "all",      label: "All" },
+                        { v: "former",   label: "Former" },
+                        { v: "oneoff",   label: "Leads" },
+                        { v: "refer",    label: "Would refer" },
+                        { v: "comeback", label: "Would come back" },
+                        { v: "parked",   label: "Parked" },
                       ].map(f => {
                         const isSel = filedFilter === f.v || (f.v === "all" && (!filedFilter || filedFilter === "all"));
                         return (
@@ -635,10 +896,25 @@ export default function RetrosPage({ app }) {
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                                 <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: wm.tone, background: wm.bg }}>{wm.label.toLowerCase()} · {agoLabel(e)}</span>
                                 {reminderChip && <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: reminderChip.color, background: reminderChip.bg }}>{reminderChip.label}</span>}
                                 {e.priority === "high" && <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: "linear-gradient(90deg, #D17A1B, #C04323)" }}>Heat {heat}</span>}
+                                {e.lead_status === "active" && seqStepFor(e.id) > 0 && (
+                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#3E2F72", background: "#EFE9FB" }}>touch {seqStepFor(e.id)}/4</span>
+                                )}
+                                {e.lead_status === "parked" && (
+                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: C.textMuted, background: C.borderLight }}>parked</span>
+                                )}
+                                {e.lead_value > 0 && (
+                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: C.primary, background: C.primarySoft, fontVariantNumeric: "tabular-nums" }}>~${Number(e.lead_value).toLocaleString()}/mo</span>
+                                )}
+                                <span style={{ flex: 1 }} />
+                                <button
+                                  onClick={ev => { ev.stopPropagation(); logTouch(e); }}
+                                  title="Stamp today as the last touch"
+                                  style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: C.textSec, background: "transparent", border: "1px solid " + C.borderLight, cursor: "pointer", fontFamily: "inherit" }}
+                                >Log touch</button>
                               </div>
                             </div>
                           );
@@ -649,6 +925,27 @@ export default function RetrosPage({ app }) {
                 </div>
 
               </div>
+
+              {/* Dossier modal — Rai's pre-call brief, on demand */}
+              {dossier && createPortal(
+                <div onClick={() => setDossier(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope', system-ui, sans-serif", padding: 16 }}>
+                  <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 460, boxShadow: "0 1px 3px rgba(20,30,22,0.08), 0 20px 60px rgba(20,30,22,0.18)" }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3" }}>✦ RAI · DOSSIER</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{dossier.name}</span>
+                    </div>
+                    {dossier.loading ? (
+                      <div style={{ ...FR, fontSize: 13, color: C.textMuted, padding: "16px 0" }}>Reading the file…</div>
+                    ) : (
+                      <div style={{ ...FR, fontSize: 13.5, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{dossier.text}</div>
+                    )}
+                    <div style={{ textAlign: "right", marginTop: 14 }}>
+                      <button onClick={() => setDossier(null)} style={{ padding: "9px 16px", background: C.surface, color: C.text, border: "none", borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Close</button>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
 
               {/* Add contact modal */}
               {showAddRolodex && createPortal(
@@ -673,6 +970,42 @@ export default function RetrosPage({ app }) {
                           ))}
                         </div>
                       </div>
+                      {/* ─── Lead intake (Jul 2026): 30 seconds that ground
+                          every draft Rai writes for this lead. Optional
+                          except source. ─── */}
+                      {newRolodexEntry.type === "oneoff" && (
+                        <>
+                          <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Where did they come from?</label>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {[{ v: "referral", label: "Referral" }, { v: "inbound", label: "Inbound" }, { v: "met", label: "Met them" }, { v: "cold", label: "Cold" }].map(s => (
+                                <button key={s.v} onClick={() => setLeadIntake({ ...leadIntake, source: s.v })} style={{ flex: "1 1 auto", padding: "8px 10px", background: leadIntake.source === s.v ? C.primarySoft : C.card, border: "none", boxShadow: "inset 0 0 0 1px " + (leadIntake.source === s.v ? C.primary : C.borderLight), borderRadius: 9, fontSize: 12, fontWeight: 600, color: leadIntake.source === s.v ? C.primary : C.textSec, cursor: "pointer", fontFamily: "inherit" }}>{s.label}</button>
+                              ))}
+                            </div>
+                            {leadIntake.source === "referral" && (
+                              <input value={leadIntake.refFrom} onChange={e => setLeadIntake({ ...leadIntake, refFrom: e.target.value })} placeholder="Referred by whom?" style={{ width: "100%", marginTop: 6, padding: "10px 13px", borderRadius: 9, fontSize: 13, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box" }} />
+                            )}
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>What do they need? <span style={{ fontWeight: 400 }}>(one line)</span></label>
+                            <input value={leadIntake.need} onChange={e => setLeadIntake({ ...leadIntake, need: e.target.value })} placeholder="Paid social for their Q4 launch" style={{ width: "100%", padding: "10px 13px", borderRadius: 9, fontSize: 13, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box" }} />
+                          </div>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Urgency</label>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                {[{ v: "now", label: "Now" }, { v: "quarter", label: "This quarter" }, { v: "someday", label: "Someday" }].map(u => (
+                                  <button key={u.v} onClick={() => setLeadIntake({ ...leadIntake, urgency: u.v })} style={{ flex: 1, padding: "8px 6px", background: leadIntake.urgency === u.v ? C.primarySoft : C.card, border: "none", boxShadow: "inset 0 0 0 1px " + (leadIntake.urgency === u.v ? C.primary : C.borderLight), borderRadius: 9, fontSize: 11.5, fontWeight: 600, color: leadIntake.urgency === u.v ? C.primary : C.textSec, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{u.label}</button>
+                                ))}
+                              </div>
+                            </div>
+                            <div style={{ width: 120 }}>
+                              <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>$/mo if known</label>
+                              <input type="number" min="0" value={leadIntake.value} onChange={e => setLeadIntake({ ...leadIntake, value: e.target.value })} placeholder="2500" style={{ width: "100%", padding: "10px 13px", borderRadius: 9, fontSize: 13, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box" }} />
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       {(() => {
@@ -680,27 +1013,50 @@ export default function RetrosPage({ app }) {
                         return (
                           <button disabled={!ready} onClick={async () => {
                             const entryType = newRolodexEntry.type || "former";
-                            const { data: created } = await rolodexDb.create(user.id, {
+                            const isLead = entryType === "oneoff";
+                            // Leads skip the retro (nothing to retro yet):
+                            // the intake IS their filing. They land filed at
+                            // high priority (they're active pipeline), and
+                            // the first touch is prepared before this modal
+                            // closes (speed-to-lead, B1).
+                            const payload = {
                               client_name: newRolodexEntry.client.trim(),
                               contact_name: newRolodexEntry.contact.trim(),
                               type: entryType,
                               retro_answers: {},
-                            });
+                            };
+                            if (isLead) {
+                              payload.lead_status = "active";
+                              payload.lead_source = leadIntake.source === "referral" && leadIntake.refFrom.trim()
+                                ? `referral:${leadIntake.refFrom.trim()}` : leadIntake.source;
+                              payload.lead_need = leadIntake.need.trim() || null;
+                              payload.lead_urgency = leadIntake.urgency;
+                              payload.lead_value = parseInt(leadIntake.value) || 0;
+                              payload.priority = "high";
+                              payload.priority_set_at = new Date().toISOString();
+                            }
+                            const { data: created, error: createErr } = await rolodexDb.create(user.id, payload);
+                            if (createErr) console.warn("Rolodex create failed:", createErr);
                             if (created) {
                               const newEntry = { ...created, client: created.client_name, contact: created.contact_name, type: entryType, retro_answers: {}, tags: [] };
                               setRolodex(prev => [newEntry, ...prev]);
-                              setRolodexFlowOpen(created.id);
-                              setRetroOpen(true);
-                              setRolodexStep(0);
-                              setRolodexStepOwner(created.id);
-                              setRolodexStepText(null);
+                              if (isLead) {
+                                prepReachback(created.id); // fire-and-forget; card appears when ready
+                              } else {
+                                setRolodexFlowOpen(created.id);
+                                setRetroOpen(true);
+                                setRolodexStep(0);
+                                setRolodexStepOwner(created.id);
+                                setRolodexStepText(null);
+                              }
                             }
                             setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" });
+                            setLeadIntake({ source: "inbound", refFrom: "", need: "", urgency: "quarter", value: "" });
                             setShowAddRolodex(false);
                           }} onMouseEnter={e => { if (ready) e.currentTarget.style.background = C.primary; }} onMouseLeave={e => { if (ready) e.currentTarget.style.background = C.primaryDeep; }} style={{ flex: 1, padding: "12px", background: ready ? C.primaryDeep : C.surfaceWarm, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit", transition: "background 120ms ease" }}>{newRolodexEntry.type === "oneoff" ? "Add lead" : "Add & start retro"}</button>
                         );
                       })()}
-                      <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); }} style={{ padding: "12px 18px", background: C.surface, color: C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      <button onClick={() => { setShowAddRolodex(false); setNewRolodexEntry({ client: "", contact: "", work: "", type: "former" }); setLeadIntake({ source: "inbound", refFrom: "", need: "", urgency: "quarter", value: "" }); }} style={{ padding: "12px 18px", background: C.surface, color: C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                     </div>
                   </div>
                 </div>,
