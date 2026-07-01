@@ -5,10 +5,10 @@
 // desktop's ⌘K quick log. Contract scanned with the v3 pipeline
 // (props, over-inclusion, template interpolations).
 import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, Fragment } from "react";
 import { mobileNavMore, mobileNavPrimary, mobileNavStrip } from "../nav";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
-import { ymdInTz, localYmd, splitLongTask, getUserInitial } from "../utils";
+import { ymdInTz, localYmd, splitLongTask } from "../utils";
 import { C } from "../theme";
 import { Icon } from "./Icon";
 import { createPortal } from "react-dom";
@@ -40,20 +40,12 @@ export default function ShellOverlays({ app }) {
   // Scrollable dock: ref to the strip so the active destination can be
   // auto-scrolled into a visible spot whenever the page changes.
   const dockStripRef = useRef(null);
-  // Overflow menu (Rolodex/Referrals/Workers/Settings) opened from the avatar.
-  const [navMenuOpen, setNavMenuOpen] = useState(false);
-  // With equal spacing (no center gap), keep the active destination scrolled
-  // into view on mount and on page change so it isn't stuck behind the FAB.
-  const scrollActiveIntoView = (behavior) => {
+  useEffect(() => {
     const strip = dockStripRef.current;
     if (!strip) return;
     const el = strip.querySelector('[data-active="1"]');
-    if (el && el.scrollIntoView) {
-      el.scrollIntoView({ behavior, inline: "center", block: "nearest" });
-    }
-  };
-  useEffect(() => { scrollActiveIntoView("auto"); }, []);
-  useEffect(() => { scrollActiveIntoView("smooth"); }, [page]);
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
+  }, [page]);
   return (<>
       {(() => {
         // ═══ SCROLLABLE STRIP DOCK (June 2026 redesign) ═══
@@ -86,8 +78,12 @@ export default function ShellOverlays({ app }) {
             }}
           >
             <div style={{ position: "relative", width: "100%", maxWidth: 480, height: 64, pointerEvents: "auto" }}>
-              {/* Frosted-glass bar: content blurs through as it scrolls under. */}
+              {/* Frosted-glass bar. ALL destinations on ONE horizontally-
+                  scrolling strip; the "+" FAB is pinned dead-center on its own
+                  layer and items scroll BEHIND it (fades dissolve them at the
+                  center + edges). No avatar, no menu. */}
               <div
+                ref={dockStripRef}
                 className="rt-dock-strip"
                 style={{
                   position: "absolute", inset: 0,
@@ -97,32 +93,25 @@ export default function ShellOverlays({ app }) {
                   border: "1px solid rgba(255,255,255,0.6)",
                   borderRadius: 22,
                   boxShadow: "0 8px 28px rgba(20,30,22,0.14), 0 1px 0 rgba(255,255,255,0.5) inset",
+                  overflowX: "auto", overflowY: "hidden",
                   display: "flex", alignItems: "center",
+                  WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
                 }}
               >
-                {/* LEFT: scrollable primary strip */}
-                <div
-                  ref={dockStripRef}
-                  style={{
-                    flex: 1, minWidth: 0, height: "100%",
-                    overflowX: "auto", overflowY: "hidden",
-                    display: "flex", alignItems: "center",
-                    WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
-                    paddingRight: 58,  // clearance so items can scroll behind the centered FAB
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 6px", height: "100%" }}>
-                    {mobileNavPrimary.map((item) => {
-                      const active = page === item.id;
-                      return (
+                <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 8px", height: "100%", minWidth: "max-content" }}>
+                  {mobileNavStrip.map((item, i) => {
+                    const active = page === item.id;
+                    const mid = Math.ceil(mobileNavStrip.length / 2);
+                    return (
+                      <Fragment key={item.id}>
+                        {i === mid && <div style={{ width: 62, flexShrink: 0 }} aria-hidden="true" />}
                         <button
-                          key={item.id}
                           onClick={() => goTo(item.id)}
                           className="rt-dock-item"
                           data-active={active ? "1" : undefined}
                           style={{
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                            gap: 3, minWidth: 58, flexShrink: 0, height: 46, padding: "0 8px",
+                            gap: 3, minWidth: 56, flexShrink: 0, height: 46, padding: "0 8px",
                             border: "none", cursor: "pointer", fontFamily: "inherit", borderRadius: 13,
                             background: active ? "rgba(51,84,62,0.10)" : "transparent",
                             color: active ? C.primary : "#8A9188",
@@ -137,35 +126,16 @@ export default function ShellOverlays({ app }) {
                           </span>
                           <span style={{ fontSize: 9.5, fontWeight: active ? 600 : 500, letterSpacing: "0.01em" }}>{item.label}</span>
                         </button>
-                      );
-                    })}
-                  </div>
+                      </Fragment>
+                    );
+                  })}
                 </div>
-
-                {/* RIGHT: avatar → overflow menu */}
-                <button
-                  onClick={() => setNavMenuOpen(v => !v)}
-                  aria-label="More"
-                  style={{
-                    flexShrink: 0, marginRight: 12, marginLeft: 4,
-                    width: 34, height: 34, borderRadius: "50%", border: "none",
-                    background: navMenuOpen ? C.primaryDeep : C.primary, color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                    position: "relative",
-                  }}
-                >
-                  {getUserInitial(user)}
-                  {mobileNavMore.some(m => dotFor(m.id)) && (
-                    <span style={{ position: "absolute", top: -1, right: -1, width: 8, height: 8, borderRadius: "50%", background: "#C0654A", border: "1.5px solid #FFFFFF" }} />
-                  )}
-                </button>
               </div>
 
-              {/* Left edge fade — dissolves items scrolling off, signals scroll */}
-              <div style={{ position: "absolute", top: 1, bottom: 1, left: 1, width: 22, borderRadius: "22px 0 0 22px", background: "linear-gradient(90deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", top: 2, bottom: 2, left: "50%", transform: "translateX(-50%)", width: 88, background: "linear-gradient(90deg, rgba(250,250,247,0) 0%, rgba(250,250,247,0.9) 34%, rgba(250,250,247,0.9) 66%, rgba(250,250,247,0) 100%)", pointerEvents: "none", zIndex: 1 }} />
+              <div style={{ position: "absolute", top: 1, bottom: 1, left: 1, width: 20, borderRadius: "22px 0 0 22px", background: "linear-gradient(90deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none", zIndex: 1 }} />
+              <div style={{ position: "absolute", top: 1, bottom: 1, right: 1, width: 20, borderRadius: "0 22px 22px 0", background: "linear-gradient(270deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none", zIndex: 1 }} />
 
-              {/* pinned capture FAB — dead center, own layer */}
               <button
                 onClick={() => setQuickLogOpen(true)}
                 aria-label="Quick capture"
@@ -180,41 +150,6 @@ export default function ShellOverlays({ app }) {
               >
                 <Icon name="plus" size={24} color="currentColor" />
               </button>
-
-              {/* Overflow menu popover (opens above the avatar) */}
-              {navMenuOpen && (
-                <>
-                  <div onClick={() => setNavMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 1, pointerEvents: "auto" }} />
-                  <div style={{
-                    position: "absolute", bottom: 72, right: 4, zIndex: 3,
-                    background: "rgba(255,255,255,0.86)", backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-                    border: "1px solid rgba(20,30,22,0.08)", borderRadius: 16, padding: 6, minWidth: 190,
-                    boxShadow: "0 12px 32px rgba(20,30,22,0.18)",
-                    animation: "rt-fade-in 160ms ease-out",
-                  }}>
-                    {mobileNavMore.map(item => {
-                      const active = page === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => { goTo(item.id); setNavMenuOpen(false); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 11, width: "100%",
-                            padding: "11px 12px", borderRadius: 10, border: "none", cursor: "pointer",
-                            background: active ? "rgba(51,84,62,0.10)" : "transparent",
-                            color: active ? C.primary : C.text, fontFamily: "inherit",
-                            fontSize: 14, fontWeight: active ? 600 : 500, textAlign: "left",
-                          }}
-                        >
-                          <Icon name={item.icon} size={17} color="currentColor" />
-                          <span style={{ flex: 1 }}>{item.label}</span>
-                          {dotFor(item.id) && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C0654A" }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
             </div>
           </div>,
           document.body
