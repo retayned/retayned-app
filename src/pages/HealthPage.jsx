@@ -49,8 +49,27 @@ export default function HealthPage({ app }) {
           // The two callsites are mutually exclusive via the isMobile flag, so
           // only one instance ever renders at a time. Returns null when there's
           // no current observation or one is being dismissed.
+          const obsCaption = (
+            <div style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, margin: "6px 2px 12px" }}>
+              Re-reads your week every Friday night.
+            </div>
+          );
+          // Friday-regeneration framing (Jul 2026): the observer card is
+          // the weekly ritual - say so. Young accounts with no card yet get
+          // a ghost promise line, same forward-promise mechanic as Rai's
+          // night card. The caption itself renders inside the card below.
           const renderObserver = () => {
-            if (!observation || obsDismissing) return null;
+            if (!observation || obsDismissing) {
+              const young = !!(user?.created_at && (Date.now() - new Date(user.created_at).getTime()) < 14 * 86400000);
+              if (!young || obsDismissing) return null;
+              return (
+                <div style={{ padding: "18px 16px", border: "1px dashed " + C.borderLight, borderRadius: 12, marginBottom: 12, textAlign: "center" }}>
+                  <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontSize: 13.5, color: C.textMuted, lineHeight: 1.5 }}>
+                    First weekly read lands Friday night.
+                  </div>
+                </div>
+              );
+            }
                     const obs = observation;
                     const rawName = obs.card_name || "Observation";
                     const archetype = /^the\s/i.test(rawName) ? rawName : `The ${rawName}`;
@@ -738,7 +757,7 @@ export default function HealthPage({ app }) {
               {isMobile && dataLoaded && clients.length > 0 && clients.every(c => !c.profileScores || Object.keys(c.profileScores || {}).length === 0) && (
                 <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
               )}
-              {isMobile && renderObserver()}
+              {isMobile && (<>{renderObserver()}{observation && !obsDismissing && obsCaption}</>)}
 
               {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
               <div className="rt-mob-strip" style={{ marginBottom: 16 }}>
@@ -974,7 +993,7 @@ export default function HealthPage({ app }) {
                   {!isMobile && dataLoaded && clients.length > 0 && clients.every(c => !c.profileScores || Object.keys(c.profileScores || {}).length === 0) && (
                     <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
                   )}
-                  {!isMobile && renderObserver()}
+                  {!isMobile && (<>{renderObserver()}{observation && !obsDismissing && obsCaption}</>)}
                   {activeQueue.length === 0 && justCompleted.length === 0 && (
                     <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: C.text }}>All caught up</div>
