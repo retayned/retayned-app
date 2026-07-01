@@ -498,12 +498,19 @@ export function useDataLoad(app) {
     if (refRes.data) setRefs(refRes.data.map(r => ({
       id: r.id,
       to: r.referred_to,
+      // The log + network render read r.name / r.on — alias them here so
+      // the page never shows blank rows (referred_to IS the name).
+      name: r.referred_to,
       from: r.referred_by,
       date: r.date_added || "",
+      on: r.date_added || "",
       converted: r.status === "converted",
       status: r.status,
       revenue: r.revenue || 0,
       totalRevenue: r.total_revenue || 0,
+      // Pipeline + thank-loop (Jul 2026)
+      statusChangedAt: r.status_changed_at || null,
+      thankedAt: r.thanked_at || null,
     })));
 
     if (rolodexRes.data) setRolodex(rolodexRes.data.map(r => ({
@@ -518,6 +525,27 @@ export function useDataLoad(app) {
       reminder: r.reminder_date,
       reminderRecurrence: r.reminder_recurrence || "none",
       work: r.notes,
+      // Raw passthrough (Jul 2026): RetrosPage's heat/warmth/tag math
+      // reads the DB field names (retro_answers, last_touch, …) —
+      // without these, every hydration silently reset heat to the
+      // neutral default and warmth to "cold".
+      client_name: r.client_name,
+      contact_name: r.contact_name,
+      retro_answers: r.retro_answers || {},
+      notes: r.notes,
+      last_touch: r.last_touch || null,
+      priority_set_at: r.priority_set_at || null,
+      created_at: r.created_at || null,
+      archived_at: r.archived_at || null,
+      reminder_date: r.reminder_date,
+      date_added: r.date_added || null,
+      // Lane B — new-lead pipeline fields
+      lead_status: r.lead_status || null,
+      lead_source: r.lead_source || null,
+      lead_need: r.lead_need || null,
+      lead_urgency: r.lead_urgency || null,
+      lead_value: r.lead_value || 0,
+      next_touch_at: r.next_touch_at || null,
     })));
 
     // Load retro answers from rolodex entries
