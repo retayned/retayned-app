@@ -1,5 +1,8 @@
 // AUTO-EXTRACTED from App.jsx (page === "referrals" block) — body is
 // verbatim; only the surrounding component shell + imports are generated.
+import { useEffect, useState } from "react";
+import { referrals as referralsDb, tasks as tasksDb } from "../lib/db";
+import { supabase } from "../lib/supabase";
 import { Icon } from "../components/Icon";
 import { ReferralNetworkD3 } from "../components/ReferralNetworkD3";
 import { EmptyState } from "../components/Skeletons";
@@ -34,10 +37,32 @@ export default function ReferralsPage({ app }) {
     setRefFrom,
     setRefName,
     setRefRevenue,
+    setRefs,
     setShowAddClient,
     setShowAddRolodex,
     user,
   } = app;
+  // ─── Persisted asks + mobile network toggle (Jul 2026) ─────────────
+  // Asks used to live in localStorage and evaporate — now every ask is a
+  // referral_asks row: it survives devices, drives the 10-day follow-up
+  // nudge, and resolves to an outcome the engine can learn from.
+  const [asks, setAsks] = useState([]);
+  const [showNetwork, setShowNetwork] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("referral_asks").select("*")
+          .eq("user_id", user.id)
+          .order("asked_at", { ascending: false })
+          .limit(200);
+        if (!cancelled) setAsks(data || []);
+      } catch (e) { console.warn("Ask history load failed:", e); }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
           try {
           // ─── Helpers ───────────────────────────────────────────────────
@@ -96,12 +121,28 @@ export default function ReferralsPage({ app }) {
           // Build ask queue: clients who haven't been referral sources AND haven't been acted on.
           // Rank by score. Keep top 3 (per design).
           const referredFrom = new Set(refs.map(r => r.from));
-          const askQueue = [...clients]
-            .filter(c => !referredFrom.has(c.name) && !askActed.has(c.name))
+          // Persisted-ask suppression: open asks hide the client; declines
+          // hide for 90 days (people change their minds — don't bury them).
+          const askedRecently = new Set(asks.filter(a => {
+            if (a.status === "declined") return (Date.now() - new Date(a.asked_at).getTime()) < 90 * 86400000;
+            return a.status === "asked" || a.status === "bumped" || a.status === "intro_made";
+          }).map(a => a.client_name));
+          const clientAskQueue = [...clients]
+            .filter(c => !referredFrom.has(c.name) && !askActed.has(c.name) && !askedRecently.has(c.name))
             .map(c => ({ ...c, askScore: calcAskScore(c) }))
             .filter(c => c.askScore >= 55) // signal threshold
             .sort((a, b) => b.askScore - a.askScore)
             .slice(0, 3);
+          // Rolodex joins the queue: former clients who said "would refer:
+          // yes" in their retro — often the MOST willing referrers, and
+          // previously invisible on this page.
+          const rolodexAsks = (rolodex || [])
+            .filter(r => (r.tags || []).includes("Would refer"))
+            .filter(r => r.client && !referredFrom.has(r.client) && !askActed.has(r.client) && !askedRecently.has(r.client))
+            .map(r => ({ name: r.client, contact: r.contact || "", months: r.months || 0, ret: 60, askScore: 68, isRolodex: true }));
+          const askQueue = [...clientAskQueue, ...rolodexAsks]
+            .sort((a, b) => b.askScore - a.askScore)
+            .slice(0, 4);
 
           // Strength label from score
           const strengthFor = (score) => score >= 80 ? { label: "STRONG", color: C.retGood, bg: "#E8F3EC" } : { label: "MEDIUM", color: C.retOk, bg: "#F6F4E5" };
@@ -109,6 +150,7 @@ export default function ReferralsPage({ app }) {
           // Primer text — Rai-generated in production; for now use rules-based primers keyed off strongest signal.
           // In a future pass, these get pulled from rai_ask_primers table populated by the monthly sweep.
           const getPrimer = (client) => {
+            if (client.isRolodex) return "Left on good terms and said yes to referring — the easiest ask on this page.";
             const p = client.profile_scores || client.profile || {};
             const loyalty = p.loyalty || 5;
             const depth = p.relationship_depth ?? p.depth ?? 5;
@@ -155,13 +197,93 @@ export default function ReferralsPage({ app }) {
           const draftIsUserEdited = askDraft && askActiveId === activeAsk?.name;
           const displayedDraft = draftIsUserEdited ? askDraft : (activeAsk ? buildDraft(activeAsk, askTone) : "");
 
-          const markAsked = (client) => {
+          const markAsked = (client, channel = "other") => {
             const next = new Set(askActed);
             next.add(client.name);
             setAskActed(next);
             try { localStorage.setItem("rt-ask-acted", JSON.stringify(Array.from(next))); } catch {}
             setAskActiveId(null);
             setAskDraft("");
+            // Persist — fire-and-forget; the localStorage set above keeps
+            // the UI instant even if the write is slow.
+            (async () => {
+              try {
+                const { data } = await supabase
+                  .from("referral_asks")
+                  .insert({ user_id: user.id, client_name: client.name, channel, status: "asked" })
+                  .select().single();
+                if (data) setAsks(prev => [data, ...prev]);
+              } catch (e) { console.warn("Ask persist failed:", e); }
+            })();
+          };
+
+          // ─── Follow-up engine (Jul 2026) ────────────────────────────
+          // An ask with no intro after 10 quiet days deserves one light
+          // bump — Rai-shaped copy, one tap. Outcomes resolve the loop.
+          const buildBumpDraft = (name) => {
+            const first = String(name || "").split(/\s+/)[0];
+            const userFirst = (user?.user_metadata?.full_name || "").trim().split(/\s+/)[0] || "";
+            return `Hi ${first},\n\nNo pressure at all on my note from the other week — just keeping it on your radar. If anyone's come to mind who could use what we do, even a quick intro email works.\n\nEither way, hope things are good.\n\n${userFirst || "[Your Name]"}`;
+          };
+          const updateAsk = async (askId, patch) => {
+            setAsks(prev => prev.map(a => a.id === askId ? { ...a, ...patch } : a));
+            try { await supabase.from("referral_asks").update(patch).eq("id", askId); }
+            catch (e) { console.warn("Ask update failed:", e); }
+          };
+          const followUps = asks.filter(a => {
+            if (a.status !== "asked" && a.status !== "bumped") return false;
+            const anchor = new Date(a.last_bumped_at || a.asked_at).getTime();
+            if (!Number.isFinite(anchor) || Date.now() - anchor < 10 * 86400000) return false;
+            // If an intro from them landed after the ask, the loop closed itself.
+            const introLanded = refs.some(r => r.from === a.client_name &&
+              new Date(r.date || 0).getTime() >= new Date(a.asked_at).getTime());
+            return !introLanded;
+          }).slice(0, 2);
+
+          // ─── Thank-the-referrer (Jul 2026) ──────────────────────────
+          // A converted intro is a debt until it's thanked — thanked
+          // referrers refer again. One tap: a task lands on Today and the
+          // row flips to "thanked".
+          const thankReferrer = async (r) => {
+            const now = new Date().toISOString();
+            setRefs(prev => prev.map(x => x.id === r.id ? { ...x, thankedAt: now } : x));
+            try {
+              await tasksDb.create(user.id, {
+                text: `Send ${r.from} a thank-you — their intro${r.revenue ? ` became $${Number(r.revenue).toLocaleString()}/mo` : " converted"}`,
+                client_name: clients.find(c => c.name === r.from)?.name || null,
+                client_id: clients.find(c => c.name === r.from)?.id || null,
+                is_recurring: false, recurrence_pattern: null, due_date: null, assigned_worker_id: null,
+              });
+              await referralsDb.update(r.id, { thanked_at: now });
+            } catch (e) { console.warn("Thank flow failed:", e); }
+          };
+
+          // ─── Pipeline stages (Jul 2026) — tap the chip to advance ───
+          const STAGES = ["pending", "conversation", "converted", "lost"];
+          const STAGE_META = {
+            pending:      { label: "Intro made",      color: C.textSec, bg: C.borderLight },
+            conversation: { label: "In conversation", color: "#8A6A2F", bg: "#FAF0DF" },
+            converted:    { label: "Won",             color: "#fff",    bg: C.retGood },
+            lost:         { label: "Lost",            color: C.textMuted, bg: C.borderLight },
+          };
+          const stageOf = (r) => STAGES.includes(r.status) ? r.status
+            : (r.status === "converted" || r.status === "active" || r.converted) ? "converted"
+            : (r.status === "closed" || r.status === "lost") ? "lost"
+            : "pending";
+          const cycleStatus = async (r) => {
+            const cur = stageOf(r);
+            const nextStage = STAGES[(STAGES.indexOf(cur) + 1) % STAGES.length];
+            const now = new Date().toISOString();
+            setRefs(prev => prev.map(x => x.id === r.id
+              ? { ...x, status: nextStage, converted: nextStage === "converted", statusChangedAt: now }
+              : x));
+            try { await referralsDb.update(r.id, { status: nextStage, status_changed_at: now }); }
+            catch (e) { console.warn("Stage update failed:", e); }
+          };
+          const daysInStage = (r) => {
+            if (!r.statusChangedAt) return null;
+            const d = Math.floor((Date.now() - new Date(r.statusChangedAt).getTime()) / 86400000);
+            return Number.isFinite(d) && d >= 0 ? d : null;
           };
 
           // ─── Network Map data ────────────────────────────────────────────
@@ -223,6 +345,8 @@ export default function ReferralsPage({ app }) {
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{totalRefs}</b> referrals</span>
                     <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{becameClients}</b> became clients</span>
+                    <span className="rt-sep" />
+                    <span><b style={{ color: C.text, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{Math.round((becameClients / Math.max(1, totalRefs)) * 100)}%</b> conversion</span>
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
@@ -391,6 +515,9 @@ export default function ReferralsPage({ app }) {
                                 <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Score {q.askScore} · {q.months || 0}mo tenure</div>
                               </div>
+                              {q.isRolodex && (
+                                <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, letterSpacing: 0.4, whiteSpace: "nowrap", flexShrink: 0, color: "#3E2F72", background: "#EFE9FB" }}>FORMER</span>
+                              )}
                               <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3, whiteSpace: "nowrap", flexShrink: 0, color: q.askScore >= 80 ? "#fff" : C.textSec, background: q.askScore >= 80 ? C.retGood : C.borderLight }}>{st.label}</span>
                             </button>
                           );
@@ -498,8 +625,23 @@ export default function ReferralsPage({ app }) {
                         if (logEl) logEl.scrollIntoView({ behavior: "smooth", block: "start" });
                       };
 
+                      // Mobile is list-first (Jul 2026): the force graph is a
+                      // desktop toy at 390px — one tap opens it for those who
+                      // want it; everyone else gets asks + log immediately.
+                      if (isMobile && !showNetwork) {
+                        return (
+                          <button onClick={() => setShowNetwork(true)} style={{ width: "100%", padding: "12px", background: C.bg, border: "1px dashed " + C.border, borderRadius: 10, fontSize: 12.5, fontWeight: 600, color: C.textSec, cursor: "pointer", fontFamily: "inherit" }}>
+                            View network map
+                          </button>
+                        );
+                      }
                       return (
                         <>
+                          {isMobile && (
+                            <div style={{ textAlign: "right", marginBottom: 8 }}>
+                              <button onClick={() => setShowNetwork(false)} style={{ background: "transparent", border: "none", fontSize: 11.5, color: C.textMuted, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Hide map</button>
+                            </div>
+                          )}
                           <ReferralNetworkD3
                             referrers={referrers}
                             predictedReferrers={predicted}
@@ -603,11 +745,11 @@ export default function ReferralsPage({ app }) {
                       {/* Action row */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <a className="rt-composer-pill" href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.card, border: "none", borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none", boxShadow: "var(--rt-sh-xs)" }}>
+                          <a className="rt-composer-pill" href={`mailto:${activeAsk.email || ""}?subject=${encodeURIComponent("Quick ask")}&body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk, "email")} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.card, border: "none", borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none", boxShadow: "var(--rt-sh-xs)" }}>
                             <Icon name="mail" size={13} color={C.textSec} />
                             <span>Email</span>
                           </a>
-                          <a className="rt-composer-pill" href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.card, border: "none", borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none", boxShadow: "var(--rt-sh-xs)" }}>
+                          <a className="rt-composer-pill" href={`sms:${activeAsk.phone || ""}?body=${encodeURIComponent(displayedDraft)}`} onClick={() => markAsked(activeAsk, "text")} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 11px", background: C.card, border: "none", borderRadius: 7, fontSize: 11.5, color: C.textSec, fontWeight: 500, cursor: "pointer", textDecoration: "none", boxShadow: "var(--rt-sh-xs)" }}>
                             <Icon name="phone" size={13} color={C.textSec} />
                             <span>Text</span>
                           </a>
@@ -620,6 +762,39 @@ export default function ReferralsPage({ app }) {
                   )}
 
                   {/* REFERRAL LOG (compact) */}
+                  {/* ─── Follow-up nudges (Jul 2026): asks that went quiet
+                      for 10+ days get one light bump — Rai-drafted, one tap.
+                      Outcomes resolve the loop and teach suppression. ─── */}
+                  {followUps.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {followUps.map(a => {
+                        const askedOn = new Date(a.asked_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                        return (
+                          <div key={a.id} style={{ background: "#EFE9FB", border: "1px solid rgba(124,92,243,0.22)", borderRadius: 12, padding: "13px 15px" }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3", marginBottom: 5 }}>✦ RAI · FOLLOW-UP</div>
+                            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontSize: 13.5, color: "#3E2F72", lineHeight: 1.5 }}>
+                              You asked {a.client_name} on {askedOn}{a.status === "bumped" ? " and bumped once" : ""}. A light nudge lands better than silence.
+                            </div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                              <a
+                                href={"mailto:?subject=" + encodeURIComponent("Quick follow-up") + "&body=" + encodeURIComponent(buildBumpDraft(a.client_name))}
+                                onClick={() => updateAsk(a.id, { status: "bumped", last_bumped_at: new Date().toISOString() })}
+                                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", background: C.btn, color: "#fff", border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}
+                              >Send the bump</a>
+                              <button
+                                onClick={() => { updateAsk(a.id, { status: "intro_made", resolved_at: new Date().toISOString() }); setRefFrom(a.client_name); setRefForm(true); }}
+                                style={{ padding: "7px 12px", background: C.card, color: C.textSec, border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", boxShadow: "var(--rt-sh-xs)" }}
+                              >They made an intro</button>
+                              <button
+                                onClick={() => updateAsk(a.id, { status: "declined", resolved_at: new Date().toISOString() })}
+                                style={{ padding: "7px 12px", background: "transparent", color: C.textMuted, border: "none", borderRadius: 7, fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                              >Not happening</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div id="ref-log">
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 4px 10px" }}>
                       <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
@@ -634,18 +809,36 @@ export default function ReferralsPage({ app }) {
                     ) : (
                       <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                         {refs.map((r, i) => {
-                          const isActive = r.status === "converted" || r.status === "active";
+                          // Pipeline chip (Jul 2026): a referral is a deal in
+                          // motion, not a line item. Tap the chip to advance
+                          // the stage; legacy "active"/"closed" rows map onto
+                          // the nearest stage without a write.
+                          const stage = stageOf(r);
+                          const sm = STAGE_META[stage];
+                          const dStage = daysInStage(r);
                           return (
                             <div key={r.id} className={i === refs.length - 1 ? undefined : "rt-divider-inset"} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", "--rt-inset": "16px" }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 13.5, color: C.text, fontWeight: 600 }}>{r.name}</div>
-                                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>Referred by {r.from} · {r.on || "recent"}</div>
+                                <div style={{ fontSize: 11.5, color: C.textMuted, marginTop: 2 }}>
+                                  Referred by {r.from} · {r.on || "recent"}
+                                  {r.thankedAt && <span style={{ color: C.primary, fontWeight: 600 }}> · thanked ✓</span>}
+                                </div>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                                {stage === "converted" && !r.thankedAt && r.from && (
+                                  <button onClick={() => thankReferrer(r)} style={{ padding: "4px 10px", background: "#EFE9FB", color: "#3E2F72", border: "none", borderRadius: 999, fontSize: 10.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                    Thank {String(r.from).split(/\s+/)[0]}
+                                  </button>
+                                )}
                                 {r.revenue > 0 && <span style={{ fontSize: 12, color: C.text, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>${r.revenue.toLocaleString()}/mo</span>}
-                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: 3, letterSpacing: 0.3, color: isActive ? "#fff" : C.textSec, background: isActive ? C.retGood : C.borderLight, textTransform: "uppercase" }}>
-                                  {isActive ? "Active" : r.status || "Pending"}
-                                </span>
+                                <button
+                                  onClick={() => cycleStatus(r)}
+                                  title="Tap to advance the stage"
+                                  style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 3, letterSpacing: 0.3, color: sm.color, background: sm.bg, textTransform: "uppercase", border: "none", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                                >
+                                  {sm.label}{stage === "conversation" && dStage != null ? ` · ${dStage}d` : ""}
+                                </button>
                               </div>
                             </div>
                           );
