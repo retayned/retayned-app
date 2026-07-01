@@ -5,7 +5,12 @@ import { Icon } from "../components/Icon";
 import { MobileCalendarStrip } from "../components/MobileCalendarStrip";
 import { ExamplePills, GettingStartedPill, RaiNightCard, TaskSpotlight, typeIntoComposer } from "../components/Onboarding";
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
-import { TimeDial } from "../components/TimeDial";
+import { lazy, Suspense } from "react";
+// TimeDial is a heavy (~940 line) DESKTOP-ONLY background calendar layer — it
+// is never shown on mobile, yet was being parsed on every mobile cold load,
+// inflating the blank-screen time. Lazy-load it so it only downloads when the
+// desktop dial actually renders.
+const TimeDial = lazy(() => import("../components/TimeDial").then(m => ({ default: m.TimeDial })));
 import { supabase } from "../lib/supabase.js";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { Fragment, useEffect, useRef, useState } from "react";
@@ -3724,6 +3729,7 @@ export default function TodayPage({ app }) {
                 style={{ position: "fixed", top: 14, bottom: 0, right: 0, width: 720, zIndex: 0, pointerEvents: "none", overflow: "visible", transform: "scale(var(--dial-scale, 1))", transformOrigin: "right center" }}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "auto" }}>
+                  <Suspense fallback={null}>
                   <TimeDial
                     gcalNudge={!googleConnected && !googleConnectPromptDismissed ? { connect: connectGoogleCalendar, dismiss: dismissGoogleConnectPrompt } : null}
                     events={(() => {
@@ -3810,6 +3816,7 @@ export default function TodayPage({ app }) {
                       setLinkPickerSearch("");
                     }}
                   />
+                  </Suspense>
                 </div>
                 {/* (Top-fade overlay removed — it painted a visible C.bg band
                     over the dial's tint that read as a shaded slab. The disc's
