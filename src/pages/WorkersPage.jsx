@@ -24,6 +24,9 @@ export default function WorkersPage({ app }) {
     org,
     orgRole,
     user,
+    orgMembers,
+    clientAssignments,
+    assignClient,
   } = app;
   // ─── SEATS (Agency, Jun 12) — owner-role only ──────────────────────
   const isOwnerRole = org && (orgRole === "owner");
@@ -492,6 +495,74 @@ export default function WorkersPage({ app }) {
                     ))}
                   </div>
                 )}
+
+                {/* ─── COVERAGE (Agency) — owner-only ─────────────────────
+                    Who covers what: per-AM load (count + revenue + share
+                    bar) and the clients nobody covers, with inline assign.
+                    Uncovered clients stay in the OWNER's sweep lane; covered
+                    clients get their AM's nightly sweep. */}
+                {isOwnerRole && (() => {
+                  const ams = (orgMembers || []).filter(m => m.role === "am");
+                  if (ams.length === 0) return null;
+                  const assigns = clientAssignments || [];
+                  const byMember = {};
+                  for (const a of assigns) {
+                    if (!byMember[a.member_user_id]) byMember[a.member_user_id] = new Set();
+                    byMember[a.member_user_id].add(a.client_id);
+                  }
+                  const clientById = {};
+                  for (const c of clients) clientById[c.id] = c;
+                  const coveredIds = new Set(assigns.map(a => a.client_id));
+                  const uncovered = clients.filter(c => !coveredIds.has(c.id));
+                  const rows = ams.map(m => {
+                    const ids = [...(byMember[m.user_id] || [])].filter(id => clientById[id]);
+                    const revenue = ids.reduce((a, id) => a + (clientById[id].revenue || 0), 0);
+                    return { member: m, count: ids.length, revenue, names: ids.map(id => clientById[id].name) };
+                  });
+                  const maxRevenue = Math.max(1, ...rows.map(r => r.revenue));
+                  const shortName = (m) => ((m.invited_email || "") || m.user_id).split("@")[0];
+                  return (
+                    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "16px 18px", marginBottom: 20 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 700, color: C.textMuted }}>Coverage</div>
+                        <div style={{ fontSize: 12, color: uncovered.length ? "#8A6A2F" : C.textMuted }}>
+                          {uncovered.length ? `${uncovered.length} client${uncovered.length === 1 ? "" : "s"} uncovered` : "every client covered"}
+                        </div>
+                      </div>
+                      {rows.map((r, i) => (
+                        <div key={r.member.user_id} className={i === rows.length - 1 && uncovered.length === 0 ? undefined : "rt-divider-inset"} style={{ padding: "9px 2px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ flex: 1, fontSize: 13, color: C.text, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }} title={r.names.join(", ")}>{shortName(r.member)}</span>
+                            <span style={{ fontSize: 12, color: C.textSec, fontVariantNumeric: "tabular-nums" }}>{r.count} client{r.count === 1 ? "" : "s"}</span>
+                            <span style={{ fontSize: 12, color: C.text, fontWeight: 600, fontVariantNumeric: "tabular-nums", minWidth: 76, textAlign: "right" }}>${r.revenue.toLocaleString()}/mo</span>
+                          </div>
+                          <div style={{ height: 4, borderRadius: 2, background: C.borderLight, marginTop: 6, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${Math.round((r.revenue / maxRevenue) * 100)}%`, background: C.primary, borderRadius: 2 }} />
+                          </div>
+                        </div>
+                      ))}
+                      {uncovered.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#8A6A2F", marginBottom: 6 }}>No coverage</div>
+                          {uncovered.map(c => (
+                            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 2px" }}>
+                              <span style={{ flex: 1, fontSize: 13, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</span>
+                              {c.revenue > 0 && <span style={{ fontSize: 11.5, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>${c.revenue.toLocaleString()}/mo</span>}
+                              <select
+                                defaultValue=""
+                                onChange={async (e) => { const v = e.target.value; e.target.value = ""; if (v) await assignClient(c.id, v); }}
+                                style={{ padding: "5px 8px", border: "1px solid " + C.border, borderRadius: 8, fontFamily: "inherit", fontSize: 11.5, background: C.bg, color: C.textSec, cursor: "pointer" }}
+                              >
+                                <option value="" disabled>Assign…</option>
+                                {ams.map(m => <option key={m.user_id} value={m.user_id}>{shortName(m)}</option>)}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               {workersList.length === 0 ? (
                 <div style={{ padding: "60px 20px", textAlign: "center", border: "1px dashed " + C.borderLight, borderRadius: 14 }}>
                   <div style={{
