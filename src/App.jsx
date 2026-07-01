@@ -37,7 +37,7 @@ import { C } from "./theme";
 import { APP_CSS } from "./appStyles";
 import { getUserInitial, localYmd, splitLongTask, tzMidnightInstant, ymdInTz } from "./utils";
 
-
+ 
 
 export default function App({ user }) {
   // ─── ROUTING: Worker magic-link page lives at /w/{token} (no auth needed) ──
