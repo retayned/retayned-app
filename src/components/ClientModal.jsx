@@ -5,6 +5,7 @@
 import { clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, clientEngagementPausesDb, clients as clientsDb, revenueHistoryDb } from "../lib/db";
 import { C } from "../theme";
 import { localYmd } from "../utils";
+import { useEffect, useState } from "react";
 import RaiMessageActions from "./RaiMessageActions";
 import { Icon } from "./Icon";
 
@@ -12,6 +13,15 @@ import { clientAddons as clientAddonsDb, raiConversations as convoDb, rolodex as
 import { retColor } from "../utils";
 export default function ClientModal({ app }) {
   const {
+    // ─── Agency ctx (Jun 2026) ───
+    org,
+    orgRole,
+    can,
+    orgMembers,
+    clientAssignments,
+    handoffBriefs,
+    assignClient,
+    unassignClient,
     user,
     allTouchpoints,
     editingAddon,
@@ -96,6 +106,12 @@ export default function ClientModal({ app }) {
     termsEditingId,
     termsHistoryOpen,
   } = app;
+  // ─── Agency UI state: assignee picker + handoff-card expansion. Reset
+  // when the modal moves to a different client so stale open state never
+  // carries across. (Hooks live HERE — the render body below is an IIFE.)
+  const [assignPickerOpen, setAssignPickerOpen] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  useEffect(() => { setAssignPickerOpen(false); setHandoffOpen(false); }, [selectedClient?.id]);
   return (<>
 {selectedClient && (() => {
         const sc = selectedClient;
@@ -308,6 +324,44 @@ export default function ClientModal({ app }) {
                       ) : (
                         <span style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, color: C.textSec, background: C.bg }}>First check pending</span>
                       )}
+                      {/* ─── AGENCY: coverage chips + assign (owners) ────────
+                          Who covers this client. Every active member can SEE
+                          coverage (transparency); only owners can change it.
+                          Multiple AMs per client is supported. */}
+                      {org && (() => {
+                        const assignedIdSet = new Set((clientAssignments || []).filter(a => a.client_id === sc.id).map(a => a.member_user_id));
+                        const assigned = (orgMembers || []).filter(m => assignedIdSet.has(m.user_id));
+                        const canAssign = can("manage_org", orgRole);
+                        const assignable = (orgMembers || []).filter(m => m.role === "am" && !assignedIdSet.has(m.user_id));
+                        const shortName = (m) => ((m.invited_email || "") || m.user_id).split("@")[0];
+                        return (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", position: "relative" }}>
+                            {assigned.map(m => (
+                              <span key={m.user_id} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: C.surfaceWarm, color: C.textSec, border: "1px solid " + C.borderLight }}>
+                                {shortName(m)}
+                                {canAssign && (
+                                  <button onClick={() => unassignClient(sc.id, m.user_id)} aria-label={"Unassign " + shortName(m)} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 12, lineHeight: 1, padding: 0, fontFamily: "inherit" }}>×</button>
+                                )}
+                              </span>
+                            ))}
+                            {assigned.length === 0 && (
+                              <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 999, background: "#FAF0DF", color: "#8A6A2F" }}>No coverage</span>
+                            )}
+                            {canAssign && assignable.length > 0 && (
+                              <button onClick={() => setAssignPickerOpen(v => !v)} style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "transparent", color: C.primary, border: "1px dashed " + C.border, cursor: "pointer", fontFamily: "inherit" }}>+ Assign</button>
+                            )}
+                            {assignPickerOpen && canAssign && (
+                              <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40, background: C.card, border: "1px solid " + C.border, borderRadius: 10, boxShadow: "var(--rt-sh-card)", padding: 6, minWidth: 200 }}>
+                                {assignable.map(m => (
+                                  <button key={m.user_id} onClick={async () => { setAssignPickerOpen(false); await assignClient(sc.id, m.user_id); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7, background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: C.text }}>
+                                    {m.invited_email || m.user_id}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -414,6 +468,31 @@ export default function ClientModal({ app }) {
                 {/* Overview */}
                 {clientTab === "overview" && (
                   <div>
+                    {/* ─── AGENCY: handoff brief — Rai's written handoff for the
+                        incoming AM. Persistent but out of the way: one quiet
+                        collapsed row; tap to read. Visible to the recipient
+                        and to owners (RLS enforces the same server-side). */}
+                    {org && (() => {
+                      const hb = (handoffBriefs || {})[sc.id];
+                      if (!hb) return null;
+                      const canSee = hb.to_member_user_id === user.id || can("manage_org", orgRole);
+                      if (!canSee) return null;
+                      const when = hb.created_at ? new Date(hb.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+                      return (
+                        <div style={{ background: "#EFE9FB", border: "1px solid rgba(124,92,243,0.18)", borderRadius: 12, padding: "11px 14px", marginBottom: 14 }}>
+                          <button onClick={() => setHandoffOpen(v => !v)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3" }}>✦ HANDOFF BRIEF</span>
+                            <span style={{ fontSize: 10.5, color: "#3E2F72", opacity: 0.6 }}>{when}</span>
+                            <span style={{ marginLeft: "auto", fontSize: 11, color: "#7c5cf3", fontWeight: 700 }}>{handoffOpen ? "hide" : "read"}</span>
+                          </button>
+                          {handoffOpen && (
+                            <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.55, color: "#3E2F72", fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", whiteSpace: "pre-wrap" }}>
+                              {hb.brief_text}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {!editingOverview ? (
                       <>
                         {(() => {
