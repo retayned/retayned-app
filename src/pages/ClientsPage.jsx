@@ -3,6 +3,7 @@
 import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
 import { C } from "../theme";
+import { ScoreReveal } from "../components/Onboarding";
 import { retColor, retGradient } from "../utils";
 
 export default function ClientsPage({ app }) {
@@ -625,13 +626,16 @@ export default function ClientsPage({ app }) {
                         </div>
                       ))}
                     </div>
-                    <div style={{ fontSize: 12, color: C.textMuted, textAlign: "center", marginBottom: 14 }}>
-                      {(() => {
-                        const b = calcRetentionScore(profileScores, null) || 50;
-                        const label = b >= 75 ? "Strong" : b >= 55 ? "Stable" : b >= 35 ? "Watch" : "At Risk";
-                        const color = b >= 75 ? C.success : b >= 55 ? C.warning : C.danger;
-                        return <span>Starting Signal: <span style={{ fontWeight: 700, color }}>{b}% — {label}</span></span>;
-                      })()}
+                    {/* Score reveal (Jul 2026) — the number ARRIVES: 0 → score
+                        with the ring drawing in sync, then Rai's one-line read
+                        of the dimension shape. Replaces the static
+                        "Starting Signal" line. */}
+                    <div style={{ marginBottom: 14 }}>
+                      <ScoreReveal
+                        score={calcRetentionScore(profileScores, null) || 50}
+                        dims={profileScores}
+                        dimNames={Object.fromEntries(profileDimensions.map(d => [d.key, d.name]))}
+                      />
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button onClick={() => setProfileStep(12)} style={{ padding: "10px 14px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
