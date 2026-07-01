@@ -38,7 +38,36 @@ export default function ClientsPage({ app }) {
     setShowAddClient,
     showAddClient,
     submitNewClient,
+    can,
+    clientAssignments,
+    org,
+    orgMembers,
+    orgRole,
   } = app;
+
+  // ─── AM coverage chip (Agency only, Jul 2026) ─────────────────────
+  // Owner-role viewers see WHO covers each client at a glance, in every
+  // view (table / columns / heatmap). Solo accounts have no org, AMs see
+  // only their own book — both render nothing. Stacked initials, +N
+  // overflow, hover names. Data comes from the same clientAssignments /
+  // orgMembers the ClientModal picker uses.
+  const amChipFor = (c) => {
+    if (!org || !can || !can("manage_org", orgRole)) return null;
+    const ids = new Set((clientAssignments || []).filter(a => a.client_id === c.id).map(a => a.member_user_id));
+    if (ids.size === 0) return null;
+    const ams = (orgMembers || []).filter(m => ids.has(m.user_id));
+    if (!ams.length) return null;
+    const nameOf = (m) => ((m.invited_email || "") || m.user_id).split("@")[0];
+    const initialsOf = (m) => nameOf(m).slice(0, 2).toUpperCase();
+    return (
+      <span title={"Covered by " + ams.map(nameOf).join(", ")} style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+        {ams.slice(0, 2).map((m, i) => (
+          <span key={m.user_id} style={{ width: 16, height: 16, borderRadius: 999, background: C.primarySoft, color: C.primaryDeep, fontSize: 7.5, fontWeight: 800, display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid " + C.card, marginLeft: i === 0 ? 0 : -5, letterSpacing: 0 }}>{initialsOf(m)}</span>
+        ))}
+        {ams.length > 2 && <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, marginLeft: 2 }}>+{ams.length - 2}</span>}
+      </span>
+    );
+  };
 
           // ─── Stubs for v2-specific per-client fields ──────────────────────
           // Real data lives in clients[]: name, ret, contact, role, months, revenue, velocity, lastHC, lastContact, tag
@@ -758,6 +787,7 @@ export default function ClientsPage({ app }) {
                               <div style={{ flex: 2, minWidth: 0 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                   <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, letterSpacing: -0.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                                  {amChipFor(c)}
                                   {c.is_paused && (
                                     <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, color: C.textMuted, background: C.surfaceWarm, letterSpacing: 0.3, textTransform: "uppercase", flexShrink: 0 }}>Paused</span>
                                   )}
@@ -851,7 +881,10 @@ export default function ClientsPage({ app }) {
                                       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                                         <ScoreRing2 client={c} size={32} />
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
+                                          <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1, minWidth: 0 }}>{c.name}</div>
+                                            {amChipFor(c)}
+                                          </div>
                                           <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.tag || "Client"}{c.renewal_date ? ` · renews ${renewalInfo(c).str}` : ""}</div>
                                         </div>
                                         <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -898,7 +931,10 @@ export default function ClientsPage({ app }) {
                             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                               <ScoreRing2 client={c} size={34} />
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1 }}>{c.name}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: -0.1, minWidth: 0 }}>{c.name}</div>
+                                  {amChipFor(c)}
+                                </div>
                                 <div style={{ fontSize: 11, color: C.textMuted, marginTop: 1 }}>{c.tag || "Client"}</div>
                               </div>
                               <div style={{ textAlign: "right" }}>
