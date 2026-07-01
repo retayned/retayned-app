@@ -11,12 +11,6 @@
   </head>
   <body>
     <div id="root">
-      <!-- Boot splash (Jun 2026): #root is empty until the JS bundle loads,
-           parses, and React mounts — on mobile that's several seconds of blank
-           white. This static splash needs no JS: it shows the logo, but only
-           AFTER a 400ms delay (CSS animation-delay), so fast desktop loads
-           where React mounts first never flash it. React replaces all of #root
-           on mount, so it vanishes automatically once the app is ready. -->
       <!-- Boot splash: #root is empty until the JS bundle parses and React
            mounts — on mobile that's several seconds. Show the logo + a subtle
            spinner IMMEDIATELY (no delay) so the user sees branding, not blank.
