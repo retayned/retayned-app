@@ -30,7 +30,7 @@ import { useGoogleCalendar } from "./hooks/useGoogleCalendar";
 import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
 import { SkeletonPage } from "./components/Skeletons";
 import { QuickLogToast } from "./components/TaskBuckets";
-import { moreItemsCore, navItemsCore } from "./nav";
+import { navItemsCore } from "./nav";
 import { parseComposer } from "./parser";
 import { nextOccurrenceDate } from "./recurrence";
 import { C } from "./theme";
@@ -83,9 +83,6 @@ export default function App({ user }) {
   // Shell v1 (May 2026): plain task creation, no parsing. v2 will add
   // client matching + tense detection (past = touchpoint, future = task).
   const [quickLogOpen, setQuickLogOpen] = useState(false);
-  // Mobile bottom-nav "More" sheet (overflow destinations). Part of the
-  // rebuilt fixed nav bar.
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   // Mobile-only: slide-out drawer for past Rai conversations. Desktop has the
   // sidebar convo list; on mobile the sidebar is hidden, so this drawer is the
   // only way to reach past chats / start a new one. Reuses raiConvoList,
@@ -1347,11 +1344,84 @@ export default function App({ user }) {
   // null, bookOwnerId === user.id, and every path below is byte-
   // identical to pre-Agency behavior (verified by exact-delta SSR).
   const { org, orgRole, bookOwnerId, orgLoading } = useOrg(user);
+  // Destinations an AM can't open are hidden from nav entirely (the pages
+  // were already can()-gated at render — but a visible item that renders
+  // nothing is a dead tap). Same map filters the mobile strip.
+  const NAV_PERMS = { workers: "manage_workers", retros: "view_rolodex", referrals: "view_referrals" };
+  const visibleNavItems = navItemsCore.filter(n => !NAV_PERMS[n.id] || can(NAV_PERMS[n.id], orgRole));
   // Boundary mapping for writes: db.js stamps created_by and routes
   // seat writes into the owner's book (setActorContext in db.js).
   useEffect(() => {
     if (!orgLoading) dbSetActorContext(bookOwnerId, user?.id || null);
   }, [orgLoading, bookOwnerId, user?.id]);
+  // ─── AGENCY: members + client assignments + handoff briefs ─────────
+  // Loaded once per session when an org exists; refreshed after every
+  // assignment mutation. RLS scopes reads: owners see the whole org,
+  // members see org-wide assignments (coverage transparency) and only
+  // the handoff briefs addressed to them.
+  const [orgMembers, setOrgMembers] = useState([]);
+  const [clientAssignments, setClientAssignments] = useState([]);
+  const [handoffBriefs, setHandoffBriefs] = useState({}); // client_id → latest brief row
+  const refreshOrgData = async () => {
+    if (!org?.id) return;
+    try {
+      const [membersRes, assignsRes, briefsRes] = await Promise.all([
+        supabase.from("org_members")
+          .select("user_id, invited_email, role, status")
+          .eq("org_id", org.id).eq("status", "active"),
+        supabase.from("client_assignments")
+          .select("id, client_id, member_user_id, created_at")
+          .eq("org_id", org.id),
+        supabase.from("client_handoff_briefs")
+          .select("id, client_id, to_member_user_id, from_member_user_id, brief_text, created_at")
+          .eq("org_id", org.id)
+          .order("created_at", { ascending: false })
+          .limit(200),
+      ]);
+      setOrgMembers(membersRes.data || []);
+      setClientAssignments(assignsRes.data || []);
+      const latest = {};
+      for (const b of (briefsRes.data || [])) {
+        if (!latest[b.client_id]) latest[b.client_id] = b; // rows are newest-first
+      }
+      setHandoffBriefs(latest);
+    } catch (e) {
+      console.warn("Org data refresh failed:", e);
+    }
+  };
+  useEffect(() => { if (!orgLoading && org?.id) refreshOrgData(); }, [orgLoading, org?.id]);
+  // Assign / unassign — owner-gated by RLS server-side (and by UI). On a
+  // NEW assignment, fire the handoff-brief generator (fire-and-forget:
+  // the card appears on the client once Rai has written it).
+  const assignClient = async (clientId, memberUserId) => {
+    const { error } = await supabase.from("client_assignments").insert({
+      org_id: org.id, client_id: clientId, member_user_id: memberUserId, assigned_by: user.id,
+    });
+    if (error && error.code !== "23505") { console.warn("Assign failed:", error); return false; }
+    refreshOrgData();
+    if (!error) {
+      // Handoff brief for the incoming AM — async, non-blocking.
+      (async () => {
+        try {
+          const { data: sess } = await supabase.auth.getSession();
+          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handoff-brief`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${sess?.session?.access_token || ""}` },
+            body: JSON.stringify({ client_id: clientId, to_member_user_id: memberUserId }),
+          });
+          refreshOrgData();
+        } catch (e) { console.warn("Handoff brief generation failed (non-fatal):", e); }
+      })();
+    }
+    return true;
+  };
+  const unassignClient = async (clientId, memberUserId) => {
+    const { error } = await supabase.from("client_assignments")
+      .delete().eq("client_id", clientId).eq("member_user_id", memberUserId);
+    if (error) { console.warn("Unassign failed:", error); return false; }
+    refreshOrgData();
+    return true;
+  };
   // Org invite acceptance: /?join=<token> survives the auth gate; once
   // signed in, accept server-side and reload into the org.
   useEffect(() => {
@@ -1374,7 +1444,7 @@ export default function App({ user }) {
       } catch (e) { console.warn("org-accept error:", e); }
     })();
   }, [orgLoading, user?.id]);
-  const loadData = useDataLoad({ bookOwnerId, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
@@ -2762,8 +2832,6 @@ export default function App({ user }) {
     }
     setPage(id);
   };
-  const allPages = [...navItemsCore, ...moreItemsCore];
-  const pageTitle = allPages.find(n => n.id === page)?.label || "";
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
   const overdueChecks = hcQueue.filter(h => (h.overdue > 0 || h.due === "Today") && !hcDone[h.client]).length;
   const totalRefRev = refs.filter(r => r.status === "converted" || r.converted).reduce((a, r) => a + (r.revenue || 0), 0);
@@ -2923,6 +2991,12 @@ export default function App({ user }) {
     orgRole,
     bookOwnerId,
     can,
+    orgMembers,
+    clientAssignments,
+    handoffBriefs,
+    assignClient,
+    unassignClient,
+    refreshOrgData,
     rolodex,
     rolodexCheckinDismissed,
     dismissRolodexCheckin,
@@ -3234,7 +3308,7 @@ export default function App({ user }) {
 
         {/* Nav items — fixed, always visible */}
         <div style={{ padding: sidebarCollapsed ? "0 8px" : "0 10px", flexShrink: 0 }}>
-          {navItemsCore.map(n => {
+          {visibleNavItems.map(n => {
             const active = page === n.id;
             return (
               <div key={n.id} className={"nav-item" + (active ? " is-active" : "")} onClick={() => goTo(n.id)} title={sidebarCollapsed ? n.label : undefined} style={{
@@ -4262,8 +4336,8 @@ export default function App({ user }) {
           put while the strip scrolls behind it. Strip has left/right padding
           equal to half the FAB's footprint so the first/last items can scroll
           fully into view without permanently sitting under the FAB. */}
-      {/* Shell overlays: dock + More sheet + quick-log FAB + capture sheet (extracted June 2026) */}
-      <ShellOverlays app={{ ...pageCtx, dockShrunk, hasDot, keyboardOpen, mobileMoreOpen, page, quickLogOpen, quickLogText, setMobileMoreOpen }} />
+      {/* Shell overlays: dock + quick-log FAB + capture sheet (extracted June 2026) */}
+      <ShellOverlays app={{ ...pageCtx, dockShrunk, hasDot, keyboardOpen, page, quickLogOpen, quickLogText }} />
 
       {/* ═══ MOBILE RAI HISTORY ═══ Mobile-only past-chats drawer. Desktop uses
           the sidebar convo list; this surfaces the same raiConvoList +
