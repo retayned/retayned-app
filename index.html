@@ -17,10 +17,15 @@
            AFTER a 400ms delay (CSS animation-delay), so fast desktop loads
            where React mounts first never flash it. React replaces all of #root
            on mount, so it vanishes automatically once the app is ready. -->
-      <div id="boot-splash" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#FAFAF7;opacity:0;animation:bootfade .3s ease-out .4s forwards;">
-        <img src="/favicon.png" alt="Retayned" width="48" height="48" style="border-radius:12px;" />
+      <!-- Boot splash: #root is empty until the JS bundle parses and React
+           mounts — on mobile that's several seconds. Show the logo + a subtle
+           spinner IMMEDIATELY (no delay) so the user sees branding, not blank.
+           React replaces all of #root on mount, removing this automatically. -->
+      <div id="boot-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#FAFAF7;">
+        <img src="/favicon.png" alt="Retayned" width="52" height="52" style="border-radius:13px;" />
+        <div style="width:26px;height:26px;border:2.5px solid rgba(51,84,62,0.18);border-top-color:#33543E;border-radius:50%;animation:bootspin 0.7s linear infinite;"></div>
       </div>
-      <style>@keyframes bootfade{to{opacity:1}}</style>
+      <style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
     </div>
     <script>
       /* White-screen watchdog (Jun 2026). If the main bundle 404s after a
