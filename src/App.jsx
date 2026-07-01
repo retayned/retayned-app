@@ -17,13 +17,8 @@ import { supabase } from "./lib/supabase";
 import { clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
-// These are interaction-triggered overlays, NOT needed for first paint, and
-// they're heavy (ClientModal ~2300 lines, BrainDump ~760, Onboarding ~350).
-// Lazy-loading them keeps ~3,400 lines of component code OUT of the initial
-// bundle — the real lever for mobile cold-load time. They render conditionally
-// already, so each just needs a Suspense boundary.
-const BrainDump = lazy(() => import("./components/BrainDump"));
-const ClientModal = lazy(() => import("./components/ClientModal"));
+import BrainDump from "./components/BrainDump";
+import ClientModal from "./components/ClientModal";
 import RolodexModal from "./components/RolodexModal";
 import ShellOverlays from "./components/ShellOverlays";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
@@ -3901,7 +3896,7 @@ export default function App({ user }) {
           </div>
         </div>
       )}
-      {selectedClient && <Suspense fallback={null}><ClientModal app={{ ...pageCtx, billingAddOpen, billingMonthStatus, billingNewItem, billingTerms, clientAddons, clientBilling, clientMenuOpen, clientTab, confidantEndRef, confidantInput, confidantLastActivity, confidantLoadingThread, confidantMessages, confidantTyping, editScores, editingAddon, editingOverview, editingProfile, engagementPausesByClient, newAddon, overviewEditData, page, pauseConfirm, radarHoverDim, removeConfirm, resumeConfirm, rolodexConfirm, selectedClient, sendConfidantMessage, setBillingAddOpen, setBillingMonthStatus, setBillingNewItem, setBillingTerms, setClientAddons, setClientBilling, setClientMenuOpen, setClients, setConfidantInput, setEditScores, setEditingAddon, setEditingAddonId, setEditingOverview, setEditingProfile, setEngagementPausesByClient, setNewAddon, setOverviewEditData, setRadarHoverDim, setRenewalModal, setRenewalModalMonth, setShowBaselineEdit, setTermsAddingNew, setTermsEditDraft, setTermsEditingId, setTermsHistoryOpen, showBaselineEdit, termsAddingNew, termsEditDraft, termsEditingId, termsHistoryOpen }} /></Suspense>}
+      {selectedClient && <ClientModal app={{ ...pageCtx, billingAddOpen, billingMonthStatus, billingNewItem, billingTerms, clientAddons, clientBilling, clientMenuOpen, clientTab, confidantEndRef, confidantInput, confidantLastActivity, confidantLoadingThread, confidantMessages, confidantTyping, editScores, editingAddon, editingOverview, editingProfile, engagementPausesByClient, newAddon, overviewEditData, page, pauseConfirm, radarHoverDim, removeConfirm, resumeConfirm, rolodexConfirm, selectedClient, sendConfidantMessage, setBillingAddOpen, setBillingMonthStatus, setBillingNewItem, setBillingTerms, setClientAddons, setClientBilling, setClientMenuOpen, setClients, setConfidantInput, setEditScores, setEditingAddon, setEditingAddonId, setEditingOverview, setEditingProfile, setEngagementPausesByClient, setNewAddon, setOverviewEditData, setRadarHoverDim, setRenewalModal, setRenewalModalMonth, setShowBaselineEdit, setTermsAddingNew, setTermsEditDraft, setTermsEditingId, setTermsHistoryOpen, showBaselineEdit, termsAddingNew, termsEditDraft, termsEditingId, termsHistoryOpen }} />}
 
 
       {/* ROLODEX SLIDE-OVER */}
@@ -4375,20 +4370,16 @@ export default function App({ user }) {
 
       {/* Brain Dump — review-before-commit extraction modal. App-level so
           it works from every page (capture sheet, Today composer). */}
-      {brainDumpOpen && (
-        <Suspense fallback={null}>
-          <BrainDump
-            open={brainDumpOpen}
-            onClose={() => setBrainDumpOpen(false)}
-            clients={clients}
-            user={user}
-            onCommitted={({ tasks: newTasks, failed }) => {
-              if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
-              if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
-            }}
-          />
-        </Suspense>
-      )}
+      <BrainDump
+        open={brainDumpOpen}
+        onClose={() => setBrainDumpOpen(false)}
+        clients={clients}
+        user={user}
+        onCommitted={({ tasks: newTasks, failed }) => {
+          if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
+          if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
+        }}
+      />
 
       {/* Toast — bottom-right confirmation with undo */}
       {quickLogToast && (
