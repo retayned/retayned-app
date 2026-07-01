@@ -347,3 +347,321 @@ export function ScoreFirstCard({ clientName, onScore }) {
     </div>
   );
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// ONBOARDING v2 (Jul 2026) — the Book Drop entry + First Week activation
+// One metric governs everything here: clients in the book, first session.
+// Win vocabulary rule: celebratory copy names clients, dollars, promises,
+// mornings, the book, drift — never app actions. No confetti, no badges.
+// ═══════════════════════════════════════════════════════════════════════
+
+// ─── useCountUp — tiny rAF count-up shared by the Book Drop counter and
+// the score reveal. Animates 0 → target on mount, then prev → next on
+// target changes. Cubic ease-out, cleans up on unmount. ─────────────────
+export function useCountUp(target, duration = 900) {
+  const [value, setValue] = useState(0);
+  const fromRef = useRef(0);
+  const rafRef = useRef(null);
+  useEffect(() => {
+    const from = fromRef.current;
+    if (from === target) { setValue(target); return; }
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(Math.round(from + (target - from) * eased));
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else fromRef.current = target;
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target, duration]);
+  return value;
+}
+
+// ─── splitRoster — the paste parser. Takes anything (typed names, a
+// spreadsheet column, an invoice list, a messy note) and returns
+// [{ name, revenue }]. Deterministic and client-side: covers the 90%
+// case for free; truly messy blobs can route through Rai later. ────────
+export function splitRoster(text) {
+  const out = [];
+  const seen = new Set();
+  // Protect thousands separators BEFORE tokenizing — otherwise the comma
+  // splitter shears "$2,500/mo" into "$2" + a junk "500/mo" entry.
+  for (const raw of String(text || "").replace(/(\d),(?=\d)/g, "$1").split(/[\n,;]+/)) {
+    let t = raw.trim();
+    if (!t) continue;
+    // Catch a $ amount riding along ("Harbor & Pine $2,500/mo", "$3k")
+    let revenue = 0;
+    const money = t.match(/\$\s*([\d][\d,]*(?:\.\d+)?)\s*(k\b)?(?:\s*\/\s*mo(?:nth)?\b)?/i);
+    if (money) {
+      revenue = Math.round(parseFloat(money[1].replace(/,/g, "")) * (money[2] ? 1000 : 1));
+      t = (t.slice(0, money.index) + t.slice(money.index + money[0].length)).trim();
+    }
+    // Emails: "Maya <maya@x.com>" → "Maya"; bare "maya.linwood@x.com" → "Maya Linwood"
+    t = t.replace(/<[^>]*>/g, " ").trim();
+    const bareEmail = t.match(/^([A-Za-z0-9._%+-]+)@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/);
+    if (bareEmail) {
+      t = bareEmail[1].replace(/[._]+/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase());
+    } else {
+      t = t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, " ").trim();
+    }
+    // List junk: leading bullets / "1." numbering (but "3M" survives —
+    // the number must be followed by a separator), trailing dashes/colons.
+    t = t.replace(/^\s*(?:[-–•*]|\d{1,3}[.)])\s+/, "").replace(/[\s\-–:|]+$/, "").replace(/\s{2,}/g, " ").trim();
+    if (!t || t.length > 60) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: t, revenue });
+  }
+  return out;
+}
+
+// ─── BookDrop — THE first screen. One question, one input, nothing else.
+// Type names (Enter between each) or paste a whole list from anywhere.
+// The roster materializes live; the counter climbs; the reveal ladder
+// shows what each threshold unlocks. Replaces WelcomeOverlay +
+// QuickAddClientCard as steps 0–1. ──────────────────────────────────────
+export function BookDrop({ onDone, onSkip }) {
+  const [entries, setEntries] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const listRef = useRef(null);
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [entries.length]);
+  const totalRevenue = entries.reduce((a, e) => a + (e.revenue || 0), 0);
+  const shownRevenue = useCountUp(totalRevenue, 700);
+  const addFromText = (text) => {
+    const parsed = splitRoster(text);
+    if (!parsed.length) return;
+    setEntries(prev => {
+      const have = new Set(prev.map(e => e.name.toLowerCase()));
+      return [...prev, ...parsed.filter(p => !have.has(p.name.toLowerCase()))];
+    });
+  };
+  const commitDraft = () => { const d = draft.trim(); if (d) { addFromText(d); setDraft(""); } };
+  const finish = async () => {
+    if (busy || entries.length === 0) return;
+    setBusy(true);
+    const ok = await onDone(entries);
+    if (!ok) setBusy(false);
+  };
+  const initials = (n) => n.split(/\s+/).map(w => w[0]).filter(Boolean).join("").slice(0, 2).toUpperCase();
+  const avatarBg = [C.primary, C.primaryLight, "#A8A420", C.primaryDeep];
+  const n = entries.length;
+  // The reveal ladder — what the book is buying, visible WHILE they add.
+  const ladder = [
+    { lit: n >= 1, text: "Task capture unlocked — I catch names, dates, repeats as you type." },
+    { lit: n >= 3, text: "Ranking unlocked — I'll tell you who needs you this week, not just who's loudest." },
+    { lit: n >= 1, text: "Your first brief: tomorrow morning, while you sleep." },
+  ];
+  return (
+    <Overlay>
+      <div>
+        <div style={{ textAlign: "center", marginBottom: 18 }}>
+          <span style={{ ...WORDMARK, fontSize: 22, color: C.primary }}>Retayned.</span>
+        </div>
+        <div style={{ background: C.bg, border: "1px solid " + C.border, borderRadius: 18, padding: "22px 20px", boxShadow: "var(--rt-sh-card)" }}>
+          <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3", marginBottom: 6 }}>✦ RAI · RETENTION SPECIALIST</div>
+          <div style={{ ...FRAUNCES, fontSize: 24, lineHeight: 1.22, color: C.text, letterSpacing: "-0.01em" }}>Who pays you?</div>
+          <div style={{ fontSize: 12.5, color: C.textSec, margin: "8px 0 14px", lineHeight: 1.55 }}>
+            Type your clients — or paste your whole list from anywhere. Names are enough. I'll read everything tonight and have your first brief ready in the morning.
+          </div>
+          {/* Counter — climbs as the book assembles */}
+          {n > 0 && (
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: C.primaryDeep, fontVariantNumeric: "tabular-nums" }}>
+                {n} client{n === 1 ? "" : "s"}
+              </span>
+              {totalRevenue > 0 && (
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: C.primary, fontVariantNumeric: "tabular-nums" }}>
+                  · ${shownRevenue.toLocaleString()}/mo under watch
+                </span>
+              )}
+            </div>
+          )}
+          {/* Live roster */}
+          <div ref={listRef} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: "32vh", overflowY: "auto", marginBottom: 8 }}>
+            {entries.map((e, i) => (
+              <div key={e.name} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "8px 11px", display: "flex", alignItems: "center", gap: 9 }}>
+                <span style={{ width: 22, height: 22, borderRadius: 999, background: avatarBg[i % avatarBg.length], color: "#fff", fontSize: 8.5, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initials(e.name)}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{e.name}</span>
+                {e.revenue > 0 && <span style={{ fontSize: 11, color: C.textMuted, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>${e.revenue.toLocaleString()}/mo</span>}
+                <button onClick={() => setEntries(prev => prev.filter(x => x.name !== e.name))} aria-label={"Remove " + e.name} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, lineHeight: 1, padding: 0, fontFamily: "inherit", flexShrink: 0 }}>×</button>
+              </div>
+            ))}
+            <textarea
+              autoFocus
+              rows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitDraft(); } }}
+              onPaste={(e) => {
+                const text = e.clipboardData ? e.clipboardData.getData("text") : "";
+                if (text && /[\n,;]/.test(text)) { e.preventDefault(); addFromText(draft + "\n" + text); setDraft(""); }
+              }}
+              onBlur={commitDraft}
+              placeholder={n === 0 ? "First client — or paste your list…" : "Next client…"}
+              style={{ width: "100%", boxSizing: "border-box", border: "2px solid rgba(20,30,22,0.30)", borderRadius: 10, padding: "10px 11px", background: C.card, fontFamily: "inherit", fontSize: 13.5, color: C.text, outline: "none", resize: "none", lineHeight: 1.4 }}
+            />
+          </div>
+          <div style={{ fontSize: 10.5, color: C.textMuted, textAlign: "center", marginBottom: 12 }}>enter adds the next row · paste catches names and $ amounts</div>
+          {/* Reveal ladder — the unlocks, in view while they add */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, padding: "12px 12px", background: C.surfaceWarm, borderRadius: 12, marginBottom: 14 }}>
+            {ladder.map((row, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, opacity: row.lit ? 1 : 0.45, transition: "opacity 400ms var(--rt-ease-out)" }}>
+                <span style={{ color: row.lit ? C.primary : C.textMuted, fontSize: 12, lineHeight: "17px", flexShrink: 0 }}>{row.lit ? "✓" : "·"}</span>
+                <span style={{ fontSize: 11.5, color: row.lit ? C.text : C.textMuted, lineHeight: 1.45 }}>{row.text}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={finish} disabled={n === 0 || busy} style={{ ...primaryBtn, opacity: n > 0 && !busy ? 1 : 0.45, cursor: n > 0 && !busy ? "pointer" : "default" }}>
+            {busy ? `Adding ${n} client${n === 1 ? "" : "s"}…` : n === 0 ? "Add your first client" : n === 1 ? "Done — 1 in the book" : `Done — ${n} in the book`}
+          </button>
+          <div style={{ textAlign: "center" }}>
+            <button onClick={onSkip} style={{ ...quietLink, marginTop: 10 }}>I'll explore on my own first</button>
+          </div>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+// ─── FirstWeekCard — the activation chain, replacing GettingStartedPill.
+// Five milestones: BOOK → PROMISE → READ → KEPT → SCORED. Each flips to a
+// client-focused win line the moment it lands and stays flipped
+// (localStorage stamps). Dismiss collapses to a dot-progress pill.
+// Retires permanently at 5/5 after one closing line. ────────────────────
+const FW_KEYS = { book: "rt:fw:book", promise: "rt:fw:promise", read: "rt:fw:read", kept: "rt:fw:kept", scored: "rt:fw:scored" };
+const fwGet = (k) => { try { return window.localStorage.getItem(k); } catch (_) { return null; } };
+const fwSet = (k, v) => { try { window.localStorage.setItem(k, v); } catch (_) { /* unavailable */ } };
+
+export function FirstWeekCard({ clients, tasks, raiPicks, onBook, onScore }) {
+  const [stamps, setStamps] = useState(() => {
+    const o = {};
+    for (const k of Object.keys(FW_KEYS)) o[k] = fwGet(FW_KEYS[k]);
+    return o;
+  });
+  const [collapsed, setCollapsed] = useState(() => fwGet("rt:fwDismissed") === "1");
+  const [closed, setClosed] = useState(() => fwGet("rt:fw:closed") === "1");
+  const scoredNow = clients.some(c => {
+    const p = c.profileScores || c.profile_scores;
+    return p && Object.keys(p).length > 0;
+  });
+  const bookRevenue = clients.reduce((a, c) => a + (c.revenue || 0), 0);
+  // Stamp milestones as they land — once stamped, a line never un-flips.
+  useEffect(() => {
+    const now = String(Date.now());
+    let changed = false;
+    const next = { ...stamps };
+    const hit = (k, cond) => { if (!next[k] && cond) { next[k] = now; fwSet(FW_KEYS[k], now); changed = true; } };
+    hit("book", clients.length >= 3);
+    hit("promise", tasks.length > 0);
+    hit("read", !!raiPicks);
+    hit("kept", tasks.some(t => t.done) || !!fwGet("rt:firstCompletionAt"));
+    hit("scored", scoredNow);
+    if (changed) setStamps(next);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clients, tasks, raiPicks, scoredNow]);
+  const done = Object.keys(FW_KEYS).filter(k => stamps[k]).length;
+  const allDone = done === 5;
+  // 5/5 → show the closing line for ~8s, then retire forever.
+  useEffect(() => {
+    if (!allDone || closed) return;
+    const t = setTimeout(() => { fwSet("rt:fw:closed", "1"); setClosed(true); }, 8000);
+    return () => clearTimeout(t);
+  }, [allDone, closed]);
+  if (closed) return null;
+  if (allDone) {
+    return (
+      <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "12px 15px", marginBottom: 10, boxShadow: "var(--rt-sh-xs)" }}>
+        <div style={{ ...FRAUNCES, fontSize: 14, color: C.text, lineHeight: 1.5 }}>The book is alive. From here, it's mornings.</div>
+      </div>
+    );
+  }
+  if (collapsed) {
+    return (
+      <button onClick={() => { setCollapsed(false); fwSet("rt:fwDismissed", "0"); }} aria-label="First week progress" style={{ display: "inline-flex", alignItems: "center", gap: 5, background: C.primarySoft, border: "none", borderRadius: 999, padding: "7px 12px", marginBottom: 10, cursor: "pointer", fontFamily: "inherit" }}>
+        {Object.keys(FW_KEYS).map(k => (
+          <span key={k} style={{ width: 6, height: 6, borderRadius: 999, background: stamps[k] ? C.primary : C.border }} />
+        ))}
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: C.primaryDeep, marginLeft: 3 }}>{done}/5</span>
+      </button>
+    );
+  }
+  const rows = [
+    { k: "book", win: bookRevenue > 0 ? `$${bookRevenue.toLocaleString()}/mo now under watch.` : "Your book, under watch.", todo: "add your book", act: onBook },
+    { k: "promise", win: "First promise on the record.", todo: "capture a task", act: null },
+    { k: "read", win: "You've seen your first brief. There's one every morning.", todo: "your first brief — tomorrow morning", act: null },
+    { k: "kept", win: "One kept promise. Rai saw it too.", todo: "complete a task", act: null },
+    { k: "scored", win: `${clients[0]?.name || "A client"}, scored. Rai starts watching for drift tonight.`, todo: "score a client", act: onScore },
+  ];
+  return (
+    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "12px 15px 10px", marginBottom: 10, boxShadow: "var(--rt-sh-xs)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>First week</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.primaryDeep, fontVariantNumeric: "tabular-nums" }}>{done}/5</span>
+        <button onClick={() => { setCollapsed(true); fwSet("rt:fwDismissed", "1"); }} aria-label="Collapse" style={{ marginLeft: "auto", background: "transparent", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, lineHeight: 1, padding: 0, fontFamily: "inherit" }}>×</button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {rows.map(r => (
+          <div key={r.k} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <span style={{ color: stamps[r.k] ? C.primary : C.border, fontSize: 12, lineHeight: "17px", flexShrink: 0 }}>{stamps[r.k] ? "✓" : "○"}</span>
+            {stamps[r.k] ? (
+              <span style={{ fontSize: 12, color: C.text, lineHeight: 1.45 }}>{r.win}</span>
+            ) : r.act ? (
+              <button onClick={r.act} style={{ background: "transparent", border: "none", padding: 0, fontFamily: "inherit", fontSize: 12, color: C.primaryDeep, fontWeight: 600, cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2, textAlign: "left", lineHeight: 1.45 }}>{r.todo}</button>
+            ) : (
+              <span style={{ fontSize: 12, color: C.textMuted, lineHeight: 1.45 }}>{r.todo}</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── ScoreReveal — the count-up moment after the 12-dimension scoring.
+// The number arrives (0 → score over ~900ms) with the ring drawing in
+// sync, then a verdict line derived from the dimension shape — the
+// strongest dimension leads unless something sits at ≤3. ────────────────
+export function ScoreReveal({ score, dims, dimNames }) {
+  const shown = useCountUp(score || 0, 900);
+  const verdict = (() => {
+    const entries = Object.entries(dims || {}).filter(([, v]) => v != null);
+    if (!entries.length) return null;
+    const nameOf = (k) => (dimNames && dimNames[k]) || k.replace(/_/g, " ");
+    let best = entries[0], worst = entries[0];
+    for (const e of entries) {
+      if (e[1] > best[1]) best = e;
+      if (e[1] < worst[1]) worst = e;
+    }
+    if (worst[1] <= 3) return `${nameOf(best[0])} carries it — ${nameOf(worst[0]).toLowerCase()} is the soft spot.`;
+    if (score >= 75) return `Solid — ${nameOf(best[0]).toLowerCase()} carries it.`;
+    if (score >= 55) return `Steady, with room — ${nameOf(best[0]).toLowerCase()} is the strength to build on.`;
+    return `Fragile — ${nameOf(best[0]).toLowerCase()} is what's holding it together.`;
+  })();
+  const color = score >= 75 ? C.success : score >= 55 ? C.warning : C.danger;
+  const R = 30;
+  const circ = 2 * Math.PI * R;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "6px 0 2px" }}>
+      <div style={{ position: "relative", width: 72, height: 72 }}>
+        <svg width={72} height={72} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={36} cy={36} r={R} fill="none" stroke={C.borderLight} strokeWidth="4" />
+          <circle cx={36} cy={36} r={R} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={circ} strokeDashoffset={circ * (1 - Math.min(100, shown) / 100)} />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 22, fontWeight: 800, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: -0.5 }}>{shown}</span>
+        </div>
+      </div>
+      {verdict && (
+        <div style={{ ...FRAUNCES, fontSize: 13, color: C.textSec, textAlign: "center", lineHeight: 1.5, maxWidth: 320 }}>{verdict}</div>
+      )}
+    </div>
+  );
+}
