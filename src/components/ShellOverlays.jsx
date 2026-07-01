@@ -5,7 +5,7 @@
 // desktop's ⌘K quick log. Contract scanned with the v3 pipeline
 // (props, over-inclusion, template interpolations).
 import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
-import { useRef, useEffect, Fragment } from "react";
+import { useRef, useEffect } from "react";
 import { mobileNavMore, mobileNavPrimary, mobileNavStrip } from "../nav";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { ymdInTz, localYmd, splitLongTask } from "../utils";
@@ -40,21 +40,18 @@ export default function ShellOverlays({ app }) {
   // Scrollable dock: ref to the strip so the active destination can be
   // auto-scrolled into a visible spot whenever the page changes.
   const dockStripRef = useRef(null);
-  const centerDockGap = (behavior = "auto") => {
+  // With equal spacing (no center gap), keep the active destination scrolled
+  // into view on mount and on page change so it isn't stuck behind the FAB.
+  const scrollActiveIntoView = (behavior) => {
     const strip = dockStripRef.current;
     if (!strip) return;
-    const gap = strip.querySelector('[aria-hidden="true"]');
-    if (gap && gap.offsetParent) {
-      const target = gap.offsetLeft + gap.offsetWidth / 2 - strip.clientWidth / 2;
-      strip.scrollTo({ left: Math.max(0, target), behavior });
+    const el = strip.querySelector('[data-active="1"]');
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ behavior, inline: "center", block: "nearest" });
     }
   };
-  // Rest state = the FAB gap centered, so the "+" has equal margins on both
-  // sides (4 destinations visible-ish each side). Re-center on mount and on
-  // page change; the active item is highlighted by color, no need to scroll it
-  // under the FAB. User can still free-scroll to reach any item.
-  useEffect(() => { centerDockGap("auto"); }, []);
-  useEffect(() => { centerDockGap("smooth"); }, [page]);
+  useEffect(() => { scrollActiveIntoView("auto"); }, []);
+  useEffect(() => { scrollActiveIntoView("smooth"); }, [page]);
   return (<>
       {(() => {
         // ═══ SCROLLABLE STRIP DOCK (June 2026 redesign) ═══
@@ -79,8 +76,12 @@ export default function ShellOverlays({ app }) {
               bottom: keyboardOpen ? -120 : "calc(env(safe-area-inset-bottom, 0px) + 10px)",
               zIndex: 500, display: "flex", justifyContent: "center",
               padding: "0 12px", pointerEvents: "none",
-              transition: "bottom 240ms var(--rt-ease-out), opacity 200ms ease",
-              opacity: dockShrunk ? 0 : 1,
+              transition: "bottom 240ms var(--rt-ease-out), transform 220ms var(--rt-ease-out)",
+              // Scroll-shrink: when scrolling DOWN the dock scales down (and eases
+              // toward the bottom) but stays visible — the original design. Not a
+              // hide. Scrolling up / near top restores full size.
+              transform: dockShrunk ? "scale(0.86) translateY(6px)" : "scale(1) translateY(0)",
+              transformOrigin: "center bottom",
             }}
           >
             <div style={{ position: "relative", width: "100%", maxWidth: 480, height: 64, pointerEvents: "auto" }}>
@@ -91,9 +92,11 @@ export default function ShellOverlays({ app }) {
                 style={{
                   position: "absolute", inset: 0,
                   background: "#FFFFFF",
-                  border: "1px solid rgba(20,30,22,0.08)",
+                  border: "1px solid rgba(20,30,22,0.14)",
                   borderRadius: 22,
-                  boxShadow: "0 8px 24px rgba(20,30,22,0.10)",
+                  // Stronger separation from page content scrolling behind it:
+                  // a defined ring + a deeper ambient shadow.
+                  boxShadow: "0 0 0 1px rgba(20,30,22,0.04), 0 4px 12px rgba(20,30,22,0.10), 0 12px 32px rgba(20,30,22,0.16)",
                   overflowX: "auto", overflowY: "hidden",
                   display: "flex", alignItems: "center",
                   WebkitOverflowScrolling: "touch",
@@ -103,17 +106,15 @@ export default function ShellOverlays({ app }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "0 8px", height: "100%", margin: "0 auto", minWidth: "min-content" }}>
                   {mobileNavStrip.map((item, i) => {
                     const active = page === item.id;
-                    const half = mobileNavStrip.length / 2;  // 8 items → gap after index 3 (4 left / 4 right)
                     return (
-                      <Fragment key={item.id}>
-                        {i === half && <div style={{ width: 68, flexShrink: 0 }} aria-hidden="true" />}
-                        <button
+                      <button
+                          key={item.id}
                           onClick={() => goTo(item.id)}
                           className="rt-dock-item"
                           data-active={active ? "1" : undefined}
                           style={{
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                            gap: 3, minWidth: 56, flexShrink: 0, height: 56,
+                            gap: 3, minWidth: 64, flexShrink: 0, height: 56,
                             border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
                             color: active ? C.primary : "#9AA39B",
                             position: "relative",
@@ -127,7 +128,6 @@ export default function ShellOverlays({ app }) {
                           </span>
                           <span style={{ fontSize: 9.5, fontWeight: active ? 600 : 500, letterSpacing: "0.01em" }}>{item.label}</span>
                         </button>
-                      </Fragment>
                     );
                   })}
                 </div>
