@@ -6,7 +6,8 @@
 // (props, over-inclusion, template interpolations).
 import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
 import { useRef, useEffect, Fragment } from "react";
-import { mobileNavMore, mobileNavPrimary, mobileNavStrip } from "../nav";
+import { mobileNavStrip } from "../nav";
+import { can } from "../hooks/useOrg";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { ymdInTz, localYmd, splitLongTask } from "../utils";
 import { C } from "../theme";
@@ -20,12 +21,11 @@ export default function ShellOverlays({ app }) {
     goTo,
     hasDot,
     keyboardOpen,
-    mobileMoreOpen,
+    orgRole,
     page,
     quickLogOpen,
     quickLogText,
     setBrainDumpOpen,
-    setMobileMoreOpen,
     setPersonalEvents,
     setQuickLogOpen,
     setQuickLogText,
@@ -36,6 +36,11 @@ export default function ShellOverlays({ app }) {
     userTimezone,
     workersList,
   } = app;
+
+  // AGENCY: destinations an AM can't open are hidden from the strip
+  // (pages are can()-gated at render — a visible item would be a dead tap).
+  const NAV_PERMS = { workers: "manage_workers", retros: "view_rolodex", referrals: "view_referrals" };
+  const navStrip = mobileNavStrip.filter(item => !NAV_PERMS[item.id] || can(NAV_PERMS[item.id], orgRole));
 
   // Scrollable dock: ref to the strip so the active destination can be
   // auto-scrolled into a visible spot whenever the page changes.
@@ -99,9 +104,9 @@ export default function ShellOverlays({ app }) {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 8px", height: "100%", minWidth: "max-content" }}>
-                  {mobileNavStrip.map((item, i) => {
+                  {navStrip.map((item, i) => {
                     const active = page === item.id;
-                    const mid = Math.ceil(mobileNavStrip.length / 2);
+                    const mid = Math.ceil(navStrip.length / 2);
                     return (
                       <Fragment key={item.id}>
                         {i === mid && <div style={{ width: 62, flexShrink: 0 }} aria-hidden="true" />}
