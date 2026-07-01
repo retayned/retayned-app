@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase";
 export function useDataLoad(app) {
   const {
     bookOwnerId,
+    orgRole,
     clients,
     getAdjustedLTV,
     googleConnected,
@@ -195,6 +196,39 @@ export function useDataLoad(app) {
       }
     } catch (err) {
       console.warn('google_oauth_tokens fetch failed (non-fatal):', err);
+    }
+
+    // ─── AGENCY (Jun 2026): AM slice scoping ─────────────────────────
+    // A seat with role 'am' works the owner's book TRIMMED to their
+    // assigned clients. Filtering happens here — one place, in-place on
+    // the response objects — so every downstream setter stays untouched.
+    // Owners (root or seat) and solo users skip this entirely.
+    if (orgRole === "am") {
+      let amSet = new Set();
+      try {
+        const { data: myAssigns } = await supabase
+          .from("client_assignments")
+          .select("client_id")
+          .eq("member_user_id", uid);
+        amSet = new Set((myAssigns || []).map(a => a.client_id));
+      } catch (e) { console.warn("Assignment load failed (AM sees empty slice):", e); }
+      const inSlice = (cid) => cid && amSet.has(cid);
+      if (clientRes?.data) clientRes.data = clientRes.data.filter(c => inSlice(c.id));
+      // Tasks: keep (a) book tasks on assigned clients, (b) the seat's own
+      // personal-book rows (user_id === uid), (c) unfiled tasks the seat
+      // created in the owner's book (created_by stamp from db.js).
+      if (taskRes?.data) taskRes.data = taskRes.data.filter(t =>
+        inSlice(t.client_id) || t.user_id === uid || (!t.client_id && t.created_by === uid));
+      if (hcRes?.data) hcRes.data = hcRes.data.filter(h => inSlice(h.client_id));
+      if (tpRes?.data) tpRes.data = tpRes.data.filter(tp => inSlice(tp.client_id));
+      if (cadenceRes?.data) cadenceRes.data = cadenceRes.data.filter(tp => inSlice(tp.client_id));
+      if (completionHistRes?.data) completionHistRes.data = completionHistRes.data.filter(r => inSlice(r.client_id));
+      // Owner-level surfaces: Referrals + Rolodex pages are role-gated off,
+      // and the weekly observation reads the WHOLE book — none of it is the
+      // seat's to see. Blank them rather than leak sibling-client data.
+      if (refRes) refRes.data = [];
+      if (rolodexRes) rolodexRes.data = [];
+      if (observerRes) observerRes.data = null;
     }
 
     // Build per-client revenue history map: client_id → [history rows]
@@ -659,6 +693,9 @@ export function useDataLoad(app) {
         .then(r => { if (r?.data) setClientAddons(r.data); })
         .catch(e => console.warn("addons hydrate failed:", e));
     }
-  }, [user, userTimezone]);
+    // bookOwnerId + orgRole in deps: when useOrg resolves (async, after
+    // mount), the closure must be rebuilt or a seat loads their own empty
+    // book with the stale null bookOwnerId and never recovers.
+  }, [user, userTimezone, bookOwnerId, orgRole]);
   return loadData;
 }
