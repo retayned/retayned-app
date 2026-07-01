@@ -3,7 +3,7 @@
 import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
 import { Icon } from "../components/Icon";
 import { MobileCalendarStrip } from "../components/MobileCalendarStrip";
-import { ExamplePills, GettingStartedPill, RaiNightCard, TaskSpotlight, typeIntoComposer } from "../components/Onboarding";
+import { ExamplePills, FirstWeekCard, RaiNightCard, TaskSpotlight, typeIntoComposer } from "../components/Onboarding";
 import { BucketCalToggle, BucketCalendarLater, BucketCalendarTomorrow } from "../components/TaskBuckets";
 import { lazy, Suspense } from "react";
 // TimeDial is a heavy (~940 line) DESKTOP-ONLY background calendar layer — it
@@ -58,6 +58,7 @@ export default function TodayPage({ app }) {
     googleConnectPromptDismissed,
     googleConnected,
     isMobile,
+    firstCompletionJustSet,
     org,
     orgRole,
     justCompletedIds,
@@ -167,6 +168,12 @@ export default function TodayPage({ app }) {
     setBrainDumpOpen,
     setOnboardingStep,
   } = app;
+  // First-brief unwrap (Jul 2026): brief #1 arrives veiled for young
+  // accounts; one tap dissolves it forever. Old accounts never see it
+  // (gated at render by account age).
+  const [briefUnwrapped, setBriefUnwrapped] = useState(() => {
+    try { return !!window.localStorage.getItem("rt:briefUnwrapped"); } catch (_) { return true; }
+  });
   // First-run example pills: on DESKTOP they type into the inline Today
   // composer (parser chips light up live). On MOBILE that composer is
   // display:none — the capture sheet is the composer — so the same tap
@@ -1151,8 +1158,11 @@ export default function TodayPage({ app }) {
                     welcomed = !!window.localStorage.getItem("rt:welcomedAt");
                     pillDismissed = !!window.localStorage.getItem("rt:gsPillDismissed");
                   } catch (_) { /* unavailable */ }
-                  const showPill = welcomed && !pillDismissed && ageMs < 7 * 86400000
-                    && dataLoaded && (clients.length < 3 || tasks.length === 0);
+                  // First Week card runs the whole activation chain and handles its
+                  // own dismissal + 5/5 retirement — outer gates are welcome +
+                  // account age only. (pillDismissed kept so accounts that
+                  // dismissed the OLD pill stay dismissed.)
+                  const showPill = welcomed && !pillDismissed && ageMs < 7 * 86400000 && dataLoaded;
                   const showNight = dataLoaded && !raiPicks && ageMs < 3 * 86400000
                     && (clients.length > 0 || tasks.length > 0)
                     && !onboardingStep; // its moment is AFTER the flow — never stacked with the spotlight
@@ -1161,18 +1171,27 @@ export default function TodayPage({ app }) {
                     <>
                       {showPill && (
                         <div>
-                          <GettingStartedPill
-                            clientsCount={clients.length}
-                            tasksCount={tasks.length}
+                          <FirstWeekCard
+                            clients={clients}
+                            tasks={tasks}
+                            raiPicks={raiPicks}
                             onBook={() => setOnboardingStep("book")}
+                            onScore={() => setPage("clients")}
                           />
+                        </div>
+                      )}
+                      {/* First-completion moment — once ever, the session a
+                          task first gets checked. */}
+                      {firstCompletionJustSet && (
+                        <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontSize: 13, color: C.textSec, padding: "0 4px 6px", lineHeight: 1.5 }}>
+                          One kept promise. Rai saw it too.
                         </div>
                       )}
                       {showNight && (
                         <RaiNightCard variant={clients.length > 0 && tasks.length > 0 ? "night" : "nothing"} />
                       )}
                       {onboardingStep === "task" && (
-                        <TaskSpotlight clientName={clients[0]?.name} onSkip={() => setOnboardingStep("book")} onPick={pickOnboardingExample} />
+                        <TaskSpotlight clientName={clients[0]?.name} onSkip={() => setOnboardingStep(null)} onPick={pickOnboardingExample} />
                       )}
                     </>
                   );
@@ -1225,6 +1244,14 @@ export default function TodayPage({ app }) {
                   }
                   if (!raiPicks || !raiPicks.client_id) return null;
                   if (raiState?.todays_pick_dismissed_at) return null;
+                  // Morning-ritual framing (young accounts only): brief #1
+                  // arrives veiled; days 1–7 carry a small caption cycling
+                  // the ritual in. Day count maintained by App per local day.
+                  let _briefDays = 0, _youngAcct = false;
+                  try {
+                    _briefDays = parseInt(window.localStorage.getItem("rt:briefDays") || "0", 10);
+                    _youngAcct = !!(user?.created_at && (Date.now() - new Date(user.created_at).getTime()) < 14 * 86400000);
+                  } catch (_) { /* storage unavailable */ }
                   const pickClient = clients.find(c => c.id === raiPicks.client_id);
                   if (!pickClient) return null;
                   // Seed the composer (desktop) or quick-log (mobile) with a
@@ -1318,6 +1345,23 @@ export default function TodayPage({ app }) {
                   const anchorNamed = briefSegments.some(s =>
                     s.type === "client" && s.canonical.toLowerCase() === pickClient.name.toLowerCase()
                   );
+                  if (_youngAcct && !briefUnwrapped) {
+                    return (
+                      <div
+                        onClick={() => {
+                          setBriefUnwrapped(true);
+                          try { window.localStorage.setItem("rt:briefUnwrapped", "1"); } catch (_) { /* unavailable */ }
+                        }}
+                        style={{ marginTop: 8, background: "#EFE9FB", border: "1px solid rgba(124,92,243,0.22)", borderRadius: 12, padding: "18px 16px", cursor: "pointer", textAlign: "center" }}
+                      >
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: "#7c5cf3" }}>✦ RAI</div>
+                        <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontSize: 15.5, color: "#3E2F72", marginTop: 6 }}>
+                          Your first brief is ready.
+                        </div>
+                        <div style={{ fontSize: 11, color: "#3E2F72", opacity: 0.6, marginTop: 4 }}>tap to read</div>
+                      </div>
+                    );
+                  }
                   return (
                     <div
                       className="rt-band-pick is-expanded"
@@ -1370,6 +1414,11 @@ export default function TodayPage({ app }) {
                       ) : (
                         <Fragment key={i}>{seg.value}</Fragment>
                       ))}
+                      {_youngAcct && _briefDays >= 1 && _briefDays <= 7 && (
+                        <div style={{ fontSize: 10, color: C.textMuted, marginTop: 7, fontFamily: "'Manrope', system-ui, sans-serif", fontStyle: "normal", letterSpacing: 0.3 }}>
+                          {["", "There'll be one of these every morning. It reads everything; it says one thing.", "Morning two.", "Morning three.", "Morning four.", "Morning five.", "Morning six.", "One week of mornings."][_briefDays]}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
