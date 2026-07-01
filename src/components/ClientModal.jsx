@@ -28,6 +28,7 @@ export default function ClientModal({ app }) {
     newAddon,
     occurrenceFlags,
     page,
+    refs,
     rolodex,
     setClientAddons,
     setEditingAddon,
@@ -111,7 +112,10 @@ export default function ClientModal({ app }) {
   // carries across. (Hooks live HERE — the render body below is an IIFE.)
   const [assignPickerOpen, setAssignPickerOpen] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
-  useEffect(() => { setAssignPickerOpen(false); setHandoffOpen(false); }, [selectedClient?.id]);
+  // Re-score delta chip (Jul 2026): after a profile re-score, the delta vs
+  // the previous score shows beside the big number until the modal moves on.
+  const [scoreDelta, setScoreDelta] = useState(null);
+  useEffect(() => { setAssignPickerOpen(false); setHandoffOpen(false); setScoreDelta(null); }, [selectedClient?.id]);
   return (<>
 {selectedClient && (() => {
         const sc = selectedClient;
@@ -367,7 +371,14 @@ export default function ClientModal({ app }) {
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
                     {sc.ret ? (
                       <>
-                        <div style={{ fontSize: 44, fontWeight: 800, color: retColor(sc.ret), letterSpacing: -1.6, lineHeight: 0.9, fontVariantNumeric: "tabular-nums" }}>{sc.ret}</div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 6, justifyContent: "flex-end" }}>
+                          {scoreDelta != null && scoreDelta !== 0 && (
+                            <span style={{ fontSize: 12, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: scoreDelta > 0 ? C.success : C.danger, background: scoreDelta > 0 ? "#E8F3EC" : "#FBEDE9", padding: "2px 7px", borderRadius: 999 }}>
+                              {scoreDelta > 0 ? "+" : ""}{scoreDelta}
+                            </span>
+                          )}
+                          <div style={{ fontSize: 44, fontWeight: 800, color: retColor(sc.ret), letterSpacing: -1.6, lineHeight: 0.9, fontVariantNumeric: "tabular-nums" }}>{sc.ret}</div>
+                        </div>
                         <div style={{ fontSize: 9.5, fontWeight: 700, color: C.textMuted, letterSpacing: 1.2, marginTop: 6, textTransform: "uppercase" }}>{_bucket}</div>
                       </>
                     ) : (
@@ -509,6 +520,12 @@ export default function ClientModal({ app }) {
                               {[
                                 { l: "Contact",      v: sc.contact || "—" },
                                 { l: "Role",         v: sc.role || "—" },
+                                // Referral lineage (Jul 2026): where this
+                                // client CAME from is a fact of the account.
+                                ...(() => {
+                                  const lin = (refs || []).find(r => r.name === sc.name && r.from);
+                                  return lin ? [{ l: "Referred by", v: lin.from + (lin.on ? " · " + lin.on : "") }] : [];
+                                })(),
                               ].map((d, i) => (
                                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight }}>
                                   <span style={{ fontSize: 14, color: C.textSec }}>{d.l}</span>
@@ -1253,6 +1270,9 @@ export default function ClientModal({ app }) {
                           <button onClick={() => setEditingProfile(false)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                           <button onClick={async () => {
                             const newRet = calcRetentionScore(editScores, null, sc.qualifyingFlags || {}, sc.months || 0);
+                            // Delta chip: re-scores update quietly — the interesting
+                            // number the second time is the movement, not the reveal.
+                            if (newRet && sc.ret && newRet !== sc.ret) setScoreDelta(newRet - sc.ret);
                             const updated = clients.map(c => c.id === sc.id ? { ...c, profileScores: { ...editScores }, ret: newRet || c.ret } : c);
                             setClients(updated);
                             setSelectedClient({ ...sc, profileScores: { ...editScores }, ret: newRet || sc.ret });
