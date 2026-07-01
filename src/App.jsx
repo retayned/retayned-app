@@ -27,7 +27,7 @@ import { useOrg, can } from "./hooks/useOrg";
 import { setActorContext as dbSetActorContext } from "./lib/db";
 import { useShellViewport } from "./hooks/useShellViewport";
 import { useGoogleCalendar } from "./hooks/useGoogleCalendar";
-import { QuickAddClientCard, RosterBuilder, WelcomeOverlay } from "./components/Onboarding";
+import { BookDrop, RosterBuilder } from "./components/Onboarding";
 import { SkeletonPage } from "./components/Skeletons";
 import { QuickLogToast } from "./components/TaskBuckets";
 import { navItemsCore } from "./nav";
@@ -1029,9 +1029,43 @@ export default function App({ user }) {
   // (composer, capture sheet, Brain Dump) — watching tasks.length
   // covers them all without touching each submit handler.
   useEffect(() => {
-    if (onboardingStep === "task" && tasks.length > 0) setOnboardingStep("book");
+    // BookDrop already collected the whole roster, so the first task ENDS
+    // the guided flow — routing to RosterBuilder here (the pre-Jul-2026
+    // behavior) would ask for the book a second time. The "book" step
+    // survives for its other doors (First Week card's "add your book").
+    if (onboardingStep === "task" && tasks.length > 0) {
+      setOnboardingStep(null);
+      try { window.localStorage.setItem("rt:onboarded", "1"); } catch (_) { /* unavailable */ }
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboardingStep, tasks.length]);
+  // ─── First Week stamps that App owns (Jul 2026) ───────────────────
+  // First-completion: the once-ever moment a task gets checked. Sets the
+  // flag + a session state TodayPage renders the italic line from. Brief
+  // days: one increment per local day with a live brief — drives the
+  // morning-ritual captions (#1 unwrap caption, #2–7 count-ins).
+  // Both gated to young accounts so existing users never see first-run
+  // theater retroactively.
+  const [firstCompletionJustSet, setFirstCompletionJustSet] = useState(false);
+  useEffect(() => {
+    if (!dataLoaded) return;
+    const young = user?.created_at && (Date.now() - new Date(user.created_at).getTime()) < 14 * 86400000;
+    try {
+      if (young && !window.localStorage.getItem("rt:firstCompletionAt") && tasks.some(t => t.done)) {
+        window.localStorage.setItem("rt:firstCompletionAt", String(Date.now()));
+        setFirstCompletionJustSet(true);
+      }
+      if (raiPicks) {
+        const todayKey = localYmd(new Date());
+        if (window.localStorage.getItem("rt:briefLastDay") !== todayKey) {
+          window.localStorage.setItem("rt:briefLastDay", todayKey);
+          const d = parseInt(window.localStorage.getItem("rt:briefDays") || "0", 10) + 1;
+          window.localStorage.setItem("rt:briefDays", String(d));
+        }
+      }
+    } catch (_) { /* storage unavailable */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataLoaded, tasks, raiPicks]);
   // Task IDs whose done-state is mid-write to the DB. loadData (which fires on
   // tab focus / visibilitychange) must NOT overwrite these with stale DB rows,
   // or an optimistic check gets silently reverted — the intermittent
@@ -2967,6 +3001,7 @@ export default function App({ user }) {
     observation,
     occurrenceFlags,
     onboardingStep,
+    firstCompletionJustSet,
     openDismissFlow,
     parserSetDueDateRef,
     parserSetRecurrenceRef,
@@ -3072,7 +3107,9 @@ export default function App({ user }) {
     setRankMode,
     setRefEditData,
     setRefEditing,
+    quickCreateClient,
     setRefForm,
+    setRefs,
     setRefFrom,
     setRefName,
     setRefRevenue,
@@ -3158,24 +3195,26 @@ export default function App({ user }) {
         href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,30..100,0..1;1,9..144,300..700,30..100,0..1&family=Caveat:wght@500;600;700&display=swap"
       />
       {/* ─── First-run onboarding overlays (see components/Onboarding) ─── */}
+      {/* Book Drop (Jul 2026) — THE first screen. One question, one input:
+          type names or paste a whole list. Replaces the old welcome +
+          single-client form; the metric it answers to is clients-in-book
+          in the first session. */}
       {onboardingStep === "welcome" && (
-        <WelcomeOverlay
-          onStart={() => setOnboardingStep("client")}
-          onSkip={() => { markWelcomed(); setOnboardingStep(null); }}
-        />
-      )}
-      {onboardingStep === "client" && (
-        <QuickAddClientCard
-          onSubmit={async (f) => {
-            const c = await quickCreateClient(f.name, f.contact, f.revenue);
+        <BookDrop
+          onDone={async (entries) => {
             markWelcomed();
-            if (c) {
+            let created = 0;
+            for (const e of entries) {
+              const c = await quickCreateClient(e.name, "", e.revenue || 0);
+              if (c) created++;
+            }
+            if (created > 0) {
               setOnboardingStep("task");
               setPage("today");
+            } else {
+              setOnboardingStep(null);
             }
-            // On failure: stay on the card (it resets its busy state and
-            // the user retries) rather than silently closing the overlay.
-            return !!c;
+            return true;
           }}
           onSkip={() => { markWelcomed(); setOnboardingStep(null); }}
         />
