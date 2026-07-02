@@ -2654,3 +2654,100 @@ export const personalCalendar = {
     return { data, error };
   },
 };
+
+
+// ============================================================
+// CLIENT DOCUMENTS — contracts/proposals filed on the client
+// (Jul 2026). Storage bucket 'client-docs', path convention:
+// {book_owner_user_id}/{client_id}/{uuid}_{filename}. The table
+// row is the source of truth for the list; storage holds bytes.
+// ============================================================
+export const clientDocuments = {
+  list: async (clientId) => {
+    const { data, error } = await supabase
+      .from('client_documents')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('uploaded_at', { ascending: false });
+    return { data: data || [], error };
+  },
+
+  // Upload bytes + insert the row. ownerId = the BOOK owner's user id
+  // (folder [1] of the path — storage policies key on it), actorId =
+  // whoever is uploading (owner or AM seat, for attribution).
+  upload: async (ownerId, actorId, clientId, file, kind) => {
+    const safeName = String(file.name || 'document').replace(/[^\w.\- ]+/g, '_').slice(0, 120);
+    const path = `${ownerId}/${clientId}/${crypto.randomUUID()}_${safeName}`;
+    const { error: upErr } = await supabase.storage
+      .from('client-docs')
+      .upload(path, file, { upsert: false, contentType: file.type || undefined });
+    if (upErr) return { data: null, error: upErr };
+    const { data, error } = await supabase
+      .from('client_documents')
+      .insert({
+        user_id: ownerId, client_id: clientId, name: safeName,
+        kind: kind || 'other', storage_path: path,
+        size_bytes: file.size || 0,
+        uploaded_by: actorId !== ownerId ? actorId : null,
+      })
+      .select().single();
+    // Orphan guard: if the row insert failed, remove the uploaded bytes.
+    if (error) { try { await supabase.storage.from('client-docs').remove([path]); } catch (_) { /* best effort */ } }
+    return { data, error };
+  },
+
+  setKind: async (docId, kind) => {
+    const { error } = await supabase.from('client_documents').update({ kind }).eq('id', docId);
+    return { error };
+  },
+
+  // Short-lived signed URL for download/view.
+  signedUrl: async (storagePath) => {
+    const { data, error } = await supabase.storage
+      .from('client-docs')
+      .createSignedUrl(storagePath, 120);
+    return { url: data?.signedUrl || null, error };
+  },
+
+  remove: async (doc) => {
+    const { error: rowErr } = await supabase.from('client_documents').delete().eq('id', doc.id);
+    if (rowErr) return { error: rowErr };
+    try { await supabase.storage.from('client-docs').remove([doc.storage_path]); } catch (e) { console.warn('Doc bytes removal failed (row deleted):', e); }
+    return { error: null };
+  },
+};
+
+// ============================================================
+// CLIENT HOURS — billable hour entries (Jul 2026). Priced at
+// clients.hourly_rate in the Billing tab; entries group into
+// billing months by logged_on.
+// ============================================================
+export const clientHours = {
+  listForClient: async (clientId) => {
+    const { data, error } = await supabase
+      .from('client_hours')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('logged_on', { ascending: false })
+      .limit(500);
+    return { data: data || [], error };
+  },
+
+  create: async (ownerId, actorId, clientId, hours, note, loggedOn) => {
+    const { data, error } = await supabase
+      .from('client_hours')
+      .insert({
+        user_id: ownerId, client_id: clientId,
+        hours, note: (note || '').trim() || null,
+        logged_on: loggedOn,
+        logged_by: actorId !== ownerId ? actorId : null,
+      })
+      .select().single();
+    return { data, error };
+  },
+
+  remove: async (entryId) => {
+    const { error } = await supabase.from('client_hours').delete().eq('id', entryId);
+    return { error };
+  },
+};
