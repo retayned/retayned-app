@@ -139,8 +139,10 @@ function QuickLogToast({ toast, onUndo, onCorrect, onDismiss, C }) {
   return (
     <div className="rt-quicklog-toast" style={{ position: "fixed", right: 24, background: "#1E261F", color: "#fff", padding: "11px 16px", borderRadius: 10, boxShadow: "0 8px 24px rgba(20,30,22,0.25)", fontSize: 13, display: "flex", alignItems: "center", gap: 10, zIndex: 250, fontFamily: "inherit" }}>
       <span style={{ color: "#5DCAA5" }}>✓</span>
-      <span>{toast.kind === "touchpoint" ? "Touchpoint logged" : toast.kind === "event" ? "Event added" : "Task added"}{toast.label ? " · " + toast.label : ""}</span>
-      <button onClick={onUndo} style={{ background: "none", border: "none", color: "#A8B0A8", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>Undo</button>
+      <span>{toast.kind === "touchpoint" ? "Touchpoint logged" : toast.kind === "event" ? "Event added" : toast.kind === "hours" ? "Hours logged" : "Task added"}{toast.label ? " · " + toast.label : ""}</span>
+      {/* No Undo for hours — onUndo deletes a TASK recordId; hours entries
+          are removed from the client's Billing tab instead. */}
+      {toast.kind !== "hours" && <button onClick={onUndo} style={{ background: "none", border: "none", color: "#A8B0A8", fontSize: 12, cursor: "pointer", textDecoration: "underline", padding: 0, fontFamily: "inherit", marginLeft: 4 }}>Undo</button>}
     </div>
   );
 }
