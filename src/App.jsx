@@ -37,7 +37,7 @@ import { C } from "./theme";
 import { APP_CSS } from "./appStyles";
 import { getUserInitial, localYmd, splitLongTask, tzMidnightInstant, ymdInTz } from "./utils";
 
- 
+
 
 export default function App({ user }) {
   // ─── ROUTING: Worker magic-link page lives at /w/{token} (no auth needed) ──
@@ -1320,6 +1320,7 @@ export default function App({ user }) {
   const [newTaskWorkerId, setNewTaskWorkerId] = useState(null);   // composer: assigned worker for new task
   const [workerPickerOpen, setWorkerPickerOpen] = useState(false); // composer popover
   const [addWorkerOpen, setAddWorkerOpen] = useState(false);       // add-worker modal
+  const [addWorkerError, setAddWorkerError] = useState("");        // inline error (was alert())
   const [newWorkerName, setNewWorkerName] = useState("");
   const [newWorkerEmail, setNewWorkerEmail] = useState("");
   const [newWorkerRole, setNewWorkerRole] = useState("");
@@ -3901,78 +3902,57 @@ export default function App({ user }) {
         {dataLoaded && page === "workers" && can("manage_workers", orgRole) && <Suspense fallback={<SkeletonPage />}><WorkersPage app={pageCtx} /></Suspense>}
 
         {/* Add-worker modal */}
+        {/* Add-worker modal — rebuilt Jul 2026 to the house modal idiom
+            (matches the rolodex "New contact" modal): centered, rounded 16,
+            inset-shadow inputs with focus ring, GREEN primary (creation is a
+            green action; purple is Rai's color), inline error instead of
+            alert(). */}
         {addWorkerOpen && (
-          <>
-            <div onClick={() => setAddWorkerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 99 }} />
-            <div style={{
-              position: "fixed", top: "20vh", left: "50%", transform: "translateX(-50%)",
-              width: 460, maxWidth: "calc(100vw - 32px)",
-              background: C.card, borderRadius: 14, padding: "24px 26px",
-              boxShadow: "0 20px 50px rgba(20,30,22,0.30)",
-              zIndex: 100,
-            }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 14px" }}>Add Worker</h3>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Name</label>
-                <input
-                  autoFocus
-                  value={newWorkerName}
-                  onChange={e => setNewWorkerName(e.target.value)}
-                  placeholder="Sarah Kim"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
-                />
+          <div onClick={() => setAddWorkerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,30,22,0.40)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope', system-ui, sans-serif", padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 26, width: "100%", maxWidth: 480, boxShadow: "0 1px 3px rgba(20,30,22,0.08), 0 20px 60px rgba(20,30,22,0.18), inset 0 1px 0 rgba(255,255,255,0.9)" }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>Add a worker</div>
+              <div style={{ fontSize: 12.5, color: C.textMuted, marginBottom: 18 }}>Someone you delegate tasks to — internal employee, freelancer, VA. They'll get an email when you assign them work.</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Name</label>
+                  <input autoFocus value={newWorkerName} onChange={e => setNewWorkerName(e.target.value)} onFocus={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.primary; }} onBlur={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.borderLight; }} placeholder="Sarah Kim" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box", transition: "box-shadow 120ms ease" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Email</label>
+                  <input type="email" value={newWorkerEmail} onChange={e => setNewWorkerEmail(e.target.value)} onFocus={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.primary; }} onBlur={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.borderLight; }} placeholder="sarah@yourdomain.com" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box", transition: "box-shadow 120ms ease" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, display: "block", marginBottom: 4 }}>Role <span style={{ fontWeight: 400 }}>· optional</span></label>
+                  <input value={newWorkerRole} onChange={e => setNewWorkerRole(e.target.value)} onFocus={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.primary; }} onBlur={e => { e.target.style.boxShadow = "inset 0 0 0 1px " + C.borderLight; }} placeholder="Internal · Freelancer · VA" style={{ width: "100%", padding: "11px 14px", borderRadius: 10, fontSize: 14, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, color: C.text, outline: "none", boxSizing: "border-box", transition: "box-shadow 120ms ease" }} />
+                </div>
+                {addWorkerError && (
+                  <div style={{ fontSize: 12, color: C.danger, lineHeight: 1.4 }}>{addWorkerError}</div>
+                )}
               </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Email</label>
-                <input
-                  type="email"
-                  value={newWorkerEmail}
-                  onChange={e => setNewWorkerEmail(e.target.value)}
-                  placeholder="sarah@yourdomain.com"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
-                />
-              </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: "block", fontSize: 11.5, fontWeight: 600, color: C.textSec, marginBottom: 5, letterSpacing: "0.02em" }}>Role <span style={{ color: C.textMuted, fontWeight: 400 }}>· optional</span></label>
-                <input
-                  value={newWorkerRole}
-                  onChange={e => setNewWorkerRole(e.target.value)}
-                  placeholder="Internal · Freelancer · VA"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, fontFamily: "inherit", fontSize: 13.5, color: C.text, background: C.bg, outline: "none" }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22, paddingTop: 18, borderTop: "1px solid " + C.borderLight }}>
-                <button
-                  onClick={() => setAddWorkerOpen(false)}
-                  style={{ padding: "8px 14px", background: "transparent", color: C.textSec, borderRadius: 8, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-                >Cancel</button>
-                <button
-                  onClick={async () => {
-                    if (!newWorkerName.trim() || !newWorkerEmail.trim()) return;
-                    const { data, error } = await workersDb.create(user.id, {
-                      name: newWorkerName.trim(),
-                      email: newWorkerEmail.trim(),
-                      role: newWorkerRole.trim() || null,
-                    });
-                    if (data) {
-                      setWorkersList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-                      setAddWorkerOpen(false);
-                    } else if (error) {
-                      alert("Failed to add worker: " + error.message);
-                    }
-                  }}
-                  disabled={!newWorkerName.trim() || !newWorkerEmail.trim()}
-                  style={{
-                    padding: "8px 14px",
-                    background: (!newWorkerName.trim() || !newWorkerEmail.trim()) ? C.btnDisabled : C.btn,
-                    color: "#fff", border: "none", borderRadius: 8,
-                    fontFamily: "inherit", fontSize: 13, fontWeight: 600,
-                    cursor: (!newWorkerName.trim() || !newWorkerEmail.trim()) ? "default" : "pointer",
-                  }}
-                >Add Worker</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(() => {
+                  const ready = newWorkerName.trim() && newWorkerEmail.trim();
+                  return (
+                    <button disabled={!ready} onClick={async () => {
+                      const { data, error } = await workersDb.create(user.id, {
+                        name: newWorkerName.trim(),
+                        email: newWorkerEmail.trim(),
+                        role: newWorkerRole.trim() || null,
+                      });
+                      if (data) {
+                        setWorkersList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+                        setAddWorkerError("");
+                        setAddWorkerOpen(false);
+                      } else if (error) {
+                        setAddWorkerError("Couldn't add them — " + (error.message || "try again."));
+                      }
+                    }} onMouseEnter={e => { if (ready) e.currentTarget.style.background = C.primary; }} onMouseLeave={e => { if (ready) e.currentTarget.style.background = C.primaryDeep; }} style={{ flex: 1, padding: "12px", background: ready ? C.primaryDeep : C.surfaceWarm, color: ready ? "#fff" : C.textMuted, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: ready ? "pointer" : "default", fontFamily: "inherit", transition: "background 120ms ease" }}>Add Worker</button>
+                  );
+                })()}
+                <button onClick={() => { setAddWorkerOpen(false); setAddWorkerError(""); }} style={{ padding: "12px 18px", background: C.surface, color: C.text, border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* ═══ REFERRALS v2 — "The Network Map" ═══ */}
@@ -4376,7 +4356,7 @@ export default function App({ user }) {
           equal to half the FAB's footprint so the first/last items can scroll
           fully into view without permanently sitting under the FAB. */}
       {/* Shell overlays: dock + quick-log FAB + capture sheet (extracted June 2026) */}
-      <ShellOverlays app={{ ...pageCtx, dockShrunk, hasDot, keyboardOpen, page, quickLogOpen, quickLogText }} />
+      <ShellOverlays app={{ ...pageCtx, dockShrunk, hasDot, keyboardOpen, page, quickLogOpen, quickLogText, selectedClient, selectedRolodex }} />
 
       {/* ═══ MOBILE RAI HISTORY ═══ Mobile-only past-chats drawer. Desktop uses
           the sidebar convo list; this surfaces the same raiConvoList +
