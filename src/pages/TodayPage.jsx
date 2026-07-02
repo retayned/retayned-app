@@ -3361,7 +3361,10 @@ export default function TodayPage({ app }) {
                                   border: "none",
                                   boxShadow: isDone ? "none" : "var(--rt-sh-xs)",
                                 }}>
-                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec)} />
+                                  {/* Calendar glyph hidden on mobile (Jul 2026) —
+                                      prime real estate on a 390px row; the label
+                                      already says the date. */}
+                                  {!isMobile && <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec)} />}
                                   <span className="rt-row-text">{label}</span>
                                   {!isDone && (
                                     <svg className="rt-due-chevron" width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
