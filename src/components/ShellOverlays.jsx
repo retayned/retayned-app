@@ -4,7 +4,7 @@
 // platforms: the dock is mobile, the FAB + capture sheet also power
 // desktop's ⌘K quick log. Contract scanned with the v3 pipeline
 // (props, over-inclusion, template interpolations).
-import { personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
+import { clientHours as clientHoursDb, personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
 import { useRef, useEffect, Fragment } from "react";
 import { mobileNavStrip } from "../nav";
 import { can } from "../hooks/useOrg";
@@ -25,6 +25,8 @@ export default function ShellOverlays({ app }) {
     page,
     quickLogOpen,
     quickLogText,
+    selectedClient,
+    selectedRolodex,
     setBrainDumpOpen,
     setPersonalEvents,
     setQuickLogOpen,
@@ -103,20 +105,18 @@ export default function ShellOverlays({ app }) {
                   WebkitOverflowScrolling: "touch", scrollbarWidth: "none",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 2, padding: "0 8px", height: "100%", minWidth: "max-content" }}>
-                  {navStrip.map((item, i) => {
+                <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 8px", height: "100%", minWidth: "max-content" }}>
+                  {navStrip.map((item) => {
                     const active = page === item.id;
-                    const mid = Math.ceil(navStrip.length / 2);
                     return (
                       <Fragment key={item.id}>
-                        {i === mid && <div style={{ width: 62, flexShrink: 0 }} aria-hidden="true" />}
                         <button
                           onClick={() => goTo(item.id)}
                           className="rt-dock-item"
                           data-active={active ? "1" : undefined}
                           style={{
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                            gap: 3, minWidth: 56, flexShrink: 0, height: 46, padding: "0 8px",
+                            gap: 3, width: "calc((min(100vw, 504px) - 40px) / 4.5)", minWidth: 0, flexShrink: 0, height: 46, padding: 0,
                             border: "none", cursor: "pointer", fontFamily: "inherit", borderRadius: 13,
                             background: active ? "rgba(51,84,62,0.10)" : "transparent",
                             color: active ? C.primary : "#8A9188",
@@ -165,6 +165,11 @@ export default function ShellOverlays({ app }) {
           Floating purple "+" quick-capture, bottom-right, on every page.
           DESKTOP ONLY — hidden on mobile via .rt-quicklog-fab CSS. A
           notes-style scratchpad: free-form text → personal task, due today. */}
+      {/* Hidden while a client/rolodex modal is open (Jul 2026): the FAB
+          sat on top of the modal's edit controls on desktop. Mobile is
+          unaffected — this element is desktop-only via CSS, and the mobile
+          dock FAB is a separate element below. */}
+      {!(selectedClient || selectedRolodex) && (
       <button
         onClick={() => setQuickLogOpen(v => !v)}
         aria-label="Quick log"
@@ -191,6 +196,7 @@ export default function ShellOverlays({ app }) {
         onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple-hover)"; e.currentTarget.style.background = "var(--rt-grad-btn-hover)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "var(--rt-sh-purple)"; e.currentTarget.style.background = "var(--rt-grad-btn)"; }}
       >+</button>
+      )}
 
       {quickLogOpen && (
         <>
@@ -253,6 +259,36 @@ export default function ShellOverlays({ app }) {
                   const parsed = parseComposer(rawText, clients, workersList);
                   const matchedClient = parsed.matchedClient || null;
                   const cleanedText = parsed.title || rawText;
+
+                  // ─── ROUTE −1: BILLABLE HOURS (Jul 2026). A LEADING duration
+                  // ("2h Lemon Law — demand letters", "45m Acme") + a matched
+                  // client logs billable hours into the client's Billing tab.
+                  // Client required: unpriced, unattached hours have no home,
+                  // so no client match → falls through to the task route.
+                  // Deliberately anchored (^) — "call Acme in 2h" stays a task.
+                  const hrsMatch = rawText.match(/^\s*(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?\b/i);
+                  const minMatch = hrsMatch ? null : rawText.match(/^\s*(\d+)\s*m(?:in(?:ute)?s?)?\b/i);
+                  if ((hrsMatch || minMatch) && matchedClient) {
+                    const h = hrsMatch
+                      ? Math.min(24, parseFloat(hrsMatch[1]))
+                      : Math.min(24, Math.round((parseInt(minMatch[1], 10) / 60) * 100) / 100);
+                    if (h > 0) {
+                      // Note = cleaned text minus the duration token and any
+                      // leading separators left behind ("— demand letters").
+                      const durToken = (hrsMatch || minMatch)[0];
+                      const note = cleanedText.replace(durToken, "").replace(/^[\s\-–—·,:]+/, "").trim();
+                      const ownerId = matchedClient.user_id || user.id;
+                      try {
+                        const { error } = await clientHoursDb.create(ownerId, user.id, matchedClient.id, h, note, localYmd(new Date()));
+                        if (error) throw error;
+                        setQuickLogToast({ id: Date.now(), kind: "hours", label: `${h}h · ${matchedClient.name}` });
+                      } catch (err) {
+                        console.warn("Quick-log hours failed:", err);
+                        setQuickLogToast({ id: Date.now(), error: true, message: "Couldn't log hours — try again" });
+                      }
+                      return;
+                    }
+                  }
 
                   // ─── ROUTE 0: CALENDAR EVENT. If the entry contains a time
                   // ("3pm", "9-10am", "noon"), it's a scheduled event, not a
