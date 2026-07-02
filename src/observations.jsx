@@ -37,9 +37,9 @@ const OBSERVATION_ILLUSTRATIONS = {
   "thriving untouched":         "/observations/18_thriving_untouched.svg",
   "quiet loyal":                "/observations/19_quiet_loyal.svg",
   "long tenure plateau":        "/observations/20_long_tenure_plateau.svg",
-  "the favorite":               "/observations/21_the_favorite.svg",
-  "the rescue":                 "/observations/22_the_rescue.svg",
-  "the autopilot":              "/observations/23_the_autopilot.svg",
+  "favorite":                   "/observations/21_the_favorite.svg",
+  "rescue":                     "/observations/22_the_rescue.svg",
+  "autopilot":                  "/observations/23_the_autopilot.svg",
   "self cluster":               "/observations/24_self_cluster.svg",
   "reverse pareto":             "/observations/25_reverse_pareto.svg",
   "client task disproportion":  "/observations/26_client_task_disproportion.svg",
@@ -47,7 +47,7 @@ const OBSERVATION_ILLUSTRATIONS = {
   "hours sink":                 "/observations/28_hours_sink.svg",
   "rate compression":           "/observations/29_rate_compression.svg",
   "pipeline drought":           "/observations/30_pipeline_drought.svg",
-  "the composition":            "/observations/31_the_composition.svg",
+  "composition":                "/observations/31_the_composition.svg",
   "cadence mirror":             "/observations/32_cadence_mirror.svg",
   "tenure map":                 "/observations/33_tenure_map.svg",
   "drift census":               "/observations/34_drift_census.svg",
@@ -59,7 +59,12 @@ const OBSERVATION_ILLUSTRATIONS = {
 // "Forgotten Addon" all resolve to the same key.
 function lookupObservationIllustration(cardName) {
   if (!cardName) return null;
-  const key = String(cardName).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  // Leading "The" is stripped (Jul 2026): the observer emits archetype
+  // names with and without it ("Slow Decline" vs "The Slow Decline"),
+  // and the map mixed both conventions — so any prefixed name missed
+  // its asset and the card silently rendered without the illustration.
+  // Map keys are now stored WITHOUT "the"; normalize inputs the same way.
+  const key = String(cardName).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/^the\s+/, "");
   return OBSERVATION_ILLUSTRATIONS[key] || null;
 }
 
