@@ -167,16 +167,20 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     </div>
   );
 
-  // ── COLLAPSED ──
+  // ── COLLAPSED: THE DOME (Jul 2026) ─────────────────────────────────
+  // The desktop TimeDial, rotated for portrait. Desktop = half-disc on the
+  // right edge, NOW pinned at the arc's left midpoint. Here = a shallow
+  // dome hanging from the TOP edge, NOW pinned at the apex. Every material
+  // is ported verbatim from TimeDial.jsx: the mint wash radial (anchored to
+  // the FIXED unscrubbed-NOW point), the feTurbulence density overlay
+  // (baseFreq 0.15 / alpha 0.025 / opacity 0.4), the 0.6px hairline
+  // rgba(28,50,36,0.16), tick labels #9A9A93, event dots r4.5
+  // (past #C4C4BD / future #558B68 / next #33543E + ring), and the NOW
+  // seeker (r9 deep-green + r3.5 white core, drop-shadow, breathing pulse).
+  // Window: 6h (3h back / 3h forward) — half the desktop's 12h, sized for
+  // a phone header. Events outside the window aren't drawn; the header row
+  // below names the next one. Tap → expand. Horizontal scrub → time bubble.
   if (!open) {
-    // ── GRADIENT SKY + REFINED TIMELINE (concept 4) ──
-    // Full-bleed time-of-day sky gradient with a restrained timeline across the
-    // header: a near-FLAT hairline curve (not a bouncy arc) + small UNIFORM
-    // dots plotted by time-of-day. Past events read as hollow rings, upcoming
-    // as solid, the next event gets one quiet halo ring. The dots are round
-    // HTML divs (positioned by %/px) so they never oval the way a stretched
-    // SVG viewBox would. Tap → expand. Bands: dawn 6–10a, midday 10a–5p,
-    // dusk 5–8p, night 8p+.
     let countdown = null, imminent = false;
     if (nextEvent) {
       const mins = minutesUntil(nextEvent._start);
@@ -186,115 +190,150 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     }
     const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
 
-    // Timeline band geometry (px). A gentle quadratic: baseline BASE_Y, the
-    // midpoint lifts only LIFT px (flat, not a rainbow). y at horizontal
-    // fraction f: quadratic with control at center.
-    const BAND_H = 40, BASE_Y = 26, LIFT = 7;
-    const curveY = (f) => {
-      // Quadratic Bézier y with endpoints at BASE_Y and control at (BASE_Y-2*LIFT)
-      // so the visible peak (at f=0.5) = 0.5*BASE_Y + 0.5*(BASE_Y-2*LIFT) = BASE_Y-LIFT.
-      const cy = BASE_Y - 2 * LIFT, mt = 1 - f;
-      return mt * mt * BASE_Y + 2 * mt * f * cy + f * f * BASE_Y;
+    // ── Dome geometry. Same R as the desktop dial (420); the circle's
+    // center sits above the screen so only a shallow ~48px cap shows.
+    // ptAt(f, r) is the desktop idiom: f∈[0,1] across the 6h window,
+    // f=0.5 = NOW = the apex (the deepest point of the cap).
+    const DOME_R = 420, DOME_W = 390, DOME_DEPTH = 58, DOME_H = 86;
+    const DCX = DOME_W / 2, DCY = DOME_DEPTH - DOME_R;
+    const rimY = DCY + Math.sqrt(DOME_R * DOME_R - DCX * DCX); // y at x=0 / x=W
+    const aL = Math.atan2(rimY - DCY, 0 - DCX);
+    const aR = Math.atan2(rimY - DCY, DOME_W - DCX);
+    const dAngleOf = (f) => aL + (aR - aL) * f;
+    const dPtAt = (f, r) => {
+      const a = dAngleOf(f);
+      return [DCX + r * Math.cos(a), DCY + r * Math.sin(a)];
     };
-    // VISIBLE SCHEDULE (June 2026 redesign): dots carry their time beneath
-    // them (skipped when a neighbor's label is too close), and the NEXT
-    // event is rendered as a named mini-card riding the band instead of a
-    // dot — the band reads as a schedule at a glance, not decoration.
-    let lastLabeledF = -1;
+    // 6h window centered on now (today) / on midday for other days.
+    const WIN_MS = 6 * 3600000;
+    const winCenter = selectedDay === "today" ? nowMs : (() => { const d = new Date(dayBase); d.setHours(13, 0, 0, 0); return d.getTime(); })();
+    const winStart = winCenter - WIN_MS / 2, winEnd = winCenter + WIN_MS / 2;
+    const domeFrac = (ms) => (ms - winStart) / WIN_MS;
+
+    // Hour ticks: every whole hour inside the window, labels etched just
+    // inside the rim (desktop treatment), skipping the apex zone where the
+    // NOW seeker lives.
+    const tickEls = [];
+    const t0 = new Date(winStart); t0.setMinutes(0, 0, 0);
+    if (t0.getTime() < winStart) t0.setHours(t0.getHours() + 1);
+    for (let t = t0.getTime(); t <= winEnd; t += 3600000) {
+      const f = domeFrac(t);
+      if (f < 0.015 || f > 0.985) continue;
+      if (selectedDay === "today" && Math.abs(f - 0.5) < 0.075) continue; // NOW zone
+      const [ox, oy] = dPtAt(f, DOME_R);
+      const [ix, iy] = dPtAt(f, DOME_R - 7);
+      const [lx, ly] = dPtAt(f, DOME_R - 19);
+      tickEls.push(
+        <g key={"tk" + t}>
+          <path d={`M ${ox.toFixed(1)} ${oy.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`} stroke="rgba(28,50,36,0.18)" strokeWidth="1" />
+          <text x={lx.toFixed(1)} y={(ly + 3).toFixed(1)} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, fill: "#9A9A93" }}>{fmtTimeShort(new Date(t))}</text>
+        </g>
+      );
+    }
+
+    // Event dots on the rim — desktop colors and next-ring, no labels
+    // (desktop names events on its side rail; here the header row below
+    // names the next one and the expanded list names them all).
     const dotEls = dayEvents.map((e, i) => {
-      const f = fracFor(e._start);
-      if (f < 0 || f > 1) return null;
+      const f = domeFrac(e._start.getTime());
+      if (f < 0.01 || f > 0.99) return null;
       const isNext = nextEvent && e.id === nextEvent.id;
-      if (isNext) return null; // rendered as the mini-card chip below
       const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
-      const y = curveY(f);
-      const sz = 7;
-      const showLabel = f - lastLabeledF >= 0.085;
-      if (showLabel) lastLabeledF = f;
+      const [x, y] = dPtAt(f, DOME_R);
       return (
-        <div key={e.id || i} aria-hidden style={{ position: "absolute", left: `${(f * 100).toFixed(2)}%`, top: y, transform: "translate(-50%, -50%)", width: sz, height: sz, pointerEvents: "none" }}>
-          <div style={{
-            width: sz, height: sz, borderRadius: "50%",
-            background: isPast ? C.bg : C.primaryLight,
-            border: isPast ? "1.5px solid " + C.ink300 : "none",
-            boxSizing: "border-box",
-          }} />
-          {showLabel && (
-            <div style={{ position: "absolute", top: sz + 3, left: "50%", transform: "translateX(-50%)", fontSize: 8.5, fontWeight: 700, color: isPast ? C.ink300 : C.textSec, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-              {fmtTimeShort(e._start)}
-            </div>
-          )}
-        </div>
+        <g key={e.id || i}>
+          {isNext && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
+          <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="4.5" fill={isPast ? "#C4C4BD" : (isNext ? "#33543E" : "#558B68")} />
+        </g>
       );
     });
-    // Next event — named mini-card anchored to its time position on the
-    // band. Edge-aware shift keeps it on-screen near 6am/midnight.
-    const nextChip = nextEvent ? (() => {
-      const f = fracFor(nextEvent._start);
-      if (f < 0 || f > 1) return null;
-      const y = curveY(f);
-      const tx = f < 0.2 ? "translateX(-12px)" : f > 0.8 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)";
-      return (
-        <div aria-hidden style={{ position: "absolute", left: `${(f * 100).toFixed(2)}%`, top: y, pointerEvents: "none", zIndex: 2 }}>
-          <div style={{ position: "absolute", left: 0, top: 0, transform: "translate(-50%,-50%)", width: 7, height: 7, borderRadius: "50%", background: C.primary, boxShadow: "0 0 0 3px rgba(51,84,62,0.16)" }} />
-          <div style={{ position: "absolute", top: -31, left: 0, transform: tx, background: C.card, borderRadius: 8, padding: "3px 8px", border: "1px solid rgba(85,139,104,0.45)", boxShadow: "0 3px 10px rgba(85,139,104,0.14)", whiteSpace: "nowrap", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: C.primary, fontVariantNumeric: "tabular-nums" }}>{fmtTimeShort(nextEvent._start)}</span>
-            <span style={{ fontSize: 9.5, fontWeight: 600, color: C.text }}> {nextEvent.title}</span>
-          </div>
-        </div>
-      );
-    })() : null;
+
+    // NOW seeker — fixed at the apex, the desktop ptAt(0.5, R) invariant.
+    const [nx, ny] = dPtAt(0.5, DOME_R);
+    const showDomeNow = selectedDay === "today";
+
+    // Dome path: rim arc closed against the top edge.
+    const domePath = `M 0 0 L 0 ${rimY.toFixed(1)} A ${DOME_R} ${DOME_R} 0 0 0 ${DOME_W} ${rimY.toFixed(1)} L ${DOME_W} 0 Z`;
+    const rimPath = `M 0 ${rimY.toFixed(1)} A ${DOME_R} ${DOME_R} 0 0 0 ${DOME_W} ${rimY.toFixed(1)}`;
 
     return (
-      <div
-        ref={bandRef}
-        onClick={() => { if (suppressClickRef.current) return; onToggle && onToggle(); }}
-        onPointerDown={onBandPointerDown}
-        onPointerMove={onBandPointerMove}
-        onPointerUp={endScrub}
-        onPointerCancel={endScrub}
-        style={{ position: "relative", cursor: "pointer", margin: "-20px -16px 0", padding: "0 16px", touchAction: "pan-y" }}
-      >
-        {/* NOW-pulse keyframes — once per render tree, scoped by name. */}
-        <style>{`@keyframes rtNowPulse { 0% { box-shadow: 0 0 0 0 rgba(51,84,62,0.32); } 70% { box-shadow: 0 0 0 9px rgba(51,84,62,0); } 100% { box-shadow: 0 0 0 0 rgba(51,84,62,0); } }`}</style>
-        {/* (v1 "time-of-day sky" rainbow gradient + daylight glow REMOVED
-            June 2026 — the cream/purple wash was the old design's skin and
-            survived every prior cleanup because it was a third, unnamed
-            copy of the V1 gradient family. The band is FLAT #FAFBFA per
-            the locked palette. Curve, dots, NOW seeker, next-card stay.) */}
-        {/* Refined timeline: a near-flat hairline curve. Full-bleed; the stroke
-            stays uniform via non-scaling-stroke even when stretched. */}
-        <div style={{ position: "absolute", top: 21, left: 0, right: 0, height: BAND_H, zIndex: 1, pointerEvents: "none" }}>
-          <svg viewBox={`0 0 288 ${BAND_H}`} width="100%" height={BAND_H} preserveAspectRatio="none" style={{ display: "block", position: "absolute", left: 0, right: 0, top: 0 }}>
-            <path d={`M 0 ${BASE_Y} Q 144 ${BASE_Y - 2 * LIFT} 288 ${BASE_Y}`} fill="none" stroke="rgba(30,38,31,0.16)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <div style={{ margin: "-20px -16px 0" }}>
+        <div
+          ref={bandRef}
+          onClick={() => { if (suppressClickRef.current) return; onToggle && onToggle(); }}
+          onPointerDown={onBandPointerDown}
+          onPointerMove={onBandPointerMove}
+          onPointerUp={endScrub}
+          onPointerCancel={endScrub}
+          style={{ position: "relative", cursor: "pointer", touchAction: "pan-y" }}
+        >
+          <svg viewBox={`0 0 ${DOME_W} ${DOME_H}`} width="100%" height="auto" style={{ display: "block" }} aria-hidden>
+            <defs>
+              {/* Mint wash — anchored to the FIXED unscrubbed-NOW point
+                  (the apex), exactly like the desktop's washX/washY. */}
+              <radialGradient id="rt-dome-wash" cx={nx} cy={ny} r={DOME_R * 0.62} gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
+                <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
+                <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
+              </radialGradient>
+              {/* Atmospheric density variation — desktop's exact filter. */}
+              <filter id="rt-dome-frosted" x="0%" y="0%" width="100%" height="100%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.15" numOctaves="2" seed="3" stitchTiles="stitch" />
+                <feColorMatrix values="0 0 0 0 0.11
+                                      0 0 0 0 0.20
+                                      0 0 0 0 0.14
+                                      0 0 0 0.025 0" />
+                <feComposite in2="SourceGraphic" operator="in" />
+              </filter>
+              {/* NOW dot drop-shadow — desktop's exact filter. */}
+              <filter id="rt-dome-now-raised" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
+                <feOffset dx="0.6" dy="1.4" result="offsetblur" />
+                <feFlood floodColor="#1C3224" floodOpacity="0.28" />
+                <feComposite in2="offsetblur" operator="in" />
+                <feMerge>
+                  <feMergeNode />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            {/* Layer 1: static mint wash */}
+            <path d={domePath} fill="url(#rt-dome-wash)" />
+            {/* Layer 2: atmospheric density variation overlay */}
+            <path d={domePath} fill="rgba(170, 220, 185, 0.40)" filter="url(#rt-dome-frosted)" opacity="0.4" />
+            {/* Layer 3: single soft hairline edge — the rim only */}
+            <path d={rimPath} fill="none" stroke="rgba(28, 50, 36, 0.16)" strokeWidth="0.6" />
+            {tickEls}
+            {dotEls}
+            {showDomeNow && (
+              <g filter="url(#rt-dome-now-raised)">
+                <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="9" fill="#33543E" />
+                <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="3.5" fill="#FFFFFF" />
+              </g>
+            )}
+            {showDomeNow && (
+              <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.26" strokeWidth="1.5">
+                <animate attributeName="r" values="18;24;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+                <animate attributeName="stroke-opacity" values="0.30;0.05;0.30" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
+              </circle>
+            )}
           </svg>
-          {/* NOW seeker — a small solid marker riding the curve at current time */}
-          {selectedDay === "today" && nowFrac > 0 && nowFrac < 1 && (
-            <div aria-hidden style={{ position: "absolute", left: `${(nowFrac * 100).toFixed(2)}%`, top: curveY(nowFrac), transform: "translate(-50%, -50%)", width: 12, height: 12, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 3px rgba(250,251,250,0.9)", background: "rgba(250,251,250,0.9)", zIndex: 3 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.primaryDeep, animation: "rtNowPulse 2.4s ease-out infinite" }} />
-              <div style={{ position: "absolute", top: 13, left: "50%", transform: "translateX(-50%)", fontSize: 7.5, fontWeight: 800, letterSpacing: 1.1, color: C.primaryDeep }}>NOW</div>
-            </div>
-          )}
-          {dotEls}
-          {nextChip}
-          {/* Scrub overlay — cursor rides the curve; bubble shows the
-              scrubbed time, or the nearest event when within ~45 min. */}
+          {/* Scrub overlay — the bubble rides the rim; shows the scrubbed
+              time, or the nearest event when within ~45 min of it. */}
           {scrubFrac != null && (() => {
-            const hFloat = DAY_START + scrubFrac * SPAN;
-            const sd = new Date(dayBase);
-            sd.setHours(Math.floor(hFloat), Math.round((hFloat % 1) * 60), 0, 0);
-            let nearest = null, best = 0.045;
+            const sd = new Date(winStart + scrubFrac * WIN_MS);
+            let nearest = null, best = 0.125; // 0.125 of 6h = 45 min
             for (const ev of dayEvents) {
-              const d = Math.abs(fracFor(ev._start) - scrubFrac);
+              const d = Math.abs(domeFrac(ev._start.getTime()) - scrubFrac);
               if (d < best) { best = d; nearest = ev; }
             }
-            const y = curveY(scrubFrac);
-            const leftPct = scrubFrac * 100;
+            const [sx, sy] = dPtAt(scrubFrac, DOME_R);
+            const leftPct = (sx / DOME_W) * 100;
             const tx = scrubFrac < 0.18 ? "translateX(-10px)" : scrubFrac > 0.82 ? "translateX(calc(-100% + 10px))" : "translateX(-50%)";
             return (
               <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 4, pointerEvents: "none" }}>
-                <div style={{ position: "absolute", left: `${leftPct}%`, top: y, transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: C.primaryDeep, boxShadow: "0 0 0 3px rgba(250,251,250,0.95), 0 0 0 4.5px rgba(51,84,62,0.30)" }} />
-                <div style={{ position: "absolute", top: -32, left: `${leftPct}%`, transform: tx, background: C.card, borderRadius: 8, padding: "4px 9px", boxShadow: "0 5px 16px rgba(20,30,22,0.16)", border: "1px solid " + C.border, whiteSpace: "nowrap", maxWidth: 210, overflow: "hidden" }}>
+                <div style={{ position: "absolute", left: `${leftPct}%`, top: sy, transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: C.primaryDeep, boxShadow: "0 0 0 3px rgba(250,251,250,0.95), 0 0 0 4.5px rgba(51,84,62,0.30)" }} />
+                <div style={{ position: "absolute", top: sy + 14, left: `${leftPct}%`, transform: tx, background: C.card, borderRadius: 8, padding: "4px 9px", boxShadow: "0 5px 16px rgba(20,30,22,0.16)", border: "1px solid " + C.border, whiteSpace: "nowrap", maxWidth: 210, overflow: "hidden" }}>
                   {nearest ? (
                     <div style={{ fontSize: 10.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis" }}>
                       <span style={{ color: C.primary, fontWeight: 700 }}>{fmtTime(nearest._start)}</span> {nearest.title}{clientNameFor(nearest) ? <span style={{ color: C.textMuted, fontWeight: 500 }}> · {clientNameFor(nearest)}</span> : null}
@@ -307,9 +346,10 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
             );
           })()}
         </div>
-        {/* Header row in the sky, sitting below the timeline band: date+greeting
-            left, next-meeting right. */}
-        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingTop: 65 }}>
+        {/* Header row below the dome: date + greeting left, NEXT EVENT right
+            (this is where "N events · N done" style chrome used to sit — the
+            next event itself renders here now, no separate tile). */}
+        <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "6px 16px 0" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
             <h1 style={{ fontSize: 26, fontWeight: 700, margin: "2px 0 0", letterSpacing: -0.4, color: C.text, lineHeight: 1.04 }}>
