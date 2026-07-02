@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import RaiMessageActions from "./RaiMessageActions";
 import { Icon } from "./Icon";
 
-import { clientAddons as clientAddonsDb, raiConversations as convoDb, rolodex as rolodexDb, tasks as tasksDb } from "../lib/db";
+import { clientAddons as clientAddonsDb, clientDocuments as clientDocsDb, clientHours as clientHoursDb, raiConversations as convoDb, rolodex as rolodexDb, tasks as tasksDb } from "../lib/db";
 import { retColor } from "../utils";
 export default function ClientModal({ app }) {
   const {
@@ -115,7 +115,37 @@ export default function ClientModal({ app }) {
   // Re-score delta chip (Jul 2026): after a profile re-score, the delta vs
   // the previous score shows beside the big number until the modal moves on.
   const [scoreDelta, setScoreDelta] = useState(null);
-  useEffect(() => { setAssignPickerOpen(false); setHandoffOpen(false); setScoreDelta(null); }, [selectedClient?.id]);
+  // ─── Docs + billable hours (Jul 2026) ─────────────────────────────
+  const [docs, setDocs] = useState([]);
+  const [docBusy, setDocBusy] = useState(false);
+  const [docDeleteId, setDocDeleteId] = useState(null);
+  const [docDragOver, setDocDragOver] = useState(false);
+  const [docError, setDocError] = useState("");
+  const [hoursEntries, setHoursEntries] = useState([]);
+  const [hoursDraft, setHoursDraft] = useState(null); // { month, h, note }
+  const [rateEditing, setRateEditing] = useState(false);
+  const [rateDraft, setRateDraft] = useState("");
+  const [copiedMonth, setCopiedMonth] = useState(null);
+  useEffect(() => {
+    setAssignPickerOpen(false); setHandoffOpen(false); setScoreDelta(null);
+    setDocs([]); setDocBusy(false); setDocDeleteId(null); setDocDragOver(false); setDocError("");
+    setHoursEntries([]); setHoursDraft(null); setRateEditing(false); setRateDraft(""); setCopiedMonth(null);
+    const cid = selectedClient?.id;
+    if (!cid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ data: d }, { data: h }] = await Promise.all([
+          clientDocsDb.list(cid),
+          clientHoursDb.listForClient(cid),
+        ]);
+        if (cancelled) return;
+        setDocs(d || []);
+        setHoursEntries(h || []);
+      } catch (e) { console.warn("Docs/hours load failed:", e); }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedClient?.id]);
   return (<>
 {selectedClient && (() => {
         const sc = selectedClient;
@@ -426,17 +456,21 @@ export default function ClientModal({ app }) {
                   });
                 };
                 return (
-                  <div style={{ padding: "14px 20px", borderTop: sc.ret ? "none" : "1px solid " + C.borderLight, borderBottom: "1px solid " + C.borderLight, background: C.surfaceWarm }}>
+                  <div style={{ padding: "14px 20px", borderTop: sc.ret ? "none" : "1px solid " + C.borderLight, borderBottom: "1px solid rgba(124,92,243,0.16)", background: "#F6F2FD" }}>
+                    {/* Rai purple surface (Jul 2026): this is a RAI control —
+                        it reads as one. Softer wash than the note cards
+                        (#F6F2FD vs #EFE9FB) so it sits back as chrome, with
+                        the ✦ marker and ink from the Rai palette. */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase" }}>Rai's role</div>
-                        <div style={{ fontSize: 12, color: C.textSec, marginTop: 3, lineHeight: 1.4 }}>
+                        <div style={{ fontSize: 10, color: "#7c5cf3", fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase" }}>✦ Rai's role</div>
+                        <div style={{ fontSize: 12, color: "#3E2F72", marginTop: 3, lineHeight: 1.4, opacity: 0.85 }}>
                           {mode === "managed"
                             ? "Rai helps manage this client — suggests tasks and flags risks."
                             : "Rai keeps score only — no tasks or flags. You've got this one."}
                         </div>
                       </div>
-                      <div style={{ display: "inline-flex", background: C.surface, borderRadius: 999, padding: 3, flexShrink: 0 }}>
+                      <div style={{ display: "inline-flex", background: "rgba(124,92,243,0.10)", borderRadius: 999, padding: 3, flexShrink: 0 }}>
                         {[["managed", "Managed"], ["advisory", "Advisory"]].map(([val, label]) => (
                           <button
                             key={val}
@@ -445,8 +479,8 @@ export default function ClientModal({ app }) {
                               padding: "6px 12px", borderRadius: 999, border: "none", cursor: "pointer",
                               fontFamily: "inherit", fontSize: 12, fontWeight: 600,
                               ...(mode === val
-                                ? { background: C.card, color: C.text, boxShadow: "var(--rt-sh-xs)" }
-                                : { background: "transparent", color: C.textMuted }),
+                                ? { background: "#7c5cf3", color: "#fff", boxShadow: "0 1px 4px rgba(124,92,243,0.35)" }
+                                : { background: "transparent", color: "#3E2F72", opacity: 0.6 }),
                             }}
                           >{label}</button>
                         ))}
@@ -458,7 +492,7 @@ export default function ClientModal({ app }) {
 
               <div style={{ padding: "16px 20px 0" }}>
                 <div style={{ display: "flex", gap: 0, background: C.surface, borderRadius: 10, padding: 3 }}>
-                  {["Overview", "Profile", "Billing", "Flags"].map(t => {
+                  {["Overview", "Profile", "Docs", "Billing", "Flags"].map(t => {
                     const isActive = clientTab === t.toLowerCase();
                     return (
                       <button key={t} onClick={() => setClientTab(t.toLowerCase())} style={{
@@ -526,6 +560,8 @@ export default function ClientModal({ app }) {
                                   const lin = (refs || []).find(r => r.name === sc.name && r.from);
                                   return lin ? [{ l: "Referred by", v: lin.from + (lin.on ? " · " + lin.on : "") }] : [];
                                 })(),
+                                // Documents (Jul 2026): jump row to the Docs tab.
+                                ...(docs.length > 0 ? [{ l: "Documents", v: docs.length + " on file", muted: true, onClick: () => setClientTab("docs") }] : []),
                               ].map((d, i) => (
                                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight }}>
                                   <span style={{ fontSize: 14, color: C.textSec }}>{d.l}</span>
@@ -549,7 +585,7 @@ export default function ClientModal({ app }) {
                               ].map((d, i) => (
                                 <div key={i} onClick={d.onClick} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight, cursor: d.onClick ? "pointer" : "default" }}>
                                   <span style={{ fontSize: 14, color: C.textSec }}>{d.l}</span>
-                                  <span style={{ fontSize: 14, fontWeight: 600, color: d.muted ? C.btn : C.text }}>{d.v}{d.onClick && <span style={{ marginLeft: 6, fontSize: 11, color: C.textMuted }}>›</span>}</span>
+                                  <span style={{ fontSize: 14, fontWeight: 600, color: d.muted ? C.primary : C.text }}>{d.v}{d.onClick && <span style={{ marginLeft: 6, fontSize: 11, color: C.textMuted }}>›</span>}</span>
                                 </div>
                               ))}
                             </>
@@ -1305,6 +1341,75 @@ export default function ClientModal({ app }) {
 
                   const getMonthItems = (month) => billing.items.filter(i => i.month === month);
                   const getMonthTotal = (month) => getMonthItems(month).reduce((a, i) => a + i.amount, 0);
+                  // ─── Billable hours (Jul 2026) ──────────────────────────
+                  // Entries group into billing months by logged_on and price
+                  // at clients.hourly_rate. The Hours block renders only when
+                  // a rate is set — retainer clients see this tab unchanged.
+                  const hourlyRate = parseInt(sc.hourly_rate) || 0;
+                  const monthLabelOf = (ymd) => new Date(String(ymd).slice(0, 10) + "T00:00:00").toLocaleString("default", { month: "long", year: "numeric" });
+                  const hoursForMonth = (month) => hourlyRate > 0
+                    ? hoursEntries.filter(h => monthLabelOf(h.logged_on) === month)
+                    : [];
+                  const hoursSum = (list) => Math.round(list.reduce((a, h) => a + Number(h.hours || 0), 0) * 100) / 100;
+                  const parseHoursInput = (raw) => {
+                    const s = String(raw || "").trim().toLowerCase();
+                    let m = s.match(/^(\d+(?:\.\d+)?)\s*h?$/);
+                    if (m) return Math.min(24, parseFloat(m[1]));
+                    m = s.match(/^(\d+)\s*m(?:in)?$/);
+                    if (m) return Math.min(24, Math.round((parseInt(m[1], 10) / 60) * 100) / 100);
+                    return null;
+                  };
+                  const addHoursEntry = async (month) => {
+                    const h = parseHoursInput(hoursDraft?.h);
+                    if (!h || h <= 0) return;
+                    const note = (hoursDraft?.note || "").trim();
+                    // Entry lands on today when logging into the current month;
+                    // logging into a PAST month lands on that month's last day.
+                    const now = new Date();
+                    let loggedOn = localYmd(now);
+                    if (month !== now.toLocaleString("default", { month: "long", year: "numeric" })) {
+                      // "June 2026" → "June 1, 2026" (reliably parseable) → last day.
+                      const parts = String(month).split(" ");
+                      const d = new Date(`${parts[0]} 1, ${parts[1]}`);
+                      if (Number.isFinite(d.getTime())) {
+                        const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+                        loggedOn = localYmd(last);
+                      }
+                    }
+                    setHoursDraft(null);
+                    const ownerId = sc.user_id || user.id;
+                    const tempId = "temp-h-" + Date.now();
+                    const optimistic = { id: tempId, client_id: sc.id, hours: h, note: note || null, logged_on: loggedOn };
+                    setHoursEntries(prev => [optimistic, ...prev]);
+                    const { data, error } = await clientHoursDb.create(ownerId, user.id, sc.id, h, note, loggedOn);
+                    if (error) { console.warn("Hours create failed:", error); setHoursEntries(prev => prev.filter(x => x.id !== tempId)); return; }
+                    if (data) setHoursEntries(prev => prev.map(x => x.id === tempId ? data : x));
+                  };
+                  const removeHoursEntry = async (entry) => {
+                    setHoursEntries(prev => prev.filter(x => x.id !== entry.id));
+                    const { error } = await clientHoursDb.remove(entry.id);
+                    if (error) { console.warn("Hours delete failed:", error); setHoursEntries(prev => [entry, ...prev]); }
+                  };
+                  const copyInvoiceSummary = (month) => {
+                    const hrs = hoursForMonth(month).slice().sort((a, b) => String(b.logged_on).localeCompare(String(a.logged_on)));
+                    const items = getMonthItems(month);
+                    const hTotal = hoursSum(hrs);
+                    const hAmt = Math.round(hTotal * hourlyRate);
+                    const total = getMonthTotal(month) + hAmt;
+                    const lines = [`${sc.name} — ${month}`];
+                    for (const h of hrs) {
+                      const d = new Date(String(h.logged_on).slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                      lines.push(`${d}  ${h.note || "Work"}  —  ${Number(h.hours)}h  $${Math.round(Number(h.hours) * hourlyRate).toLocaleString()}`);
+                    }
+                    if (hrs.length > 0) lines.push(`Hours subtotal (${hTotal}h × $${hourlyRate})  —  $${hAmt.toLocaleString()}`);
+                    for (const it of items) lines.push(`${it.description}  —  $${it.amount.toLocaleString()}`);
+                    lines.push(`Total due  —  $${total.toLocaleString()}`);
+                    try {
+                      navigator.clipboard.writeText(lines.join("\n"));
+                      setCopiedMonth(month);
+                      setTimeout(() => setCopiedMonth(null), 2500);
+                    } catch (e) { console.warn("Clipboard failed:", e); }
+                  };
                   // pastMonths now means "older than previous month" — the deeper history list.
                   const pastMonths = [...new Set(billing.items.map(i => i.month))].filter(m => !activeMonths.includes(m));
 
@@ -1624,9 +1729,13 @@ export default function ClientModal({ app }) {
                   const renderMonth = (month, opts = {}) => {
                     const { isNext = false, readOnly = false } = opts;
                     const items = getMonthItems(month);
-                    const total = getMonthTotal(month);
+                    const monthHours = hoursForMonth(month);
+                    const monthHoursTotal = hoursSum(monthHours);
+                    const monthHoursAmt = Math.round(monthHoursTotal * hourlyRate);
+                    const total = getMonthTotal(month) + monthHoursAmt;
                     const isAdding = billingAddOpen === month;
                     const status = getStatus(month);
+                    const isDraftingHours = hoursDraft?.month === month;
 
                     return (
                       <div key={month} style={{ marginBottom: 20, opacity: readOnly ? 0.85 : 1 }}>
@@ -1639,12 +1748,50 @@ export default function ClientModal({ app }) {
                           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                             <StatusPill kind="invoiced" on={status.invoiced} onClick={() => toggleInvoiced(month)} />
                             <StatusPill kind="paid" on={status.paid} onClick={() => togglePaid(month)} />
-                            {items.length > 0 && (
+                            {total > 0 && !isNext && (
+                              <button onClick={() => copyInvoiceSummary(month)} title="Copy an itemized summary to paste into your invoicing tool" style={{ fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit", background: copiedMonth === month ? C.primarySoft : C.primaryDeep, color: copiedMonth === month ? C.primaryDeep : "#fff", whiteSpace: "nowrap", transition: "background 150ms ease" }}>
+                                {copiedMonth === month ? "Copied ✓" : "Copy summary"}
+                              </button>
+                            )}
+                            {(items.length > 0 || monthHours.length > 0) && (
                               <span style={{ fontSize: 14, fontWeight: 700, color: C.primary, marginLeft: 4 }}>${total.toLocaleString()}</span>
                             )}
                           </div>
                         </div>
 
+                        {/* ─── Hours block — only when a rate is on file ─── */}
+                        {hourlyRate > 0 && (monthHours.length > 0 || !readOnly) && (
+                          <div style={{ marginBottom: items.length > 0 ? 6 : 0 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: C.textMuted, padding: "4px 0 2px" }}>
+                              Hours{monthHoursTotal > 0 ? ` · ${monthHoursTotal}h` : ""}
+                            </div>
+                            {monthHours.map(h => (
+                              <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid " + C.borderLight, fontSize: 13 }}>
+                                <span style={{ color: C.textMuted, width: 46, flexShrink: 0, fontSize: 11.5, fontVariantNumeric: "tabular-nums" }}>{new Date(String(h.logged_on).slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                                <span style={{ flex: 1, minWidth: 0, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.note || "Work"}</span>
+                                <span style={{ fontWeight: 700, color: C.textSec, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{Number(h.hours)}h</span>
+                                <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0, width: 58, textAlign: "right" }}>${Math.round(Number(h.hours) * hourlyRate).toLocaleString()}</span>
+                                {!readOnly && <button onClick={() => removeHoursEntry(h)} style={{ background: "none", border: "none", fontSize: 13, color: C.borderLight, cursor: "pointer", padding: "0 2px", fontFamily: "inherit" }}>×</button>}
+                              </div>
+                            ))}
+                            {!readOnly && (isDraftingHours ? (
+                              <div style={{ display: "flex", gap: 6, padding: "9px 0", alignItems: "center" }}>
+                                <input autoFocus value={hoursDraft.h} onChange={e => setHoursDraft({ ...hoursDraft, h: e.target.value })} onKeyDown={e => { if (e.key === "Enter") addHoursEntry(month); }} placeholder="2h" style={{ width: 58, textAlign: "center", padding: "8px 6px", border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, borderRadius: 8, fontSize: 12.5, fontFamily: "inherit", outline: "none", background: C.card, color: C.text }} />
+                                <input value={hoursDraft.note} onChange={e => setHoursDraft({ ...hoursDraft, note: e.target.value })} onKeyDown={e => { if (e.key === "Enter") addHoursEntry(month); }} placeholder="What was it? (optional)" style={{ flex: 1, minWidth: 0, padding: "8px 10px", border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, borderRadius: 8, fontSize: 12.5, fontFamily: "inherit", outline: "none", background: C.card, color: C.text }} />
+                                <button onClick={() => addHoursEntry(month)} disabled={!parseHoursInput(hoursDraft.h)} style={{ padding: "8px 12px", background: parseHoursInput(hoursDraft.h) ? C.primaryDeep : C.surfaceWarm, color: parseHoursInput(hoursDraft.h) ? "#fff" : C.textMuted, border: "none", borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: parseHoursInput(hoursDraft.h) ? "pointer" : "default", fontFamily: "inherit" }}>Log</button>
+                                <button onClick={() => setHoursDraft(null)} style={{ background: "none", border: "none", fontSize: 12, color: C.textMuted, cursor: "pointer", fontFamily: "inherit", padding: "0 2px" }}>✕</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setHoursDraft({ month, h: "", note: "" })} style={{ background: "transparent", border: "none", padding: "8px 0 4px", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: C.primary, cursor: "pointer" }}>+ hours</button>
+                            ))}
+                            {monthHours.length > 0 && (
+                              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", fontSize: 12, color: C.textSec, borderBottom: items.length > 0 ? "1px solid " + C.borderLight : "none" }}>
+                                <span>Hours subtotal · {monthHoursTotal}h × ${hourlyRate.toLocaleString()}</span>
+                                <span style={{ fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>${monthHoursAmt.toLocaleString()}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {items.map(item => (
                           <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid " + C.borderLight }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1663,9 +1810,9 @@ export default function ClientModal({ app }) {
                           </div>
                         ))}
 
-                        {items.length === 0 && !isAdding && (
+                        {items.length === 0 && monthHours.length === 0 && !isAdding && !isDraftingHours && (
                           <div style={{ padding: "12px 0", fontSize: 14, color: C.textMuted }}>
-                            {readOnly ? "No items logged for this month." : "No items yet."}
+                            {readOnly ? "Nothing logged for this month." : hourlyRate > 0 ? "No items or hours yet." : "No items yet."}
                           </div>
                         )}
 
@@ -1693,6 +1840,28 @@ export default function ClientModal({ app }) {
 
                   return (
                     <div>
+                      {/* ─── Hourly rate (Jul 2026) — the price the Hours
+                          blocks bill at. Unset = hours UI hidden entirely. ─── */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.surfaceWarm, borderRadius: 10, padding: "10px 13px", marginBottom: 14 }}>
+                        {rateEditing ? (
+                          <>
+                            <span style={{ fontSize: 12.5, color: C.textSec }}>Hourly rate $</span>
+                            <input autoFocus type="number" min="0" value={rateDraft} onChange={e => setRateDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { const v = parseInt(rateDraft) || 0; setRateEditing(false); setSelectedClient(prev => prev ? { ...prev, hourly_rate: v } : prev); setClients(prev => prev.map(c => c.id === sc.id ? { ...c, hourly_rate: v } : c)); clientsDb.update(sc.id, { hourly_rate: v || null }).then(({ error }) => { if (error) console.warn("Rate save failed:", error); }); } }} placeholder="150" style={{ width: 74, padding: "6px 9px", border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, borderRadius: 8, fontSize: 13, fontFamily: "inherit", outline: "none", background: C.card, color: C.text }} />
+                            <span style={{ fontSize: 12.5, color: C.textMuted }}>/hr</span>
+                            <button onClick={() => { const v = parseInt(rateDraft) || 0; setRateEditing(false); setSelectedClient(prev => prev ? { ...prev, hourly_rate: v } : prev); setClients(prev => prev.map(c => c.id === sc.id ? { ...c, hourly_rate: v } : c)); clientsDb.update(sc.id, { hourly_rate: v || null }).then(({ error }) => { if (error) console.warn("Rate save failed:", error); }); }} style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, color: "#fff", background: C.primaryDeep, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontFamily: "inherit" }}>Save</button>
+                            <button onClick={() => setRateEditing(false)} style={{ background: "none", border: "none", fontSize: 12, color: C.textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ fontSize: 12.5, color: C.textSec }}>
+                              {hourlyRate > 0
+                                ? <>Billing: <b style={{ fontWeight: 800, color: C.text, fontVariantNumeric: "tabular-nums" }}>Hourly · ${hourlyRate.toLocaleString()}/hr</b></>
+                                : <>No hourly rate on file — set one to log billable hours.</>}
+                            </span>
+                            <button onClick={() => { setRateDraft(hourlyRate ? String(hourlyRate) : ""); setRateEditing(true); }} style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 11.5, fontWeight: 700, color: C.primary, cursor: "pointer", fontFamily: "inherit" }}>{hourlyRate > 0 ? "Edit rate" : "Set rate"}</button>
+                          </>
+                        )}
+                      </div>
                       {/* ─── Billing terms section ─── */}
                       {/* Standard card pattern: white bg, hairline border,
                           10px radius. Matches every other card in the app
@@ -1807,7 +1976,7 @@ export default function ClientModal({ app }) {
                           <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8, paddingTop: 12, borderTop: "1px solid " + C.borderLight }}>Earlier months</div>
                           {pastMonths.map((month, mi) => {
                             const items = getMonthItems(month);
-                            const total = getMonthTotal(month);
+                            const total = getMonthTotal(month) + Math.round(hoursSum(hoursForMonth(month)) * hourlyRate);
                             const status = getStatus(month);
                             return (
                               <div key={mi} style={{ background: C.bg, borderRadius: 8, padding: "10px 12px", marginBottom: 6 }}>
@@ -2108,6 +2277,106 @@ export default function ClientModal({ app }) {
                 })()}
 
                 {/* Flags — pill toggles with descriptions. Score impact hidden — scoring is magic. */}
+                {/* ─── DOCS TAB (Jul 2026) — contracts and proposals filed on
+                    the client. Upload / list / download / delete. Kind chip
+                    auto-guessed from the filename, tap to cycle. AM uploads
+                    carry attribution; delete is owner-side (RLS-enforced). ─── */}
+                {clientTab === "docs" && (() => {
+                  const KINDS = ["contract", "proposal", "other"];
+                  const KIND_META = {
+                    contract: { label: "CONTRACT", color: C.primaryDeep, bg: C.primarySoft },
+                    proposal: { label: "PROPOSAL", color: "#8A6A2F", bg: "#FAF0DF" },
+                    other:    { label: "OTHER",    color: C.textSec,   bg: C.borderLight },
+                  };
+                  const guessKind = (name) => {
+                    const n = String(name || "").toLowerCase();
+                    if (/(msa|contract|sow|agreement|nda)/.test(n)) return "contract";
+                    if (/(proposal|quote|estimate|pitch|scope)/.test(n)) return "proposal";
+                    return "other";
+                  };
+                  const fmtSize = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+                  const extOf = (name) => (String(name).split(".").pop() || "").slice(0, 4).toUpperCase() || "FILE";
+                  const ALLOWED = /\.(pdf|docx?|xlsx?|png|jpe?g)$/i;
+                  const handleFiles = async (fileList) => {
+                    const file = fileList && fileList[0];
+                    if (!file || docBusy) return;
+                    setDocError("");
+                    if (file.size > 25 * 1048576) { setDocError("25 MB max per file."); return; }
+                    if (!ALLOWED.test(file.name)) { setDocError("PDF, DOC, XLSX, PNG or JPG only."); return; }
+                    setDocBusy(true);
+                    const ownerId = sc.user_id || user.id;
+                    const { data, error } = await clientDocsDb.upload(ownerId, user.id, sc.id, file, guessKind(file.name));
+                    setDocBusy(false);
+                    if (error) { console.warn("Doc upload failed:", error); setDocError("Upload failed — " + (error.message || "try again.")); return; }
+                    if (data) setDocs(prev => [data, ...prev]);
+                  };
+                  const cycleKind = (doc) => {
+                    const next = KINDS[(KINDS.indexOf(doc.kind) + 1) % KINDS.length];
+                    setDocs(prev => prev.map(d => d.id === doc.id ? { ...d, kind: next } : d));
+                    clientDocsDb.setKind(doc.id, next).then(({ error }) => { if (error) console.warn("Kind update failed:", error); });
+                  };
+                  const openDoc = async (doc) => {
+                    const { url, error } = await clientDocsDb.signedUrl(doc.storage_path);
+                    if (url) window.open(url, "_blank", "noopener");
+                    else console.warn("Signed URL failed:", error);
+                  };
+                  const deleteDoc = async (doc) => {
+                    if (docDeleteId !== doc.id) { setDocDeleteId(doc.id); return; }
+                    setDocDeleteId(null);
+                    setDocs(prev => prev.filter(d => d.id !== doc.id));
+                    const { error } = await clientDocsDb.remove(doc);
+                    if (error) { console.warn("Doc delete failed:", error); setDocs(prev => [doc, ...prev]); }
+                  };
+                  return (
+                    <div>
+                      <label
+                        onDragOver={e => { e.preventDefault(); setDocDragOver(true); }}
+                        onDragLeave={() => setDocDragOver(false)}
+                        onDrop={e => { e.preventDefault(); setDocDragOver(false); handleFiles(e.dataTransfer.files); }}
+                        style={{ display: "block", border: "1.5px dashed " + (docDragOver ? C.primary : C.border), borderRadius: 12, padding: "20px 16px", textAlign: "center", background: docDragOver ? C.primaryGhost : C.bg, cursor: docBusy ? "wait" : "pointer", transition: "border-color 120ms ease, background 120ms ease" }}
+                      >
+                        <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" style={{ display: "none" }} onChange={e => { handleFiles(e.target.files); e.target.value = ""; }} disabled={docBusy} />
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.textSec }}>{docBusy ? "Uploading…" : "Drop a file here, or tap to browse"}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Contracts, proposals, SOWs · PDF, DOC, XLSX, PNG · up to 25 MB</div>
+                      </label>
+                      {docError && (
+                        <div style={{ fontSize: 12, color: C.danger, marginTop: 8, lineHeight: 1.4 }}>{docError}</div>
+                      )}
+                      {docs.length > 0 && (
+                        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: C.textMuted, margin: "16px 0 2px" }}>On file · {docs.length}</div>
+                      )}
+                      {docs.length === 0 && !docBusy && (
+                        <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontSize: 13, color: C.textMuted, textAlign: "center", padding: "22px 12px", lineHeight: 1.55 }}>
+                          Nothing filed yet. The contract belongs where the relationship lives.
+                        </div>
+                      )}
+                      {docs.map((doc, i) => {
+                        const km = KIND_META[doc.kind] || KIND_META.other;
+                        return (
+                          <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 2px", borderBottom: i === docs.length - 1 ? "none" : "1px solid " + C.borderLight }}>
+                            <div style={{ width: 34, height: 38, borderRadius: 7, background: C.surfaceWarm, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: 0.4, color: C.textSec }}>{extOf(doc.name)}</span>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <button onClick={() => openDoc(doc)} style={{ background: "transparent", border: "none", padding: 0, fontFamily: "inherit", fontSize: 13.5, fontWeight: 600, color: C.text, cursor: "pointer", textAlign: "left", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{doc.name}</button>
+                              <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 4, flexWrap: "wrap" }}>
+                                <button onClick={() => cycleKind(doc)} title="Tap to change type" style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5, padding: "2.5px 7px", borderRadius: 4, border: "none", cursor: "pointer", fontFamily: "inherit", color: km.color, background: km.bg }}>{km.label}</button>
+                                <span style={{ fontSize: 10.5, color: C.textMuted }}>
+                                  {fmtSize(doc.size_bytes)} · {new Date(doc.uploaded_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                  {doc.uploaded_by && <span> · uploaded by a seat</span>}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                              <button onClick={() => openDoc(doc)} title="Download" style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: "transparent", color: C.textMuted, cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>⬇</button>
+                              <button onClick={() => deleteDoc(doc)} title={docDeleteId === doc.id ? "Tap again to delete" : "Delete"} style={{ height: 28, minWidth: 28, padding: docDeleteId === doc.id ? "0 8px" : 0, borderRadius: 8, border: "none", background: docDeleteId === doc.id ? "#FBEDE9" : "transparent", color: docDeleteId === doc.id ? C.danger : C.textMuted, cursor: "pointer", fontSize: docDeleteId === doc.id ? 10.5 : 13, fontWeight: docDeleteId === doc.id ? 700 : 400, fontFamily: "inherit" }}>{docDeleteId === doc.id ? "Sure?" : "✕"}</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 {clientTab === "flags" && (
                   <div>
                     <div style={{ fontSize: 12.5, color: C.textSec, lineHeight: 1.5, marginBottom: 14 }}>
@@ -2117,7 +2386,9 @@ export default function ClientModal({ app }) {
                       { flag: "latePayments",   label: "Late payments",       desc: "Has missed or delayed invoices", delta: -4 },
                       { flag: "prevTerminated", label: "Previously terminated", desc: "Has churned and returned",      delta: -8 },
                       { flag: "otherVendors",   label: "Works with competitors", desc: "Uses other vendors in parallel", delta: -3 },
-                      { flag: "fromReferral",   label: "From referral",       desc: "Introduced by an existing client", delta: 2  },
+                      // "From referral" removed Jul 2026 — provenance, not a
+                      // relationship flag, and its predictive value is
+                      // unproven. Lineage lives in the Overview facts row.
                     ].map(f => {
                       const on = !!sc.qualifyingFlags?.[f.flag];
                       return (
