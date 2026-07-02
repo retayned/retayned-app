@@ -3297,8 +3297,13 @@ export default function TodayPage({ app }) {
                                 from the row edge, so the right gutter stays free
                                 for the date and the title gets full width. */}
 
-                            {/* Right-side indicator — recurring infinity OR date pill (mutually exclusive) */}
-                            {t.recurring ? (
+                            {/* Right-side indicator — recurring infinity OR date pill
+                                (mutually exclusive). DESKTOP ONLY (Jul 2026): on
+                                mobile both pills are removed entirely — dead weight
+                                on a 390px row; the title gets the full width. Dates
+                                are still editable from the task's swipe/long-press
+                                surfaces and the composer. */}
+                            {!isMobile && (t.recurring ? (
                               <span className="rt-row-recur" style={{
                                 display: "inline-flex", alignItems: "center", gap: 4,
                                 padding: "3px 9px",
@@ -3361,10 +3366,7 @@ export default function TodayPage({ app }) {
                                   border: "none",
                                   boxShadow: isDone ? "none" : "var(--rt-sh-xs)",
                                 }}>
-                                  {/* Calendar glyph hidden on mobile (Jul 2026) —
-                                      prime real estate on a 390px row; the label
-                                      already says the date. */}
-                                  {!isMobile && <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec)} />}
+                                  <Icon name="calendar" size={10} color={isDone ? C.textMuted : (isOverdue ? C.danger : C.textSec)} />
                                   <span className="rt-row-text">{label}</span>
                                   {!isDone && (
                                     <svg className="rt-due-chevron" width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ marginLeft: 1, opacity: 0.6 }} aria-hidden="true">
@@ -3374,7 +3376,7 @@ export default function TodayPage({ app }) {
                                 </button>
                                 </span>
                               );
-                            })() : null}
+                            })() : null)}
 
                             <button onClick={(e) => {
                                 e.stopPropagation();
