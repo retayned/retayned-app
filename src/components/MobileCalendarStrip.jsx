@@ -46,9 +46,37 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   // deliberate horizontal drags (>8px, more X than Y) become scrubs.
   // A scrub suppresses the tap-to-expand click on release.
   const bandRef = useRef(null);
-  const scrubGesture = useRef({ id: null, active: false, startX: 0, startY: 0 });
+  const scrubGesture = useRef({ id: null, active: false, startX: 0, startY: 0, fStart: 0 });
   const suppressClickRef = useRef(false);
   const [scrubFrac, setScrubFrac] = useState(null);
+  // ── Scrub-turn (Jul 2026): the desktop dial's real semantics, ported.
+  // Dragging doesn't move a cursor — it TURNS the 6h window under the
+  // fixed apex. scrubMs = how far the window has been turned off "now".
+  // On release the dial holds for a beat, then eases home.
+  const DOME_WIN_MS = 6 * 3600000;
+  const [scrubMs, _setScrubMs] = useState(0);
+  const scrubMsRef = useRef(0);
+  const setScrubMs = (v) => { scrubMsRef.current = v; _setScrubMs(v); };
+  const easeTimerRef = useRef(null);
+  const easeRafRef = useRef(null);
+  const cancelEase = () => {
+    if (easeTimerRef.current) { clearTimeout(easeTimerRef.current); easeTimerRef.current = null; }
+    if (easeRafRef.current) { cancelAnimationFrame(easeRafRef.current); easeRafRef.current = null; }
+  };
+  const scheduleEaseBack = () => {
+    cancelEase();
+    easeTimerRef.current = setTimeout(() => {
+      const from = scrubMsRef.current, t0 = performance.now(), DUR = 420;
+      const step = (t) => {
+        const p = Math.min(1, (t - t0) / DUR);
+        const e = 1 - Math.pow(1 - p, 3);
+        setScrubMs(from * (1 - e));
+        if (p < 1) easeRafRef.current = requestAnimationFrame(step);
+      };
+      easeRafRef.current = requestAnimationFrame(step);
+    }, 1400);
+  };
+  useEffect(() => cancelEase, []);
   const fracFromClientX = (clientX) => {
     const el = bandRef.current;
     if (!el) return null;
@@ -57,7 +85,8 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     return Math.max(0, Math.min(1, (clientX - r.left) / r.width));
   };
   const onBandPointerDown = (e) => {
-    scrubGesture.current = { id: e.pointerId, active: false, startX: e.clientX, startY: e.clientY };
+    cancelEase(); // grabbing the dial interrupts its glide home
+    scrubGesture.current = { id: e.pointerId, active: false, startX: e.clientX, startY: e.clientY, fStart: 0, baseMs: scrubMsRef.current };
   };
   const onBandPointerMove = (e) => {
     const s = scrubGesture.current;
@@ -66,17 +95,25 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       const dx = e.clientX - s.startX, dy = e.clientY - s.startY;
       if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) {
         s.active = true;
+        s.fStart = fracFromClientX(s.startX) ?? 0.5;
         try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { /* unsupported */ }
       } else return;
     }
     const f = fracFromClientX(e.clientX);
-    if (f != null) setScrubFrac(f);
+    if (f != null) {
+      setScrubFrac(f);
+      // Turn the window: drag left = time advances toward you, drag
+      // right = rewind. base + (fStart − f) · window.
+      setScrubMs((s.fStart - f) * DOME_WIN_MS + (scrubGesture.current.baseMs || 0));
+    }
   };
   const endScrub = () => {
     const s = scrubGesture.current;
     if (s.active) {
       suppressClickRef.current = true;
       setTimeout(() => { suppressClickRef.current = false; }, 250);
+      setScrubFrac(null);
+      scheduleEaseBack();
     }
     scrubGesture.current = { id: null, active: false, startX: 0, startY: 0 };
     setScrubFrac(null);
@@ -167,20 +204,63 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     </div>
   );
 
-  // ── COLLAPSED: THE DOME (Jul 2026) ─────────────────────────────────
-  // The desktop TimeDial, rotated for portrait. Desktop = half-disc on the
-  // right edge, NOW pinned at the arc's left midpoint. Here = a shallow
-  // dome hanging from the TOP edge, NOW pinned at the apex. Every material
-  // is ported verbatim from TimeDial.jsx: the mint wash radial (anchored to
-  // the FIXED unscrubbed-NOW point), the feTurbulence density overlay
-  // (baseFreq 0.15 / alpha 0.025 / opacity 0.4), the 0.6px hairline
-  // rgba(28,50,36,0.16), tick labels #9A9A93, event dots r4.5
-  // (past #C4C4BD / future #558B68 / next #33543E + ring), and the NOW
-  // seeker (r9 deep-green + r3.5 white core, drop-shadow, breathing pulse).
-  // Window: 6h (3h back / 3h forward) — half the desktop's 12h, sized for
-  // a phone header. Events outside the window aren't drawn; the header row
-  // below names the next one. Tap → expand. Horizontal scrub → time bubble.
+  // ── COLLAPSED: THE CREST (Jul 2026, v2) ────────────────────────────
+  // The desktop TimeDial for portrait — now as a SUN-PATH ARC. v1 hung
+  // the cap downward (a bowl); a day doesn't read as a valley, it rises
+  // to a zenith, so the arc now crests UP with NOW riding the top.
+  // Chronology stays left→right (matches the expanded list, the bucket
+  // calendars, every axis in the app). Materials remain the desktop's,
+  // verbatim: mint wash radial anchored to the FIXED unscrubbed-NOW
+  // point (the crest), feTurbulence density overlay (0.15/0.025/0.4),
+  // 0.6px hairline rim, #9A9A93 tick labels, r4.5 dots (past #C4C4BD /
+  // future #558B68 / focus #33543E + ring), r9+r3.5 NOW seeker with
+  // drop-shadow and breathing pulse. Same R (420) as the desktop dial.
+  //
+  // THE SCRUB IS THE DESKTOP'S: dragging turns the 6h window under the
+  // fixed crest — NOW slides off-center exactly like the desktop dial —
+  // and whichever event rides nearest the crest becomes the selection,
+  // shown in the header row. Release → holds a beat → glides home.
   if (!open) {
+    const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
+
+    // ── Geometry: the HANGING DISC (reverted Jul 2026 — the upward
+    // "sun crest" flip was wrong; the instrument is the desktop dial's
+    // protruding disc, entering from the screen edge, so from the top
+    // edge it hangs DOWN with NOW at its lowest point). Circle center
+    // sits above the screen; a shallow ~48px cap shows. Chronology is
+    // left→right: the desktop dial reads window-start at its top and
+    // window-end at its bottom, and the only rotation that brings its
+    // flat edge to the phone's top edge (90° counter-clockwise) maps
+    // top→LEFT and bottom→RIGHT — earlier left, later right. It also
+    // makes the disc a clockwise wheel: as time passes, dots ride left
+    // through NOW, the direction every clock mechanism turns.
+    const DOME_R = 420, DOME_W = 390, APEX_Y = 58, DOME_H = 86;
+    const DCX = DOME_W / 2, DCY = APEX_Y - DOME_R;
+    const rimY = DCY + Math.sqrt(DOME_R * DOME_R - DCX * DCX); // ≈10
+    const aL = Math.atan2(rimY - DCY, 0 - DCX);
+    const aR = Math.atan2(rimY - DCY, DOME_W - DCX);
+    const dPtAt = (f, r) => {
+      const a = aL + (aR - aL) * f;
+      return [DCX + r * Math.cos(a), DCY + r * Math.sin(a)];
+    };
+    // 6h window, turned by the scrub.
+    const baseCenter = selectedDay === "today" ? nowMs : (() => { const d = new Date(dayBase); d.setHours(13, 0, 0, 0); return d.getTime(); })();
+    const winCenter = baseCenter + scrubMs;
+    const winStart = winCenter - DOME_WIN_MS / 2, winEnd = winCenter + DOME_WIN_MS / 2;
+    const domeFrac = (ms) => (ms - winStart) / DOME_WIN_MS;
+    const scrubActive = scrubFrac != null || Math.abs(scrubMs) > 30000;
+
+    // The selection: whichever event rides nearest the crest while the
+    // dial is turned (within 45 min of it).
+    let focusEvent = null;
+    if (scrubActive) {
+      let best = 45 * 60000;
+      for (const ev of dayEvents) {
+        const d = Math.abs(ev._start.getTime() - winCenter);
+        if (d < best) { best = d; focusEvent = ev; }
+      }
+    }
+
     let countdown = null, imminent = false;
     if (nextEvent) {
       const mins = minutesUntil(nextEvent._start);
@@ -188,72 +268,49 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       else if (mins < 60) { countdown = `in ${mins} min`; imminent = mins <= 30; }
       else { countdown = `in ${Math.round(mins / 60)} hr`; }
     }
-    const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
 
-    // ── Dome geometry. Same R as the desktop dial (420); the circle's
-    // center sits above the screen so only a shallow ~48px cap shows.
-    // ptAt(f, r) is the desktop idiom: f∈[0,1] across the 6h window,
-    // f=0.5 = NOW = the apex (the deepest point of the cap).
-    const DOME_R = 420, DOME_W = 390, DOME_DEPTH = 58, DOME_H = 86;
-    const DCX = DOME_W / 2, DCY = DOME_DEPTH - DOME_R;
-    const rimY = DCY + Math.sqrt(DOME_R * DOME_R - DCX * DCX); // y at x=0 / x=W
-    const aL = Math.atan2(rimY - DCY, 0 - DCX);
-    const aR = Math.atan2(rimY - DCY, DOME_W - DCX);
-    const dAngleOf = (f) => aL + (aR - aL) * f;
-    const dPtAt = (f, r) => {
-      const a = dAngleOf(f);
-      return [DCX + r * Math.cos(a), DCY + r * Math.sin(a)];
-    };
-    // 6h window centered on now (today) / on midday for other days.
-    const WIN_MS = 6 * 3600000;
-    const winCenter = selectedDay === "today" ? nowMs : (() => { const d = new Date(dayBase); d.setHours(13, 0, 0, 0); return d.getTime(); })();
-    const winStart = winCenter - WIN_MS / 2, winEnd = winCenter + WIN_MS / 2;
-    const domeFrac = (ms) => (ms - winStart) / WIN_MS;
-
-    // Hour ticks: every whole hour inside the window, labels etched just
-    // inside the rim (desktop treatment), skipping the apex zone where the
-    // NOW seeker lives.
+    // Hour LABELS etched into the glass just inside the rim — labels
+    // only, no tick lines (the desktop dial doesn't draw them either).
+    // The apex zone is skipped for the seeker/readout.
     const tickEls = [];
     const t0 = new Date(winStart); t0.setMinutes(0, 0, 0);
     if (t0.getTime() < winStart) t0.setHours(t0.getHours() + 1);
     for (let t = t0.getTime(); t <= winEnd; t += 3600000) {
       const f = domeFrac(t);
-      if (f < 0.015 || f > 0.985) continue;
-      if (selectedDay === "today" && Math.abs(f - 0.5) < 0.075) continue; // NOW zone
-      const [ox, oy] = dPtAt(f, DOME_R);
-      const [ix, iy] = dPtAt(f, DOME_R - 7);
-      const [lx, ly] = dPtAt(f, DOME_R - 19);
+      if (f < 0.03 || f > 0.97) continue;
+      if (Math.abs(f - 0.5) < 0.075) continue; // apex zone
+      const [lx, ly] = dPtAt(f, DOME_R - 18);
       tickEls.push(
-        <g key={"tk" + t}>
-          <path d={`M ${ox.toFixed(1)} ${oy.toFixed(1)} L ${ix.toFixed(1)} ${iy.toFixed(1)}`} stroke="rgba(28,50,36,0.18)" strokeWidth="1" />
-          <text x={lx.toFixed(1)} y={(ly + 3).toFixed(1)} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, fill: "#9A9A93" }}>{fmtTimeShort(new Date(t))}</text>
-        </g>
+        <text key={"tk" + t} x={lx.toFixed(1)} y={(ly + 3).toFixed(1)} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, fill: "#9A9A93" }}>{fmtTimeShort(new Date(t))}</text>
       );
     }
 
-    // Event dots on the rim — desktop colors and next-ring, no labels
-    // (desktop names events on its side rail; here the header row below
-    // names the next one and the expanded list names them all).
+    // Event dots on the rim — desktop colors; the ring rides the focus
+    // while scrubbing, the next event otherwise.
+    const ringTarget = focusEvent || nextEvent;
     const dotEls = dayEvents.map((e, i) => {
       const f = domeFrac(e._start.getTime());
-      if (f < 0.01 || f > 0.99) return null;
-      const isNext = nextEvent && e.id === nextEvent.id;
+      if (f < 0.02 || f > 0.98) return null;
+      const isRing = ringTarget && e.id === ringTarget.id;
       const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
       const [x, y] = dPtAt(f, DOME_R);
       return (
         <g key={e.id || i}>
-          {isNext && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
-          <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="4.5" fill={isPast ? "#C4C4BD" : (isNext ? "#33543E" : "#558B68")} />
+          {isRing && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
+          <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="4.5" fill={isPast ? "#C4C4BD" : (isRing ? "#33543E" : "#558B68")} />
         </g>
       );
     });
 
-    // NOW seeker — fixed at the apex, the desktop ptAt(0.5, R) invariant.
-    const [nx, ny] = dPtAt(0.5, DOME_R);
-    const showDomeNow = selectedDay === "today";
+    // NOW seeker — at real now's position in the (possibly turned)
+    // window, sliding off the crest as you scrub. Desktop-true.
+    const nowF = domeFrac(nowMs);
+    const nowInWindow = selectedDay === "today" && nowF > 0.02 && nowF < 0.98;
+    const [nx, ny] = dPtAt(Math.max(0.02, Math.min(0.98, nowF)), DOME_R);
+    // Wash stays anchored to the crest — the FIXED unscrubbed-NOW spot.
+    const [wx, wy] = dPtAt(0.5, DOME_R);
 
-    // Dome path: rim arc closed against the top edge.
-    const domePath = `M 0 0 L 0 ${rimY.toFixed(1)} A ${DOME_R} ${DOME_R} 0 0 0 ${DOME_W} ${rimY.toFixed(1)} L ${DOME_W} 0 Z`;
+    const capPath = `M 0 0 L 0 ${rimY.toFixed(1)} A ${DOME_R} ${DOME_R} 0 0 0 ${DOME_W} ${rimY.toFixed(1)} L ${DOME_W} 0 Z`;
     const rimPath = `M 0 ${rimY.toFixed(1)} A ${DOME_R} ${DOME_R} 0 0 0 ${DOME_W} ${rimY.toFixed(1)}`;
 
     return (
@@ -269,14 +326,11 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         >
           <svg viewBox={`0 0 ${DOME_W} ${DOME_H}`} width="100%" height="auto" style={{ display: "block" }} aria-hidden>
             <defs>
-              {/* Mint wash — anchored to the FIXED unscrubbed-NOW point
-                  (the apex), exactly like the desktop's washX/washY. */}
-              <radialGradient id="rt-dome-wash" cx={nx} cy={ny} r={DOME_R * 0.62} gradientUnits="userSpaceOnUse">
+              <radialGradient id="rt-dome-wash" cx={wx.toFixed(1)} cy={wy.toFixed(1)} r={DOME_R * 0.62} gradientUnits="userSpaceOnUse">
                 <stop offset="0%" stopColor="rgba(170, 220, 185, 0.20)" />
                 <stop offset="55%" stopColor="rgba(170, 220, 185, 0.08)" />
                 <stop offset="100%" stopColor="rgba(170, 220, 185, 0.02)" />
               </radialGradient>
-              {/* Atmospheric density variation — desktop's exact filter. */}
               <filter id="rt-dome-frosted" x="0%" y="0%" width="100%" height="100%">
                 <feTurbulence type="fractalNoise" baseFrequency="0.15" numOctaves="2" seed="3" stitchTiles="stitch" />
                 <feColorMatrix values="0 0 0 0 0.11
@@ -285,7 +339,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
                                       0 0 0 0.025 0" />
                 <feComposite in2="SourceGraphic" operator="in" />
               </filter>
-              {/* NOW dot drop-shadow — desktop's exact filter. */}
               <filter id="rt-dome-now-raised" x="-50%" y="-50%" width="200%" height="200%">
                 <feGaussianBlur in="SourceAlpha" stdDeviation="1.5" />
                 <feOffset dx="0.6" dy="1.4" result="offsetblur" />
@@ -298,57 +351,33 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
               </filter>
             </defs>
             {/* Layer 1: static mint wash */}
-            <path d={domePath} fill="url(#rt-dome-wash)" />
+            <path d={capPath} fill="url(#rt-dome-wash)" />
             {/* Layer 2: atmospheric density variation overlay */}
-            <path d={domePath} fill="rgba(170, 220, 185, 0.40)" filter="url(#rt-dome-frosted)" opacity="0.4" />
-            {/* Layer 3: single soft hairline edge — the rim only */}
+            <path d={capPath} fill="rgba(170, 220, 185, 0.40)" filter="url(#rt-dome-frosted)" opacity="0.4" />
+            {/* Layer 3: single soft hairline edge */}
             <path d={rimPath} fill="none" stroke="rgba(28, 50, 36, 0.16)" strokeWidth="0.6" />
             {tickEls}
             {dotEls}
-            {showDomeNow && (
+            {/* Scrubbed-time readout at the crest while the dial is turned */}
+            {scrubActive && (
+              <text x={DCX} y={APEX_Y + 22} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 800, fill: "#1C3224", fontVariantNumeric: "tabular-nums" }}>{fmtTime(new Date(winCenter))}</text>
+            )}
+            {nowInWindow && (
               <g filter="url(#rt-dome-now-raised)">
                 <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="9" fill="#33543E" />
                 <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="3.5" fill="#FFFFFF" />
               </g>
             )}
-            {showDomeNow && (
+            {nowInWindow && !scrubActive && (
               <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="18" fill="none" stroke="#33543E" strokeOpacity="0.26" strokeWidth="1.5">
                 <animate attributeName="r" values="18;24;18" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
                 <animate attributeName="stroke-opacity" values="0.30;0.05;0.30" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1" />
               </circle>
             )}
           </svg>
-          {/* Scrub overlay — the bubble rides the rim; shows the scrubbed
-              time, or the nearest event when within ~45 min of it. */}
-          {scrubFrac != null && (() => {
-            const sd = new Date(winStart + scrubFrac * WIN_MS);
-            let nearest = null, best = 0.125; // 0.125 of 6h = 45 min
-            for (const ev of dayEvents) {
-              const d = Math.abs(domeFrac(ev._start.getTime()) - scrubFrac);
-              if (d < best) { best = d; nearest = ev; }
-            }
-            const [sx, sy] = dPtAt(scrubFrac, DOME_R);
-            const leftPct = (sx / DOME_W) * 100;
-            const tx = scrubFrac < 0.18 ? "translateX(-10px)" : scrubFrac > 0.82 ? "translateX(calc(-100% + 10px))" : "translateX(-50%)";
-            return (
-              <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 4, pointerEvents: "none" }}>
-                <div style={{ position: "absolute", left: `${leftPct}%`, top: sy, transform: "translate(-50%,-50%)", width: 10, height: 10, borderRadius: "50%", background: C.primaryDeep, boxShadow: "0 0 0 3px rgba(250,251,250,0.95), 0 0 0 4.5px rgba(51,84,62,0.30)" }} />
-                <div style={{ position: "absolute", top: sy + 14, left: `${leftPct}%`, transform: tx, background: C.card, borderRadius: 8, padding: "4px 9px", boxShadow: "0 5px 16px rgba(20,30,22,0.16)", border: "1px solid " + C.border, whiteSpace: "nowrap", maxWidth: 210, overflow: "hidden" }}>
-                  {nearest ? (
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      <span style={{ color: C.primary, fontWeight: 700 }}>{fmtTime(nearest._start)}</span> {nearest.title}{clientNameFor(nearest) ? <span style={{ color: C.textMuted, fontWeight: 500 }}> · {clientNameFor(nearest)}</span> : null}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text, fontVariantNumeric: "tabular-nums" }}>{fmtTime(sd)}</div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
         </div>
-        {/* Header row below the dome: date + greeting left, NEXT EVENT right
-            (this is where "N events · N done" style chrome used to sit — the
-            next event itself renders here now, no separate tile). */}
+        {/* Header row: date + greeting left; the selection (while turning)
+            or the next event (at rest) on the right — no separate tile. */}
         <div style={{ position: "relative", zIndex: 2, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "6px 16px 0" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11.5, color: C.textMuted, letterSpacing: 0.3 }}>{displayDate}</div>
@@ -357,7 +386,16 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
             </h1>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0, paddingBottom: 3, paddingLeft: 10 }}>
-            {nextEvent ? (
+            {focusEvent ? (
+              <>
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.primary }}>
+                  On the dial
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(focusEvent._start)}</span> {focusEvent.title}
+                </div>
+              </>
+            ) : nextEvent ? (
               <>
                 <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
                   Next{countdown ? ` · ${countdown}` : ""}
