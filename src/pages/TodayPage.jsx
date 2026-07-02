@@ -1316,23 +1316,32 @@ export default function TodayPage({ app }) {
                       const n = c && c.name;
                       if (!n || typeof n !== "string") continue;
                       aliasToCanonical.set(n.toLowerCase(), n);
-                      // First-word alias for multi-word names. Skip if the
-                      // first word is too short to be unambiguous (e.g.
-                      // "The Motley Fool" — "The" should NOT be a link).
-                      // Skip leading articles, and require ≥3 chars.
+                      // Prefix aliases (Jul 2 2026): Rai shortens names in
+                      // prose at ANY word boundary — "Lemon Law Assist"
+                      // becomes "Lemon Law", not just "Lemon". The old
+                      // first-word-only alias made the link stop mid-name
+                      // ("Lemon" underlined, " Law" plain). Now EVERY word
+                      // prefix of a multi-word name is an alias ("lemon law
+                      // assist", "lemon law", "lemon"), longest-first
+                      // matching below picks the fullest form present.
+                      // Leading articles are skipped for the shortest form
+                      // ("The Motley Fool" → "Motley" not "The"), and
+                      // single-word aliases still require ≥3 chars.
                       const ARTICLES = new Set(["the", "a", "an"]);
                       const words = n.split(/\s+/);
-                      let firstWord = words[0];
-                      if (words.length > 1 && firstWord && ARTICLES.has(firstWord.toLowerCase())) {
-                        firstWord = words[1];
-                      }
-                      if (
-                        words.length > 1 &&
-                        firstWord &&
-                        firstWord.length >= 3 &&
-                        !aliasToCanonical.has(firstWord.toLowerCase())
-                      ) {
-                        aliasToCanonical.set(firstWord.toLowerCase(), n);
+                      for (let w = words.length - 1; w >= 1; w--) {
+                        const prefixWords = words.slice(0, w);
+                        // Shortest form: drop a leading article, require ≥3 chars.
+                        if (prefixWords.length === 1) {
+                          let solo = prefixWords[0];
+                          if (ARTICLES.has(solo.toLowerCase()) && words.length > 1) solo = words[1];
+                          if (solo && solo.length >= 3 && !aliasToCanonical.has(solo.toLowerCase())) {
+                            aliasToCanonical.set(solo.toLowerCase(), n);
+                          }
+                          continue;
+                        }
+                        const prefix = prefixWords.join(" ").toLowerCase();
+                        if (!aliasToCanonical.has(prefix)) aliasToCanonical.set(prefix, n);
                       }
                     }
                     const aliases = Array.from(aliasToCanonical.keys())
