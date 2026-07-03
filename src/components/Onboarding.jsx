@@ -399,6 +399,18 @@ export function splitRoster(text) {
       revenue = Math.round(parseFloat(money[1].replace(/,/g, "")) * (money[2] ? 1000 : 1));
       t = (t.slice(0, money.index) + t.slice(money.index + money[0].length)).trim();
     }
+    // BARE NUMBERS ARE REVENUE, NEVER NAMES (Jul 2026). The $-only regex
+    // above meant "Northbeam, 1450" minted a client literally named
+    // "1450". A token that is nothing but a number (optionally "k" or
+    // "/mo") attaches as revenue to the entry before it — or drops if
+    // that entry already has one. It never becomes a client.
+    // Names that merely CONTAIN digits ("Studio 54") are untouched.
+    const bareNum = t.match(/^([\d][\d,]*(?:\.\d+)?)\s*(k\b)?(?:\s*\/?\s*mo(?:nth)?(?:ly)?\b)?$/i);
+    if (bareNum) {
+      const val = Math.round(parseFloat(bareNum[1].replace(/,/g, "")) * (bareNum[2] ? 1000 : 1));
+      if (val > 0 && out.length && !out[out.length - 1].revenue) out[out.length - 1].revenue = val;
+      continue;
+    }
     // Emails: "Maya <maya@x.com>" → "Maya"; bare "maya.linwood@x.com" → "Maya Linwood"
     t = t.replace(/<[^>]*>/g, " ").trim();
     const bareEmail = t.match(/^([A-Za-z0-9._%+-]+)@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/);
@@ -410,7 +422,9 @@ export function splitRoster(text) {
     // List junk: leading bullets / "1." numbering (but "3M" survives —
     // the number must be followed by a separator), trailing dashes/colons.
     t = t.replace(/^\s*(?:[-–•*]|\d{1,3}[.)])\s+/, "").replace(/[\s\-–:|]+$/, "").replace(/\s{2,}/g, " ").trim();
-    if (!t || t.length > 60) continue;
+    // Backstop: a client name must contain at least one letter. Whatever
+    // path a token took to get here, digits-and-symbols-only never mints.
+    if (!t || t.length > 60 || !/[A-Za-z]/.test(t)) continue;
     const key = t.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
