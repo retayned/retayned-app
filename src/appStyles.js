@@ -1532,17 +1532,26 @@ export const APP_CSS = `
            content-sized parent and the input floats mid-screen. dvh handles the
            mobile URL bar. Scoped to mobile so desktop's sidebar layout is untouched. */
         @media (max-width: 767px) {
-          /* iOS fix: 100svh (small viewport height — assumes browser chrome is
-             visible) is STABLE. 100dvh changes as Safari's URL bar/nav collapses
-             on scroll, which resized the page mid-scroll and let the whole chat
-             be dragged (the "nav pulls the chat down" bug). svh never moves, so
-             the page stays fixed and only r-rai-scroll scrolls. */
+          /* iOS chat shell (Jul 2026 — third iteration, read before touching).
+             v1 used 100dvh: it resized mid-scroll as Safari's chrome collapsed
+             and let the whole chat be dragged ("nav pulls the chat down").
+             v2 used 100svh: stable, but svh assumes chrome at its LARGEST —
+             with the URL bar collapsed the real screen is taller, the page
+             ended early, and the composer floated mid-screen over dead space.
+             v3 (now): position:fixed + inset:0. A fixed box tracks the layout
+             viewport through chrome collapse/expand automatically (bottom edge
+             is always the true bottom), and because the page no longer
+             participates in body scroll, mid-scroll resize can't drag it —
+             both prior bugs are structurally impossible. Only r-rai-scroll
+             scrolls, as before. */
           .r-main:has(.r-rai-page) {
-            height: 100svh !important;
+            position: fixed !important;
+            inset: 0 !important;
+            height: auto !important;
             overflow: hidden !important;
             min-height: 0 !important;
           }
-          .r-rai-page { height: 100svh !important; }
+          .r-rai-page { height: 100% !important; }
           /* Break-out task on mobile: the desktop -24px shift pops into the
              64px page padding, which mobile doesn't have — at -24px the row +
              its purple rai ring clipped off the left edge. Scale the shift to
