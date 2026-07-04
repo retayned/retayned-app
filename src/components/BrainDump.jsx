@@ -65,7 +65,7 @@ function dueOptions() {
   ];
 }
 
-export default function BrainDump({ open, onClose, clients, user, onCommitted }) {
+export default function BrainDump({ open, onClose, clients, user, onCommitted, existingTasks = [] }) {
   const [step, setStep] = useState("input");           // 'input' | 'review'
   const [clientId, setClientId] = useState(null);
   const [clientMenuOpen, setClientMenuOpen] = useState(false);
@@ -240,6 +240,11 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
       if (!resp.ok) throw new Error(body.error || `Extraction failed (${resp.status})`);
       const got = (body.items || []).map((it, i) => ({
         key: `bd${Date.now()}_${i}`,
+        // Row id generated HERE, once, at extraction. If the same reviewed
+        // item is ever committed twice (retry, race, stale tab), the second
+        // insert collides on the primary key instead of minting a duplicate
+        // — the database enforces once-ness, not the UI's good manners.
+        dbId: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : null,
         title: it.title,
         notes: it.notes || null,
         type: it.type || "task",
@@ -263,9 +268,14 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
   };
 
   // ── Commit: create the kept items via existing db paths ──────────────
+  const committingRef = useRef(false);
   const commit = async () => {
     const kept = items.filter((it) => it.keep && it.title.trim());
-    if (kept.length === 0 || committing) return;
+    // Ref guard, not just state: two clicks in the same tick both read
+    // committing=false from their render's closure. The ref flips
+    // synchronously, so the second click is dead on arrival.
+    if (kept.length === 0 || committing || committingRef.current) return;
+    committingRef.current = true;
     setCommitting(true); setError(null);
     const createdTasks = [];
     // Failure surfacing (Jul 2026). Failed creates used to bump a counter
@@ -312,7 +322,19 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
           // Match the app's task convention: titles read as sentences ending
           // in a period. Add one unless it already ends in sentence punctuation.
           const taskText = /[.!?]$/.test(title) ? title : `${title}.`;
+          // DUPLICATE-SKIP (Jul 2026). If an open task with this exact text
+          // already exists for this client, this item has already landed —
+          // a re-commit, a retry after a partial failure, or a stale tab is
+          // replaying it. Skip silently and count it as done; never mint a
+          // second copy of a task the user can already see.
+          const dupExisting = (existingTasks || []).some(x =>
+            !x.done &&
+            (x.text || "").trim().toLowerCase() === taskText.trim().toLowerCase() &&
+            ((x.client_id || null) === (chosenClient?.id || null))
+          );
+          if (dupExisting) continue;
           const { data: created, error: e } = await tasksDb.create(user.id, {
+            ...(it.dbId ? { id: it.dbId } : {}),
             text: taskText,
             client_name: chosenClient?.name || null,
             client_id: chosenClient?.id || null,
@@ -322,6 +344,12 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             assigned_worker_id: null,
             notes: it.notes || null,
           });
+          if (e && (e.code === "23505" || /duplicate key/i.test(e.message || ""))) {
+            // Primary-key collision on our own extraction id: this exact
+            // item was already inserted by a previous attempt. That IS
+            // success — the row exists once, which is the whole point.
+            continue;
+          }
           if (e) { noteFail(it.key, e); continue; }
           createdTasks.push({
             id: created?.id || "bd" + Date.now() + Math.random().toString(36).slice(2, 6),
@@ -342,6 +370,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
       }
     }
     setCommitting(false);
+    committingRef.current = false;
     // Whatever DID save is real — hand it to the app either way.
     onCommitted?.({ tasks: createdTasks, touchpoints: tp, events: ev, failed });
     if (failed === 0) {
