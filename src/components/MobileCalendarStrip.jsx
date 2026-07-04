@@ -51,6 +51,8 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   // Rim-dot selection: tapping an event dot pins that event into the
   // header slot. Tapping empty dial glass clears it back to next-up.
   const [pickedId, setPickedId] = useState(null);
+  // Two-tap delete: first tap arms ("Confirm delete?"), second commits.
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   // ── Scrub-turn (Jul 2026): the desktop dial's real semantics, ported.
   // Dragging doesn't move a cursor — it TURNS the 6h window under the
   // fixed apex. scrubMs = how far the window has been turned off "now".
@@ -65,7 +67,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     if (easeTimerRef.current) { clearTimeout(easeTimerRef.current); easeTimerRef.current = null; }
     if (easeRafRef.current) { cancelAnimationFrame(easeRafRef.current); easeRafRef.current = null; }
   };
-  const scheduleEaseBack = () => {
+  const scheduleEaseBack = (delay = 1400) => {
     cancelEase();
     easeTimerRef.current = setTimeout(() => {
       const from = scrubMsRef.current, t0 = performance.now(), DUR = 420;
@@ -76,7 +78,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         if (p < 1) easeRafRef.current = requestAnimationFrame(step);
       };
       easeRafRef.current = requestAnimationFrame(step);
-    }, 1400);
+    }, delay);
   };
   useEffect(() => cancelEase, []);
   const fracFromClientX = (clientX) => {
@@ -106,7 +108,10 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       setScrubFrac(f);
       // Turn the window: drag left = time advances toward you, drag
       // right = rewind. base + (fStart − f) · window.
-      setScrubMs(clampScrub((s.fStart - f) * DOME_WIN_MS + (scrubGesture.current.baseMs || 0)));
+      // 1.75x drag gain (Jul 2026, "too difficult to scroll"): 1:1 band
+      // mapping meant a full-width swipe moved only 6h — crossing a day
+      // took three re-grips. Now one swipe covers ~10.5h.
+      setScrubMs(clampScrub((s.fStart - f) * DOME_WIN_MS * 1.75 + (scrubGesture.current.baseMs || 0)));
     }
   };
   const endScrub = () => {
@@ -115,7 +120,9 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       suppressClickRef.current = true;
       setTimeout(() => { suppressClickRef.current = false; }, 250);
       setScrubFrac(null);
-      scheduleEaseBack();
+      // No auto ease-back (Jul 2026): the 1400ms idle timer yanked the
+      // dial home mid-reading. A parked dial stays parked; tapping the
+      // glass brings it home (see container onClick).
     }
     scrubGesture.current = { id: null, active: false, startX: 0, startY: 0 };
     setScrubFrac(null);
@@ -310,7 +317,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       <div style={{ margin: "-20px -16px 0" }}>
         <div
           ref={bandRef}
-          onClick={() => { if (suppressClickRef.current) return; setPickedId(null); }}
+          onClick={() => { if (suppressClickRef.current) return; setPickedId(null); setConfirmDeleteId(null); scheduleEaseBack(0); }}
           onPointerDown={onBandPointerDown}
           onPointerMove={onBandPointerMove}
           onPointerUp={endScrub}
@@ -351,10 +358,13 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
             <path d={rimPath} fill="none" stroke="rgba(28, 50, 36, 0.16)" strokeWidth="0.6" />
             {tickEls}
             {dotEls}
-            {/* Scrubbed-time readout at the crest while the dial is turned */}
-            {scrubActive && (
-              <text x={DCX} y={APEX_Y + 22} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 800, fill: "#1C3224", fontVariantNumeric: "tabular-nums" }}>{fmtTime(new Date(winCenter))}</text>
-            )}
+            {/* Crest readout — ALWAYS rendered (Jul 2026). Hour labels
+                near the apex are skipped to make room for this readout, but
+                it used to render only mid-scrub — so at rest, or on small
+                turns, the center hour simply vanished ("3a" missing from
+                the dial). The crest now always names its time; at rest
+                that's a live clock, mid-scrub it's the scrubbed time. */}
+            <text x={DCX} y={APEX_Y + 22} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 800, fill: scrubActive ? "#1C3224" : "#6E7E72", fontVariantNumeric: "tabular-nums" }}>{fmtTime(new Date(winCenter))}</text>
             {nowInWindow && (
               <g filter="url(#rt-dome-now-raised)">
                 <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="9" fill="#33543E" />
@@ -416,6 +426,41 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
             )}
           </div>
         </div>
+        {/* ── Selected-event detail card (Jul 2026): the header slot
+            truncates at 130px; this card is where the FULL event lives.
+            Full wrapping title, time range, client, and delete — manual
+            events delete (two-tap confirm, verified upstream with
+            restore-on-failure); Google-synced events say so honestly,
+            because RLS forbids deleting google rows and pretending
+            otherwise is how events "resurrect." ── */}
+        {pickedEvent && (
+          <div style={{ position: "relative", zIndex: 2, margin: "10px 16px 2px", padding: "10px 12px", background: "#FFFFFF", border: "1px solid rgba(28,50,36,0.10)", borderRadius: 14, boxShadow: "0 1px 4px rgba(28,50,36,0.05)" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 650, color: C.text, lineHeight: 1.35, overflowWrap: "break-word" }}>{pickedEvent.title}</div>
+            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>
+              {fmtTime(pickedEvent._start)}{pickedEvent._end ? `–${fmtTime(pickedEvent._end)}` : ""}
+              {clientNameFor(pickedEvent) ? ` · ${clientNameFor(pickedEvent)}` : ""}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+              {!clientNameFor(pickedEvent) && linkChip(pickedEvent, 10)}
+              <span style={{ flex: 1 }} />
+              {pickedEvent.source === "google" ? (
+                <span style={{ fontSize: 10, color: C.textMuted, fontStyle: "italic" }}>Synced from Google — delete it in Google Calendar</span>
+              ) : confirmDeleteId === pickedEvent.id ? (
+                <button
+                  onClick={(ev) => { ev.stopPropagation(); const id = pickedEvent.id; setPickedId(null); setConfirmDeleteId(null); onDelete && onDelete(id); }}
+                  style={{ border: "none", background: "#B91C1C", color: "#fff", borderRadius: 999, padding: "5px 12px", fontFamily: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  Confirm delete
+                </button>
+              ) : (
+                <button
+                  onClick={(ev) => { ev.stopPropagation(); setConfirmDeleteId(pickedEvent.id); }}
+                  style={{ border: "1px solid rgba(185,28,28,0.35)", background: "transparent", color: "#B91C1C", borderRadius: 999, padding: "5px 12px", fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  Delete
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
