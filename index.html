@@ -6,6 +6,10 @@
     <meta name="retayned-build" content="2026-06-12.1" />
     <title>Retayned</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Warm the Supabase connection during HTML parse: DNS+TLS finish
+         before the bundle's first auth call needs them (~100-300ms saved
+         on mobile radio). -->
+    <link rel="preconnect" href="https://vwwezynzqvzlmebkmang.supabase.co" crossorigin />
     <script>console.log("Retayned build 2026-06-12.1");window.__RETAYNED_BUILD__="2026-06-12.1";</script>
     <script type="module" src="/src/main.jsx"></script>
   </head>
@@ -22,26 +26,29 @@
       <style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
     </div>
     <script>
-      /* White-screen watchdog (Jun 2026). If the main bundle 404s after a
-         deploy (restored tab + stale cached HTML), no JS ever runs and
-         #root stays empty forever. This inline script needs no bundle:
-         after 6s, if the root is still empty, force one reload to fetch
-         fresh HTML. Session-guarded against loops. */
+      /* White-screen watchdog (Jun 2026; retuned Jul 2026). If the main
+         bundle 404s after a deploy (restored tab + stale cached HTML), no
+         JS ever runs and #root stays empty forever — reload once to fetch
+         fresh HTML.
+         THE JUL 2026 FIX: the old check was "splash still visible after
+         6s", which is REACT MOUNTED, not BUNDLE RAN. On a slow mobile
+         connection a healthy first load (260KB gz download + parse) can
+         legitimately take >6s — and the watchdog then force-reloaded a
+         perfectly good boot, restarting the download and doubling the
+         load time. Now main.jsx sets window.__RT_JS_EXECUTED__ the moment
+         the bundle executes; the watchdog fires only when that flag never
+         appears (the true 404 case), and it waits 12s. A slow boot is
+         slow; only a dead boot reloads. */
       (function () {
         try {
           var k = "rt:wsReloadAt";
           var last = Number(sessionStorage.getItem(k) || 0);
           setTimeout(function () {
-            var r = document.getElementById("root");
-            // App mounted = React replaced #root's contents, so the boot-splash
-            // is gone. If the splash is still present after 6s, the bundle
-            // never ran (e.g. 404'd after a deploy) — force one fresh reload.
-            var stillBooting = r && document.getElementById("boot-splash");
-            if (stillBooting && Date.now() - last > 60000) {
+            if (!window.__RT_JS_EXECUTED__ && Date.now() - last > 60000) {
               sessionStorage.setItem(k, String(Date.now()));
               location.reload();
             }
-          }, 6000);
+          }, 12000);
         } catch (e) { /* sessionStorage unavailable */ }
       })();
     </script>
