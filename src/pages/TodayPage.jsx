@@ -2785,12 +2785,22 @@ export default function TodayPage({ app }) {
                             // actual delete is deferred to the modal's confirm.
                             // For non-Rai tasks, openDismissFlow runs the
                             // delete immediately (no modal).
-                            const performDelete = () => {
+                            const performDelete = async () => {
                               purgeTaskHistory(t.id);
                               setTasks(prev => prev.filter(t2 => t2.id !== t.id));
-                              tasksDb.delete(t.id);
                               setSwipeOffset(prev => { const n = { ...prev }; delete n[t.id]; return n; });
                               setSwipeStartX(prev => { const n = { ...prev }; delete n[t.id]; return n; });
+                              // VERIFIED DELETE (Jul 2026). This used to be fire-and-forget:
+                              // if the database refused the delete, the row silently survived
+                              // and the next hydration resurrected it — "I deleted it and it
+                              // came back." Now a failed delete restores the row immediately
+                              // and says why, so a dead delete is loud, not haunting.
+                              const { error: delErr } = await tasksDb.delete(t.id);
+                              if (delErr) {
+                                console.error("Task delete failed — restoring row:", t.id, delErr);
+                                setTasks(prev => prev.some(t2 => t2.id === t.id) ? prev : [t, ...prev]);
+                                setQuickLogToast({ id: Date.now(), error: true, message: `Delete failed: ${delErr.message || "database error"}` });
+                              }
                             };
                             if (t.ai && t.rai_suggestion_id) {
                               openDismissFlow(t, performDelete);
@@ -3392,10 +3402,17 @@ export default function TodayPage({ app }) {
                                 // Phase 9: for Rai tasks, opens the feedback
                                 // modal which runs the delete on confirm.
                                 // For non-Rai tasks, deletes immediately.
-                                openDismissFlow(t, () => {
+                                openDismissFlow(t, async () => {
                                   purgeTaskHistory(t.id);
-                                  setTasks(tasks.filter(t2 => t2.id !== t.id));
-                                  tasksDb.delete(t.id);
+                                  // prev-form (was `tasks.filter` — a stale closure
+                                  // that could resurrect concurrent edits by itself)
+                                  setTasks(prev => prev.filter(t2 => t2.id !== t.id));
+                                  const { error: delErr } = await tasksDb.delete(t.id);
+                                  if (delErr) {
+                                    console.error("Task delete failed — restoring row:", t.id, delErr);
+                                    setTasks(prev => prev.some(t2 => t2.id === t.id) ? prev : [t, ...prev]);
+                                    setQuickLogToast({ id: Date.now(), error: true, message: `Delete failed: ${delErr.message || "database error"}` });
+                                  }
                                 });
                               }}
                               className="rt-dismiss"
@@ -3887,9 +3904,20 @@ export default function TodayPage({ app }) {
                     setScrubMs={setDialScrubMs}
                     dayView={dialDayView}
                     setDayView={setDialDayView}
-                    onDeleteEvent={(id) => {
+                    onDeleteEvent={async (id) => {
+                      // VERIFIED DELETE (Jul 2026). This was fire-and-forget —
+                      // and RLS refuses deletion of google-synced rows, so a
+                      // synced event "deleted" here vanished locally, survived
+                      // in the DB, and resurrected on the next refetch. Now a
+                      // refused delete restores the event and says why.
+                      const removed = (personalEvents || []).find(e => e.id === id);
                       setPersonalEvents(prev => (prev || []).filter(e => e.id !== id));
-                      try { personalCalendarDb.remove(id); } catch (e) { console.warn("Event delete failed:", e); }
+                      const { error: evErr } = await personalCalendarDb.remove(id);
+                      if (evErr) {
+                        console.error("Event delete refused — restoring:", id, evErr);
+                        if (removed) setPersonalEvents(prev => (prev || []).some(e => e.id === id) ? prev : [...prev, removed].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)));
+                        setQuickLogToast({ id: Date.now(), error: true, message: removed?.source === "google" ? "Google-synced event — delete it in Google Calendar" : `Delete failed: ${evErr.message || "database error"}` });
+                      }
                     }}
                     onOpenClient={(clientId) => {
                       const c = (clients || []).find(x => x.id === clientId);
