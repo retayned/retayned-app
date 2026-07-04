@@ -4473,6 +4473,7 @@ export default function App({ user }) {
         onClose={() => setBrainDumpOpen(false)}
         clients={clients}
         user={user}
+        existingTasks={tasks}
         onCommitted={({ tasks: newTasks, failed }) => {
           if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
           if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
@@ -4487,7 +4488,9 @@ export default function App({ user }) {
             const t = quickLogToast;
             if (t.kind === "task" && t.recordId) {
               setTasks(prev => prev.filter(x => x.id !== t.recordId));
-              tasksDb.delete(t.recordId);
+              tasksDb.delete(t.recordId).then(({ error }) => {
+                if (error) console.error("Undo delete failed — task row survives:", t.recordId, error);
+              });
             } else if (t.kind === "touchpoint" && t.recordId) {
               setTpLogged(prev => prev.filter(x => x.id !== t.recordId));
               touchpointsDb.delete(t.recordId);
