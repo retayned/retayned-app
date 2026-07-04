@@ -11,15 +11,20 @@ const ReferralsPage = lazy(() => import("./pages/ReferralsPage"));
 const RetrosPage = lazy(() => import("./pages/RetrosPage"));
 const CoachPage = lazy(() => import("./pages/CoachPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
-import WorkerDashboard from "./WorkerDashboard";
+// Code-split (Jul 2026, mobile boot-time work): WorkerDashboard renders
+// only on /w/ magic-link routes, and the three modals below render only
+// when opened — none of them belong in the bundle the boot splash waits
+// on. lazy() moves ~4,200 first-party lines (ClientModal alone is 2,672)
+// out of the critical chunk; each loads on first use behind Suspense.
+const WorkerDashboard = lazy(() => import("./WorkerDashboard"));
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
-import BrainDump from "./components/BrainDump";
-import ClientModal from "./components/ClientModal";
-import RolodexModal from "./components/RolodexModal";
+const BrainDump = lazy(() => import("./components/BrainDump"));
+const ClientModal = lazy(() => import("./components/ClientModal"));
+const RolodexModal = lazy(() => import("./components/RolodexModal"));
 import ShellOverlays from "./components/ShellOverlays";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useDataLoad } from "./hooks/useDataLoad";
@@ -44,7 +49,7 @@ export default function App({ user }) {
   // Detect this route before any auth-gated logic runs. Returns WorkerDashboard
   // standalone if matched.
   if (typeof window !== "undefined" && /^\/w\//.test(window.location.pathname)) {
-    return <WorkerDashboard />;
+    return <Suspense fallback={<SkeletonPage />}><WorkerDashboard /></Suspense>;
   }
 
   // (Enterprise tier REMOVED June 2026 — Retayned is single-tier. The
@@ -3989,7 +3994,7 @@ export default function App({ user }) {
           </div>
         </div>
       )}
-      {selectedClient && <ClientModal app={{ ...pageCtx, billingAddOpen, billingMonthStatus, billingNewItem, billingTerms, clientAddons, clientBilling, clientMenuOpen, clientTab, confidantEndRef, confidantInput, confidantLastActivity, confidantLoadingThread, confidantMessages, confidantTyping, editScores, editingAddon, editingOverview, editingProfile, engagementPausesByClient, newAddon, overviewEditData, page, pauseConfirm, radarHoverDim, removeConfirm, resumeConfirm, rolodexConfirm, selectedClient, sendConfidantMessage, setBillingAddOpen, setBillingMonthStatus, setBillingNewItem, setBillingTerms, setClientAddons, setClientBilling, setClientMenuOpen, setClients, setConfidantInput, setEditScores, setEditingAddon, setEditingAddonId, setEditingOverview, setEditingProfile, setEngagementPausesByClient, setNewAddon, setOverviewEditData, setRadarHoverDim, setRenewalModal, setRenewalModalMonth, setShowBaselineEdit, setTermsAddingNew, setTermsEditDraft, setTermsEditingId, setTermsHistoryOpen, showBaselineEdit, termsAddingNew, termsEditDraft, termsEditingId, termsHistoryOpen }} />}
+      {selectedClient && <Suspense fallback={null}><ClientModal app={{ ...pageCtx, billingAddOpen, billingMonthStatus, billingNewItem, billingTerms, clientAddons, clientBilling, clientMenuOpen, clientTab, confidantEndRef, confidantInput, confidantLastActivity, confidantLoadingThread, confidantMessages, confidantTyping, editScores, editingAddon, editingOverview, editingProfile, engagementPausesByClient, newAddon, overviewEditData, page, pauseConfirm, radarHoverDim, removeConfirm, resumeConfirm, rolodexConfirm, selectedClient, sendConfidantMessage, setBillingAddOpen, setBillingMonthStatus, setBillingNewItem, setBillingTerms, setClientAddons, setClientBilling, setClientMenuOpen, setClients, setConfidantInput, setEditScores, setEditingAddon, setEditingAddonId, setEditingOverview, setEditingProfile, setEngagementPausesByClient, setNewAddon, setOverviewEditData, setRadarHoverDim, setRenewalModal, setRenewalModalMonth, setShowBaselineEdit, setTermsAddingNew, setTermsEditDraft, setTermsEditingId, setTermsHistoryOpen, showBaselineEdit, termsAddingNew, termsEditDraft, termsEditingId, termsHistoryOpen }} /></Suspense>}
 
 
       {/* ROLODEX SLIDE-OVER */}
@@ -4217,7 +4222,7 @@ export default function App({ user }) {
         document.body
       )}
 
-      {selectedRolodex && <RolodexModal app={{ ...pageCtx, moveRolodexToClients, rolodexRemoveConfirm, setRolodexRemoveConfirm, reminderDate, reminderRecur, reminderRepeatOn, retroAnswers, rolodexEditData, rolodexEditing, rolodexMenuOpen, rolodexMoveConfirm, selectedRolodex, setReminderDate, setReminderRecur, setReminderRepeatOn, setRetroAnswers, setRolodexEditData, setRolodexEditing, setRolodexMenuOpen, setRolodexMoveConfirm, setShowReminderPicker, showReminderPicker }} />}
+      {selectedRolodex && <Suspense fallback={null}><RolodexModal app={{ ...pageCtx, moveRolodexToClients, rolodexRemoveConfirm, setRolodexRemoveConfirm, reminderDate, reminderRecur, reminderRepeatOn, retroAnswers, rolodexEditData, rolodexEditing, rolodexMenuOpen, rolodexMoveConfirm, selectedRolodex, setReminderDate, setReminderRecur, setReminderRepeatOn, setRetroAnswers, setRolodexEditData, setRolodexEditing, setRolodexMenuOpen, setRolodexMoveConfirm, setShowReminderPicker, showReminderPicker }} /></Suspense>}
 
 
       {/* REFERRAL SLIDE-OVER */}
@@ -4463,7 +4468,7 @@ export default function App({ user }) {
 
       {/* Brain Dump — review-before-commit extraction modal. App-level so
           it works from every page (capture sheet, Today composer). */}
-      <BrainDump
+      <Suspense fallback={null}><BrainDump
         open={brainDumpOpen}
         onClose={() => setBrainDumpOpen(false)}
         clients={clients}
@@ -4472,7 +4477,7 @@ export default function App({ user }) {
           if (newTasks && newTasks.length) setTasks(prev => [...newTasks, ...prev]);
           if (failed) console.warn(`Brain Dump: ${failed} item(s) failed to create`);
         }}
-      />
+      /></Suspense>
 
       {/* Toast — bottom-right confirmation with undo */}
       {quickLogToast && (
