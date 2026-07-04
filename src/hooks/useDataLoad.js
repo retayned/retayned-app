@@ -3,7 +3,7 @@
 // from App.jsx. One function, one concern: read every table for this
 // user and light up the app's state. Returns the memoized loadData;
 // App's effects call it exactly as before.
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { clientAddons as clientAddonsDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, clients as clientsDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, raiConversations as convoDb, raiPicks as raiPicksDb, raiUserState as raiUserStateDb, referrals as referralsDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "../lib/db";
 import { supabase } from "../lib/supabase";
 
@@ -59,6 +59,7 @@ export function useDataLoad(app) {
     user,
     userTimezone,
   } = app;
+  const hydrateRetryRef = useRef(0);
   const loadData = useCallback(async () => {
     if (!user) return;
     // Wait for the user's stored timezone to load before fetching tasks.
@@ -77,7 +78,16 @@ export function useDataLoad(app) {
     const bookId = bookOwnerId || user.id;
     try { window.__RT_BOOT_MARK?.("data-start"); } catch (_) { /* profiler absent */ }
     
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
+    // HYDRATE RESILIENCE (Jul 2026). Supabase query errors resolve as
+    // { data, error } — they never throw. But a NETWORK-level failure
+    // (a phone radio waking from background is the canonical case)
+    // rejects the fetch itself, which used to reject this entire
+    // Promise.all: all 22 results discarded, zero state updates, and
+    // the stale view survives with no trace. Desktop on stable wifi
+    // never saw it; mobile hit it constantly. Now a failed batch logs,
+    // retries twice on a short delay, and gives up loudly — a slow
+    // hydrate beats a silent one that never happened.
+    const _hydrateBatch = await Promise.all([
       clientsDb.list(bookId),
       tasksDb.listToday(bookId),
       referralsDb.list(bookId),
@@ -167,7 +177,19 @@ export function useDataLoad(app) {
         .eq('id', uid)
         .single()
         .then(r => r, () => ({ data: { occurrence_flags: {} }, error: null })),
-    ]);
+    ]).catch((err) => {
+      console.error("[hydrate] batch failed at network level:", err);
+      return null;
+    });
+    if (!_hydrateBatch) {
+      if (hydrateRetryRef.current < 2) {
+        hydrateRetryRef.current += 1;
+        setTimeout(() => { loadData(); }, 4000);
+      }
+      return;
+    }
+    hydrateRetryRef.current = 0;
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = _hydrateBatch;
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
 
