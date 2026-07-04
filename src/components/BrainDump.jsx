@@ -268,9 +268,22 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
     if (kept.length === 0 || committing) return;
     setCommitting(true); setError(null);
     const createdTasks = [];
+    // Failure surfacing (Jul 2026). Failed creates used to bump a counter
+    // and vanish — the modal closed green while items silently died
+    // ("3 published, 1 landed"). Now every failure keeps its item in the
+    // review list with the database's actual error under it, and the
+    // modal stays open until everything saves. console.error carries the
+    // full error object for remote debugging.
+    const failedKeys = new Map(); // key -> human error text
     let tp = 0, ev = 0, failed = 0;
     for (const it of kept) {
       const title = it.title.trim().slice(0, TITLE_CAP).trimEnd();
+      const noteFail = (key, e) => {
+        failed++;
+        const msg = (e && (e.message || e.details || e.hint)) ? [e.message, e.details, e.code && `(${e.code})`].filter(Boolean).join(" — ") : "Unknown error";
+        failedKeys.set(key, msg);
+        console.error("Brain Dump: item failed to create:", { title, type: it.type, error: e });
+      };
       try {
         if (it.type === "touchpoint") {
           const noteText = it.notes ? `${title} — ${it.notes}` : title;
@@ -280,7 +293,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             channel: "call",
             notes: noteText,
           });
-          if (e) failed++; else tp++;
+          if (e) noteFail(it.key, e); else tp++;
         } else if (it.type === "event") {
           // Calendar events need a time; default 9:00 AM local on the
           // suggested date (or today). Easy to drag/adjust afterwards.
@@ -294,7 +307,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             client_id: chosenClient?.id || null,
             client_name: chosenClient?.name || null,
           });
-          if (e) failed++; else ev++;
+          if (e) noteFail(it.key, e); else ev++;
         } else {
           // Match the app's task convention: titles read as sentences ending
           // in a period. Add one unless it already ends in sentence punctuation.
@@ -309,7 +322,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             assigned_worker_id: null,
             notes: it.notes || null,
           });
-          if (e) { failed++; continue; }
+          if (e) { noteFail(it.key, e); continue; }
           createdTasks.push({
             id: created?.id || "bd" + Date.now() + Math.random().toString(36).slice(2, 6),
             text: taskText,
@@ -324,14 +337,24 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
             assigned_worker_id: null,
           });
         }
-      } catch {
-        failed++;
+      } catch (err) {
+        noteFail(it.key, err);
       }
     }
     setCommitting(false);
-    clearDraft();
+    // Whatever DID save is real — hand it to the app either way.
     onCommitted?.({ tasks: createdTasks, touchpoints: tp, events: ev, failed });
-    close();
+    if (failed === 0) {
+      clearDraft();
+      close();
+      return;
+    }
+    // Failures: drop the saved items from the list, pin the failed ones
+    // with their error text, stay open. Retry re-attempts only these.
+    setItems(prev => prev
+      .filter(it => failedKeys.has(it.key) || !it.keep)
+      .map(it => failedKeys.has(it.key) ? { ...it, _error: failedKeys.get(it.key) } : it));
+    setError(`${failed} of ${kept.length} item${kept.length === 1 ? "" : "s"} didn't save — the database error is shown under each. Fix or discard, then retry.`);
   };
 
   const keptCount = items.filter((it) => it.keep).length;
@@ -712,6 +735,11 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted })
                             {it.notes}
                           </div>
                         )
+                      )}
+                      {it._error && (
+                        <div style={{ marginTop: 6, fontSize: 11, lineHeight: 1.45, color: "#B91C1C", fontWeight: 600 }}>
+                          Didn't save: {it._error}
+                        </div>
                       )}
                     </div>
                   </div>
