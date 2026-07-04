@@ -7,13 +7,12 @@ import { Icon } from "./Icon";
 // C tokens). If the palette changes again, update #FAFBFA / rgba(250,251,250).
 // (V1_GRAD_H/V removed June 2026 refactor — an App-level CSS kill-rule had
 // been flattening them in production anyway; the flat bg is the real look.)
-// Mobile-only ambient calendar. Collapsed: a slim horizontal day-strip
-// (6am→midnight) with meetings as dots + a NOW tick + the next meeting named
-// underneath. Expanded (open=true): the strip stays pinned on top and the
-// day's events list below it, next as a green-ringed white card, with the
-// frosted inline composer at the foot. Uses the EXACT desktop V1 gradient,
-// horizontal for the strip and vertical for the expanded body, so it reads as
-// the same ambient day, just rotated. Reuses parseCalendarEntry for create.
+// Mobile-only ambient calendar — the hanging-disc dial, single mode
+// (Jul 2026: the tap-to-expand day-list view was REMOVED by product
+// decision — the dial is not a thing you click into. The header slot
+// beside the greeting carries the day instead: it shows whichever event
+// the user taps on the rim, or simply whatever is up next. open/onToggle/
+// onCreate/onDelete props are accepted for API compatibility but unused).
 
 function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [], open = false, onToggle = null, selectedDay = "today", greeting = "", firstName = "", displayDate = "", googleConnected = false, onConnectGoogle = null, onRequestLink = null }) {
   // "+ client" chip for any event with no client/rolodex linkage —
@@ -49,6 +48,9 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   const scrubGesture = useRef({ id: null, active: false, startX: 0, startY: 0, fStart: 0 });
   const suppressClickRef = useRef(false);
   const [scrubFrac, setScrubFrac] = useState(null);
+  // Rim-dot selection: tapping an event dot pins that event into the
+  // header slot. Tapping empty dial glass clears it back to next-up.
+  const [pickedId, setPickedId] = useState(null);
   // ── Scrub-turn (Jul 2026): the desktop dial's real semantics, ported.
   // Dragging doesn't move a cursor — it TURNS the 6h window under the
   // fixed apex. scrubMs = how far the window has been turned off "now".
@@ -104,7 +106,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       setScrubFrac(f);
       // Turn the window: drag left = time advances toward you, drag
       // right = rewind. base + (fStart − f) · window.
-      setScrubMs((s.fStart - f) * DOME_WIN_MS + (scrubGesture.current.baseMs || 0));
+      setScrubMs(clampScrub((s.fStart - f) * DOME_WIN_MS + (scrubGesture.current.baseMs || 0)));
     }
   };
   const endScrub = () => {
@@ -129,6 +131,21 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   const dayBase = new Date(now);
   if (selectedDay === "tomorrow") dayBase.setDate(dayBase.getDate() + 1);
 
+  // ── Scrub clamp (Jul 2026): the dial turns only within the selected
+  // day — desktop behavior. Unclamped, scrubMs accumulated across drags
+  // (baseMs) and the 6h window walked into future days without limit.
+  // Bounds: the window's EDGES stay inside the day's 24h, so the extremes
+  // show exactly midnight→6am and 6pm→midnight, then the dial stops.
+  const dayStartMs = (() => { const d = new Date(dayBase); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const baseCenterMs = selectedDay === "today"
+    ? now.getTime()
+    : (() => { const d = new Date(dayBase); d.setHours(13, 0, 0, 0); return d.getTime(); })();
+  const clampScrub = (v) => {
+    const lo = (dayStartMs + DOME_WIN_MS / 2) - baseCenterMs;
+    const hi = (dayStartMs + 86400000 - DOME_WIN_MS / 2) - baseCenterMs;
+    return Math.max(lo, Math.min(hi, v));
+  };
+
   const fracFor = (d) => {
     const h = d.getHours() + d.getMinutes() / 60;
     return Math.max(0, Math.min(1, (h - DAY_START) / SPAN));
@@ -148,6 +165,9 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   const nextEvent = selectedDay === "today"
     ? dayEvents.find(e => e._start.getTime() > nowMs)
     : dayEvents[0];
+
+  // The pinned event, if the user tapped a dot and it still exists today.
+  const pickedEvent = pickedId ? (dayEvents.find(e => e.id === pickedId) || null) : null;
 
   const nowFrac = fracFor(now);
   const showNow = selectedDay === "today" && nowFrac > 0 && nowFrac < 1;
@@ -170,40 +190,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   const minutesUntil = (d) => Math.round((d.getTime() - nowMs) / 60000);
 
 
-  // Dot for a single event on the strip
-  const renderDot = (e, i) => {
-    const left = fracFor(e._start) * 100;
-    const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
-    const isNext = nextEvent && e.id === nextEvent.id;
-    return (
-      <span
-        key={e.id || i}
-        style={{
-          position: "absolute", top: 2, left: `${left}%`, transform: "translateX(-50%)",
-          width: 8, height: 8, borderRadius: "50%",
-          background: isPast ? C.ink300 : C.primaryLight,
-          boxShadow: isNext ? "0 0 0 3px rgba(85,139,104,0.20)" : "none",
-        }}
-      />
-    );
-  };
-
-  const strip = (
-    <div style={{ position: "relative", height: 12 }}>
-      <div style={{ position: "absolute", left: 0, right: 0, top: 5, height: 2, borderRadius: 2, background: "rgba(30,38,31,0.10)" }} />
-      {dayEvents.map(renderDot)}
-      {showNow && (
-        <div style={{ position: "absolute", top: 0, left: `${nowFrac * 100}%`, transform: "translateX(-50%)", width: 2, height: 12, background: C.btn, borderRadius: 2, boxShadow: "0 0 0 2px rgba(124,92,243,0.14)" }} />
-      )}
-    </div>
-  );
-
-  const ends = (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, color: C.ink300, marginTop: 5, fontVariantNumeric: "tabular-nums" }}>
-      <span>6a</span><span>12p</span><span>6p</span><span>12a</span>
-    </div>
-  );
-
   // ── COLLAPSED: THE CREST (Jul 2026, v2) ────────────────────────────
   // The desktop TimeDial for portrait — now as a SUN-PATH ARC. v1 hung
   // the cap downward (a bowl); a day doesn't read as a valley, it rises
@@ -220,7 +206,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   // fixed crest — NOW slides off-center exactly like the desktop dial —
   // and whichever event rides nearest the crest becomes the selection,
   // shown in the header row. Release → holds a beat → glides home.
-  if (!open) {
+  {
     const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
 
     // ── Geometry: the HANGING DISC (reverted Jul 2026 — the upward
@@ -244,8 +230,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       return [DCX + r * Math.cos(a), DCY + r * Math.sin(a)];
     };
     // 6h window, turned by the scrub.
-    const baseCenter = selectedDay === "today" ? nowMs : (() => { const d = new Date(dayBase); d.setHours(13, 0, 0, 0); return d.getTime(); })();
-    const winCenter = baseCenter + scrubMs;
+    const winCenter = baseCenterMs + clampScrub(scrubMs);
     const winStart = winCenter - DOME_WIN_MS / 2, winEnd = winCenter + DOME_WIN_MS / 2;
     const domeFrac = (ms) => (ms - winStart) / DOME_WIN_MS;
     const scrubActive = scrubFrac != null || Math.abs(scrubMs) > 30000;
@@ -287,7 +272,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
     // Event dots on the rim — desktop colors; the ring rides the focus
     // while scrubbing, the next event otherwise.
-    const ringTarget = focusEvent || nextEvent;
+    const ringTarget = focusEvent || pickedEvent || nextEvent;
     const dotEls = dayEvents.map((e, i) => {
       const f = domeFrac(e._start.getTime());
       if (f < 0.02 || f > 0.98) return null;
@@ -298,6 +283,14 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
         <g key={e.id || i}>
           {isRing && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="9" fill="none" stroke="#33543E" strokeOpacity="0.32" strokeWidth="1.4" />}
           <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="4.5" fill={isPast ? "#C4C4BD" : (isRing ? "#33543E" : "#558B68")} />
+          {/* Invisible tap target (a 4.5px dot is untappable). click, not
+              pointerdown, so a scrub that STARTS on a dot still scrubs;
+              stopPropagation so the glass-tap clear doesn't fire. */}
+          <circle
+            cx={x.toFixed(1)} cy={y.toFixed(1)} r="16"
+            fill="transparent" style={{ cursor: "pointer" }}
+            onClick={(ev) => { ev.stopPropagation(); if (suppressClickRef.current) return; setPickedId(e.id); }}
+          />
         </g>
       );
     });
@@ -317,12 +310,12 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       <div style={{ margin: "-20px -16px 0" }}>
         <div
           ref={bandRef}
-          onClick={() => { if (suppressClickRef.current) return; onToggle && onToggle(); }}
+          onClick={() => { if (suppressClickRef.current) return; setPickedId(null); }}
           onPointerDown={onBandPointerDown}
           onPointerMove={onBandPointerMove}
           onPointerUp={endScrub}
           onPointerCancel={endScrub}
-          style={{ position: "relative", cursor: "pointer", touchAction: "pan-y" }}
+          style={{ position: "relative", touchAction: "pan-y" }}
         >
           <svg viewBox={`0 0 ${DOME_W} ${DOME_H}`} width="100%" height="auto" style={{ display: "block" }} aria-hidden>
             <defs>
@@ -395,6 +388,18 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
                   <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(focusEvent._start)}</span> {focusEvent.title}
                 </div>
               </>
+            ) : pickedEvent ? (
+              <>
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.primary }}>
+                  Selected{(() => { const m = minutesUntil(pickedEvent._start); return m > 0 && m < 60 ? ` · in ${m} min` : m > 0 ? ` · in ${Math.round(m / 60)} hr` : ""; })()}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(pickedEvent._start)}</span> {pickedEvent.title}
+                </div>
+                {clientNameFor(pickedEvent)
+                  ? <div style={{ fontSize: 9.5, color: C.textMuted, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientNameFor(pickedEvent)}</div>
+                  : <div style={{ marginTop: 2, display: "flex", justifyContent: "flex-end" }}>{linkChip(pickedEvent, 9)}</div>}
+              </>
             ) : nextEvent ? (
               <>
                 <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: imminent ? C.primary : C.primaryLight }}>
@@ -406,7 +411,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
               </>
             ) : (
               <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
-                {allPast ? "All done." : "Tap to add"}
+                {allPast ? "All done." : "No calls today"}
               </div>
             )}
           </div>
@@ -415,70 +420,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     );
   }
 
-  // ── EXPANDED ──
-  return (
-    <div style={{ background: "#FAFBFA", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(20,30,22,0.05)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px 4px" }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted }}>{selectedDay === "today" ? "Today" : "Tomorrow"} · {dayEvents.length} {dayEvents.length === 1 ? "event" : "events"}</span>
-        <button onClick={onToggle} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10.5, fontWeight: 600, color: C.textMuted, fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: 3 }}>
-          collapse <Icon name="chevron-down" size={11} color={C.textMuted} />
-        </button>
-      </div>
-      <div style={{ padding: "6px 14px 10px" }}>{strip}{ends}</div>
-      <div style={{ padding: "0 14px 4px" }}>
-        {dayEvents.length === 0 && (
-          <div style={{ padding: "10px 0 6px" }}>
-            <div style={{ border: "1px dashed " + C.ink300, borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
-              Your day lives here.{!googleConnected && onConnectGoogle ? (
-                <>
-                  {" "}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onConnectGoogle(); }}
-                    style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontStyle: "italic", fontSize: 11.5, color: C.primary, fontWeight: 700, textDecoration: "underline", textDecorationStyle: "dotted", textUnderlineOffset: 2 }}
-                  >
-                    Connect Google Calendar
-                  </button>
-                  {" "}and it fills itself.
-                </>
-              ) : " Add one from the green + — \u201c2pm call with Maya.\u201d"}
-            </div>
-          </div>
-        )}
-        {dayEvents.map((e, i) => {
-          const isPast = selectedDay === "today" && (e._end ? e._end.getTime() : e._start.getTime() + 30 * 60000) <= nowMs;
-          const isNext = nextEvent && e.id === nextEvent.id;
-          const cname = clientNameFor(e);
-          if (isNext) {
-            const mins = minutesUntil(e._start);
-            return (
-              <div key={e.id || i} style={{ padding: "6px 0" }}>
-                <div style={{ marginLeft: 56, background: C.card, borderRadius: 10, padding: "8px 12px", boxShadow: "0 0 0 1px rgba(85,139,104,0.35), 0 3px 10px rgba(85,139,104,0.12), 0 8px 22px rgba(20,30,22,0.05)" }}>
-                  <div style={{ fontSize: 10, color: C.primaryLight, fontWeight: 700 }}>{fmtTime(e._start)}{mins > 0 && mins <= 120 ? ` · in ${mins} min` : ""}</div>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, marginTop: 1 }}>{e.title}</div>
-                  {cname && <div style={{ fontSize: 10, color: C.textMuted, marginTop: 1 }}>{cname}</div>}
-                  {!cname && <div style={{ marginTop: 3 }}>{linkChip(e)}</div>}
-                </div>
-              </div>
-            );
-          }
-          return (
-            <div key={e.id || i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderTop: i === 0 ? "none" : "1px solid rgba(30,38,31,0.06)" }}>
-              <span style={{ fontSize: 10, fontWeight: 700, width: 56, flexShrink: 0, color: isPast ? C.textMuted : C.primaryLight }}>{fmtTime(e._start)}</span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: isPast ? 500 : 600, color: isPast ? C.textMuted : C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.title}</span>
-              {linkChip(e, 9.5)}
-              {onDelete && e.source === "manual" && (
-                <button onClick={() => onDelete(e.id)} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }} title="Delete">×</button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {/* Frosted foot composer — HIDDEN: calendar entry happens via the + FAB
-          / task composer only. Gated behind false (no deletion). */}
-      {/* (dead {false &&} block removed — June 2026 refactor: strip composer foot) */}
-      {/* (dead {false &&} block removed — June 2026 refactor: strip composer error) */}
-    </div>
-  );
 }
 
 export { MobileCalendarStrip };
