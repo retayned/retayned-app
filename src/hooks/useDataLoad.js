@@ -75,6 +75,7 @@ export function useDataLoad(app) {
     // seat works in the org owner's book; RLS trims what they see to
     // their assignment. (Agency spine, scope §4.1 / A2-3.)
     const bookId = bookOwnerId || user.id;
+    try { window.__RT_BOOT_MARK?.("data-start"); } catch (_) { /* profiler absent */ }
     
     const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = await Promise.all([
       clientsDb.list(bookId),
@@ -690,6 +691,7 @@ export function useDataLoad(app) {
     }
 
     setDataLoaded(true);
+    try { window.__RT_BOOT_MARK?.("data-done"); } catch (_) { /* profiler absent */ }
 
     // ─── Secondary hydration — fire-and-forget AFTER initial render ───
     // Only billing data remains here. It's billing-tab-only — invisible on
