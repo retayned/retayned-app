@@ -2554,6 +2554,22 @@ export const workerTokens = {
 //   remove(eventId)           → delete a manual event. RLS blocks google rows.
 // ============================================================
 
+// ============================================================
+// BILLING — the user's subscription row. Read-only from the app:
+// the stripe-webhook edge function (service role) is the only
+// writer. RLS restricts reads to the caller's own row.
+// ============================================================
+export const billingDb = {
+  get: async (userId) => {
+    const { data, error } = await supabase
+      .from('billing_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return { data, error };
+  },
+};
+
 export const personalCalendar = {
   // Get events from ~now through 7 days ahead — covers the Today dial, the
   // Tomorrow strip, and the Later (days 2–6) columns in ONE fetch. Far-future
