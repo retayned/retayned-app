@@ -250,7 +250,11 @@ export default function ReferralsPage({ app }) {
             try {
               await tasksDb.create(user.id, {
                 text: `Send ${r.from} a thank-you — their intro${r.revenue ? ` became $${Number(r.revenue).toLocaleString()}/mo` : " converted"}`,
-                client_name: clients.find(c => c.name === r.from)?.name || null,
+                // Keep the referrer's name even when they're not an
+                // active client (rolodex contact, former client, lead) —
+                // client_id stays null, and the Today row renders a
+                // stone outlined chip instead of "N/A".
+                client_name: clients.find(c => c.name === r.from)?.name || r.from || null,
                 client_id: clients.find(c => c.name === r.from)?.id || null,
                 is_recurring: false, recurrence_pattern: null, due_date: null, assigned_worker_id: null,
               });
