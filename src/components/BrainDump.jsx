@@ -101,7 +101,12 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
   // The 5-minute clock anchors to the CLICK-OUT (we stamp savedAt on
   // every change while open AND once more on close).
   const DRAFT_TTL_MS = 5 * 60 * 1000;
-  const draftKey = `rt:brainDumpDraft:${user?.id || "anon"}`;
+  // v2 (Jul 2026): key bumped to orphan all pre-existing drafts — a
+  // stamp-on-mount bug (fixed below) had made old drafts immortal, and
+  // one resurrected a month-old review session. The old key is removed
+  // on sight.
+  const draftKey = `rt:brainDumpDraft:v2:${user?.id || "anon"}`;
+  try { window.localStorage.removeItem(`rt:brainDumpDraft:${user?.id || "anon"}`); } catch { /* fine */ }
   const draftRestored = useRef(false);
   useEffect(() => {
     if (!open) { draftRestored.current = false; return; } // re-arm for the next open
@@ -113,10 +118,15 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
       if (raw) {
         const d = JSON.parse(raw);
         if (d.savedAt && Date.now() - d.savedAt <= DRAFT_TTL_MS) {
+          // TEXT ONLY (Jul 2026, product rule): brain dump ALWAYS opens
+          // on the dump page. A recent unfinished dump's text comes
+          // back; a saved review session never does — extraction is
+          // cheap to redo, and resurrecting stale reviews is how a
+          // month-old item list ambushed the user.
           if (d.dump) setDump(d.dump);
           if (d.clientId) setClientId(d.clientId);
-          if (Array.isArray(d.items) && d.items.length) { setItems(d.items); }
-          if (d.step === "review" && Array.isArray(d.items) && d.items.length) setStep("review");
+          setItems([]);
+          setStep("input");
           restored = true;
         } else {
           window.localStorage.removeItem(draftKey);
@@ -136,8 +146,11 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
   }, [open]);
   // Final stamp on close — the 5-minute window starts at the click-out,
   // not at the last keystroke.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (open) return;
+    if (open) { wasOpenRef.current = true; return; }
+    if (!wasOpenRef.current) return; // mount with open=false is NOT a close
+    wasOpenRef.current = false;
     try {
       const raw = window.localStorage.getItem(draftKey);
       if (!raw) return;
@@ -149,7 +162,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
   useEffect(() => {
     if (!open) return;
     try {
-      if (!dump && items.length === 0) {
+      if (!dump) {
         // User cleared everything while open — intentional. Delete the
         // stored draft too, or the close-stamp would refresh the OLD
         // draft's clock and the deleted text would resurrect on reopen.
@@ -157,7 +170,7 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
         return;
       }
       window.localStorage.setItem(draftKey, JSON.stringify({
-        dump, clientId, items, step, savedAt: Date.now(),
+        dump, clientId, savedAt: Date.now(),
       }));
     } catch { /* storage full/blocked — degrade silently */ }
   }, [open, dump, clientId, manualPick, items, step]);
