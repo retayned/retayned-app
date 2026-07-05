@@ -19,7 +19,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const WorkerDashboard = lazy(() => import("./WorkerDashboard"));
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
-import { clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
+import { billingDb, clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
 const BrainDump = lazy(() => import("./components/BrainDump"));
@@ -2912,7 +2912,86 @@ export default function App({ user }) {
   // Called here — after every referenced declaration — to avoid TDZ.
   useRealtimeSync({ inFlightToggles, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user,
     bookOwnerId, raiBurstTrackerRef });
+  // ── BILLING (Jul 2026) ─────────────────────────────────────────────
+  // One row from billing_subscriptions (webhook-written, read-only
+  // here). Drives the Settings card, the trial banner, and the
+  // expired-trial gate. Refetched after Stripe redirects back with
+  // ?billing=success.
+  const [billing, setBilling] = React.useState(null);
+  const refreshBilling = React.useCallback(async () => {
+    if (!user?.id) return;
+    const { data } = await billingDb.get(user.id);
+    if (data) setBilling(data);
+  }, [user?.id]);
+  React.useEffect(() => { refreshBilling(); }, [refreshBilling]);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const flag = params.get("billing");
+    if (!flag) return;
+    if (flag === "success") {
+      // Stripe redirected back post-checkout. The webhook races this
+      // redirect, so refetch now and again shortly after.
+      refreshBilling();
+      const t = setTimeout(refreshBilling, 3500);
+      setQuickLogToast({ id: Date.now(), message: "You're upgraded — welcome aboard." });
+      params.delete("billing");
+      window.history.replaceState({}, "", window.location.pathname + (params.toString() ? "?" + params.toString() : ""));
+      return () => clearTimeout(t);
+    }
+    params.delete("billing");
+    window.history.replaceState({}, "", window.location.pathname + (params.toString() ? "?" + params.toString() : ""));
+  }, [refreshBilling]);
+
+  const startCheckout = React.useCallback(async (plan) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ plan }),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || !body.url) throw new Error(body.error || `Checkout failed (${resp.status})`);
+      window.location.href = body.url;
+    } catch (e) {
+      console.error("startCheckout failed:", e);
+      setQuickLogToast({ id: Date.now(), error: true, message: e.message || "Couldn't start checkout" });
+    }
+  }, []);
+
+  const openBillingPortal = React.useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-portal`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({}),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || !body.url) throw new Error(body.error || `Portal failed (${resp.status})`);
+      window.location.href = body.url;
+    } catch (e) {
+      console.error("openBillingPortal failed:", e);
+      setQuickLogToast({ id: Date.now(), error: true, message: e.message || "Couldn't open billing" });
+    }
+  }, []);
+
   const pageCtx = {
+    billing,
+    refreshBilling,
+    startCheckout,
+    openBillingPortal,
     addRef,
     registerInFlightCreate,
     rekeyInFlightCreate,
@@ -4480,6 +4559,43 @@ export default function App({ user }) {
         }}
       /></Suspense>
 
+      {/* ── Billing gate + payment banner (Jul 2026) ──
+          Expired trial or canceled subscription: full-screen gate.
+          Data stays intact underneath (read-only by occlusion, v1);
+          the only actions are upgrade or manage billing. Past-due:
+          a slim banner, not a lockout — grace, not a wall. Founder
+          row (agency/active) never matches either condition. */}
+      {billing && billing.status === "past_due" && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 300, background: "#7A2E2E", color: "#fff", padding: "8px 16px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <span>Your last payment didn't go through — your plan stays active for now.</span>
+          <button onClick={openBillingPortal} style={{ border: "1px solid rgba(255,255,255,0.5)", background: "transparent", color: "#fff", borderRadius: 999, padding: "4px 12px", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Update card</button>
+        </div>
+      )}
+      {billing && (billing.status === "canceled" || (billing.plan === "trial" && billing.status === "trialing" && new Date(billing.trial_ends_at).getTime() < Date.now())) && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(30,38,31,0.55)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#FFFFFF", borderRadius: 18, padding: "28px 26px", maxWidth: 420, width: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-0.02em", color: "#1E261F" }}>
+              {billing.status === "canceled" ? "Your subscription has ended." : "Your trial has ended."}
+            </div>
+            <div style={{ fontSize: 13.5, color: "#5A665C", marginTop: 8, lineHeight: 1.5 }}>
+              Your clients, tasks, and history are all safe and exactly where you left them. Pick a plan to keep going.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 20 }}>
+              <button onClick={() => startCheckout("solo")} style={{ border: "none", background: "#33543E", color: "#fff", borderRadius: 12, padding: "12px 16px", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Solo — $29/mo · up to 25 clients
+              </button>
+              <button onClick={() => startCheckout("agency")} style={{ border: "1.5px solid #33543E", background: "transparent", color: "#33543E", borderRadius: 12, padding: "12px 16px", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Team — $99/mo · 5 seats, unlimited clients
+              </button>
+              {billing.stripe_customer_id && (
+                <button onClick={openBillingPortal} style={{ border: "none", background: "transparent", color: "#5A665C", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+                  Manage billing
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Toast — bottom-right confirmation with undo */}
       {quickLogToast && (
         <QuickLogToast
