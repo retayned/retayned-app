@@ -31,6 +31,7 @@ import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useDataLoad } from "./hooks/useDataLoad";
 import { useOrg, can } from "./hooks/useOrg";
 import { setActorContext as dbSetActorContext } from "./lib/db";
+import { readHydrateSnapshot, clearHydrateSnapshot } from "./lib/hydrateCache";
 import { useShellViewport } from "./hooks/useShellViewport";
 import { useGoogleCalendar } from "./hooks/useGoogleCalendar";
 import { BookDrop, RosterBuilder } from "./components/Onboarding";
@@ -272,6 +273,16 @@ export default function App({ user }) {
   // the device (that's how the Eastern-vs-Denver drift bug happened pre-fix).
   // null means "not loaded yet"; effects that depend on it must guard.
   const [userTimezone, setUserTimezone] = useState(null);
+  // Boot accelerant (Jul 2026): seed the timezone from the hydrate
+  // snapshot so the network hydrate starts immediately instead of
+  // waiting a profile round trip. The profile's authoritative value
+  // overwrites it moments later (normally identical).
+  useEffect(() => {
+    if (!user?.id || userTimezone) return;
+    const env = readHydrateSnapshot(user.id);
+    if (env?.tz) setUserTimezone(env.tz);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   // Google Calendar integration lives in src/hooks/useGoogleCalendar
   // (extracted June 2026). Six regions gathered into one hook.
   const { connectGoogleCalendar, disconnectGoogleCalendar, googleConnectPromptDismissed, googleConnectStatus, googleConnected, googleEmail, googleLastSyncedAt, googleSyncing, setGoogleConnectPromptDismissed, setGoogleConnectStatus, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, syncGoogleCalendar } = useGoogleCalendar({ page, setPage, setPersonalEvents, user });
