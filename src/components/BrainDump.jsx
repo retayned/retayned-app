@@ -79,6 +79,13 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
   const [typeMenuKey, setTypeMenuKey] = useState(null);
   const [dueMenuKey, setDueMenuKey] = useState(null);
   const textareaRef = useRef(null);
+  // Reentry guard for commit. MUST live here with the other hooks —
+  // this component early-returns null when closed (line ~214), and a
+  // hook declared below that return only executes when open flips
+  // true, changing the hook count between renders. React throws and
+  // unmounts the whole app: the Jul 5 "click brain dump -> blank
+  // screen" outage. Hooks above returns, always.
+  const committingRef = useRef(false);
   const editRef = useRef(null);
 
   const activeClients = (clients || []).filter((c) => c.is_active !== false);
@@ -268,7 +275,6 @@ export default function BrainDump({ open, onClose, clients, user, onCommitted, e
   };
 
   // ── Commit: create the kept items via existing db paths ──────────────
-  const committingRef = useRef(false);
   const commit = async () => {
     const kept = items.filter((it) => it.keep && it.title.trim());
     // Ref guard, not just state: two clicks in the same tick both read
