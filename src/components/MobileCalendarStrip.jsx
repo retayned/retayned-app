@@ -48,10 +48,14 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   const scrubGesture = useRef({ id: null, active: false, startX: 0, startY: 0, fStart: 0 });
   const suppressClickRef = useRef(false);
   const [scrubFrac, setScrubFrac] = useState(null);
-  // Rim-dot selection: tapping an event dot pins that event into the
-  // header slot. Tapping empty dial glass clears it back to next-up.
-  const [pickedId, setPickedId] = useState(null);
-  // Two-tap delete: first tap arms ("Confirm delete?"), second commits.
+  // ── Event sheet (Jul 2026, mock v2 + dial glide) ──────────────────
+  // ONE interaction concept: touch any event — a rim dot or the header
+  // slot — and its bottom sheet slides up over the page. No pinned
+  // cards, no layout shift; the sheet is open (sheetId) or it isn't.
+  // Paging inside the sheet moves through the day's events, and the
+  // dial glides so the ringed dot sits under the crest.
+  const [sheetId, setSheetId] = useState(null);
+  // Two-tap delete inside the sheet: first tap arms, second commits.
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   // ── Scrub-turn (Jul 2026): the desktop dial's real semantics, ported.
   // Dragging doesn't move a cursor — it TURNS the 6h window under the
@@ -67,19 +71,24 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     if (easeTimerRef.current) { clearTimeout(easeTimerRef.current); easeTimerRef.current = null; }
     if (easeRafRef.current) { cancelAnimationFrame(easeRafRef.current); easeRafRef.current = null; }
   };
-  const scheduleEaseBack = (delay = 1400) => {
+  // Glide the dial to any scrub offset (0 = home/NOW). Cubic ease-out,
+  // same feel as the original ease-home; the sheet uses it to bring the
+  // glass to whatever event it's showing (v3 idea #1 — dial answers
+  // the sheet).
+  const glideScrubTo = (target, delay = 0) => {
     cancelEase();
     easeTimerRef.current = setTimeout(() => {
       const from = scrubMsRef.current, t0 = performance.now(), DUR = 420;
       const step = (t) => {
         const p = Math.min(1, (t - t0) / DUR);
         const e = 1 - Math.pow(1 - p, 3);
-        setScrubMs(from * (1 - e));
+        setScrubMs(from + (target - from) * e);
         if (p < 1) easeRafRef.current = requestAnimationFrame(step);
       };
       easeRafRef.current = requestAnimationFrame(step);
     }, delay);
   };
+  const scheduleEaseBack = (delay = 1400) => glideScrubTo(0, delay);
   useEffect(() => cancelEase, []);
   const fracFromClientX = (clientX) => {
     const el = bandRef.current;
@@ -108,10 +117,10 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       setScrubFrac(f);
       // Turn the window: drag left = time advances toward you, drag
       // right = rewind. base + (fStart − f) · window.
-      // 1.75x drag gain (Jul 2026, "too difficult to scroll"): 1:1 band
-      // mapping meant a full-width swipe moved only 6h — crossing a day
-      // took three re-grips. Now one swipe covers ~10.5h.
-      setScrubMs(clampScrub((s.fStart - f) * DOME_WIN_MS * 1.75 + (scrubGesture.current.baseMs || 0)));
+      // Drag gain 1.4x (Jul 2026: started 1.0 — too stiff; 1.75 — Adam
+      // field-tested it 20% too fast; 1.4 is the tuned value. Full-width
+      // swipe covers ~8.4h.)
+      setScrubMs(clampScrub((s.fStart - f) * DOME_WIN_MS * 1.4 + (scrubGesture.current.baseMs || 0)));
     }
   };
   const endScrub = () => {
@@ -173,8 +182,21 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     ? dayEvents.find(e => e._start.getTime() > nowMs)
     : dayEvents[0];
 
-  // The pinned event, if the user tapped a dot and it still exists today.
-  const pickedEvent = pickedId ? (dayEvents.find(e => e.id === pickedId) || null) : null;
+  // The sheet's subject (null when closed or if the event vanished in a
+  // refetch — the sheet simply doesn't render then).
+  const sheetIdx = sheetId ? dayEvents.findIndex(e => e.id === sheetId) : -1;
+  const sheetEvent = sheetIdx >= 0 ? dayEvents[sheetIdx] : null;
+  // Open the sheet for an event AND glide the glass to it — the dial
+  // always shows what the sheet is talking about.
+  const openSheet = (ev) => {
+    setSheetId(ev.id);
+    setConfirmDeleteId(null);
+    const dayStartMsL = (() => { const d = new Date(dayBase); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+    const baseCenterL = selectedDay === "today" ? Date.now() : (() => { const d = new Date(dayBase); d.setHours(13, 0, 0, 0); return d.getTime(); })();
+    const lo = (dayStartMsL + DOME_WIN_MS / 2) - baseCenterL;
+    const hi = (dayStartMsL + 86400000 - DOME_WIN_MS / 2) - baseCenterL;
+    glideScrubTo(Math.max(lo, Math.min(hi, ev._start.getTime() - baseCenterL)));
+  };
 
   const nowFrac = fracFor(now);
   const showNow = selectedDay === "today" && nowFrac > 0 && nowFrac < 1;
@@ -214,7 +236,9 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
   // and whichever event rides nearest the crest becomes the selection,
   // shown in the header row. Release → holds a beat → glides home.
   {
-    const allPast = dayEvents.length > 0 && !nextEvent && selectedDay === "today";
+    // The day's most recent past event — holds the slot after hours so
+    // the header keeps telling the truth instead of "All done."
+    const lastPastEvent = (!nextEvent && dayEvents.length > 0) ? dayEvents[dayEvents.length - 1] : null;
 
     // ── Geometry: the HANGING DISC (reverted Jul 2026 — the upward
     // "sun crest" flip was wrong; the instrument is the desktop dial's
@@ -263,14 +287,16 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
     // Hour LABELS etched into the glass just inside the rim — labels
     // only, no tick lines (the desktop dial doesn't draw them either).
-    // The apex zone is skipped for the seeker/readout.
+    // EVERY hour renders, always (Jul 2026): the old "apex zone" skip
+    // deleted whichever hour the user scrolled to — scroll to 5p and
+    // "5p" vanished. The crest readout sits lower for clearance now;
+    // the hour row never has holes.
     const tickEls = [];
     const t0 = new Date(winStart); t0.setMinutes(0, 0, 0);
     if (t0.getTime() < winStart) t0.setHours(t0.getHours() + 1);
     for (let t = t0.getTime(); t <= winEnd; t += 3600000) {
       const f = domeFrac(t);
       if (f < 0.03 || f > 0.97) continue;
-      if (Math.abs(f - 0.5) < 0.075) continue; // apex zone
       const [lx, ly] = dPtAt(f, DOME_R - 18);
       tickEls.push(
         <text key={"tk" + t} x={lx.toFixed(1)} y={(ly + 3).toFixed(1)} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 600, fill: "#9A9A93" }}>{fmtTimeShort(new Date(t))}</text>
@@ -279,7 +305,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
 
     // Event dots on the rim — desktop colors; the ring rides the focus
     // while scrubbing, the next event otherwise.
-    const ringTarget = focusEvent || pickedEvent || nextEvent;
+    const ringTarget = focusEvent || sheetEvent || nextEvent;
     const dotEls = dayEvents.map((e, i) => {
       const f = domeFrac(e._start.getTime());
       if (f < 0.02 || f > 0.98) return null;
@@ -296,7 +322,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
           <circle
             cx={x.toFixed(1)} cy={y.toFixed(1)} r="16"
             fill="transparent" style={{ cursor: "pointer" }}
-            onClick={(ev) => { ev.stopPropagation(); if (suppressClickRef.current) return; setPickedId(e.id); }}
+            onClick={(ev) => { ev.stopPropagation(); if (suppressClickRef.current) return; openSheet(e); }}
           />
         </g>
       );
@@ -317,7 +343,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
       <div style={{ margin: "-20px -16px 0" }}>
         <div
           ref={bandRef}
-          onClick={() => { if (suppressClickRef.current) return; setPickedId(null); setConfirmDeleteId(null); scheduleEaseBack(0); }}
+          onClick={() => { if (suppressClickRef.current) return; scheduleEaseBack(0); }}
           onPointerDown={onBandPointerDown}
           onPointerMove={onBandPointerMove}
           onPointerUp={endScrub}
@@ -364,7 +390,7 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
                 turns, the center hour simply vanished ("3a" missing from
                 the dial). The crest now always names its time; at rest
                 that's a live clock, mid-scrub it's the scrubbed time. */}
-            <text x={DCX} y={APEX_Y + 22} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 800, fill: scrubActive ? "#1C3224" : "#6E7E72", fontVariantNumeric: "tabular-nums" }}>{fmtTime(new Date(winCenter))}</text>
+            <text x={DCX} y={APEX_Y + 34} textAnchor="middle" style={{ fontFamily: "'Manrope', sans-serif", fontSize: 9.5, fontWeight: 800, fill: scrubActive ? "#1C3224" : "#6E7E72", fontVariantNumeric: "tabular-nums" }}>{fmtTime(new Date(winCenter))}</text>
             {nowInWindow && (
               <g filter="url(#rt-dome-now-raised)">
                 <circle cx={nx.toFixed(1)} cy={ny.toFixed(1)} r="9" fill="#33543E" />
@@ -388,7 +414,21 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
               {greeting}{firstName ? ", " + firstName : ""}.
             </h1>
           </div>
-          <div style={{ textAlign: "right", flexShrink: 0, paddingBottom: 3, paddingLeft: 10 }}>
+          {/* The right-side slot IS a tap target (Jul 2026): tapping it
+              opens the sheet for whatever it shows, same as tapping a
+              rim dot. Precedence: on-the-dial (while turning) -> next
+              upcoming -> last past event grayed as "Earlier today" ->
+              "No calls today". "All done." is retired — the slot never
+              hides an event that exists. */}
+          <div
+            style={{ textAlign: "right", flexShrink: 0, paddingBottom: 3, paddingLeft: 10, cursor: "pointer" }}
+            onClick={(ev) => {
+              ev.stopPropagation();
+              if (suppressClickRef.current) return;
+              const target = focusEvent || nextEvent || lastPastEvent;
+              if (target) openSheet(target);
+            }}
+          >
             {focusEvent ? (
               <>
                 <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.primary }}>
@@ -397,18 +437,6 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(focusEvent._start)}</span> {focusEvent.title}
                 </div>
-              </>
-            ) : pickedEvent ? (
-              <>
-                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: C.primary }}>
-                  Selected{(() => { const m = minutesUntil(pickedEvent._start); return m > 0 && m < 60 ? ` · in ${m} min` : m > 0 ? ` · in ${Math.round(m / 60)} hr` : ""; })()}
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(pickedEvent._start)}</span> {pickedEvent.title}
-                </div>
-                {clientNameFor(pickedEvent)
-                  ? <div style={{ fontSize: 9.5, color: C.textMuted, marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{clientNameFor(pickedEvent)}</div>
-                  : <div style={{ marginTop: 2, display: "flex", justifyContent: "flex-end" }}>{linkChip(pickedEvent, 9)}</div>}
               </>
             ) : nextEvent ? (
               <>
@@ -419,47 +447,97 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
                   <span style={{ color: C.primaryDeep, fontWeight: 700 }}>{fmtTime(nextEvent._start)}</span> {nextEvent.title}
                 </div>
               </>
+            ) : lastPastEvent ? (
+              <>
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: "#9A9A93" }}>
+                  Earlier today
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#8A948C", marginTop: 1, maxWidth: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ fontWeight: 700 }}>{fmtTime(lastPastEvent._start)}</span> {lastPastEvent.title}
+                </div>
+              </>
             ) : (
               <div style={{ fontSize: 11, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif" }}>
-                {allPast ? "All done." : "No calls today"}
+                No calls today
               </div>
             )}
           </div>
         </div>
-        {/* ── Selected-event detail card (Jul 2026): the header slot
-            truncates at 130px; this card is where the FULL event lives.
-            Full wrapping title, time range, client, and delete — manual
-            events delete (two-tap confirm, verified upstream with
-            restore-on-failure); Google-synced events say so honestly,
-            because RLS forbids deleting google rows and pretending
-            otherwise is how events "resurrect." ── */}
-        {pickedEvent && (
-          <div style={{ position: "relative", zIndex: 2, margin: "10px 16px 2px", padding: "10px 12px", background: "#FFFFFF", border: "1px solid rgba(28,50,36,0.10)", borderRadius: 14, boxShadow: "0 1px 4px rgba(28,50,36,0.05)" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 650, color: C.text, lineHeight: 1.35, overflowWrap: "break-word" }}>{pickedEvent.title}</div>
-            <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>
-              {fmtTime(pickedEvent._start)}{pickedEvent._end ? `–${fmtTime(pickedEvent._end)}` : ""}
-              {clientNameFor(pickedEvent) ? ` · ${clientNameFor(pickedEvent)}` : ""}
+        {/* ── EVENT SHEET (Jul 2026, mock v2 + dial glide). Slides over
+            the page — zero layout shift. Closes via handle tap, scrim
+            tap, or a downward drag on the handle. Pager appears only on
+            multi-event days; paging glides the dial to the shown event.
+            Manual events: two-tap delete (verified upstream — a refused
+            delete restores with a toast). Google events say the truth. */}
+        {sheetEvent && (
+          <>
+            <div
+              onClick={() => { setSheetId(null); setConfirmDeleteId(null); }}
+              style={{ position: "fixed", inset: 0, zIndex: 600, background: "rgba(30,38,31,0.35)" }}
+            />
+            <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 601, background: "#FFFFFF", borderRadius: "20px 20px 0 0", boxShadow: "0 -8px 40px rgba(28,50,36,0.18)", padding: "8px 16px calc(22px + env(safe-area-inset-bottom))" }}>
+              <div
+                onClick={() => { setSheetId(null); setConfirmDeleteId(null); }}
+                onPointerDown={(pe) => {
+                  const y0 = pe.clientY;
+                  const onMove = (me) => { if (me.clientY - y0 > 60) { setSheetId(null); setConfirmDeleteId(null); cleanup(); } };
+                  const cleanup = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", cleanup); };
+                  window.addEventListener("pointermove", onMove);
+                  window.addEventListener("pointerup", cleanup);
+                }}
+                style={{ padding: "2px 0 8px", cursor: "pointer", touchAction: "none" }}
+              >
+                <div style={{ width: 36, height: 4, borderRadius: 999, background: "rgba(28,50,36,0.15)", margin: "0 auto" }} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "#8A948C" }}>
+                  Today{dayEvents.length > 1 ? ` · ${sheetIdx + 1} of ${dayEvents.length}` : ""}
+                </span>
+                {dayEvents.length > 1 && (
+                  <span>
+                    <button
+                      disabled={sheetIdx === 0}
+                      onClick={() => { const p = dayEvents[sheetIdx - 1]; if (p) openSheet(p); }}
+                      style={{ border: "none", background: "none", fontFamily: "inherit", fontSize: 16, fontWeight: 800, color: sheetIdx === 0 ? "#D5D8D2" : C.primary, padding: "0 8px", cursor: sheetIdx === 0 ? "default" : "pointer" }}>
+                      ‹
+                    </button>
+                    <button
+                      disabled={sheetIdx >= dayEvents.length - 1}
+                      onClick={() => { const n = dayEvents[sheetIdx + 1]; if (n) openSheet(n); }}
+                      style={{ border: "none", background: "none", fontFamily: "inherit", fontSize: 16, fontWeight: 800, color: sheetIdx >= dayEvents.length - 1 ? "#D5D8D2" : C.primary, padding: "0 8px", cursor: sheetIdx >= dayEvents.length - 1 ? "default" : "pointer" }}>
+                      ›
+                    </button>
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 16.5, fontWeight: 750, letterSpacing: "-0.01em", color: C.text, lineHeight: 1.3, overflowWrap: "break-word" }}>{sheetEvent.title}</div>
+              <div style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>
+                {fmtTime(sheetEvent._start)}{sheetEvent._end ? `–${fmtTime(sheetEvent._end)}` : ""}
+                {clientNameFor(sheetEvent) ? ` · ${clientNameFor(sheetEvent)}` : ""}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 16 }}>
+                {!clientNameFor(sheetEvent) && (
+                  <span onClickCapture={() => { setSheetId(null); setConfirmDeleteId(null); }}>{linkChip(sheetEvent, 10.5)}</span>
+                )}
+                <span style={{ flex: 1 }} />
+                {sheetEvent.source === "google" ? (
+                  <span style={{ fontSize: 10, color: C.textMuted, fontStyle: "italic" }}>Synced from Google — delete it in Google Calendar</span>
+                ) : confirmDeleteId === sheetEvent.id ? (
+                  <button
+                    onClick={() => { const id = sheetEvent.id; setSheetId(null); setConfirmDeleteId(null); onDelete && onDelete(id); }}
+                    style={{ border: "none", background: "#B91C1C", color: "#fff", borderRadius: 999, padding: "7px 16px", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    Confirm delete
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(sheetEvent.id)}
+                    style={{ border: "1px solid rgba(185,28,28,0.35)", background: "transparent", color: "#B91C1C", borderRadius: 999, padding: "7px 16px", fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-              {!clientNameFor(pickedEvent) && linkChip(pickedEvent, 10)}
-              <span style={{ flex: 1 }} />
-              {pickedEvent.source === "google" ? (
-                <span style={{ fontSize: 10, color: C.textMuted, fontStyle: "italic" }}>Synced from Google — delete it in Google Calendar</span>
-              ) : confirmDeleteId === pickedEvent.id ? (
-                <button
-                  onClick={(ev) => { ev.stopPropagation(); const id = pickedEvent.id; setPickedId(null); setConfirmDeleteId(null); onDelete && onDelete(id); }}
-                  style={{ border: "none", background: "#B91C1C", color: "#fff", borderRadius: 999, padding: "5px 12px", fontFamily: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-                  Confirm delete
-                </button>
-              ) : (
-                <button
-                  onClick={(ev) => { ev.stopPropagation(); setConfirmDeleteId(pickedEvent.id); }}
-                  style={{ border: "1px solid rgba(185,28,28,0.35)", background: "transparent", color: "#B91C1C", borderRadius: 999, padding: "5px 12px", fontFamily: "inherit", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                  Delete
-                </button>
-              )}
-            </div>
-          </div>
+          </>
         )}
       </div>
     );
