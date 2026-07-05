@@ -4555,6 +4555,19 @@ export default function App({ user }) {
           <CheckoutOverlay plan={checkoutPlan} onClose={() => setCheckoutPlan(null)} />
         </Suspense>
       )}
+      {/* Trial countdown (Jul 2026): the expiry gate must never be a
+          surprise. Final 3 days: a quiet strip, one button, no modal.
+          Mutually exclusive with past_due (trial users have no card). */}
+      {billing && billing.plan === "trial" && billing.status === "trialing" && (() => {
+        const daysLeft = Math.ceil((new Date(billing.trial_ends_at).getTime() - Date.now()) / 86400000);
+        if (daysLeft > 3 || daysLeft < 0) return null;
+        return (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 300, background: "#33543E", color: "#fff", padding: "8px 16px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
+            <span>{daysLeft === 0 ? "Your trial ends today" : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left in your trial`} — your clients and history stay saved either way.</span>
+            <button onClick={() => startCheckout("solo")} style={{ border: "1px solid rgba(255,255,255,0.55)", background: "transparent", color: "#fff", borderRadius: 999, padding: "4px 14px", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Keep going — $29/mo</button>
+          </div>
+        );
+      })()}
       {billing && billing.status === "past_due" && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 300, background: "#7A2E2E", color: "#fff", padding: "8px 16px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
           <span>Your last payment didn't go through — your plan stays active for now.</span>
