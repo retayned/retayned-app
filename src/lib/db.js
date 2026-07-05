@@ -44,6 +44,15 @@ export const auth = {
   },
 
   signOut: async () => {
+    // Clear the instant-paint hydrate snapshot on the way out — a
+    // shared device must not paint the previous user's book.
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) {
+        const { clearHydrateSnapshot } = await import("./hydrateCache");
+        clearHydrateSnapshot(data.user.id);
+      }
+    } catch (_) { /* best effort */ }
     const { error } = await supabase.auth.signOut();
     return { error };
   },
