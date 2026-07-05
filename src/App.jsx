@@ -17,7 +17,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 // on. lazy() moves ~4,200 first-party lines (ClientModal alone is 2,672)
 // out of the critical chunk; each loads on first use behind Suspense.
 const WorkerDashboard = lazy(() => import("./WorkerDashboard"));
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { billingDb, clients as clientsDb, raiConversations as convoDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, referrals as referralsDb, revenueHistoryDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "./lib/db";
 import { createPortal } from "react-dom";
@@ -42,7 +42,7 @@ import { nextOccurrenceDate } from "./recurrence";
 import { C } from "./theme";
 import { APP_CSS } from "./appStyles";
 import { getUserInitial, localYmd, splitLongTask, tzMidnightInstant, ymdInTz } from "./utils";
- 
+
 
 
 export default function App({ user }) {
@@ -2918,15 +2918,15 @@ export default function App({ user }) {
   // here). Drives the Settings card, the trial banner, and the
   // expired-trial gate. Refetched after Stripe redirects back with
   // ?billing=success.
-  const [billing, setBilling] = React.useState(null);
-  const refreshBilling = React.useCallback(async () => {
+  const [billing, setBilling] = useState(null);
+  const refreshBilling = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await billingDb.get(user.id);
     if (data) setBilling(data);
   }, [user?.id]);
-  React.useEffect(() => { refreshBilling(); }, [refreshBilling]);
+  useEffect(() => { refreshBilling(); }, [refreshBilling]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const flag = params.get("billing");
     if (!flag) return;
@@ -2947,10 +2947,10 @@ export default function App({ user }) {
   // Embedded checkout (Jul 2026): opens the Retayned-branded
   // CheckoutOverlay, which fetches the session and mounts Stripe's
   // embedded component — the user never leaves the app.
-  const [checkoutPlan, setCheckoutPlan] = React.useState(null);
-  const startCheckout = React.useCallback((plan) => { setCheckoutPlan(plan); }, []);
+  const [checkoutPlan, setCheckoutPlan] = useState(null);
+  const startCheckout = useCallback((plan) => { setCheckoutPlan(plan); }, []);
 
-  const openBillingPortal = React.useCallback(async () => {
+  const openBillingPortal = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in");
