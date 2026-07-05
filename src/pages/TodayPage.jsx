@@ -12,7 +12,7 @@ import { lazy, Suspense } from "react";
 // desktop dial actually renders.
 const TimeDial = lazy(() => import("../components/TimeDial").then(m => ({ default: m.TimeDial })));
 import { supabase } from "../lib/supabase.js";
-import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
+import { parseCalendarEntry, parsaeComposer, detectPastTense } from "../parser";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
@@ -3200,10 +3200,17 @@ export default function TodayPage({ app }) {
                                 )}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
+                                {/* Named-but-not-a-client (rolodex contact,
+                                    former client, lead): outlined stone chip
+                                    with the name — quieter than a client,
+                                    which is semantically honest. "N/A" only
+                                    for the truly nameless. */}
                                 {client
                                   ? <div className="rt-task-avatar" style={{ display: "flex", flexShrink: 0 }}><ClientAvatar client={client} size={16} /></div>
-                                  : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{client ? client.name : "N/A"}</span>
+                                  : t.client_name
+                                    ? <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, border: "1.5px solid #A8A296", background: "transparent", flexShrink: 0 }} />
+                                    : <div className="rt-task-avatar" style={{ width: 16, height: 16, borderRadius: 8, background: C.borderSoft, flexShrink: 0 }} />}
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, color: client ? undefined : (t.client_name ? "#8A8478" : undefined) }}>{client ? client.name : (t.client_name || "N/A")}</span>
                                 {t.notes && (
                                   <button
                                     className="rt-expand"
