@@ -84,6 +84,8 @@ export default function RetrosPage({ app }) {
     setRolodexStepOwner,
     setRolodexStepText,
     setSelectedRolodex,
+    setAiInput,
+    setPage,
     setShowAddRolodex,
     showAddRolodex,
     user,
@@ -670,37 +672,68 @@ export default function RetrosPage({ app }) {
                       it shares the content margin and never overlaps the
                       left rail. Observation-green surface (primarySoft),
                       matching the Health observation cards. */}
-                  {dueReminders.length > 0 && !rolodexCheckinDismissed && (
-                    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, background: C.primarySoft, border: "1px solid rgba(51,84,62,0.22)", borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "13px 38px 13px 16px" }}>
-                      {/* Corner ✕ dismiss — SAME spec as the Health observation
-                          card (28×28, top-right, transparent, textMuted). One
-                          dismiss pattern across every green card. */}
-                      <button
-                        type="button"
-                        onClick={dismissRolodexCheckin}
-                        aria-label="Dismiss check-in reminder"
-                        style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: 14, background: "transparent", border: "none", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-                      >✕</button>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        {dueReminders.length === 1 ? (
-                          <>
-                            <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {dueReminders[0].contact || dueReminders[0].client}</div>
-                            <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>{dueReminders[0].client ? dueReminders[0].client + " · " : ""}reminder due</div>
-                          </>
-                        ) : (
-                          <>
-                            <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
-                            <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>
-                              {dueReminders.slice(0, 2).map(r => r.contact || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
-                            </div>
-                          </>
-                        )}
+                  {/* Check-in due strip (Jul 2026 redesign). The old
+                      version was a solid primarySoft slab — the loudest
+                      element on a page of quiet white cards, for routine
+                      information the left rail already lists. Now it
+                      speaks the page's own card language: white, ochre
+                      accent bar for urgency, contact avatar, and the
+                      capability that was missing entirely — DRAFT WITH
+                      RAI, which prefills the Rai composer with the
+                      contact's facts (name, company, status, staleness)
+                      so Rai writes the re-engagement note. Rai's chat
+                      context has no rolodex section, so the prompt must
+                      carry the facts itself. */}
+                  {dueReminders.length > 0 && !rolodexCheckinDismissed && (() => {
+                    const r0 = dueReminders[0];
+                    const r0Name = r0.contact_name || r0.contact || r0.client_name || r0.client || "this contact";
+                    const r0Co = (r0.client_name || r0.client) && (r0.contact_name || r0.contact) ? (r0.client_name || r0.client) : null;
+                    const overdueDays = (() => {
+                      const rem = String(r0.reminder || "").slice(0, 10);
+                      if (!rem) return 0;
+                      return Math.max(0, Math.round((new Date(_reminderToday + "T12:00:00Z").getTime() - new Date(rem + "T12:00:00Z").getTime()) / 86400000));
+                    })();
+                    const draftWithRai = () => {
+                      const staleness = r0.last_touch_at ? `last touch ${Math.round((Date.now() - new Date(r0.last_touch_at).getTime()) / 86400000)} days ago` : (overdueDays > 0 ? `check-in ${overdueDays}d overdue` : "check-in due");
+                      const status = r0.status || (deriveTags(r0)[0] || "").toLowerCase() || "kept-warm contact";
+                      setAiInput(`Draft a short, warm re-engagement note to ${r0Name}${r0Co ? ` (${r0Co})` : ""} — ${status}, ${staleness}. Reopen the thread naturally, reference our history if you know it, no ask, sounds like me.`);
+                      setPage("rai");
+                    };
+                    return (
+                      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, background: C.card, border: "1px solid " + C.border, borderLeft: "3px solid #C4823B", borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 38px 12px 14px" }}>
+                        <button
+                          type="button"
+                          onClick={dismissRolodexCheckin}
+                          aria-label="Dismiss check-in reminder"
+                          style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: 14, background: "transparent", border: "none", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+                        >✕</button>
+                        <Avatar id={r0.id} name={r0Name} size={32} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {dueReminders.length === 1 ? (
+                            <>
+                              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {r0Name}</div>
+                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>{r0Co ? r0Co + " · " : ""}{overdueDays > 0 ? `${overdueDays}d overdue` : "due today"}</div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
+                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>
+                                {dueReminders.slice(0, 2).map(r => r.contact_name || r.contact || r.client_name || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={draftWithRai}
+                          style={{ background: "#7C5CF3", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                        >✦ Draft note</button>
+                        <button
+                          onClick={() => setSelectedRolodex(r0)}
+                          style={{ background: "transparent", color: C.primary, border: "1px solid " + C.border, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                        >{dueReminders.length === 1 ? "View" : "Review"}</button>
                       </div>
-                      <button
-                        onClick={() => setSelectedRolodex(dueReminders[0])}
-                        style={{ background: C.card, color: C.primary, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                      >{dueReminders.length === 1 ? "View" : "Review"}</button>
-                    </div>
+                    );
+                  })()}
                   )}
 
                   {/* ACTIVE RETRO (top card) or empty state */}
