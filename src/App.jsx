@@ -23,6 +23,7 @@ import { billingDb, clients as clientsDb, raiConversations as convoDb, healthChe
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
 const BrainDump = lazy(() => import("./components/BrainDump"));
+const CheckoutOverlay = lazy(() => import("./components/CheckoutOverlay"));
 const ClientModal = lazy(() => import("./components/ClientModal"));
 const RolodexModal = lazy(() => import("./components/RolodexModal"));
 import ShellOverlays from "./components/ShellOverlays";
@@ -2943,27 +2944,11 @@ export default function App({ user }) {
     window.history.replaceState({}, "", window.location.pathname + (params.toString() ? "?" + params.toString() : ""));
   }, [refreshBilling]);
 
-  const startCheckout = React.useCallback(async (plan) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not signed in");
-      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ plan }),
-      });
-      const body = await resp.json().catch(() => ({}));
-      if (!resp.ok || !body.url) throw new Error(body.error || `Checkout failed (${resp.status})`);
-      window.location.href = body.url;
-    } catch (e) {
-      console.error("startCheckout failed:", e);
-      setQuickLogToast({ id: Date.now(), error: true, message: e.message || "Couldn't start checkout" });
-    }
-  }, []);
+  // Embedded checkout (Jul 2026): opens the Retayned-branded
+  // CheckoutOverlay, which fetches the session and mounts Stripe's
+  // embedded component — the user never leaves the app.
+  const [checkoutPlan, setCheckoutPlan] = React.useState(null);
+  const startCheckout = React.useCallback((plan) => { setCheckoutPlan(plan); }, []);
 
   const openBillingPortal = React.useCallback(async () => {
     try {
@@ -4565,6 +4550,11 @@ export default function App({ user }) {
           the only actions are upgrade or manage billing. Past-due:
           a slim banner, not a lockout — grace, not a wall. Founder
           row (agency/active) never matches either condition. */}
+      {checkoutPlan && (
+        <Suspense fallback={null}>
+          <CheckoutOverlay plan={checkoutPlan} onClose={() => setCheckoutPlan(null)} />
+        </Suspense>
+      )}
       {billing && billing.status === "past_due" && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 300, background: "#7A2E2E", color: "#fff", padding: "8px 16px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
           <span>Your last payment didn't go through — your plan stays active for now.</span>
