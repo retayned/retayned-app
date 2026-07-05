@@ -3,7 +3,8 @@
 // from App.jsx. One function, one concern: read every table for this
 // user and light up the app's state. Returns the memoized loadData;
 // App's effects call it exactly as before.
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { readHydrateSnapshot, saveHydrateSnapshot } from "../lib/hydrateCache";
 import { clientAddons as clientAddonsDb, clientBillingDb, clientBillingMonthStatusDb, clientBillingTermsDb, clients as clientsDb, healthChecks as hcDb, observations as observationsDb, personalCalendar as personalCalendarDb, profile as profileDb, raiConversations as convoDb, raiPicks as raiPicksDb, raiUserState as raiUserStateDb, referrals as referralsDb, rolodex as rolodexDb, tasks as tasksDb, touchpoints as touchpointsDb, workers as workersDb } from "../lib/db";
 import { supabase } from "../lib/supabase";
 
@@ -60,8 +61,16 @@ export function useDataLoad(app) {
     userTimezone,
   } = app;
   const hydrateRetryRef = useRef(0);
-  const loadData = useCallback(async () => {
+  const bootedFromCacheRef = useRef(false);
+  const loadData = useCallback(async (opts = {}) => {
     if (!user) return;
+    // INSTANT-PAINT CACHE (Jul 2026). fromCache runs synchronously-fast
+    // off the last successful hydrate's snapshot: no gates, no network,
+    // no retries — paint what we knew, and let the normal network
+    // hydrate (which App fires the moment the timezone lands) replace
+    // it wholesale, exactly like every visibilitychange refetch does.
+    const cachedEnv = opts.fromCache ? readHydrateSnapshot(user.id) : null;
+    if (opts.fromCache && !cachedEnv) return;
     // Wait for the user's stored timezone to load before fetching tasks.
     // Without this gate, loadData fires twice on sign-in: first with
     // userTimezone=null (which falls back to device-local TZ and may
@@ -69,13 +78,13 @@ export function useDataLoad(app) {
     // effect sets userTimezone. That double-load is what produces the
     // ~2s "everything jumbled then sorts" jank Adam was seeing. The
     // skeleton state covers the (very brief) gap.
-    if (!userTimezone) return;
+    if (!userTimezone && !cachedEnv) return;
     const uid = user.id;                    // SELF: my intelligence, profile, calendar, tokens
     // BOOK: the client data I work in. Solo users and root owners work
     // in their own book (bookId === uid, byte-identical behavior). A
     // seat works in the org owner's book; RLS trims what they see to
     // their assignment. (Agency spine, scope §4.1 / A2-3.)
-    const bookId = bookOwnerId || user.id;
+    const bookId = cachedEnv ? (cachedEnv.bookId || user.id) : (bookOwnerId || user.id);
     try { window.__RT_BOOT_MARK?.("data-start"); } catch (_) { /* profiler absent */ }
     
     // HYDRATE RESILIENCE (Jul 2026). Supabase query errors resolve as
@@ -87,7 +96,7 @@ export function useDataLoad(app) {
     // never saw it; mobile hit it constantly. Now a failed batch logs,
     // retries twice on a short delay, and gives up loudly — a slow
     // hydrate beats a silent one that never happened.
-    const _hydrateBatch = await Promise.all([
+    const _hydrateBatch = cachedEnv ? cachedEnv.batch : await Promise.all([
       clientsDb.list(bookId),
       tasksDb.listToday(bookId),
       referralsDb.list(bookId),
@@ -714,6 +723,7 @@ export function useDataLoad(app) {
 
     setDataLoaded(true);
     try { window.__RT_BOOT_MARK?.("data-done"); } catch (_) { /* profiler absent */ }
+    if (!cachedEnv) saveHydrateSnapshot(user.id, bookId, userTimezone, _hydrateBatch);
 
     // ─── Secondary hydration — fire-and-forget AFTER initial render ───
     // Only billing data remains here. It's billing-tab-only — invisible on
@@ -749,5 +759,15 @@ export function useDataLoad(app) {
     // mount), the closure must be rebuilt or a seat loads their own empty
     // book with the stale null bookOwnerId and never recovers.
   }, [user, userTimezone, bookOwnerId, orgRole]);
+
+  // Fire the cached paint once per session, as early as the user id
+  // exists — before the profile round trip, before the timezone gate.
+  // The network hydrate that follows (App fires it when the timezone
+  // lands) replaces everything wholesale and refreshes the snapshot.
+  useEffect(() => {
+    if (!user?.id || bootedFromCacheRef.current) return;
+    bootedFromCacheRef.current = true;
+    loadData({ fromCache: true });
+  }, [user?.id, loadData]);
   return loadData;
 }
