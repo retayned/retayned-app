@@ -5,6 +5,9 @@ import { C } from "../theme";
 
 export default function SettingsPage({ app }) {
   const {
+    billing,
+    startCheckout,
+    openBillingPortal,
     clients,
     connectGoogleCalendar,
     disconnectGoogleCalendar,
@@ -23,6 +26,61 @@ export default function SettingsPage({ app }) {
   } = app;
   return (<div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
+
+            {/* ── Billing (Jul 2026). Read-only view of the webhook-written
+                billing_subscriptions row. Customer-facing name for the
+                'agency' plan key is TEAM. Active subscribers get one
+                button — Stripe's hosted portal owns card changes, plan
+                switches, and cancellation. Founder row (agency/active
+                with no Stripe customer) shows a quiet badge. ── */}
+            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 }}>Plan &amp; Billing</div>
+              {!billing ? (
+                <div style={{ fontSize: 13, color: C.textMuted }}>Loading…</div>
+              ) : (() => {
+                const isFounder = billing.plan === "agency" && billing.status === "active" && !billing.stripe_customer_id;
+                const isActive = billing.status === "active" && billing.stripe_subscription_id;
+                const trialDaysLeft = Math.max(0, Math.ceil((new Date(billing.trial_ends_at).getTime() - Date.now()) / 86400000));
+                const planLabel = billing.plan === "agency" ? "Team" : billing.plan === "solo" ? "Solo" : "Trial";
+                return (
+                  <>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{planLabel}</div>
+                      <div style={{ fontSize: 12.5, color: C.textMuted }}>
+                        {isFounder ? "Full access"
+                          : isActive ? (billing.cancel_at_period_end ? "Cancels at period end" : "Active")
+                          : billing.status === "past_due" ? "Payment issue — update your card"
+                          : billing.plan === "trial" ? (trialDaysLeft > 0 ? `${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left in your trial` : "Trial ended")
+                          : billing.status}
+                      </div>
+                    </div>
+                    {!isFounder && (
+                      <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                        {isActive || billing.status === "past_due" ? (
+                          <button onClick={openBillingPortal} className="r-btn" style={{ border: "1px solid " + C.border, background: "transparent", color: C.text, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                            Manage billing
+                          </button>
+                        ) : (
+                          <>
+                            <button onClick={() => startCheckout("solo")} className="r-btn" style={{ border: "none", background: C.btn, color: "#fff", borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                              Upgrade to Solo — $29/mo
+                            </button>
+                            <button onClick={() => startCheckout("agency")} className="r-btn" style={{ border: "1.5px solid " + C.btn, background: "transparent", color: C.btn, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                              Upgrade to Team — $99/mo
+                            </button>
+                            {billing.stripe_customer_id && (
+                              <button onClick={openBillingPortal} style={{ border: "none", background: "transparent", color: C.textMuted, fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+                                Billing history
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
 
             {/* Timezone — read-only. The app now auto-syncs to the
                 user's device timezone silently on every load and on
