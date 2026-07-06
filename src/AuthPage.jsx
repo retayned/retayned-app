@@ -123,7 +123,7 @@ export default function AuthPage() {
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Company</label>
-                <input value={company} onChange={e => setCompany(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="Your company or studio" style={inputStyle} />
+                <input value={company} onChange={e => setCompany(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="Your company or studio (optional)" style={inputStyle} />
               </div>
             </>
           )}
@@ -144,7 +144,7 @@ export default function AuthPage() {
                 type="checkbox"
                 checked={agreedToTerms}
                 onChange={e => setAgreedToTerms(e.target.checked)}
-                style={{ marginTop: 2, accentColor: C.btn, width: 15, height: 15, flexShrink: 0, cursor: "pointer" }}
+                style={{ marginTop: 2, accentColor: C.primary, width: 15, height: 15, flexShrink: 0, cursor: "pointer" }}
               />
               <span>
                 I've reviewed the <a href="https://retayned.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: C.primary, fontWeight: 600 }}>Terms of Service</a> and <a href="https://retayned.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: C.primary, fontWeight: 600 }}>Privacy Policy</a>, and I confirm I have the right to process my clients' information for client management purposes.
