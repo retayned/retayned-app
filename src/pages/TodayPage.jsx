@@ -12,7 +12,7 @@ import { lazy, Suspense } from "react";
 // desktop dial actually renders.
 const TimeDial = lazy(() => import("../components/TimeDial").then(m => ({ default: m.TimeDial })));
 import { supabase } from "../lib/supabase.js";
-import { parseCalendarEntry, parsaeComposer, detectPastTense } from "../parser";
+import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
