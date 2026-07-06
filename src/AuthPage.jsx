@@ -29,6 +29,9 @@ export default function AuthPage() {
   });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Terms acknowledgment — pre-checked by product decision (Jul 2026);
+  // unchecking disables Create Account.
+  const [agreedToTerms, setAgreedToTerms] = useState(true);
   const [fullName, setFullName] = useState('');
   const [company, setCompany] = useState('');
   const [error, setError] = useState('');
@@ -100,7 +103,7 @@ export default function AuthPage() {
             lineHeight: 1.1,
           }}>Retayned.</div>
           <p style={{ fontSize: 14, color: C.textSec, marginTop: 10 }}>
-            {mode === 'signin' ? 'Welcome back.' : 'Start retaining your clients.'}
+            {mode === 'signin' ? 'Welcome back.' : '14 days free. No card required.'}
           </p>
         </div>
 
@@ -136,17 +139,25 @@ export default function AuthPage() {
           {error && <p style={{ fontSize: 13, color: C.danger, marginBottom: 14 }}>{error}</p>}
 
           {mode === 'signup' && (
-            <p style={{ fontSize: 11.5, color: C.textMuted, lineHeight: 1.5, marginBottom: 14, textAlign: "center" }}>
-              By creating an account, you confirm you have the right to process your clients' information for client management purposes.
-            </p>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 12, color: C.textSec, lineHeight: 1.55, cursor: "pointer", textAlign: "left", marginBottom: 14 }}>
+              <input
+                type="checkbox"
+                checked={agreedToTerms}
+                onChange={e => setAgreedToTerms(e.target.checked)}
+                style={{ marginTop: 2, accentColor: C.btn, width: 15, height: 15, flexShrink: 0, cursor: "pointer" }}
+              />
+              <span>
+                I've reviewed the <a href="https://retayned.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: C.primary, fontWeight: 600 }}>Terms of Service</a> and <a href="https://retayned.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: C.primary, fontWeight: 600 }}>Privacy Policy</a>, and I confirm I have the right to process my clients' information for client management purposes.
+              </span>
+            </label>
           )}
 
           <button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || (mode === 'signup' && !agreedToTerms)}
             onMouseEnter={e => { if (!loading) e.currentTarget.style.background = C.btnHover; }}
             onMouseLeave={e => { e.currentTarget.style.background = C.btn; }}
-            style={{ width: "100%", padding: "13px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading ? "default" : "pointer", fontFamily: "inherit", opacity: loading ? 0.7 : 1, transition: "background 120ms ease, opacity 120ms ease" }}
+            style={{ width: "100%", padding: "13px", background: C.btn, color: "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: (loading || (mode === 'signup' && !agreedToTerms)) ? "default" : "pointer", fontFamily: "inherit", opacity: (loading || (mode === 'signup' && !agreedToTerms)) ? 0.7 : 1, transition: "background 120ms ease, opacity 120ms ease" }}
           >
             {loading ? '...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
           </button>
