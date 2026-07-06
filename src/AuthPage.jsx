@@ -9,12 +9,24 @@ const C = {
   bg: "#FAFBFA", card: "#FFFFFF", surfaceWarm: "#F4F6F4",
   text: "#1E261F", textSec: "#4A4F4A", textMuted: "#8A8F8A",
   border: "#D8DFD8", borderLight: "#E8ECE6",
-  btn: "#5B21B6", btnHover: "#4C1D95",
+  // Brand purple — MUST match the site and app theme (#7c5cf3 / hover
+  // #6a4ce8). This page is the site→app handoff; a different purple
+  // here reads as leaving the brand at the exact moment of commitment.
+  // (Was #5B21B6/#4C1D95 — a stale local palette from an earlier era.)
+  btn: "#7c5cf3", btnHover: "#6a4ce8",
   danger: "#C4432B",
 };
 
 export default function AuthPage() {
-  const [mode, setMode] = useState('signin');
+  // Mode honors the arriving intent (Jul 2026). The site's Start Free
+  // Trial forwards with ?src=site_signup (Sign In forwards with
+  // ?src=site_login); ?plan= from pricing CTAs also means signup. New
+  // users from an ad must land on Create Account, not "Welcome back."
+  const [mode, setMode] = useState(() => {
+    try {
+      return /[?&](src=site_signup|mode=signup|plan=)/.test(window.location.search) ? 'signup' : 'signin';
+    } catch { return 'signin'; }
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -104,11 +116,11 @@ export default function AuthPage() {
             <>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Full name</label>
-                <input value={fullName} onChange={e => setFullName(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="Adam Lawrence" style={inputStyle} />
+                <input value={fullName} onChange={e => setFullName(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="Your name" style={inputStyle} />
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Company</label>
-                <input value={company} onChange={e => setCompany(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="TopMercury" style={inputStyle} />
+                <input value={company} onChange={e => setCompany(e.target.value)} onFocus={onInputFocus} onBlur={onInputBlur} placeholder="Your company or studio" style={inputStyle} />
               </div>
             </>
           )}
