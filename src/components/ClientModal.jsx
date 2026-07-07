@@ -437,6 +437,68 @@ export default function ClientModal({ app }) {
                 </div>
               )}
 
+              {/* ── ACCOUNT MANAGER (Agency, Jul 2026 — the UI the June
+                  engine never got). Owners assign/unassign; seats see who
+                  owns the client read-only. A new assignment auto-fires
+                  the handoff-brief function (wired in App since June);
+                  the latest brief renders below the moment it exists. */}
+              {org && (() => {
+                const assigned = clientAssignments.filter(a => a.client_id === sc.id);
+                const isOwner = orgRole === "owner";
+                const nameFor = (uid) => {
+                  if (uid === user?.id) return "You";
+                  if (uid === org.owner_user_id) return "Owner";
+                  const m = orgMembers.find(mm => mm.user_id === uid);
+                  return m?.invited_email ? m.invited_email.split("@")[0] : "Teammate";
+                };
+                const candidates = [
+                  { user_id: org.owner_user_id, label: org.owner_user_id === user?.id ? "You (owner)" : "Owner" },
+                  ...orgMembers.filter(m => m.user_id && m.status === "active" && m.user_id !== org.owner_user_id)
+                    .map(m => ({ user_id: m.user_id, label: m.invited_email || "Teammate" })),
+                ].filter(c => !assigned.some(a => a.member_user_id === c.user_id));
+                const brief = handoffBriefs && handoffBriefs[sc.id];
+                return (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 8 }}>Account manager</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      {assigned.length === 0 && (
+                        <span style={{ fontSize: 12.5, color: C.textMuted, fontStyle: "italic" }}>Unassigned{isOwner ? "" : " — the owner assigns clients"}</span>
+                      )}
+                      {assigned.map(a => (
+                        <span key={a.member_user_id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: C.primaryDeep || C.primary, background: "#E6EFE9", borderRadius: 999, padding: "4px 10px" }}>
+                          {nameFor(a.member_user_id)}
+                          {isOwner && (
+                            <button
+                              onClick={() => unassignClient(sc.id, a.member_user_id)}
+                              aria-label="Unassign"
+                              style={{ border: "none", background: "none", color: C.primaryDeep || C.primary, fontSize: 12, fontWeight: 800, cursor: "pointer", padding: 0, lineHeight: 1 }}>
+                              ×
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {isOwner && candidates.length > 0 && (
+                        <select
+                          value=""
+                          onChange={e => { if (e.target.value) assignClient(sc.id, e.target.value); }}
+                          style={{ fontSize: 12, fontFamily: "inherit", color: C.textSec, border: "1px dashed " + C.border, borderRadius: 999, padding: "4px 8px", background: "transparent", cursor: "pointer" }}>
+                          <option value="">+ Assign…</option>
+                          {candidates.map(c => <option key={c.user_id} value={c.user_id}>{c.label}</option>)}
+                        </select>
+                      )}
+                    </div>
+                    {brief && brief.brief_text && (
+                      <details style={{ marginTop: 10, background: "#F6F8F5", border: "1px solid rgba(51,84,62,0.10)", borderRadius: 10, padding: "8px 12px" }}>
+                        <summary style={{ fontSize: 11.5, fontWeight: 700, color: C.primaryDeep || C.primary, cursor: "pointer" }}>
+                          Handoff brief · {new Date(brief.created_at).toLocaleDateString()}
+                        </summary>
+                        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55, marginTop: 8, whiteSpace: "pre-wrap" }}>{brief.brief_text}</div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Rai involvement — Managed (Rai helps: scores, suggests tasks,
                   flags, can pick) vs Advisory (Rai keeps score only — no tasks,
                   no flags, never picked). For clients the user handles on their
