@@ -445,6 +445,13 @@ export default function ClientModal({ app }) {
                 const mode = sc.rai_mode || "managed";
                 const setMode = (next) => {
                   if (next === mode) return;
+                  // Promotion at the cap: stop honestly here rather than
+                  // letting the DB backstop silently demote what the UI
+                  // just showed as promoted (advisory_cap_01, Jul 2026).
+                  if (next === "managed" && app.soloAtCap && app.soloAtCap()) {
+                    app.setCapNotice && app.setCapNotice(sc.name || "This client");
+                    return;
+                  }
                   setSelectedClient(prev => prev ? { ...prev, rai_mode: next } : prev);
                   setClients(prev => prev.map(c => c.id === sc.id ? { ...c, rai_mode: next } : c));
                   clientsDb.update(sc.id, { rai_mode: next }).then(({ error }) => {
