@@ -55,15 +55,15 @@ export default function ShellOverlays({ app }) {
   }, [page]);
   return (<>
       {(() => {
-        // ═══ SCROLLABLE STRIP DOCK (June 2026 redesign) ═══
-        // All destinations live on ONE horizontally-scrollable track. The
-        // capture "+" FAB is pinned dead-center on its own layer; the strip
-        // scrolls BEHIND it. Fade masks (center + both edges) dissolve items
-        // rather than hard-clipping. No More sheet, no three-dot menu. On a
-        // ~390px phone only ~2 items show each side of the centered FAB; the
-        // rest are reached by swiping the track. Active item auto-scrolls into
-        // a visible spot. Portaled to <body> so no ancestor transform breaks
-        // position:fixed (the trap that bit Brain Dump).
+        // ═══ SCROLLABLE STRIP DOCK (June 2026; Jul 2026: FAB moved out) ═══
+        // All destinations live on ONE horizontally-scrollable track sized
+        // 4.5 items per screen — the half-visible fifth IS the scroll
+        // affordance. The capture "+" used to be pinned dead-center, eating
+        // the middle of the bar (only ~2 items showed per side); it now
+        // floats as a 52px circle bottom-right in the thumb arc, hiding with
+        // the keyboard and on the Rai page (the composer owns that corner).
+        // Edge fades dissolve overflow. Portaled to <body> so no ancestor
+        // transform breaks position:fixed (the trap that bit Brain Dump).
         if (typeof document === "undefined" || !document.body || document.body.nodeType !== 1) return null;
 
         const dotFor = (id) => hasDot(id);
@@ -137,19 +137,24 @@ export default function ShellOverlays({ app }) {
                 </div>
               </div>
 
-              <div style={{ position: "absolute", top: 2, bottom: 2, left: "50%", transform: "translateX(-50%)", width: 88, background: "linear-gradient(90deg, rgba(250,250,247,0) 0%, rgba(250,250,247,0.9) 34%, rgba(250,250,247,0.9) 66%, rgba(250,250,247,0) 100%)", pointerEvents: "none", zIndex: 1 }} />
               <div style={{ position: "absolute", top: 1, bottom: 1, left: 1, width: 20, borderRadius: "22px 0 0 22px", background: "linear-gradient(90deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none", zIndex: 1 }} />
               <div style={{ position: "absolute", top: 1, bottom: 1, right: 1, width: 20, borderRadius: "0 22px 22px 0", background: "linear-gradient(270deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none", zIndex: 1 }} />
 
+              {/* Capture FAB — 52px circle in the right-thumb arc, floating
+                  above the dock. Hides with the keyboard (rides the wrap's
+                  keyboard offset would leave a sliver, so it hides itself)
+                  and on the Rai page, where the chat composer owns the
+                  bottom-right. */}
               <button
                 onClick={() => setQuickLogOpen(true)}
                 aria-label="Quick capture"
                 style={{
-                  position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-                  width: 54, height: 54, borderRadius: 18, border: "none",
+                  position: "absolute", right: 4, bottom: 76,
+                  width: 52, height: 52, borderRadius: "50%", border: "none",
                   background: C.primary, color: "#fff", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 6px 16px rgba(51,84,62,0.4), 0 0 0 5px #FAFAF7",
+                  display: (keyboardOpen || page === "rai") ? "none" : "flex",
+                  alignItems: "center", justifyContent: "center",
+                  boxShadow: "0 6px 18px rgba(51,84,62,0.35), 0 2px 6px rgba(28,50,36,0.18)",
                   zIndex: 2,
                 }}
               >
