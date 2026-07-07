@@ -2972,7 +2972,7 @@ export default function App({ user }) {
   const [checkoutPlan, setCheckoutPlan] = useState(null);
   const startCheckout = useCallback((plan) => { setCheckoutPlan(plan); }, []);
 
-  const openBillingPortal = useCallback(async () => {
+  const openBillingPortal = useCallback(async (opts = {}) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in");
@@ -2983,7 +2983,7 @@ export default function App({ user }) {
           "Authorization": `Bearer ${session.access_token}`,
           "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify(opts.flow ? { flow: opts.flow } : {}),
       });
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok || !body.url) throw new Error(body.error || `Portal failed (${resp.status})`);
