@@ -17,6 +17,9 @@ import { supabase } from '../lib/supabase';
 
 export function useOrg(user) {
   const [state, setState] = useState({ org: null, orgRole: null, bookOwnerId: user?.id || null, orgLoading: !!user });
+  // Bumping this re-runs the resolution effect — used by the Agency
+  // activation card after creating the org (Jul 2026).
+  const [refetchTick, setRefetchTick] = useState(0);
   useEffect(() => {
     let cancelled = false;
     if (!user?.id) { setState({ org: null, orgRole: null, bookOwnerId: null, orgLoading: false }); return; }
@@ -52,8 +55,8 @@ export function useOrg(user) {
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id]);
-  return state;
+  }, [user?.id, refetchTick]);
+  return { ...state, refetchOrg: () => setRefetchTick(t => t + 1) };
 }
 
 // Role gating in one place (scope §4.2). Usage: can('edit_billing', orgRole)
