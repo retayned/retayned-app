@@ -57,9 +57,20 @@ export default function SettingsPage({ app }) {
                     {!isFounder && (
                       <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
                         {isActive || billing.status === "past_due" ? (
-                          <button onClick={openBillingPortal} className="r-btn" style={{ border: "1px solid " + C.border, background: "transparent", color: C.text, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                            Manage billing
-                          </button>
+                          <>
+                            {/* Active Solo -> visible road to Team. Goes through
+                                Stripe's subscription-UPDATE flow (proration,
+                                one subscription always) — never a second
+                                checkout for an active subscriber. */}
+                            {billing.plan === "solo" && isActive && (
+                              <button onClick={() => openBillingPortal({ flow: "upgrade" })} className="r-btn" style={{ border: "none", background: C.btn, color: "#fff", borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                                Upgrade to Team — $99/mo
+                              </button>
+                            )}
+                            <button onClick={() => openBillingPortal()} className="r-btn" style={{ border: "1px solid " + C.border, background: "transparent", color: C.text, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                              Manage billing
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button onClick={() => startCheckout("solo")} className="r-btn" style={{ border: "none", background: C.btn, color: "#fff", borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
