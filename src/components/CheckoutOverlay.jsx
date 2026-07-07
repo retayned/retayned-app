@@ -61,6 +61,24 @@ const PLAN_COPY = {
 export default function CheckoutOverlay({ plan, onClose }) {
   const mountRef = useRef(null);
   const checkoutRef = useRef(null);
+  // Back button closes checkout instead of ejecting the user from the
+  // app (Jul 2026). The app has no router — every in-app move is state —
+  // so browser Back's previous entry is the marketing site or wherever
+  // they came from. Opening checkout pushes a history entry; popstate
+  // closes the overlay; closing via ✕ consumes the entry so history
+  // stays balanced.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const poppedRef = useRef(false);
+  useEffect(() => {
+    const onPop = () => { poppedRef.current = true; onCloseRef.current(); };
+    try { window.history.pushState({ rtCheckout: 1 }, ""); } catch (_) { /* history unavailable */ }
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (!poppedRef.current) { try { window.history.back(); } catch (_) { /* fine */ } }
+    };
+  }, []);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const copy = PLAN_COPY[plan] || PLAN_COPY.solo;
@@ -107,7 +125,7 @@ export default function CheckoutOverlay({ plan, onClose }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 500, background: C.bg || "#FAFAF7", overflowY: "auto" }}>
       {/* Header: wordmark + close. The user is still in Retayned. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", maxWidth: 1020, margin: "0 auto" }}>
-        <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary || "#33543E" }}>Retayned.</div>
+        <div style={{ fontSize: 20, fontWeight: 900, letterSpacing: "-0.04em", color: C.primary || "#33543E", fontFamily: "system-ui, -apple-system, sans-serif" }}>Retayned.</div>
         <button
           onClick={onClose}
           aria-label="Close checkout"
