@@ -11,6 +11,8 @@ export default function ClientsPage({ app }) {
     allCompletions,
     allTouchpoints,
     calcRetentionScore,
+    billing,
+    soloAtCap,
     clientSearch,
     clients,
     clientsDriftFilter,
@@ -411,6 +413,22 @@ export default function ClientsPage({ app }) {
                   <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: -0.4, color: C.text }}>Clients</h1>
                   <div style={{ fontSize: 13.5, color: C.textMuted, marginTop: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{activeClients.length}</b> active</span>
+                    {/* Cap gauge (Jul 2026): appears at 23 of 25 managed so the
+                        wall is never a surprise. Team (agency) books never see it. */}
+                    {(() => {
+                      if (billing?.plan === "agency") return null;
+                      const managed = clients.filter(cl => cl.is_active !== false && cl.rai_mode !== "advisory").length;
+                      if (managed < 23) return null;
+                      const full = managed >= 25;
+                      return (
+                        <>
+                          <span className="rt-sep" />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: full ? "#B45309" : C.textMuted, background: full ? "#FDF3E3" : "transparent", border: full ? "1px solid #F0DCB8" : "none", borderRadius: 999, padding: full ? "2px 9px" : 0 }}>
+                            {managed} of 25 managed
+                          </span>
+                        </>
+                      );
+                    })()}
                     <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>${(totalMRR/1000).toFixed(1)}k</b> /mo</span>
                     <span className="rt-sep" />
