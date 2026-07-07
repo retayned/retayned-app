@@ -251,7 +251,11 @@ function MobileCalendarStrip({ events = [], onCreate, onDelete, C, clients = [],
     // top→LEFT and bottom→RIGHT — earlier left, later right. It also
     // makes the disc a clockwise wheel: as time passes, dots ride left
     // through NOW, the direction every clock mechanism turns.
-    const DOME_R = 420, DOME_W = 390, APEX_Y = 58, DOME_H = 86;
+    // DOME_H 86 -> 100 (Jul 2026): the always-on crest readout sits at
+    // APEX_Y + 34 = 92 — six units past the old viewport bottom, so SVG
+    // clipping decapitated the time ("10:50" showing only its top half).
+    // The viewBox now ends at 100, leaving descender room below the text.
+    const DOME_R = 420, DOME_W = 390, APEX_Y = 58, DOME_H = 100;
     const DCX = DOME_W / 2, DCY = APEX_Y - DOME_R;
     const rimY = DCY + Math.sqrt(DOME_R * DOME_R - DCX * DCX); // ≈10
     const aL = Math.atan2(rimY - DCY, 0 - DCX);
