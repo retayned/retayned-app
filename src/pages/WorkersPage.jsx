@@ -23,6 +23,9 @@ export default function WorkersPage({ app }) {
     workersList,
     org,
     orgRole,
+    billing,
+    orgLoading,
+    refetchOrg,
     user,
     orgMembers,
     clientAssignments,
@@ -451,6 +454,14 @@ export default function WorkersPage({ app }) {
                 </div>
               </div>
 
+                {/* ── AGENCY ACTIVATION (Jul 2026). Paying for Agency
+                    removes the cap; the SEATS spine activates when an org
+                    exists. This card is the bridge: one field, one click,
+                    org created with the payer as owner, seats UI appears
+                    in place. Solo/trial accounts never see it. */}
+                {billing?.plan === "agency" && !org && !orgLoading && (
+                  <AgencyActivationCard user={user} refetchOrg={refetchOrg} />
+                )}
                 {isOwnerRole && (
                   <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "16px 18px", marginBottom: 20 }}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
@@ -823,4 +834,53 @@ export default function WorkersPage({ app }) {
             </div>
           );
         
+}
+
+
+// ── Agency activation (Jul 2026): creates the org row that lights up
+// the seats spine. Owner needs no org_members row — useOrg resolves
+// ownership from orgs.owner_user_id directly.
+function AgencyActivationCard({ user, refetchOrg }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const createOrg = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || busy) return;
+    setBusy(true); setErr(null);
+    const { error } = await supabase.from("orgs").insert({
+      owner_user_id: user.id,
+      name: trimmed,
+      plan: "agency",
+      seat_limit: 5,
+    });
+    if (error) { setErr(error.message || "Couldn't create your agency"); setBusy(false); return; }
+    refetchOrg && refetchOrg();
+  };
+  return (
+    <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, padding: "18px 20px", marginBottom: 14, boxShadow: "var(--rt-sh-card)" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#558B68" }}>Agency plan · active</div>
+      <div style={{ fontSize: 16, fontWeight: 750, color: C.text, marginTop: 6 }}>Name your agency to unlock seats.</div>
+      <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 4, lineHeight: 1.5 }}>
+        One step: your agency gets a name, you become its owner, and seat invites open up right here — 5 seats included.
+      </div>
+      <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && createOrg()}
+          placeholder="Your agency name"
+          style={{ flex: "1 1 220px", padding: "9px 12px", borderRadius: 9, border: "1px solid " + C.border, fontFamily: "inherit", fontSize: 13.5, background: "#fff", color: C.text }}
+        />
+        <button
+          onClick={createOrg}
+          disabled={busy || !name.trim()}
+          style={{ padding: "9px 18px", borderRadius: 9, border: "none", background: C.primary, color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: busy || !name.trim() ? "default" : "pointer", opacity: busy || !name.trim() ? 0.6 : 1 }}
+        >
+          {busy ? "Creating…" : "Create agency"}
+        </button>
+      </div>
+      {err && <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 8 }}>{err}</div>}
+    </div>
+  );
 }
