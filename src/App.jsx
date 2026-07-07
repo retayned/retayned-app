@@ -57,7 +57,18 @@ export default function App({ user }) {
   // (Enterprise tier REMOVED June 2026 — Retayned is single-tier. The
   // tier flag, enterprise nav variants, SweepsPage, ReferralIntelPage,
   // and demoData were all excised; core paths are the only paths.)
-  const [page, setPage] = useState("today");
+  // Page survives reloads (Jul 2026). The stale-chunk self-heal in
+  // main.jsx reloads the app when a deploy invalidates a lazy chunk
+  // mid-session — correct behavior, but it used to dump you back on
+  // Today because page state lived only in memory ("clicked Rolodex,
+  // it refreshed, put me back on Today"). The current page is mirrored
+  // to sessionStorage so any reload returns you to where you were.
+  const [page, setPage] = useState(() => {
+    try { return sessionStorage.getItem("rt:page") || "today"; } catch { return "today"; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem("rt:page", page); } catch { /* unavailable */ }
+  }, [page]);
 
   // Scroll to top on page change. .r-main is now a fixed-positioned scroll
   // container (not the document), so we reset its scrollTop plus the Rai
