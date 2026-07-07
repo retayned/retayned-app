@@ -41,7 +41,7 @@ export default function SettingsPage({ app }) {
                 const isFounder = billing.plan === "agency" && billing.status === "active" && !billing.stripe_customer_id;
                 const isActive = billing.status === "active" && billing.stripe_subscription_id;
                 const trialDaysLeft = Math.max(0, Math.ceil((new Date(billing.trial_ends_at).getTime() - Date.now()) / 86400000));
-                const planLabel = billing.plan === "agency" ? "Team" : billing.plan === "solo" ? "Solo" : "Trial";
+                const planLabel = billing.plan === "agency" ? "Agency" : billing.plan === "solo" ? "Solo" : "Trial";
                 return (
                   <>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -64,7 +64,7 @@ export default function SettingsPage({ app }) {
                                 checkout for an active subscriber. */}
                             {billing.plan === "solo" && isActive && (
                               <button onClick={() => openBillingPortal({ flow: "upgrade" })} className="r-btn" style={{ border: "none", background: C.btn, color: "#fff", borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                                Upgrade to Team — $99/mo
+                                Upgrade to Agency — $99/mo
                               </button>
                             )}
                             <button onClick={() => openBillingPortal()} className="r-btn" style={{ border: "1px solid " + C.border, background: "transparent", color: C.text, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -77,7 +77,7 @@ export default function SettingsPage({ app }) {
                               Upgrade to Solo — $29/mo
                             </button>
                             <button onClick={() => startCheckout("agency")} className="r-btn" style={{ border: "1.5px solid " + C.btn, background: "transparent", color: C.btn, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                              Upgrade to Team — $99/mo
+                              Upgrade to Agency — $99/mo
                             </button>
                             {billing.stripe_customer_id && (
                               <button onClick={openBillingPortal} style={{ border: "none", background: "transparent", color: C.textMuted, fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
