@@ -1410,7 +1410,7 @@ export default function App({ user }) {
   // org/role/bookOwnerId resolve once per session. Solo users: org is
   // null, bookOwnerId === user.id, and every path below is byte-
   // identical to pre-Agency behavior (verified by exact-delta SSR).
-  const { org, orgRole, bookOwnerId, orgLoading } = useOrg(user);
+  const { org, orgRole, bookOwnerId, orgLoading, refetchOrg } = useOrg(user);
   // Destinations an AM can't open are hidden from nav entirely (the pages
   // were already can()-gated at render — but a visible item that renders
   // nothing is a dead tap). Same map filters the mobile strip.
@@ -3000,6 +3000,8 @@ export default function App({ user }) {
 
   const pageCtx = {
     billing,
+    orgLoading,
+    refetchOrg,
     soloAtCap,
     setCapNotice,
     refreshBilling,
