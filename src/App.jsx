@@ -4085,7 +4085,7 @@ export default function App({ user }) {
                   else startCheckout("agency");
                 }}
                 style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: "#7C5CF3", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                Upgrade to Team — $99/mo
+                Upgrade to Agency — $99/mo
               </button>
               <button onClick={() => setCapNotice(null)} className="r-btn" data-tone="green" style={{ padding: "9px 16px", borderRadius: 10, border: "none", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Got it
@@ -4624,7 +4624,7 @@ export default function App({ user }) {
                 Solo — $29/mo · up to 25 clients
               </button>
               <button onClick={() => startCheckout("agency")} style={{ border: "1.5px solid #33543E", background: "transparent", color: "#33543E", borderRadius: 12, padding: "12px 16px", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                Team — $99/mo · 5 seats, unlimited clients
+                Agency — $99/mo · 5 seats, unlimited clients
               </button>
               {billing.stripe_customer_id && (
                 <button onClick={openBillingPortal} style={{ border: "none", background: "transparent", color: "#5A665C", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
