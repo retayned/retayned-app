@@ -700,7 +700,7 @@ export default function RetrosPage({ app }) {
                       setPage("rai");
                     };
                     return (
-                      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, background: C.card, border: "1px solid " + C.border, borderLeft: "3px solid #C4823B", borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 38px 12px 14px" }}>
+                      <div style={{ position: "relative", display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 12, background: C.card, border: "1px solid " + C.border, borderLeft: "3px solid #C4823B", borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 38px 12px 14px" }}>
                         <button
                           type="button"
                           onClick={dismissRolodexCheckin}
@@ -708,7 +708,7 @@ export default function RetrosPage({ app }) {
                           style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: 14, background: "transparent", border: "none", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
                         >✕</button>
                         <Avatar id={r0.id} name={r0Name} size={32} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ flex: 1, minWidth: 180 }}>
                           {dueReminders.length === 1 ? (
                             <>
                               <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {r0Name}</div>
@@ -734,7 +734,6 @@ export default function RetrosPage({ app }) {
                       </div>
                     );
                   })()}
-                  )}
 
                   {/* ACTIVE RETRO (top card) or empty state */}
                   {/* RETRO — compact prompt by default; the five-step card
