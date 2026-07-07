@@ -39,14 +39,14 @@ const PLAN_COPY = {
     price: "$29",
     blurb: "Your daily operating system for client retention.",
     features: [
-      "Up to 25 active clients",
+      "Up to 25 active clients (unlimited advisory clients)",
       "Rai's daily brief, every morning",
       "Tasks, touchpoints, docs & billing hours",
       "Unlimited history — your book, remembered",
     ],
   },
   agency: {
-    name: "Team",
+    name: "Agency",
     price: "$99",
     blurb: "Retayned for agencies.",
     features: [
