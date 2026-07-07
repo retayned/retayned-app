@@ -1399,8 +1399,12 @@ export default function App({ user }) {
   // profile and the Agency option. Org accounts have no cap. Counting
   // uses local state (the loaded active book), cheap and current.
   const [capNotice, setCapNotice] = useState(null);
+  // Billing-aware (Jul 2026): a Team (agency-plan) subscriber is
+  // uncapped even before creating an org; trial and Solo books cap at
+  // 25 managed. The database trigger (advisory_cap_01) backstops this
+  // same rule no matter what the client writes.
   const soloAtCap = () =>
-    !org && clients.filter(cl => cl.rai_mode !== "advisory").length >= 25;
+    !org && billing?.plan !== "agency" && clients.filter(cl => cl.rai_mode !== "advisory").length >= 25;
 
   // ─── AGENCY SPINE (Jun 12) ──────────────────────────────────────────
   // org/role/bookOwnerId resolve once per session. Solo users: org is
@@ -2996,6 +3000,8 @@ export default function App({ user }) {
 
   const pageCtx = {
     billing,
+    soloAtCap,
+    setCapNotice,
     refreshBilling,
     startCheckout,
     openBillingPortal,
@@ -4070,8 +4076,16 @@ export default function App({ user }) {
               You choose who Rai manages: open any client and switch <strong>Rai's role</strong> between Managed and Advisory. Want everyone managed? Agency has no cap.
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18, justifyContent: "flex-end" }}>
-              <button onClick={() => { try { window.open("https://retayned.com/pricing", "_blank"); } catch (_) {} }} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid " + C.border, background: "transparent", color: C.textSec, fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                See Agency
+              <button
+                onClick={() => {
+                  setCapNotice(null);
+                  // Active Solo -> Stripe's plan-switch flow (proration,
+                  // one subscription). Everyone else -> Team checkout.
+                  if (billing?.plan === "solo" && billing?.status === "active") openBillingPortal({ flow: "upgrade" });
+                  else startCheckout("agency");
+                }}
+                style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: "#7C5CF3", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                Upgrade to Team — $99/mo
               </button>
               <button onClick={() => setCapNotice(null)} className="r-btn" data-tone="green" style={{ padding: "9px 16px", borderRadius: 10, border: "none", color: "#fff", fontFamily: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Got it
