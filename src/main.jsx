@@ -17,7 +17,17 @@ window.__RT_BOOT = { html: performance.timing?.navigationStart || 0, js: Math.ro
 // yes/no that convicts or clears the 6s watchdog for the "logo for 6-7
 // seconds" symptom.
 try { window.__RT_BOOT.wd = (Date.now() - Number(sessionStorage.getItem("rt:wsReloadAt") || 0)) < 30000 ? "yes" : "no"; } catch (_) { window.__RT_BOOT.wd = "?"; }
-export const bootMark = (name) => { if (!(name in window.__RT_BOOT)) window.__RT_BOOT[name] = Math.round(performance.now()); };
+export const bootMark = (name) => {
+  if (!(name in window.__RT_BOOT)) window.__RT_BOOT[name] = Math.round(performance.now());
+  // Every boot records itself (Jul 2026): the pathological 6-7s boot is
+  // the once-a-day COLD one, which nobody is holding a profiler open
+  // for. Persist the marks as they land; the overlay shows the PREVIOUS
+  // boot alongside the current one, so the slow open gets captured
+  // automatically and read at leisure.
+  if (name === "data-done" || name === "auth") {
+    try { localStorage.setItem("rt:lastBoot", JSON.stringify({ ...window.__RT_BOOT, at: Date.now() })); } catch (_) { /* storage unavailable */ }
+  }
+};
 window.__RT_BOOT_MARK = bootMark;
 
 import React from 'react';
@@ -49,6 +59,14 @@ function BootTimeOverlay() {
   if (!/[?&]boottime/.test(window.location.search)) return null;
   const b = window.__RT_BOOT || {};
   const rows = ["js", "mount", "auth", "data-start", "data-done"].map(k => `${k}: ${b[k] != null ? b[k] + "ms" : "…"}`).concat(`wd-reload: ${b.wd ?? "?"}`);
+  try {
+    const prev = JSON.parse(localStorage.getItem("rt:lastBoot") || "null");
+    if (prev && prev.at && Date.now() - prev.at > 60000) {
+      rows.push(`— prev boot (${Math.round((Date.now() - prev.at) / 3600000 * 10) / 10}h ago) —`);
+      for (const k of ["js", "mount", "auth", "data-done"]) if (prev[k] != null) rows.push(`${k}: ${prev[k]}ms`);
+      if (prev.wd) rows.push(`wd-reload: ${prev.wd}`);
+    }
+  } catch (_) { /* unreadable */ }
   return (
     <div style={{ position: "fixed", left: 8, bottom: 8, zIndex: 9999, background: "rgba(20,30,22,0.88)", color: "#DFF3E4", font: "600 11px/1.6 ui-monospace, monospace", padding: "8px 10px", borderRadius: 8, pointerEvents: "none", whiteSpace: "pre" }}>
       {rows.join("\n")}
