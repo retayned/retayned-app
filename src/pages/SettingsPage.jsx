@@ -2,6 +2,7 @@
 // verbatim; only the surrounding component shell + imports are generated.
 import { Icon } from "../components/Icon";
 import { C } from "../theme";
+import AgencyTeam from "../components/AgencyTeam";
 
 export default function SettingsPage({ app }) {
   const {
@@ -214,7 +215,12 @@ export default function SettingsPage({ app }) {
                 ever want it back. */}
             {/* (dead {false &&} block removed — June 2026 refactor: settings attribution queue) */}
 
-            {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Team", desc: "Invite members, assign clients" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
+            {/* Team — the agency's people layer, moved here from Workers
+                (Jul 2026): activation, seats, coverage. Renders nothing
+                for solo/trial accounts. */}
+            <AgencyTeam app={app} />
+
+            {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
               <div key={i} className="row-hover" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
                 <Icon name="chevron" size={16} color={C.border} />
