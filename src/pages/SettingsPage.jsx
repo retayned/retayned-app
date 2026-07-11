@@ -75,6 +75,13 @@ export default function SettingsPage({ app }) {
                           </>
                         ) : (
                           <>
+                            {billing.status === "trialing" && Number.isFinite(trialDaysLeft) && trialDaysLeft < 3650 && (
+                              <div style={{ marginBottom: 10 }}>
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#33543E", background: "#E6EFE9", borderRadius: 999, padding: "3px 10px" }}>
+                                  Trial · {trialDaysLeft} {trialDaysLeft === 1 ? "day" : "days"} left
+                                </span>
+                              </div>
+                            )}
                             {(() => {
                               // Segmented trial (owner spec): the trial IS solo or
                               // agency. Continue = convert (checkout). The other
