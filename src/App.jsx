@@ -3312,6 +3312,17 @@ export default function App({ user }) {
     workersList,
   };
 
+  // Pre-data frames render the calm canvas, never content (the boot
+  // splash's real job, done right). Every empty-state surface — the
+  // onboarding card, First Week doors, zero-client pages — could flash
+  // in the ~500ms between React mounting and data landing (visible once
+  // the splash was removed). Cached boots pass this within a frame;
+  // only genuinely fresh devices see the quiet beat. Auth screens are
+  // upstream of this component, so gating on user here is safe.
+  if (user && !dataLoaded) {
+    return <div style={{ minHeight: "100vh", background: C.bg }} />;
+  }
+
   return (
     <div className="app-root" style={{ minHeight: "100vh", fontFamily: "'Manrope', system-ui, sans-serif", color: C.text, background: "transparent" }}>
       {/* Non-blocking font load via <link> (not @import, which is
