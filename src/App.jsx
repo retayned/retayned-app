@@ -4618,7 +4618,7 @@ export default function App({ user }) {
           row (agency/active) never matches either condition. */}
       {checkoutPlan && (
         <Suspense fallback={null}>
-          <CheckoutOverlay plan={checkoutPlan} onClose={() => setCheckoutPlan(null)} />
+          <CheckoutOverlay plan={checkoutPlan} trialing={billing?.status === "trialing"} onClose={() => setCheckoutPlan(null)} />
         </Suspense>
       )}
       {/* Trial countdown (Jul 2026): the expiry gate must never be a
