@@ -5,7 +5,7 @@
 // desktop's ⌘K quick log. Contract scanned with the v3 pipeline
 // (props, over-inclusion, template interpolations).
 import { clientHours as clientHoursDb, personalCalendar as personalCalendarDb, tasks as tasksDb, touchpoints as touchpointsDb } from "../lib/db";
-import { useRef, useEffect, Fragment } from "react";
+import { Fragment } from "react";
 import { mobileNavStrip } from "../nav";
 import { can } from "../hooks/useOrg";
 import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
@@ -44,15 +44,10 @@ export default function ShellOverlays({ app }) {
   const NAV_PERMS = { workers: "manage_workers", retros: "view_rolodex", referrals: "view_referrals" };
   const navStrip = mobileNavStrip.filter(item => !NAV_PERMS[item.id] || can(NAV_PERMS[item.id], orgRole));
 
-  // Scrollable dock: ref to the strip so the active destination can be
-  // auto-scrolled into a visible spot whenever the page changes.
-  const dockStripRef = useRef(null);
-  useEffect(() => {
-    const strip = dockStripRef.current;
-    if (!strip) return;
-    const el = strip.querySelector('[data-active="1"]');
-    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
-  }, [page]);
+  // The dock keeps the user's horizontal scroll position on page change —
+  // tapping a visible tab navigates without repositioning the strip. (The
+  // old auto-scroll that centered the active tab was removed: it yanked the
+  // selection to mid-screen instead of leaving it where the user tapped.)
   return (<>
       {(() => {
         // ═══ SCROLLABLE STRIP DOCK (June 2026; Jul 2026: FAB moved out) ═══
@@ -90,7 +85,6 @@ export default function ShellOverlays({ app }) {
                   layer and items scroll BEHIND it (fades dissolve them at the
                   center + edges). No avatar, no menu. */}
               <div
-                ref={dockStripRef}
                 className="rt-dock-strip"
                 style={{
                   position: "absolute", inset: 0,
@@ -113,7 +107,6 @@ export default function ShellOverlays({ app }) {
                         <button
                           onClick={() => goTo(item.id)}
                           className="rt-dock-item"
-                          data-active={active ? "1" : undefined}
                           style={{
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                             gap: 3, width: "calc((min(100vw, 504px) - 40px) / 4.5)", minWidth: 0, flexShrink: 0, height: 46, padding: 0,
