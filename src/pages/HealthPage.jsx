@@ -5,7 +5,7 @@ import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
 import { lookupObservationIllustration } from "../observations";
 import { C } from "../theme";
-import { retColor, retGradient } from "../utils";
+import { retColor, retGradient, computeCadence } from "../utils";
 
 import { ScoreFirstCard } from "../components/Onboarding";
 import { useEffect, useRef } from "react";
@@ -634,60 +634,16 @@ export default function HealthPage({ app }) {
           const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
 
           // ─── Drift Wall — real cadence ───────────────────────────────────
-          // Same cadence model as the Clients page: recent 7-day activity vs the
-          // average of prior ACTIVE 7-day windows (>=3 events), back to 90 days.
-          // Reads touchpoints + task completions + past calendar events.
-          //   momentum >= 1.25 → Ahead · < 0.75 → Slipping · else On rhythm.
-          //   <7 days since added, or no real prior week → Calibrating.
-          const healthCadence = (c) => {
-            // #2 — advisory clients have no managed cadence → N/A.
-            if (c && c.rai_mode === "advisory") return { state: "na", label: "N/A", color: C.textMuted, momentum: 1 };
-            const NOW = Date.now();
-            const DAY = 86400000;
-            const WINDOW = 90 * DAY;
-            const addedMs = c.created_at ? new Date(c.created_at).getTime() : null;
-            if (addedMs && (NOW - addedMs) < 7 * DAY) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-            const stamps = [];
-            for (const t of (allTouchpoints || [])) {
-              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
-                if (t.occurred_at) { const ms = new Date(t.occurred_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
-              }
-            }
-            for (const cp of (allCompletions || [])) {
-              if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
-                if (cp.completed_at) { const ms = new Date(cp.completed_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
-              }
-            }
-            for (const e of (personalEvents || [])) {
-              if (e.client_id && e.client_id === c.id && e.starts_at) {
-                const ms = new Date(e.starts_at).getTime();
-                if (ms <= NOW && NOW - ms <= WINDOW) stamps.push(ms);
-              }
-            }
-            const counts = {};
-            for (const ms of stamps) {
-              const w = Math.floor((NOW - ms) / (7 * DAY));
-              if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
-            }
-            const thisWeek = counts[0] || 0;
-            const priorActive = [];
-            for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 3) priorActive.push(counts[w]);
-            if (priorActive.length === 0) {
-              if (thisWeek === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
-              return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-            }
-            const baseline = priorActive.reduce((a, b) => a + b, 0) / priorActive.length;
-            const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
-            if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
-            if (momentum < 0.75)  return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
-            return { state: "steady", label: "On rhythm", color: C.warning, momentum };
-          };
+          // Single shared cadence model (utils.computeCadence). Identical to
+          // the Clients table — one source of truth so the wall and the table
+          // always agree. (Previously an inline copy that drifted out of sync.)
+          const healthCadence = (c) => computeCadence(c, { allTouchpoints, allCompletions, personalEvents });
 
           // Group every client by cadence state for the wall. Order = most-
           // urgent first (Slipping), then On rhythm, Ahead, Calibrating last.
           const cadenceBuckets = [
             { key: "cooling",     label: "Slipping",    sub: "getting less attention than their normal", color: C.retWarn },
-            { key: "steady",      label: "On rhythm",   sub: "holding their usual pace",                  color: C.warning },
+            { key: "steady",      label: "On rhythm",   sub: "holding their usual pace",                  color: C.primaryMuted },
             { key: "warming",     label: "Ahead",       sub: "getting more attention than their normal",  color: C.retGood },
             { key: "calibrating", label: "Calibrating", sub: "still building a baseline",                 color: C.textMuted },
           ].map(b => ({
@@ -1123,7 +1079,7 @@ export default function HealthPage({ app }) {
                             >
                               <span>
                                 <span style={{ color: C.textMuted, marginRight: 4 }}>{moreReviews.length}</span>
-                                more {moreReviews.length === 1 ? "review" : "reviews"}
+                                more upcoming
                               </span>
                               <svg
                                 width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -1162,7 +1118,7 @@ export default function HealthPage({ app }) {
                         </div>
                         <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Slipping</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.warning }} />On rhythm</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.primaryMuted }} />On rhythm</span>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Ahead</span>
                         </div>
                       </div>
