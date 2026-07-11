@@ -39,8 +39,6 @@ export default function HealthPage({ app }) {
     setPage,
     setReviewQueueMoreOpen,
     setSelectedClient,
-    setShowUpcoming,
-    showUpcoming,
     user,
   } = app;
 
@@ -628,8 +626,6 @@ export default function HealthPage({ app }) {
             return a.daysUntil - b.daysUntil;
           });
           const justCompleted = hcQueue.filter(h => h.runnable && hcDone[h.client]);
-          // Upcoming-locked: HC #2+ that aren't yet due. Visible but not tappable until due date.
-          const upcomingQueue = hcQueue.filter(h => !h.runnable).sort((a, b) => a.daysUntil - b.daysUntil);
 
           const totalClients = clients.length;
           const checkedThisMonth = hcQueue.filter(h => hcDone[h.client]).length;
@@ -1041,7 +1037,7 @@ export default function HealthPage({ app }) {
                         } catch (e) { console.warn("Review reschedule failed:", e); }
                       };
                       return (
-                        <div key={i} style={{ background: C.card, border: "1px solid " + (isOpen ? C.primary : C.border), borderRadius: 12, boxShadow: isOpen ? "inset 0 0 0 1px " + C.primary + ", var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "border-color 150ms" }}>
+                        <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 18, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
                               {(h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
@@ -1228,26 +1224,6 @@ export default function HealthPage({ app }) {
                           </div>
                         );
                       })}
-                    </div>
-                  )}
-
-                  {/* Upcoming */}
-                  {upcomingQueue.length > 0 && (
-                    <div style={{ marginTop: 24 }}>
-                      <div onClick={() => setShowUpcoming(!showUpcoming)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", border: "1px solid " + C.border, borderRadius: 8, cursor: "pointer", background: C.card, boxShadow: "var(--rt-sh-card)" }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: C.textSec }}>Upcoming · {upcomingQueue.length}</span>
-                        <span style={{ fontSize: 12, color: C.textMuted }}>{showUpcoming ? "Hide" : "Show"}</span>
-                      </div>
-                      {showUpcoming && (
-                        <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden", marginTop: 6 }}>
-                          {upcomingQueue.map((h, i) => (
-                            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px", borderBottom: i < upcomingQueue.length - 1 ? "1px solid " + C.borderLight : "none", opacity: 0.6 }}>
-                              <span style={{ fontSize: 13, color: C.textSec }}>{h.client}</span>
-                              <span style={{ fontSize: 12, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>In {h.daysUntil}d · {h.due}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
