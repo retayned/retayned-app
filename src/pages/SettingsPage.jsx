@@ -8,6 +8,7 @@ export default function SettingsPage({ app }) {
   const {
     billing,
     startCheckout,
+    switchTrialPlan,
     openBillingPortal,
     clients,
     connectGoogleCalendar,
@@ -74,12 +75,25 @@ export default function SettingsPage({ app }) {
                           </>
                         ) : (
                           <>
-                            <button onClick={() => startCheckout("solo")} className="r-btn" style={{ border: "none", background: C.btn, color: "#fff", borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                              Upgrade to Solo — $29/mo
-                            </button>
-                            <button onClick={() => startCheckout("agency")} className="r-btn" style={{ border: "1.5px solid " + C.btn, background: "transparent", color: C.btn, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                              Upgrade to Agency — $99/mo
-                            </button>
+                            {(() => {
+                              // Segmented trial (owner spec): the trial IS solo or
+                              // agency. Continue = convert (checkout). The other
+                              // button re-segments the trial — no prices here.
+                              const intent = billing.intended_plan === "agency" ? "agency" : "solo";
+                              const filled = { border: "none", background: C.btn, color: "#fff", borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" };
+                              const outline = { border: "1.5px solid " + C.btn, background: "transparent", color: C.btn, borderRadius: 999, padding: "8px 16px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" };
+                              return intent === "solo" ? (
+                                <>
+                                  <button onClick={() => startCheckout("solo")} className="r-btn" style={filled}>Continue with Solo</button>
+                                  <button onClick={() => switchTrialPlan("agency")} className="r-btn" style={outline}>Upgrade to Agency</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => switchTrialPlan("solo")} className="r-btn" style={outline}>Downgrade to Solo</button>
+                                  <button onClick={() => startCheckout("agency")} className="r-btn" style={filled}>Continue with Agency</button>
+                                </>
+                              );
+                            })()}
                             {billing.stripe_customer_id && (
                               <button onClick={openBillingPortal} style={{ border: "none", background: "transparent", color: C.textMuted, fontFamily: "inherit", fontSize: 12, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
                                 Billing history
