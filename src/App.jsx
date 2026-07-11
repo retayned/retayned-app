@@ -3709,9 +3709,9 @@ export default function App({ user }) {
                     );
                   })}
                 </div>
-                <div style={{ position: "relative", display: "inline-block", padding: "4px 10px 8px" }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{periodCount.toLocaleString()}</div>
-                  <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="none">
+                <div style={{ position: "relative", display: "inline-flex", justifyContent: "center", alignItems: "center", minWidth: 62, padding: "4px 12px 8px" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1, fontVariantNumeric: "tabular-nums", textAlign: "center" }}>{periodCount.toLocaleString()}</div>
+                  <svg style={{ position: "absolute", inset: 0, pointerEvents: "none" }} viewBox="0 0 70 38" preserveAspectRatio="xMidYMid meet">
                     <path d="M 52 4 C 38 2, 18 4, 8 12 C 2 19, 4 30, 18 33 C 32 36, 54 35, 62 28 C 68 21, 64 10, 50 6 C 44 4, 36 4, 30 5"
                           stroke={C.primaryDeep} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.9" />
                   </svg>
