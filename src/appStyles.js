@@ -1200,12 +1200,12 @@ export const APP_CSS = `
                       0 1px 2px rgba(20,30,22,0.04),
                       0 2px 10px rgba(124,92,243,0.10) !important;
         }
-        /* Rai composer focus — green ring (not purple), since the Rai send
-           button and chrome are green. Scoped under .r-rai-intro so the
-           Today task composer keeps its own focus treatment. */
+        /* Rai new-chat composer focus — no ring. The in-conversation input
+           (.rt-rai-inputbox) has no focus treatment, and the new-chat input
+           should match: clicking in must not draw a border. Hold the resting
+           shadow on focus so nothing changes. */
         .r-rai-intro .rt-composer:focus-within {
-          box-shadow: 0 0 0 1px rgba(51,84,62,0.28),
-                      0 1px 3px rgba(20,30,22,0.04),
+          box-shadow: 0 1px 3px rgba(20,30,22,0.04),
                       0 8px 24px rgba(20,30,22,0.06) !important;
         }
         /* (1) The TASK composer (inside the Today page) is an underline-
