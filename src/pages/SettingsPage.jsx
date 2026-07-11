@@ -247,14 +247,5 @@ export default function SettingsPage({ app }) {
                 <Icon name="chevron" size={16} color={C.border} />
               </div>
             ))}
-            {/* Build stamp — diagnostic ground truth. If this stamp is
-                missing or stale on a device, that device is running an
-                old build; no more guessing about what's live. Bump the
-                date suffix on every deploy batch. */}
-            <div style={{ textAlign: "center", fontSize: 10.5, color: C.textMuted, padding: "18px 0 6px", letterSpacing: 0.4 }}>
-              Retayned · build 2026-06-11.1
-            </div>
-
-            {/* (Enterprise Automated Sweep block REMOVED June 2026 — single-tier.) */}
           </div>);
 }
