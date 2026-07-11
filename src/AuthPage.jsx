@@ -27,6 +27,15 @@ export default function AuthPage() {
       return /[?&](src=site_signup|mode=signup|plan=)/.test(window.location.search) ? 'signup' : 'signin';
     } catch { return 'signin'; }
   });
+  // Trial segmentation: a pricing CTA carrying ?plan=agency|solo names
+  // the trial the person chose. Stash it; App applies it to the billing
+  // row after the account exists (RLS blocks a direct client write).
+  useEffect(() => {
+    try {
+      const m = window.location.search.match(/[?&]plan=(agency|solo)/);
+      if (m) localStorage.setItem('rt:intendedPlan', m[1]);
+    } catch { /* fine */ }
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   // Terms acknowledgment — pre-checked by product decision (Jul 2026);
