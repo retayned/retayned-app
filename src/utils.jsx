@@ -1,3 +1,4 @@
+import { C } from "./theme";
 
 // ============================================================
 // Avatar initials helpers
@@ -393,4 +394,87 @@ export function splitLongTask(text, cap = 75) {
   }
   const cut = t.slice(0, cap - 1).replace(/\s+\S*$/, "");
   return { text: (cut || t.slice(0, cap - 1)) + "…", notes: t };
+}
+
+// ============================================================
+// Cadence — the ONE cadence model, shared by the Clients table and the
+// Health Drift Wall. Both surfaces MUST call this; keeping two copies is
+// how they silently diverged before. Judges each client against their OWN
+// history: this week's activity vs a typical prior week.
+//
+//   • Advisory clients → N/A (no managed rhythm).
+//   • First 7 days after add → Calibrating (no baseline yet).
+//   • Baseline = MEDIAN of all prior active 7-day windows (>=1 event),
+//     back to 90 days. Median (not mean) resists the occasional spike
+//     without discarding the light weeks that make up most relationships.
+//   • momentum = thisWeek / baseline.
+//   • Ahead: momentum >= 1.25 AND a real step-up (>=2 events this week and
+//     >=2 above baseline) — guards against 1→2-event false spikes.
+//   • Slipping: momentum < 0.75 AND baseline >= 2 — one quiet week off a
+//     baseline of 1 isn't a signal.
+//   • On rhythm otherwise — the neutral default, painted sage (primaryMuted),
+//     NOT amber, so "fine" doesn't read as a warning.
+//
+// Returns { state, label, color, momentum } where state is one of
+// warming | steady | cooling | calibrating | na.
+export function computeCadence(c, { allTouchpoints, allCompletions, personalEvents } = {}) {
+  if (c && c.rai_mode === "advisory") return { state: "na", label: "N/A", color: C.textMuted, momentum: 1 };
+  const NOW = Date.now();
+  const DAY = 86400000;
+  const WINDOW = 90 * DAY;
+
+  const addedMs = c.created_at ? new Date(c.created_at).getTime() : null;
+  if (addedMs && (NOW - addedMs) < 7 * DAY) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+
+  const stamps = [];
+  for (const t of (allTouchpoints || [])) {
+    if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
+      if (t.occurred_at) { const ms = new Date(t.occurred_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
+    }
+  }
+  for (const cp of (allCompletions || [])) {
+    if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
+      if (cp.completed_at) { const ms = new Date(cp.completed_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
+    }
+  }
+  for (const e of (personalEvents || [])) {
+    if (e.client_id && e.client_id === c.id && e.starts_at) {
+      const ms = new Date(e.starts_at).getTime();
+      if (ms <= NOW && NOW - ms <= WINDOW) stamps.push(ms);
+    }
+  }
+
+  const counts = {};
+  for (const ms of stamps) {
+    const w = Math.floor((NOW - ms) / (7 * DAY));
+    if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
+  }
+  const thisWeek = counts[0] || 0;
+
+  const priorActive = [];
+  for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 1) priorActive.push(counts[w]);
+
+  if (priorActive.length === 0) {
+    if (thisWeek === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
+    return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
+  }
+
+  const sortedPrior = priorActive.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sortedPrior.length / 2);
+  const baseline = sortedPrior.length % 2
+    ? sortedPrior[mid]
+    : (sortedPrior[mid - 1] + sortedPrior[mid]) / 2;
+  const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
+
+  if (typeof window !== "undefined" && window.__cadenceDebug) {
+    console.log(`[cadence] ${c.name}: thisWeek=${thisWeek} priorActive=[${priorActive.join(",")}] baseline=${baseline.toFixed(1)} m=${momentum.toFixed(2)}`);
+  }
+
+  if (momentum >= 1.25 && thisWeek >= 2 && thisWeek >= baseline + 2) {
+    return { state: "warming", label: "Ahead", color: C.retGood, momentum };
+  }
+  if (momentum < 0.75 && baseline >= 2) {
+    return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
+  }
+  return { state: "steady", label: "On rhythm", color: C.primaryMuted, momentum };
 }
