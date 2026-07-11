@@ -191,14 +191,18 @@ export default function ClientsPage({ app }) {
               if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
             }
             const thisWeek = counts[0] || 0;
-            // Prior weeks count toward the baseline only if they had REAL volume
-            // (>=3 events). A week with 1-2 events is noise, not a representative
-            // "active week" — counting it drags the baseline down and makes this
-            // week look like a false spike. We want this week vs a typical REAL week.
+            // Baseline = the client's TYPICAL active week, judged against their
+            // own history. Every prior week with ANY activity counts (>=1 event),
+            // and we take the MEDIAN, not the mean: the median is a normal week,
+            // resistant to the occasional heavy spike without discarding the
+            // light weeks that make up most real client relationships. (The old
+            // rule kept only >=3-event weeks and averaged them, which set the bar
+            // to the busy-week floor — so an ordinary week cleared it and read
+            // Ahead. That's what made everything look green.)
             const priorActive = [];
-            for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 3) priorActive.push(counts[w]);
+            for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 1) priorActive.push(counts[w]);
 
-            // No real prior week to compare against.
+            // No prior active week to compare against.
             if (priorActive.length === 0) {
               // Nothing this week either → genuinely quiet → Slipping.
               if (thisWeek === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
@@ -206,16 +210,32 @@ export default function ClientsPage({ app }) {
               return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
             }
 
-            const baseline = priorActive.reduce((a, b) => a + b, 0) / priorActive.length;
+            const sortedPrior = priorActive.slice().sort((a, b) => a - b);
+            const mid = Math.floor(sortedPrior.length / 2);
+            const baseline = sortedPrior.length % 2
+              ? sortedPrior[mid]
+              : (sortedPrior[mid - 1] + sortedPrior[mid]) / 2;
             const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
 
             if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) {
               console.log(`[cadence] ${c.name}: thisWeek=${thisWeek} priorActiveWeeks=[${priorActive.join(",")}] baseline=${baseline.toFixed(1)} m=${momentum.toFixed(2)}`);
             }
 
-            if (momentum >= 1.25) return { state: "warming", label: "Ahead", color: C.retGood, momentum };
-            if (momentum < 0.75)  return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
-            return { state: "steady", label: "On rhythm", color: C.warning, momentum };
+            // Small-number guards (B): momentum on tiny counts lies. Going from
+            // 1 event to 2 is momentum 2.0 but means nothing. Require a real
+            // step-up (>=2 events this week AND at least 2 above baseline) to
+            // earn Ahead; otherwise the best a low-volume week gets is On rhythm.
+            // Symmetrically, don't brand a client Slipping when their baseline is
+            // a single event — one quiet week off a baseline of 1 isn't a signal.
+            if (momentum >= 1.25 && thisWeek >= 2 && thisWeek >= baseline + 2) {
+              return { state: "warming", label: "Ahead", color: C.retGood, momentum };
+            }
+            if (momentum < 0.75 && baseline >= 2) {
+              return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
+            }
+            // On rhythm is the neutral default — painted sage (primaryMuted),
+            // NOT amber. "Fine, nothing to do" should not look like a warning.
+            return { state: "steady", label: "On rhythm", color: C.primaryMuted, momentum };
           };
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
