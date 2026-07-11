@@ -73,7 +73,8 @@ export default function AgencyTeam({ app }) {
   };
   const activeSeatCount = (seatMembers || []).filter(m => m.status === "active").length;
 
-  const showAnything = (billing?.plan === "agency" && !org && !orgLoading) || (org && orgRole);
+  const isAgencyIntent = billing?.plan === "agency" || (billing?.status === "trialing" && billing?.intended_plan === "agency");
+  const showAnything = (isAgencyIntent && !org && !orgLoading) || (org && orgRole);
   if (!showAnything) return null;
   if (org && orgRole && orgRole !== "owner") {
     return (
