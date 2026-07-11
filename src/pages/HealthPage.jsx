@@ -8,6 +8,7 @@ import { C } from "../theme";
 import { retColor, retGradient } from "../utils";
 
 import { ScoreFirstCard } from "../components/Onboarding";
+import { useEffect, useRef } from "react";
 
 export default function HealthPage({ app }) {
   const {
@@ -42,6 +43,27 @@ export default function HealthPage({ app }) {
     showUpcoming,
     user,
   } = app;
+
+  // Default-open the top of the queue when the Health page loads. hcOpen is
+  // reset to null on navigation away (App.jsx), so this fires once per visit
+  // and won't fight the user: the ref guards against re-firing if they close
+  // the card. Computed from hcQueue directly (activeQueue is built later in
+  // the render body, out of scope here) using the same runnable+sort rule.
+  const _autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (_autoOpenedRef.current) return;
+    if (hcOpen) { _autoOpenedRef.current = true; return; }
+    const top = (hcQueue || [])
+      .filter(h => h.runnable && !hcDone[h.client])
+      .sort((a, b) => {
+        if (a.overdue !== b.overdue) return b.overdue - a.overdue;
+        if (a.due === "Today" && b.due !== "Today") return -1;
+        if (b.due === "Today" && a.due !== "Today") return 1;
+        return a.daysUntil - b.daysUntil;
+      })[0];
+    if (top) { setHcOpen(top.client); _autoOpenedRef.current = true; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hcQueue, hcDone]);
 
           // ─── Observer card renderer ───
           // Rendered TWICE in the JSX below: once above the mobile calendar
@@ -1019,7 +1041,7 @@ export default function HealthPage({ app }) {
                         } catch (e) { console.warn("Review reschedule failed:", e); }
                       };
                       return (
-                        <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: isOpen ? "0 0 0 1px " + C.primary + "55, var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "box-shadow 150ms" }}>
+                        <div key={i} style={{ background: C.card, border: "1px solid " + (isOpen ? C.primary : C.border), borderRadius: 12, boxShadow: isOpen ? "inset 0 0 0 1px " + C.primary + ", var(--rt-sh-card)" : "var(--rt-sh-card)", transition: "border-color 150ms" }}>
                           <div onClick={() => setHcOpen(isOpen ? null : h.client)} style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ width: 36, height: 36, borderRadius: 18, background: retGradient(h.ret), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, boxShadow: "var(--rt-sh-xs)" }}>
                               {(h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase()}
