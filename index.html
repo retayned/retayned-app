@@ -14,26 +14,16 @@
     <script type="module" src="/src/main.jsx"></script>
   </head>
   <body style="background:#FAFAF7;margin:0;">
-    <!-- Boot splash removed: warm boots run ~0.65s with the instant-paint
-         cache, cold boots came down after the reload/watchdog fixes — a
-         logo that flashes for half a second reads as jank, not branding.
-         The body background matches the app canvas so the brief gap is a
-         calm color, never a white flash. -->
+    <!-- #root stays bare on purpose: no splash — body bg covers the boot gap. -->
     <div id="root"></div>
     <script>
-      /* White-screen watchdog (Jun 2026; retuned Jul 2026). If the main
-         bundle 404s after a deploy (restored tab + stale cached HTML), no
-         JS ever runs and #root stays empty forever — reload once to fetch
-         fresh HTML.
-         THE JUL 2026 FIX: the old check was "splash still visible after
-         6s", which is REACT MOUNTED, not BUNDLE RAN. On a slow mobile
-         connection a healthy first load (260KB gz download + parse) can
-         legitimately take >6s — and the watchdog then force-reloaded a
-         perfectly good boot, restarting the download and doubling the
-         load time. Now main.jsx sets window.__RT_JS_EXECUTED__ the moment
-         the bundle executes; the watchdog fires only when that flag never
-         appears (the true 404 case), and it waits 12s. A slow boot is
-         slow; only a dead boot reloads. */
+      /* White-screen watchdog. If the main bundle 404s after a deploy
+         (restored tab + stale cached HTML), no JS ever runs and #root
+         stays empty forever — reload once to fetch fresh HTML.
+         main.jsx sets window.__RT_JS_EXECUTED__ the moment the bundle
+         executes; the watchdog fires only when that flag never appears
+         (the true 404 case), and it waits 12s. A slow boot is slow;
+         only a dead boot reloads. */
       (function () {
         try {
           var k = "rt:wsReloadAt";
