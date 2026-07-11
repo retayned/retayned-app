@@ -13,18 +13,13 @@
     <script>console.log("Retayned build 2026-06-12.1");window.__RETAYNED_BUILD__="2026-06-12.1";</script>
     <script type="module" src="/src/main.jsx"></script>
   </head>
-  <body>
-    <div id="root">
-      <!-- Boot splash: #root is empty until the JS bundle parses and React
-           mounts — on mobile that's several seconds. Show the logo + a subtle
-           spinner IMMEDIATELY (no delay) so the user sees branding, not blank.
-           React replaces all of #root on mount, removing this automatically. -->
-      <div id="boot-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#FAFAF7;">
-        <img src="/favicon.png" alt="Retayned" width="52" height="52" style="border-radius:13px;" />
-        <div style="width:26px;height:26px;border:2.5px solid rgba(51,84,62,0.18);border-top-color:#33543E;border-radius:50%;animation:bootspin 0.7s linear infinite;"></div>
-      </div>
-      <style>@keyframes bootspin{to{transform:rotate(360deg)}}</style>
-    </div>
+  <body style="background:#FAFAF7;margin:0;">
+    <!-- Boot splash removed: warm boots run ~0.65s with the instant-paint
+         cache, cold boots came down after the reload/watchdog fixes — a
+         logo that flashes for half a second reads as jank, not branding.
+         The body background matches the app canvas so the brief gap is a
+         calm color, never a white flash. -->
+    <div id="root"></div>
     <script>
       /* White-screen watchdog (Jun 2026; retuned Jul 2026). If the main
          bundle 404s after a deploy (restored tab + stale cached HTML), no
