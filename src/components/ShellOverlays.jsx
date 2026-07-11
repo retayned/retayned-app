@@ -139,29 +139,43 @@ export default function ShellOverlays({ app }) {
 
               <div style={{ position: "absolute", top: 1, bottom: 1, left: 1, width: 20, borderRadius: "22px 0 0 22px", background: "linear-gradient(90deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none", zIndex: 1 }} />
               <div style={{ position: "absolute", top: 1, bottom: 1, right: 1, width: 20, borderRadius: "0 22px 22px 0", background: "linear-gradient(270deg, rgba(255,255,255,0.72) 30%, rgba(255,255,255,0))", pointerEvents: "none", zIndex: 1 }} />
-
-              {/* Capture FAB — 52px circle in the right-thumb arc, floating
-                  above the dock. Hides with the keyboard (rides the wrap's
-                  keyboard offset would leave a sliver, so it hides itself)
-                  and on the Rai page, where the chat composer owns the
-                  bottom-right. */}
-              <button
-                onClick={() => setQuickLogOpen(true)}
-                aria-label="Quick capture"
-                style={{
-                  position: "absolute", right: 4, bottom: 76,
-                  width: 52, height: 52, borderRadius: "50%", border: "none",
-                  background: C.primary, color: "#fff", cursor: "pointer",
-                  display: (keyboardOpen || page === "rai") ? "none" : "flex",
-                  alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 6px 18px rgba(51,84,62,0.35), 0 2px 6px rgba(28,50,36,0.18)",
-                  zIndex: 2,
-                }}
-              >
-                <Icon name="plus" size={24} color="currentColor" />
-              </button>
             </div>
           </div>,
+          document.body
+        );
+      })()}
+
+      {(() => {
+        // ═══ CAPTURE FAB — 52px circle in the right-thumb arc ═══
+        // Its OWN viewport-fixed portal, a sibling of the dock wrap — NOT a
+        // child. The dock strip scales down on scroll (transform on the wrap);
+        // pinning the FAB outside that subtree keeps it a constant 52px while
+        // the bar packs smaller. Anchored to the screen edge with the same
+        // effective offset it had inside the wrap (wrap bottom = safe-area +
+        // 10px, FAB sat 76px above that ≈ safe-area + 86px), so it lands in the
+        // identical spot. Hides with the keyboard and on the Rai page, where
+        // the chat composer owns the bottom-right.
+        if (typeof document === "undefined" || !document.body || document.body.nodeType !== 1) return null;
+        return createPortal(
+          <button
+            onClick={() => setQuickLogOpen(true)}
+            aria-label="Quick capture"
+            className="rt-dock-fab"
+            style={{
+              position: "fixed",
+              right: "calc(env(safe-area-inset-right, 0px) + 16px)",
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 86px)",
+              width: 52, height: 52, borderRadius: "50%", border: "none",
+              background: C.primary, color: "#fff", cursor: "pointer",
+              display: (keyboardOpen || page === "rai") ? "none" : "flex",
+              alignItems: "center", justifyContent: "center",
+              boxShadow: "0 6px 18px rgba(51,84,62,0.35), 0 2px 6px rgba(28,50,36,0.18)",
+              zIndex: 501,
+              transition: "bottom 240ms var(--rt-ease-out), opacity 200ms var(--rt-ease-out)",
+            }}
+          >
+            <Icon name="plus" size={24} color="currentColor" />
+          </button>,
           document.body
         );
       })()}
