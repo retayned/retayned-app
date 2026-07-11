@@ -1432,6 +1432,12 @@ export const APP_CSS = `
            <body>, so this rule must target the wrap class directly, not an
            ancestor.) */
         .rt-dock-wrap { display: flex; }        @media (min-width: 768px) { .rt-dock-wrap { display: none !important; } }
+        /* Capture FAB — lives in its OWN viewport-fixed portal (a sibling of
+           the dock wrap) so the dock's scroll-shrink transform never scales it.
+           MOBILE-ONLY, same as the dock: desktop has its own .rt-quicklog-fab,
+           so without this gate both would show. The button's own inline style
+           uses flex when visible; hide it outright at >=768px. */
+        @media (min-width: 768px) { .rt-dock-fab { display: none !important; } }
         /* Mobile Rai-history New Chat button — mirrors desktop .rt-rai-pop-btn. */
         .rt-rai-new-mobile:active { background: rgba(80,130,95,0.26) !important; }
         @media (hover: hover) { .rt-rai-new-mobile:hover { background: rgba(80,130,95,0.18) !important; } }
