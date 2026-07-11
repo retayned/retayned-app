@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/Skeletons";
 import { C } from "../theme";
 import { ScoreReveal } from "../components/Onboarding";
-import { retColor, retGradient } from "../utils";
+import { retColor, retGradient, computeCadence } from "../utils";
 
 export default function ClientsPage({ app }) {
   const {
@@ -140,103 +140,10 @@ export default function ClientsPage({ app }) {
             return `${Math.floor(days / 365)}y ago`;
           };
 
-          const clientCadence = (c) => {
-            // #2 — advisory clients aren't on a managed contact rhythm, so a
-            // cadence verdict doesn't apply. Return an N/A verdict in the same
-            // shape consumers expect (state/label/color/momentum).
-            if (c && c.rai_mode === "advisory") return { state: "na", label: "N/A", color: C.textMuted, momentum: 1 };
-            // CADENCE — is this client getting more or less attention than their
-            // own normal active week?
-            //  • Calibration: first 7 days after the client was ADDED (created_at).
-            //  • Day 8+: compare the rolling last 7 days to the AVERAGE of prior
-            //    7-day windows that actually had activity (empty weeks ignored, so
-            //    a sparse early history doesn't make everything look like a spike),
-            //    going back up to 90 days.
-            //  • No prior ACTIVE week yet → still Calibrating (no baseline to judge).
-            //  • momentum = thisWeek / avg(prior active weeks):
-            //      ≥ 1.25 → Ahead,  < 0.75 → Slipping,  else On rhythm.
-            // Counts every activity: recurring + non-recurring tasks, touchpoints,
-            // past calendar events.
-            const NOW = Date.now();
-            const DAY = 86400000;
-            const WINDOW = 90 * DAY;
-
-            // 7-day calibration gate, measured from when the client was added.
-            const addedMs = c.created_at ? new Date(c.created_at).getTime() : null;
-            if (addedMs && (NOW - addedMs) < 7 * DAY) return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-
-            const stamps = [];
-            for (const t of (allTouchpoints || [])) {
-              if ((t.client_id && t.client_id === c.id) || t.client_name === c.name) {
-                if (t.occurred_at) { const ms = new Date(t.occurred_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
-              }
-            }
-            for (const cp of (allCompletions || [])) {
-              if ((cp.client_id && cp.client_id === c.id) || cp.client_name === c.name) {
-                if (cp.completed_at) { const ms = new Date(cp.completed_at).getTime(); if (NOW - ms <= WINDOW) stamps.push(ms); }
-              }
-            }
-            for (const e of (personalEvents || [])) {
-              if (e.client_id && e.client_id === c.id && e.starts_at) {
-                const ms = new Date(e.starts_at).getTime();
-                if (ms <= NOW && NOW - ms <= WINDOW) stamps.push(ms);
-              }
-            }
-
-            // Bucket activity into 7-day windows by age. Window 0 = last 7 days
-            // (the "this week" we're judging). Windows 1..12 = prior weeks back to 90d.
-            const counts = {};
-            for (const ms of stamps) {
-              const w = Math.floor((NOW - ms) / (7 * DAY));
-              if (w >= 0 && w < 13) counts[w] = (counts[w] || 0) + 1;
-            }
-            const thisWeek = counts[0] || 0;
-            // Baseline = the client's TYPICAL active week, judged against their
-            // own history. Every prior week with ANY activity counts (>=1 event),
-            // and we take the MEDIAN, not the mean: the median is a normal week,
-            // resistant to the occasional heavy spike without discarding the
-            // light weeks that make up most real client relationships. (The old
-            // rule kept only >=3-event weeks and averaged them, which set the bar
-            // to the busy-week floor — so an ordinary week cleared it and read
-            // Ahead. That's what made everything look green.)
-            const priorActive = [];
-            for (let w = 1; w < 13; w++) if ((counts[w] || 0) >= 1) priorActive.push(counts[w]);
-
-            // No prior active week to compare against.
-            if (priorActive.length === 0) {
-              // Nothing this week either → genuinely quiet → Slipping.
-              if (thisWeek === 0) return { state: "cooling", label: "Slipping", color: C.retWarn, momentum: 0 };
-              // Active now but no baseline yet → still building history.
-              return { state: "calibrating", label: "Calibrating", color: C.textMuted, momentum: 1 };
-            }
-
-            const sortedPrior = priorActive.slice().sort((a, b) => a - b);
-            const mid = Math.floor(sortedPrior.length / 2);
-            const baseline = sortedPrior.length % 2
-              ? sortedPrior[mid]
-              : (sortedPrior[mid - 1] + sortedPrior[mid]) / 2;
-            const momentum = baseline > 0 ? thisWeek / baseline : (thisWeek > 0 ? 1 : 0);
-
-            if (typeof window !== "undefined" && (window.__cadenceDebug || (typeof debugScores !== "undefined" && debugScores))) {
-              console.log(`[cadence] ${c.name}: thisWeek=${thisWeek} priorActiveWeeks=[${priorActive.join(",")}] baseline=${baseline.toFixed(1)} m=${momentum.toFixed(2)}`);
-            }
-
-            // Small-number guards (B): momentum on tiny counts lies. Going from
-            // 1 event to 2 is momentum 2.0 but means nothing. Require a real
-            // step-up (>=2 events this week AND at least 2 above baseline) to
-            // earn Ahead; otherwise the best a low-volume week gets is On rhythm.
-            // Symmetrically, don't brand a client Slipping when their baseline is
-            // a single event — one quiet week off a baseline of 1 isn't a signal.
-            if (momentum >= 1.25 && thisWeek >= 2 && thisWeek >= baseline + 2) {
-              return { state: "warming", label: "Ahead", color: C.retGood, momentum };
-            }
-            if (momentum < 0.75 && baseline >= 2) {
-              return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
-            }
-            // On rhythm is the neutral default — painted sage (primaryMuted),
-            // NOT amber. "Fine, nothing to do" should not look like a warning.
-            return { state: "steady", label: "On rhythm", color: C.primaryMuted, momentum };
-          };
+          // Single shared cadence model (utils.computeCadence). Both this
+          // table and the Health Drift Wall call it, so their verdicts can
+          // never diverge again.
+          const clientCadence = (c) => computeCadence(c, { allTouchpoints, allCompletions, personalEvents });
 
           // ─── v2 Primitives (local to Clients page) ─────────────────────────
           // Pearl score pill — the polished tint→white→tint gradient chip used
