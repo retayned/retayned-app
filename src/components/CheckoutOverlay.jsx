@@ -58,7 +58,7 @@ const PLAN_COPY = {
   },
 };
 
-export default function CheckoutOverlay({ plan, onClose }) {
+export default function CheckoutOverlay({ plan, onClose, trialing = false }) {
   const mountRef = useRef(null);
   const checkoutRef = useRef(null);
   // Back button closes checkout instead of ejecting the user from the
@@ -152,7 +152,7 @@ export default function CheckoutOverlay({ plan, onClose }) {
               </div>
             ))}
             <div style={{ marginTop: 14, fontSize: 12, color: "#7A857C", lineHeight: 1.5 }}>
-              Cancel anytime from Settings. Your clients and history stay yours either way.
+              {trialing ? "You won't be billed until your trial ends — your card is saved today, your first charge lands when the trial does. " : ""}Cancel anytime from Settings. Your clients and history stay yours either way.
             </div>
           </div>
         </div>
