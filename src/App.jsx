@@ -1404,7 +1404,10 @@ export default function App({ user }) {
   // 25 managed. The database trigger (advisory_cap_01) backstops this
   // same rule no matter what the client writes.
   const soloAtCap = () =>
-    !org && billing?.plan !== "agency" && clients.filter(cl => cl.rai_mode !== "advisory").length >= 25;
+    !org
+    && billing?.plan !== "agency"
+    && !(billing?.status === "trialing" && billing?.intended_plan === "agency")
+    && clients.filter(cl => cl.rai_mode !== "advisory").length >= 25;
 
   // ─── AGENCY SPINE (Jun 12) ──────────────────────────────────────────
   // org/role/bookOwnerId resolve once per session. Solo users: org is
@@ -2998,8 +3001,33 @@ export default function App({ user }) {
     }
   }, []);
 
+  // Apply a stashed signup plan-intent (from ?plan= CTAs) once the
+  // billing row is loaded. RPC is trial-only and own-row-only.
+  useEffect(() => {
+    if (!billing || billing.status !== "trialing") return;
+    let stash = null;
+    try { stash = localStorage.getItem("rt:intendedPlan"); } catch { /* fine */ }
+    if (!stash || stash === billing.intended_plan) {
+      try { localStorage.removeItem("rt:intendedPlan"); } catch { /* fine */ }
+      return;
+    }
+    supabase.rpc("set_intended_plan", { p: stash }).then(({ error }) => {
+      if (!error) {
+        try { localStorage.removeItem("rt:intendedPlan"); } catch { /* fine */ }
+        refreshBilling && refreshBilling();
+      }
+    });
+  }, [billing?.status, billing?.intended_plan]);
+
+  const switchTrialPlan = useCallback(async (p) => {
+    const { error } = await supabase.rpc("set_intended_plan", { p });
+    if (!error && refreshBilling) refreshBilling();
+    return !error;
+  }, [refreshBilling]);
+
   const pageCtx = {
     billing,
+    switchTrialPlan,
     orgLoading,
     refetchOrg,
     soloAtCap,
