@@ -6,7 +6,7 @@ import { EmptyState } from "../components/Skeletons";
 import { createPortal } from "react-dom";
 import { C } from "../theme";
 import { useEffect, useState } from "react";
-import { retGradient } from "../utils";
+import { retGradient, localYmd } from "../utils";
 
 // Fraunces observer idiom — same voice surface Rai uses elsewhere.
 const FR = { fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0" };
@@ -301,6 +301,23 @@ export default function RetrosPage({ app }) {
             }
           };
           const logTouch = (e) => rolodexPatch(e.id, { last_touch: new Date().toISOString() });
+          // Mark Check-In (banner action): records the touch AND satisfies the
+          // due reminder — recurring reminders advance to the next occurrence
+          // (snapped to Monday), one-offs clear. Mirrors the modal's
+          // "Mark checked in" so the banner and modal behave identically.
+          const markCheckIn = (e) => {
+            const recurring = e.reminderRecurrence && e.reminderRecurrence !== "none";
+            let nextDate = null, nextRecur = "none";
+            if (recurring) {
+              const days = { "2w": 14, "1m": 30, "3m": 90, "6m": 180 }[e.reminderRecurrence] || 30;
+              const t = new Date(Date.now() + days * 86400000);
+              const dow = t.getDay();
+              const diff = dow === 0 ? 1 : dow === 1 ? 0 : 8 - dow;
+              nextDate = localYmd(new Date(t.getTime() + diff * 86400000));
+              nextRecur = e.reminderRecurrence;
+            }
+            rolodexPatch(e.id, { last_touch: new Date().toISOString(), reminder_date: nextDate, reminder_recurrence: nextRecur });
+          };
           // Workbench slices
           const preparedRbs = reachbacks.filter(b => b.status === "prepared").slice(0, 5);
           const sentRbs = reachbacks.filter(b => b.status === "sent" || b.status === "bumped" || b.status === "replied").slice(0, 4);
@@ -521,7 +538,7 @@ export default function RetrosPage({ app }) {
                   {/* WARMTH — who needs you, not how you filed them. Click a
                       band to filter the grid; click again to clear. */}
                   <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 14px" }}>
-                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Warmth</div>
+                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Pulse</div>
                     {["warm", "cooling", "cold"].map(band => {
                       const m = WARMTH_META[band];
                       const selected = filedFilter === band;
@@ -540,9 +557,6 @@ export default function RetrosPage({ app }) {
                         </button>
                       );
                     })}
-                    <div style={{ borderTop: "1px solid " + C.borderLight, marginTop: 8, paddingTop: 9, fontSize: 10.5, color: C.textMuted }}>
-                      {referReady} would refer · {queued.length} awaiting retro
-                    </div>
                   </div>
 
                   {/* CHECK-IN QUEUE — due/upcoming reminders, soonest first.
@@ -752,6 +766,13 @@ export default function RetrosPage({ app }) {
                           onClick={ev => { ev.stopPropagation(); draftWithRai(); }}
                           style={{ background: "#fff", color: C.text, border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, boxShadow: "0 1px 2px rgba(20,30,22,0.08)" }}
                         >{single ? "Draft Note" : "Review"}</button>
+                        {single && (
+                          <button
+                            onClick={ev => { ev.stopPropagation(); markCheckIn(r0); }}
+                            title="Records the touch and clears this check-in"
+                            style={{ background: "transparent", color: C.text, border: "1px solid #E7C0B6", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                          >Mark Check-In</button>
+                        )}
                         <button
                           type="button"
                           onClick={ev => { ev.stopPropagation(); dismissRolodexCheckin(); }}
