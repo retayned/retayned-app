@@ -941,14 +941,6 @@ export default function RetrosPage({ app }) {
                         {filteredFiled.map(e => {
                           const tags = deriveTags(e);
                           const heat = calcHeat(e);
-                          // Full-entry priority tint (replaces the old left-bar rail):
-                          // a barely-there wash + matching border, so the whole
-                          // tile carries a subtle pop of its priority color.
-                          const prioTint = e.priority === "high"
-                            ? { bg: "#F1F7F3", border: "#DCEAE1" }
-                            : e.priority === "medium"
-                            ? { bg: "#FCF6EC", border: "#EFE2CC" }
-                            : { bg: C.bg, border: C.border };
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
                           const band = warmthBand(e);
@@ -964,7 +956,7 @@ export default function RetrosPage({ app }) {
                             else if (diffDays <= 30) reminderChip = { label: `Next: in ${diffDays}d`, color: C.primary, bg: C.primarySoft };
                           }
                           return (
-                            <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ background: prioTint.bg, border: "1px solid " + prioTint.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "11px 14px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 9 }}>
+                            <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "11px 14px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 9 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                                 <Avatar id={e.id} name={name} size={30} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
