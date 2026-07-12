@@ -40,12 +40,17 @@ export default function CoachPage({ app }) {
       </div>
     );
   }
-  // A task link was clicked and we're in the gap before the auto-send fires.
-  // Show a quiet loading state, NOT the intro/home composer — otherwise the
-  // chat home flashes for a beat before the task chat appears.
+  // A launch was triggered (task link, rolodex Draft Note, etc.) and we're in
+  // the gap before the auto-sent message populates aiMessages. Show a quiet
+  // "pulling up" loader — NOT the intro/home composer, which would flash the
+  // chat homepage for a beat before the real chat appears.
   if (raiLaunching && aiMessages.length === 0) {
     return (
-      <div className="r-rai-page r-rai-chat" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }} />
+      <div className="r-rai-page r-rai-chat" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: 0, gap: 12 }}>
+        <div style={{ width: 26, height: 26, borderRadius: "50%", border: "2.5px solid " + C.border, borderTopColor: C.primary, animation: "rt-spin 0.7s linear infinite" }} />
+        <div style={{ fontSize: 13, color: C.textMuted }}>Getting Rai up to speed…</div>
+        <style>{"@keyframes rt-spin { to { transform: rotate(360deg); } }"}</style>
+      </div>
     );
   }
   return (<div className={"r-rai-page " + (aiMessages.length === 0 ? "r-rai-intro" : "r-rai-chat")} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
