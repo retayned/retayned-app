@@ -78,6 +78,7 @@ export default function RetrosPage({ app }) {
     setRolodexStepOwner,
     setRolodexStepText,
     setSelectedRolodex,
+    selectedRolodex,
     setAiInput,
     setAiConvoId,
     setAiMessages,
@@ -543,11 +544,12 @@ export default function RetrosPage({ app }) {
                         const name = r.contact_name || r.contact || r.client_name || r.client || "Untitled";
                         const sub = diff < 0 ? `${Math.abs(diff)}d overdue` : diff === 0 ? "due today" : `in ${diff}d`;
                         const subColor = diff < 0 ? C.retCrit : diff === 0 ? C.retWarn : C.textMuted;
+                        const isActive = selectedRolodex?.id === r.id;
                         return (
-                          <button key={r.id} onClick={() => setSelectedRolodex(r)} className={"rt-soft-row" + (i === withReminder.length - 1 ? "" : " rt-divider-inset")} style={{
+                          <button key={r.id} onClick={() => setSelectedRolodex(r)} className={"rt-soft-row" + (isActive ? " is-active" : "") + (i === withReminder.length - 1 ? "" : " rt-divider-inset")} style={{
                             display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, width: "100%",
-                            padding: "10px 14px", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                            background: "transparent",
+                            padding: "10px 14px", border: "none", borderLeft: isActive ? "3px solid " + C.primary : "3px solid transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                            ...(isActive ? { background: C.primarySoft } : {}),
                           }}>
                             <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{name}</span>
                             <span style={{ fontSize: 10.5, fontWeight: 600, color: subColor }}>{sub}</span>
