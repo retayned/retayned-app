@@ -167,17 +167,6 @@ export default function RetrosPage({ app }) {
             const t = d ? d.getTime() : NaN;
             return Number.isFinite(t) ? t : null;
           };
-          const warmthBand = (r) => {
-            const ms = lastTouchMs(r);
-            if (ms == null) return "cold";
-            const days = (Date.now() - ms) / 86400000;
-            return days <= 30 ? "warm" : days <= 90 ? "cooling" : "cold";
-          };
-          const WARMTH_META = {
-            warm:    { label: "Warm",    tone: C.retGood,   bg: "#E8F3EC" },
-            cooling: { label: "Cooling", tone: C.retWarn,   bg: "#FAF0DF" },
-            cold:    { label: "Cold",    tone: C.textMuted, bg: C.borderLight },
-          };
           const agoLabel = (r) => {
             const ms = lastTouchMs(r);
             if (ms == null) return "no touch yet";
@@ -187,6 +176,44 @@ export default function RetrosPage({ app }) {
             if (days < 30) return `${Math.floor(days / 7)}w ago`;
             if (days < 365) return `${Math.floor(days / 30)}mo ago`;
             return `${Math.floor(days / 365)}y ago`;
+          };
+
+          // ─── Rhythm model (client-side, no new columns) ──────────────
+          // Rhythm days derived from the existing priority field so the model
+          // renders today without a migration: high=30, medium=60, low/none=90,
+          // untouched-lead default 120. When rhythm_days lands as a real column
+          // (spec §2), swap this line for e.rhythm_days ?? <derived>.
+          const rhythmDays = (r) => r.rhythm_days ?? (r.priority === "high" ? 30 : r.priority === "medium" ? 60 : r.priority === "low" ? 90 : 120);
+          const daysSinceTouch = (r) => {
+            const ms = lastTouchMs(r);
+            if (ms == null) return null;
+            return Math.max(0, Math.floor((Date.now() - ms) / 86400000));
+          };
+          // { D, R, O, section, dueInDays, bar:{fillPct,overflowPct,dotPct,duePct} }
+          const rhythmOf = (r) => {
+            const R = rhythmDays(r);
+            const D = daysSinceTouch(r) ?? 0;
+            const O = Math.max(0, D - R);
+            const dueInDays = R - D;
+            const section = D > R ? "slipping" : D >= R - 7 ? "coming_up" : "on_rhythm";
+            const fillPct = Math.min(D / R, 1) * 70;
+            const overflowPct = O > 0 ? Math.min(O / (R / 2), 1) * 30 : 0;
+            return { D, R, O, section, dueInDays, bar: { fillPct, overflowPct, dotPct: Math.min(fillPct + overflowPct, 99), duePct: 70 } };
+          };
+          // Value proxy (client-side): lead_value percentile-ish via simple
+          // normalization + refer/comeback flags. Real V (spec §3) arrives with
+          // the LTV join; this keeps the Slipping sort sensible meanwhile.
+          const valueProxy = (r) => {
+            const tags = deriveTags(r);
+            const v = Math.min((Number(r.lead_value) || 0) / 5000, 1) * 0.6
+              + (tags.includes("Would refer") ? 0.25 : 0)
+              + (tags.includes("Would come back") ? 0.15 : 0);
+            return Math.min(1, v);
+          };
+          const priorityScoreOf = (r) => {
+            const { O, R } = rhythmOf(r);
+            const P = O <= 0 ? 0 : Math.min(O / R, 1.5);
+            return (0.25 + 0.75 * valueProxy(r)) * P;
           };
 
           // ─── Reach-back actions (Jul 2026) ─────────────────────────
@@ -438,7 +465,7 @@ export default function RetrosPage({ app }) {
           const [filedFilter, setFiledFilter] = [rolodexFiledFilter, setRolodexFiledFilter];
           const filteredFiled = saved.filter(r => {
             if (!filedFilter || filedFilter === "all") return true;
-            if (filedFilter === "warm" || filedFilter === "cooling" || filedFilter === "cold") return warmthBand(r) === filedFilter;
+            if (filedFilter === "slipping" || filedFilter === "coming_up" || filedFilter === "on_rhythm") return rhythmOf(r).section === filedFilter;
             if (filedFilter === "former") return r.type === "former";
             if (filedFilter === "oneoff") return r.type !== "former";
             if (filedFilter === "refer") return deriveTags(r).includes("Would refer");
@@ -448,8 +475,6 @@ export default function RetrosPage({ app }) {
             return true;
           });
           const allFiled = rolodex.filter(r => r.priority);
-          const warmthCounts = { warm: 0, cooling: 0, cold: 0 };
-          for (const r of allFiled) warmthCounts[warmthBand(r)]++;
 
           // ─── Render ─────────────────────────────────────────────────────
           return (
@@ -489,36 +514,69 @@ export default function RetrosPage({ app }) {
                 </button>
               </div>
 
-              {/* MAIN GRID: rail + main + rai (rai shows on >=1440px) */}
+              {/* RAI'S READ — her voice as Fraunces italic prose (the Today
+                  brief pattern), not a chatbot card. Names are inline links to
+                  the contact. Mentions up to 3 slipping, highest priority first.
+                  Silent when nothing is slipping. */}
+              {(() => {
+                const slippingSorted = saved
+                  .filter(r => rhythmOf(r).section === "slipping")
+                  .sort((a, b) => priorityScoreOf(b) - priorityScoreOf(a));
+                if (slippingSorted.length === 0) return null;
+                const top = slippingSorted.slice(0, 3);
+                const nm = (r) => r.contact_name || r.contact || r.client_name || r.client || "someone";
+                const lead = top[0];
+                const leadR = rhythmOf(lead);
+                const leadRefer = deriveTags(lead).includes("Would refer");
+                return (
+                  <div style={{ padding: "0 4px 20px", marginBottom: 20, borderBottom: "1px solid " + C.borderLight }}>
+                    <div style={{ ...FR, fontSize: 15.5, lineHeight: 1.55, color: C.text, maxWidth: 660 }}>
+                      {slippingSorted.length === 1 ? "One's slipping. " : `${slippingSorted.length} are slipping. `}
+                      <span onClick={() => setSelectedRolodex(lead)} style={{ fontFamily: "'Manrope', system-ui, sans-serif", fontStyle: "normal", fontWeight: 600, color: C.primary, cursor: "pointer", borderBottom: "1px solid rgba(51,84,62,0.25)" }}>{nm(lead)}</span>
+                      {"'s the one I'd move on — "}{leadR.O} days past {leadR.O <= leadR.R ? "her" : "their"} rhythm{leadRefer ? ", and still sends you referrals" : ""}.
+                      {top.length > 1 && <>{" "}
+                        {top.slice(1).map((r, i) => (
+                          <span key={r.id}>
+                            <span onClick={() => setSelectedRolodex(r)} style={{ fontFamily: "'Manrope', system-ui, sans-serif", fontStyle: "normal", fontWeight: 600, color: C.primary, cursor: "pointer", borderBottom: "1px solid rgba(51,84,62,0.25)" }}>{nm(r)}</span>
+                            {i < top.length - 2 ? " and " : ""}
+                          </span>
+                        ))}
+                        {" "}are drifting but can wait.
+                      </>}
+                      {" "}Everyone else is holding.
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="rc-grid" style={{ display: "grid", gap: 20, alignItems: "start" }}>
 
-                {/* LEFT RAIL: warmth + check-in queue */}
+                {/* LEFT RAIL: rhythm summary + check-in queue */}
                 <div className="rc-rail" style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 0, alignSelf: "start" }}>
-                  {/* WARMTH — who needs you, not how you filed them. Click a
-                      band to filter the grid; click again to clear. */}
+                  {/* RHYTHM — who's slipping / coming up / holding. Click to
+                      filter the grid; click again to clear. */}
                   <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 14px" }}>
-                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Warmth</div>
-                    {["warm", "cooling", "cold"].map(band => {
-                      const m = WARMTH_META[band];
-                      const selected = filedFilter === band;
+                    <div style={{ fontSize: 10.5, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 10 }}>Rhythm</div>
+                    {[
+                      { key: "slipping", label: "Slipping", dot: "#A85D4C" },
+                      { key: "coming_up", label: "Coming up", dot: "#A87E38" },
+                      { key: "on_rhythm", label: "On rhythm", dot: C.primaryMuted },
+                    ].map(({ key, label, dot }) => {
+                      const count = saved.filter(r => rhythmOf(r).section === key).length;
+                      const selected = filedFilter === key;
                       return (
-                        <button key={band} onClick={() => setFiledFilter(selected ? "all" : band)} style={{
+                        <button key={key} onClick={() => setFiledFilter(selected ? "all" : key)} style={{
                           display: "flex", alignItems: "center", gap: 8, width: "100%",
                           padding: "8px 10px", marginBottom: 4, borderRadius: 8,
-                          border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
-                          background: selected ? m.bg : "transparent",
-                          transition: "background 120ms ease",
+                          border: "none", cursor: "pointer", fontFamily: "inherit",
+                          background: selected ? C.primarySoft : "transparent",
+                          borderLeft: selected ? "3px solid " + C.primary : "3px solid transparent",
                         }}>
-                          <span style={{ width: 8, height: 8, borderRadius: 999, background: m.tone, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{m.label}</span>
-                          <span style={{ flex: 1 }} />
-                          <span style={{ fontSize: 12.5, fontWeight: 700, color: selected ? m.tone : C.textSec, fontVariantNumeric: "tabular-nums" }}>{warmthCounts[band]}</span>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, flex: 1, textAlign: "left" }}>{label}</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: C.textMuted, fontVariantNumeric: "tabular-nums" }}>{count}</span>
                         </button>
                       );
                     })}
-                    <div style={{ borderTop: "1px solid " + C.borderLight, marginTop: 8, paddingTop: 9, fontSize: 10.5, color: C.textMuted }}>
-                      {referReady} would refer · {queued.length} awaiting retro
-                    </div>
                   </div>
 
                   {/* CHECK-IN QUEUE — due/upcoming reminders, soonest first.
@@ -891,7 +949,7 @@ export default function RetrosPage({ app }) {
                       })}
                       {["warm", "cooling", "cold"].includes(filedFilter) && (
                         <button onClick={() => setFiledFilter("all")} style={{ fontSize: 10.5, color: C.primary, fontWeight: 600, padding: "3px 10px", background: C.primarySoft, borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                          {filedFilter} ✕
+                          {({ slipping: "Slipping", coming_up: "Coming up", on_rhythm: "On rhythm" }[filedFilter] || filedFilter)} ✕
                         </button>
                       )}
                       <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 170, padding: "8px 12px", borderRadius: 9, fontSize: 12.5, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, outline: "none", color: C.text }} />
@@ -903,33 +961,29 @@ export default function RetrosPage({ app }) {
                       </div>
                     ) : (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 8 }}>
-                        {filteredFiled.map(e => {
+                        {filteredFiled.slice().sort((a, b) => {
+                          // Slipping first (by priority score), then coming-up, then on-rhythm.
+                          const secRank = { slipping: 0, coming_up: 1, on_rhythm: 2 };
+                          const ra = rhythmOf(a), rb = rhythmOf(b);
+                          if (secRank[ra.section] !== secRank[rb.section]) return secRank[ra.section] - secRank[rb.section];
+                          if (ra.section === "slipping") return priorityScoreOf(b) - priorityScoreOf(a);
+                          return ra.dueInDays - rb.dueInDays;
+                        }).map(e => {
                           const tags = deriveTags(e);
-                          const heat = calcHeat(e);
-                          // Full-entry priority tint (replaces the old left-bar rail):
-                          // a barely-there wash + matching border, so the whole
-                          // tile carries a subtle pop of its priority color.
-                          const prioTint = e.priority === "high"
-                            ? { bg: "#F1F7F3", border: "#DCEAE1" }
-                            : e.priority === "medium"
-                            ? { bg: "#FCF6EC", border: "#EFE2CC" }
-                            : { bg: C.bg, border: C.border };
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
-                          const band = warmthBand(e);
-                          const wm = WARMTH_META[band];
                           const refer = tags.includes("Would refer");
-                          const reminderRaw = e.reminder ?? e.reminder_date;
-                          let reminderChip = null;
-                          if (reminderRaw) {
-                            const reminderYmd = String(reminderRaw).slice(0, 10);
-                            const diffDays = Math.round((new Date(reminderYmd).getTime() - new Date(_checkinTodayYmd).getTime()) / 86400000);
-                            if (diffDays < 0) reminderChip = { label: `Overdue ${Math.abs(diffDays)}d`, color: "#fff", bg: "#C04323" };
-                            else if (diffDays === 0) reminderChip = { label: "Check in today", color: "#fff", bg: "#C04323" };
-                            else if (diffDays <= 30) reminderChip = { label: `Next: in ${diffDays}d`, color: C.primary, bg: C.primarySoft };
-                          }
+                          const rh = rhythmOf(e);
+                          const slipping = rh.section === "slipping";
+                          const comingUp = rh.section === "coming_up";
+                          // Status line: overdue in rust, coming-up in amber, on-rhythm muted.
+                          const statusText = slipping ? `${rh.O}d past ${rh.R}d rhythm`
+                            : comingUp ? (rh.dueInDays <= 0 ? "due today" : `due in ${rh.dueInDays}d`)
+                            : `on rhythm · ${agoLabel(e)}`;
+                          const statusColor = slipping ? "#A85D4C" : comingUp ? "#A87E38" : C.textMuted;
+                          const dotOver = rh.O > 0;
                           return (
-                            <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ background: prioTint.bg, border: "1px solid " + prioTint.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "11px 14px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 9 }}>
+                            <div key={e.id} onClick={() => setSelectedRolodex(e)} className="rt-rolo-card" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 14px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 10 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                                 <Avatar id={e.id} name={name} size={30} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -940,26 +994,24 @@ export default function RetrosPage({ app }) {
                                     {contact ? contact + " · " : ""}{e.type === "former" ? "Former" : "New lead"}
                                   </div>
                                 </div>
-                              </div>
-                              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: wm.tone, background: wm.bg }}>{wm.label.toLowerCase()} · {agoLabel(e)}</span>
-                                {reminderChip && <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: reminderChip.color, background: reminderChip.bg }}>{reminderChip.label}</span>}
-                                {e.priority === "high" && <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: "linear-gradient(90deg, #D17A1B, #C04323)" }}>Heat {heat}</span>}
-                                {e.lead_status === "active" && seqStepFor(e.id) > 0 && (
-                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#3E2F72", background: "#EFE9FB" }}>touch {seqStepFor(e.id)}/4</span>
-                                )}
-                                {e.lead_status === "parked" && (
-                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: C.textMuted, background: C.borderLight }}>parked</span>
-                                )}
-                                {e.lead_value > 0 && (
-                                  <span style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: C.primary, background: C.primarySoft, fontVariantNumeric: "tabular-nums" }}>~${Number(e.lead_value).toLocaleString()}/mo</span>
-                                )}
-                                <span style={{ flex: 1 }} />
                                 <button
                                   onClick={ev => { ev.stopPropagation(); logTouch(e); }}
                                   title="Stamp today as the last touch"
-                                  style={{ fontSize: 9.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: C.textSec, background: "transparent", border: "1px solid " + C.borderLight, cursor: "pointer", fontFamily: "inherit" }}
+                                  style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: C.textSec, background: "transparent", border: "1px solid " + C.borderLight, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
                                 >Log touch</button>
+                              </div>
+                              {/* Rhythm bar — echoes the TimeDial: green fill, due tick at 70%, rust overflow, now-dot. */}
+                              <div>
+                                <div style={{ position: "relative", height: 6, background: C.track || "#ECE9E0", borderRadius: 4 }}>
+                                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: rh.bar.fillPct + "%", background: C.primary, opacity: 0.75, borderRadius: 4 }} />
+                                  {rh.bar.overflowPct > 0 && <div style={{ position: "absolute", left: "70%", top: 0, bottom: 0, width: rh.bar.overflowPct + "%", background: "#A85D4C", borderRadius: "0 4px 4px 0" }} />}
+                                  <div style={{ position: "absolute", left: "70%", top: -2, bottom: -2, width: 1.5, background: "rgba(28,50,36,0.25)" }} />
+                                  <div className={slipping ? "rt-rhythm-dot" : ""} style={{ position: "absolute", left: rh.bar.dotPct + "%", top: "50%", width: 10, height: 10, borderRadius: "50%", background: dotOver ? "#A85D4C" : C.primaryDeep, border: "2px solid #fff", transform: "translate(-50%,-50%)", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }} />
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6, gap: 6 }}>
+                                  <span style={{ fontSize: 10, color: C.textMuted }}>last touch {agoLabel(e)}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: statusColor }}>{statusText}</span>
+                                </div>
                               </div>
                             </div>
                           );
