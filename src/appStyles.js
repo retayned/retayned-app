@@ -947,6 +947,14 @@ export const APP_CSS = `
         }
         .row-hover { transition: background 0.1s, transform 180ms var(--rt-ease-out); cursor: pointer; }
         .row-hover:hover { background: ${C.primarySoft}; transform: translateX(2px); }
+        /* Rolodex rhythm cards: gentle lift on hover, TimeDial-style pulsing
+           now-dot on the most-overdue (slipping) cards. Motion disabled under
+           prefers-reduced-motion. */
+        .rt-rolo-card { transition: box-shadow 160ms var(--rt-ease-out), transform 160ms var(--rt-ease-out); }
+        .rt-rolo-card:hover { box-shadow: 0 2px 6px rgba(20,30,22,0.08), 0 8px 20px rgba(20,30,22,0.06); transform: translateY(-1px); }
+        @keyframes rt-rhythm-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(168,93,76,0.45); } 50% { box-shadow: 0 0 0 5px rgba(168,93,76,0); } }
+        .rt-rhythm-dot { animation: rt-rhythm-pulse 2.2s infinite; }
+        @media (prefers-reduced-motion: reduce) { .rt-rhythm-dot { animation: none; } .rt-rolo-card { transition: none; } }
         /* Neutral row-hover variant — for table rows where green is too
            loud / fights with status pills inside the row. Same shift-right
            motion, lighter wash. Used in the Clients Table view (both mobile
