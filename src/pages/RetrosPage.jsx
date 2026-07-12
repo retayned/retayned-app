@@ -205,8 +205,24 @@ export default function RetrosPage({ app }) {
             catch (e) { console.warn("Reach-back update failed:", e); }
           };
           const rolodexPatch = async (id, patch) => {
+            // Optimistic update, then persist. IMPORTANT: rolodexDb.update
+            // RETURNS { data, error } — it does not throw — so a try/catch here
+            // silently swallowed nothing and DB failures (e.g. Log touch) were
+            // invisible: the UI looked updated but the write never landed and
+            // reverted on reload. Now we inspect the returned error, surface it,
+            // and roll the optimistic change back so the UI tells the truth.
+            const prevRow = rolodex.find(r => r.id === id) || null;
             setRolodex(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
-            try { await rolodexDb.update(id, patch); } catch (e) { console.warn("Rolodex update failed:", e); }
+            try {
+              const { error } = await rolodexDb.update(id, patch);
+              if (error) {
+                console.error("Rolodex update failed:", error.message || error, "| patch:", patch);
+                if (prevRow) setRolodex(prev => prev.map(r => r.id === id ? prevRow : r));
+              }
+            } catch (e) {
+              console.error("Rolodex update threw:", e, "| patch:", patch);
+              if (prevRow) setRolodex(prev => prev.map(r => r.id === id ? prevRow : r));
+            }
           };
           // Send: opens mail prefilled, stamps the touch, arms the next
           // sequence step's clock for leads.
@@ -438,14 +454,22 @@ export default function RetrosPage({ app }) {
           const [filedFilter, setFiledFilter] = [rolodexFiledFilter, setRolodexFiledFilter];
           const filteredFiled = saved.filter(r => {
             if (!filedFilter || filedFilter === "all") return true;
-            if (filedFilter === "warm" || filedFilter === "cooling" || filedFilter === "cold") return warmthBand(r) === filedFilter;
+            if (filedFilter === "warm") return warmthBand(r) === "warm";
+            if (filedFilter === "cold") return warmthBand(r) === "cold" || warmthBand(r) === "cooling";
             if (filedFilter === "former") return r.type === "former";
             if (filedFilter === "oneoff") return r.type !== "former";
-            if (filedFilter === "refer") return deriveTags(r).includes("Would refer");
-            if (filedFilter === "comeback") return deriveTags(r).includes("Would come back");
-            if (filedFilter === "parked") return r.lead_status === "parked";
             if (byPrio[filedFilter]) return r.priority === filedFilter;
             return true;
+          }).sort((a, b) => {
+            // Per-tab sort:
+            //   Warm → warmest first (fewest days since touch).
+            //   Cold → coldest first (most days since touch).
+            //   All / Former / Leads → alphabetical A→Z by name.
+            const nameOf = (r) => (r.client_name || r.client || r.contact_name || r.contact || "").toLowerCase();
+            const touchMs = (r) => lastTouchMs(r) ?? 0; // no touch = oldest = coldest
+            if (filedFilter === "warm") return touchMs(b) - touchMs(a); // recent (larger ms) first
+            if (filedFilter === "cold") return touchMs(a) - touchMs(b); // oldest (smaller ms) first
+            return nameOf(a).localeCompare(nameOf(b));
           });
           const allFiled = rolodex.filter(r => r.priority);
           const warmthCounts = { warm: 0, cooling: 0, cold: 0 };
@@ -702,41 +726,37 @@ export default function RetrosPage({ app }) {
                       setPage("coach");
                     };
                     const isOverdue = overdueDays > 0;
-                    const dotColor = isOverdue ? "#C04323" : C.retWarn;
+                    const single = dueReminders.length === 1;
                     return (
-                      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 12, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px 16px" }}>
-                        <div style={{ position: "relative", flexShrink: 0 }}>
-                          <Avatar id={r0.id} name={r0Name} size={34} />
-                          <span style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderRadius: 6, background: dotColor, border: "2px solid " + C.card }} />
-                        </div>
+                      <div onClick={single ? () => setSelectedRolodex(r0) : undefined} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 11, background: C.dangerSoft, border: "1px solid #F3CFC3", borderRadius: 12, padding: "13px 15px", cursor: single ? "pointer" : "default" }}>
+                        <Avatar id={r0.id} name={r0Name} size={36} />
                         <div style={{ flex: 1, minWidth: 180 }}>
-                          {dueReminders.length === 1 ? (
+                          {single ? (
                             <>
-                              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {r0Name}</div>
-                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 2 }}>{r0Co ? r0Co + " · " : ""}<span style={{ color: isOverdue ? "#C04323" : C.text, fontWeight: isOverdue ? 700 : 500 }}>{isOverdue ? `${overdueDays}d overdue` : "due today"}</span></div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{r0Name}</span>
+                                <span style={{ fontSize: 9.5, fontWeight: 700, color: "#fff", background: C.danger, borderRadius: 999, padding: "2px 8px" }}>{isOverdue ? `${overdueDays}d overdue` : "due today"}</span>
+                              </div>
+                              <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 2 }}>{r0Co ? r0Co + " · " : ""}time for a check-in</div>
                             </>
                           ) : (
                             <>
                               <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
-                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 2 }}>
+                              <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 2 }}>
                                 {dueReminders.slice(0, 2).map(r => r.contact_name || r.contact || r.client_name || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
                               </div>
                             </>
                           )}
                         </div>
                         <button
-                          onClick={draftWithRai}
-                          style={{ background: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                        >Draft Note</button>
-                        <button
-                          onClick={() => setSelectedRolodex(r0)}
-                          style={{ background: "transparent", color: C.primary, border: "1px solid " + C.border, borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                        >{dueReminders.length === 1 ? "View" : "Review"}</button>
+                          onClick={ev => { ev.stopPropagation(); draftWithRai(); }}
+                          style={{ background: "#fff", color: C.text, border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, boxShadow: "0 1px 2px rgba(20,30,22,0.08)" }}
+                        >{single ? "Draft Note" : "Review"}</button>
                         <button
                           type="button"
-                          onClick={dismissRolodexCheckin}
+                          onClick={ev => { ev.stopPropagation(); dismissRolodexCheckin(); }}
                           aria-label="Dismiss check-in reminder"
-                          style={{ background: "transparent", border: "none", color: C.textMuted, fontSize: 18, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: "4px 2px", flexShrink: 0 }}
+                          style={{ background: "transparent", border: "none", color: "#B58575", fontSize: 18, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: "4px 2px", flexShrink: 0 }}
                         >×</button>
                       </div>
                     );
@@ -872,11 +892,10 @@ export default function RetrosPage({ app }) {
                       <span style={{ flex: 1 }} />
                       {[
                         { v: "all",      label: "All" },
+                        { v: "warm",     label: "Warm" },
+                        { v: "cold",     label: "Cold" },
                         { v: "former",   label: "Former" },
                         { v: "oneoff",   label: "Leads" },
-                        { v: "refer",    label: "Would refer" },
-                        { v: "comeback", label: "Would come back" },
-                        { v: "parked",   label: "Parked" },
                       ].map(f => {
                         const isSel = filedFilter === f.v || (f.v === "all" && (!filedFilter || filedFilter === "all"));
                         return (
@@ -889,11 +908,6 @@ export default function RetrosPage({ app }) {
                           }}>{f.label}</button>
                         );
                       })}
-                      {["warm", "cooling", "cold"].includes(filedFilter) && (
-                        <button onClick={() => setFiledFilter("all")} style={{ fontSize: 10.5, color: C.primary, fontWeight: 600, padding: "3px 10px", background: C.primarySoft, borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                          {filedFilter} ✕
-                        </button>
-                      )}
                       <input value={rolodexSearch} onChange={e => setRolodexSearch(e.target.value)} placeholder="Search filed…" style={{ width: 170, padding: "8px 12px", borderRadius: 9, fontSize: 12.5, fontFamily: "inherit", background: C.card, border: "none", boxShadow: "inset 0 0 0 1px " + C.borderLight, outline: "none", color: C.text }} />
                     </div>
 
