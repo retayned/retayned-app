@@ -470,7 +470,14 @@ export function computeCadence(c, { allTouchpoints, allCompletions, personalEven
     console.log(`[cadence] ${c.name}: thisWeek=${thisWeek} priorActive=[${priorActive.join(",")}] baseline=${baseline.toFixed(1)} m=${momentum.toFixed(2)}`);
   }
 
-  if (momentum >= 1.25 && thisWeek >= 2 && thisWeek >= baseline + 2) {
+  // Ahead is meant to be RARE — a client you've genuinely surged on, not one
+  // busy week of ordinary variance. Two guards, both load-bearing:
+  //   • momentum >= 1.5 — handles the ratio for larger baselines.
+  //   • thisWeek >= baseline + 3 — an absolute gap above THIS client's normal,
+  //     so a low-baseline client can't trip Ahead on a single extra touch
+  //     (base 2 now needs 5+ this week, not 4). This +3 gap also covers the
+  //     small-number floor case, so no separate absolute minimum is needed.
+  if (momentum >= 1.5 && thisWeek >= baseline + 3) {
     return { state: "warming", label: "Ahead", color: C.retGood, momentum };
   }
   if (momentum < 0.75 && baseline >= 2) {
