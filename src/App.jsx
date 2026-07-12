@@ -2547,9 +2547,20 @@ export default function App({ user }) {
     const text = pendingAutoSendRef.current;
     pendingAutoSendRef.current = null;
     sendAi(text);
-    setRaiLaunching(false);
+    // NOTE: do NOT clear raiLaunching here. sendAi is async; clearing it now
+    // leaves a frame where raiLaunching=false AND aiMessages is still empty,
+    // so the coach page falls through to the intro/home composer and flashes
+    // it for a beat before the chat appears. Instead the loading state is
+    // held until aiMessages actually has content — cleared in the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedTaskId, observationContext, aiMessages]);
+
+  // Clear the launching state only once the chat actually has messages, so the
+  // "pulling up" loader hands directly to the populated chat with no homepage
+  // flash in between.
+  useEffect(() => {
+    if (raiLaunching && aiMessages.length > 0) setRaiLaunching(false);
+  }, [raiLaunching, aiMessages]);
 
   // ─── Rai conversation handlers (sidebar) ──────────────────────────────
   // Start a fresh chat — clears messages + convo id so the next send creates
