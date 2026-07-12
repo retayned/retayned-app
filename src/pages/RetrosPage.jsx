@@ -699,25 +699,24 @@ export default function RetrosPage({ app }) {
                       pendingAutoSendRef.current = ask;
                       setPage("coach");
                     };
+                    const isOverdue = overdueDays > 0;
+                    const dotColor = isOverdue ? "#C04323" : C.retWarn;
                     return (
-                      <div style={{ position: "relative", display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 12, background: C.card, border: "1px solid " + C.border, borderLeft: "3px solid #C4823B", borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "12px 38px 12px 14px" }}>
-                        <button
-                          type="button"
-                          onClick={dismissRolodexCheckin}
-                          aria-label="Dismiss check-in reminder"
-                          style={{ position: "absolute", top: 10, right: 10, width: 28, height: 28, borderRadius: 14, background: "transparent", border: "none", color: C.textMuted, fontSize: 16, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
-                        >✕</button>
-                        <Avatar id={r0.id} name={r0Name} size={32} />
+                      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 12, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "14px 16px" }}>
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                          <Avatar id={r0.id} name={r0Name} size={34} />
+                          <span style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderRadius: 6, background: dotColor, border: "2px solid " + C.card }} />
+                        </div>
                         <div style={{ flex: 1, minWidth: 180 }}>
                           {dueReminders.length === 1 ? (
                             <>
                               <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>Check in with {r0Name}</div>
-                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>{r0Co ? r0Co + " · " : ""}{overdueDays > 0 ? `${overdueDays}d overdue` : "due today"}</div>
+                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 2 }}>{r0Co ? r0Co + " · " : ""}<span style={{ color: isOverdue ? "#C04323" : C.text, fontWeight: isOverdue ? 700 : 500 }}>{isOverdue ? `${overdueDays}d overdue` : "due today"}</span></div>
                             </>
                           ) : (
                             <>
                               <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
-                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 1 }}>
+                              <div style={{ fontSize: 12.5, color: C.textSec, marginTop: 2 }}>
                                 {dueReminders.slice(0, 2).map(r => r.contact_name || r.contact || r.client_name || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
                               </div>
                             </>
@@ -725,12 +724,18 @@ export default function RetrosPage({ app }) {
                         </div>
                         <button
                           onClick={draftWithRai}
-                          style={{ background: "#7C5CF3", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                          style={{ background: C.primary, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
                         >Draft Note</button>
                         <button
                           onClick={() => setSelectedRolodex(r0)}
-                          style={{ background: "transparent", color: C.primary, border: "1px solid " + C.border, borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                          style={{ background: "transparent", color: C.primary, border: "1px solid " + C.border, borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
                         >{dueReminders.length === 1 ? "View" : "Review"}</button>
+                        <button
+                          type="button"
+                          onClick={dismissRolodexCheckin}
+                          aria-label="Dismiss check-in reminder"
+                          style={{ background: "transparent", border: "none", color: C.textMuted, fontSize: 18, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: "4px 2px", flexShrink: 0 }}
+                        >×</button>
                       </div>
                     );
                   })()}
@@ -899,7 +904,14 @@ export default function RetrosPage({ app }) {
                         {filteredFiled.map(e => {
                           const tags = deriveTags(e);
                           const heat = calcHeat(e);
-                          const prioTone = e.priority === "high" ? C.retGood : e.priority === "medium" ? C.retWarn : C.textMuted;
+                          // Full-entry priority tint (replaces the old left-bar rail):
+                          // a barely-there wash + matching border, so the whole
+                          // tile carries a subtle pop of its priority color.
+                          const prioTint = e.priority === "high"
+                            ? { bg: "#F1F7F3", border: "#DCEAE1" }
+                            : e.priority === "medium"
+                            ? { bg: "#FCF6EC", border: "#EFE2CC" }
+                            : { bg: C.bg, border: C.border };
                           const name = e.client_name || e.client || "Untitled";
                           const contact = e.contact_name || e.contact || "";
                           const band = warmthBand(e);
@@ -915,8 +927,7 @@ export default function RetrosPage({ app }) {
                             else if (diffDays <= 30) reminderChip = { label: `Next: in ${diffDays}d`, color: C.primary, bg: C.primarySoft };
                           }
                           return (
-                            <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ position: "relative", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "11px 12px 11px 16px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 9 }}>
-                              <div style={{ position: "absolute", left: 6, top: 12, bottom: 12, width: 3, background: prioTone, borderRadius: 2 }} />
+                            <div key={e.id} onClick={() => setSelectedRolodex(e)} style={{ background: prioTint.bg, border: "1px solid " + prioTint.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "11px 14px", cursor: "pointer", display: "flex", flexDirection: "column", gap: 9 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
                                 <Avatar id={e.id} name={name} size={30} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
