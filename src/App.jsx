@@ -1622,8 +1622,14 @@ export default function App({ user }) {
   // and the calendar all flip together at 00:00.
   // Fires even if the tab stays open across midnight — ensures no one sees stale state.
   //
-  // Anchored to the user's STORED timezone (profiles.timezone), not the
-  // browser's wall clock — see notes on tzMidnightInstant for why.
+  // Anchored to userTimezone state — the device-detected TZ kept current
+  // by the load hydrate and the visibilitychange handler (comment
+  // corrected Jul 14 2026; it previously claimed the STORED timezone,
+  // a third stale reference to the retired policy). Because userTimezone
+  // is in this effect's dependency array, any TZ change tears down the
+  // pending midnight timer and reschedules it against the NEW timezone —
+  // this is the line that makes travel safe (the old EST timer cannot
+  // fire at 10pm MST; it is cancelled the moment the change is seen).
   // While userTimezone is still null (very brief, just on first mount),
   // fall back to device-local midnight so the effect still fires reasonably.
   useEffect(() => {
