@@ -1570,16 +1570,17 @@ export default function App({ user }) {
 
   // Hydrate profile-derived state: timezone, Google Cal prompt dismissal.
   //
-  // Timezone policy (post-May-2026 fix): profiles.timezone is the single
-  // source of truth for all local-day math (Rai sweep gate, frontend
-  // midnight rollover, recurring-task reset cutoff). We SEED it from the
-  // device's detected TZ exactly once — when the column is null/empty —
-  // and never overwrite a stored value from the device after that. The
-  // prior behavior auto-wrote on every session, which let a stale browser
-  // TZ (e.g. Chrome holding an Eastern resolvedOptions across a macOS
-  // clock change) silently flip profiles.timezone hours-at-a-time and
-  // corrupt both the overnight Rai pick AND the local midnight cutoff.
-  // Users can change their stored TZ via Settings (separate UI path).
+  // TIMEZONE POLICY — one policy, stated once (comment corrected Jul 14
+  // 2026; the block that used to sit here described the RETIRED seed-once
+  // policy as if live, directly contradicting the code below and the
+  // Settings page — a landmine for anyone "restoring" it):
+  // DEVICE TZ ALWAYS WINS. profiles.timezone exists only so the backend
+  // (sweep enqueuer, local-day math) has a value; it is resynced from the
+  // device on every load and on visibility change. There is NO manual
+  // override — Settings displays it read-only ("moves with you").
+  // Accepted tradeoff: a browser holding a stale resolvedOptions across
+  // an OS clock change can flip sweep timing until next reload. That was
+  // the failure the old seed-once policy targeted; travel-follows-you won.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -1846,12 +1847,15 @@ export default function App({ user }) {
     setDismissReasonText("");
   };
 
-  // Phase 9 — skip giving a reason and just delete (the original behavior).
-  const skipDismissReason = () => {
-    if (!dismissModalTask) return;
-    const { task, performDelete } = dismissModalTask;
-    dismissRaiTaskFeedback(task, "user_deleted");
-    performDelete();
+  // Cancel the dismiss flow entirely (Jul 14 2026 fix): backdrop click,
+  // the X, and "Nevermind" previously ran skipDismissReason — which
+  // DELETED the task with reason "user_deleted". An accidental click-away
+  // destroyed the task and fed Rai a dismissal verdict the user never
+  // gave (observed live: a manufactured "no" she then re-pitched around).
+  // Cancel now means cancel: close the modal, keep the task, write
+  // nothing. The ONLY path that deletes is the Delete Task button
+  // (confirmDismissWithReason).
+  const cancelDismiss = () => {
     setDismissModalTask(null);
     setDismissReasonChips([]);
     setDismissReasonText("");
@@ -4263,9 +4267,9 @@ export default function App({ user }) {
 
       {/* Phase 9 — Rai task dismiss feedback modal.
           Opens when a Rai-suggested task is dismissed. Captures a short
-          reason (optional) so the lesson extractor can learn from the
-          dismissal. Skipping gives the default "user_deleted" which
-          only powers the 14-day anti-repeat, not a lesson. */}
+          reason (optional). Delete Task is the ONLY action that deletes
+          (with "user_deleted" as the reason when none is given);
+          backdrop / X / Nevermind cancel and keep the task. */}
       {dismissModalTask && createPortal(
         (() => {
           const task = dismissModalTask.task;
@@ -4276,7 +4280,7 @@ export default function App({ user }) {
             { id: "wrong_timing", label: "Wrong time" },
           ];
           return (
-            <div onClick={() => skipDismissReason()} style={{ position: "fixed", inset: 0, zIndex: 6500, background: "rgba(20,30,22,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "10vh 20px", fontFamily: "'Manrope', system-ui, sans-serif" }}>
+            <div onClick={cancelDismiss} style={{ position: "fixed", inset: 0, zIndex: 6500, background: "rgba(20,30,22,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "10vh 20px", fontFamily: "'Manrope', system-ui, sans-serif" }}>
               <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 18, padding: 24, width: "100%", maxWidth: 460, boxShadow: "0 1px 3px rgba(20,30,22,0.1), 0 30px 70px rgba(20,30,22,0.3)" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
                   <div style={{ minWidth: 0 }}>
@@ -4285,7 +4289,7 @@ export default function App({ user }) {
                       Optional — but helps Rai stop suggesting things like this.
                     </div>
                   </div>
-                  <button onClick={skipDismissReason} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: C.surfaceWarm, color: C.textSec, fontSize: 15, cursor: "pointer", flexShrink: 0 }} aria-label="nevermind">✕</button>
+                  <button onClick={cancelDismiss} style={{ width: 28, height: 28, borderRadius: 8, border: "none", background: C.surfaceWarm, color: C.textSec, fontSize: 15, cursor: "pointer", flexShrink: 0 }} aria-label="close">✕</button>
                 </div>
 
                 <div style={{ marginTop: 14, fontSize: 13, color: C.text, padding: "10px 12px", background: C.surfaceWarm, borderRadius: 10, fontStyle: "italic", lineHeight: 1.45 }}>
@@ -4355,7 +4359,7 @@ export default function App({ user }) {
 
                 <div style={{ display: "flex", alignItems: "center", marginTop: 18, justifyContent: "space-between" }}>
                   <button
-                    onClick={skipDismissReason}
+                    onClick={cancelDismiss}
                     style={{ padding: "8px 4px", background: "transparent", color: C.textMuted, border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", textUnderlineOffset: 3 }}
                   >
                     Nevermind
