@@ -2969,6 +2969,9 @@ export default function App({ user }) {
   // expired-trial gate. Refetched after Stripe redirects back with
   // ?billing=success.
   const [billing, setBilling] = useState(null);
+  // Sidebar account popover (P4, Jul 2026) — the user chip was rendered
+  // with cursor:pointer since launch but never had a click handler.
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const refreshBilling = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await billingDb.get(user.id);
@@ -3780,8 +3783,31 @@ export default function App({ user }) {
             );
           })()}
         </div>
-        <div style={{ padding: sidebarCollapsed ? "10px 0 14px" : "10px 6px 14px", flexShrink: 0 }}>
-          <div className="rt-user-chip" style={{ display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10, justifyContent: sidebarCollapsed ? "center" : "flex-start", padding: sidebarCollapsed ? "8px 0" : "8px 10px", borderRadius: 8, cursor: "pointer", background: "transparent", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
+        <div style={{ padding: sidebarCollapsed ? "10px 0 14px" : "10px 6px 14px", flexShrink: 0, position: "relative" }}>
+          {/* Account popover — the standard SaaS sidebar-anchor pattern:
+              identity on top, then Settings and Sign out. Closes on any
+              outside click via the fixed backdrop. */}
+          {profileMenuOpen && (
+            <>
+              <div onClick={() => setProfileMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+              <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: 8, right: 8, minWidth: 200, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "0 8px 24px rgba(20,30,22,0.18)", padding: 6, zIndex: 61 }}>
+                <div style={{ padding: "8px 10px 10px", borderBottom: "1px solid " + C.borderLight }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div>
+                  <div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.email || ""}</div>
+                  <div style={{ display: "inline-block", marginTop: 6, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: C.primary, background: C.primarySoft, borderRadius: 999, padding: "2px 8px" }}>
+                    {billing?.plan === "trial" ? "Trial" : billing?.plan === "agency" ? "Agency" : "Solo"}
+                  </div>
+                </div>
+                <div onClick={() => { setProfileMenuOpen(false); setPage("settings"); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }} className="row-hover">
+                  <Icon name="settings" size={15} color={C.textSec} /> Settings
+                </div>
+                <div onClick={async () => { setProfileMenuOpen(false); try { if (user?.id) clearHydrateSnapshot(user.id); } catch (_) { /* best effort */ } await supabase.auth.signOut(); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.danger }} className="row-hover">
+                  <Icon name="x" size={15} color={C.danger} /> Sign out
+                </div>
+              </div>
+            </>
+          )}
+          <div className="rt-user-chip" onClick={() => setProfileMenuOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10, justifyContent: sidebarCollapsed ? "center" : "flex-start", padding: sidebarCollapsed ? "8px 0" : "8px 10px", borderRadius: 8, cursor: "pointer", background: "transparent", transition: "background 160ms var(--rt-ease-out), box-shadow 200ms var(--rt-ease-out), transform 200ms var(--rt-ease-out)" }}>
             <div style={{ width: 28, height: 28, borderRadius: 14, background: C.primarySoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, color: C.primary, flexShrink: 0 }}>{getUserInitial(user)}</div>
             {!sidebarCollapsed && (
               <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, color: C.text, textTransform: "capitalize", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}</div><div style={{ fontSize: 11, color: C.textSec, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user?.user_metadata?.company || ""}</div></div>
