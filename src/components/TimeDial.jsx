@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { formatTimeLabel } from "../timeFormat";
+import { supabase } from "../lib/supabase";
 
 
 // ─── TodayTimeline — visual timeline widget ─────────────────────────────
@@ -26,6 +27,54 @@ import { formatTimeLabel } from "../timeFormat";
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
 function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {}, onRequestLink = null, gcalNudge = null }) {
+  // ── Rai prep memo (Jul 2026) — on-demand 7-day dossier for the
+  // meeting's linked client. Nothing generates until the user clicks
+  // (deliberate: memos cost tokens; the click is the spend gate).
+  // Keyed by event id; the edge function day-caches per client, so a
+  // second click on the same client's other meeting is a cache hit.
+  const [prepMemos, setPrepMemos] = useState({});
+  const generatePrepMemo = async (ev) => {
+    if (!ev || !ev.client_id) return;
+    const key = ev.id;
+    setPrepMemos(m => ({ ...m, [key]: { status: "loading" } }));
+    try {
+      const { data, error } = await supabase.functions.invoke("rai-prep", {
+        body: { client_id: ev.client_id, days: 7 },
+      });
+      if (error || !data?.memo) throw (error || new Error("No memo returned"));
+      setPrepMemos(m => ({ ...m, [key]: { status: "done", memo: data.memo } }));
+    } catch (err) {
+      console.error("rai-prep failed:", err);
+      setPrepMemos(m => ({ ...m, [key]: { status: "error" } }));
+    }
+  };
+  const renderPrepMemo = (ev) => {
+    if (!ev || !ev.client_id) return null;
+    const st = prepMemos[ev.id];
+    if (!st) {
+      return (
+        <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, fontWeight: 600, color: "#7C5CF3", cursor: "pointer", marginTop: 8, textAlign: "right" }}>
+          ✦ Generate the last 7 days
+        </div>
+      );
+    }
+    if (st.status === "loading") {
+      return <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", marginTop: 8, textAlign: "right" }}>Rai is reading the week…</div>;
+    }
+    if (st.status === "error") {
+      return (
+        <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, color: C.textMuted, cursor: "pointer", marginTop: 8, textAlign: "right" }}>
+          Couldn't generate — tap to retry
+        </div>
+      );
+    }
+    return (
+      <div style={{ marginTop: 10, background: "rgba(124,92,243,0.07)", borderRadius: 8, padding: "10px 12px", textAlign: "left" }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "#7C5CF3", marginBottom: 5 }}>Rai · last 7 days</div>
+        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{st.memo}</div>
+      </div>
+    );
+  };
   const [, force] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   // Reschedule editor state — when the user clicks Reschedule inside the
@@ -776,6 +825,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       Nothing to prep — you're set.
                     </div>
                   )}
+                  {renderPrepMemo(hubEvent)}
                 </div>
               )}
 
@@ -868,6 +918,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                     Nothing to prep — you're set.
                   </div>
                 )}
+                {renderPrepMemo(hubEvent)}
               </div>
 
               {/* Action row — same Reschedule + Delete as the selected
