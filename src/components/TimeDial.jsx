@@ -54,7 +54,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
     if (!st) {
       return (
         <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, fontWeight: 600, color: "#7C5CF3", cursor: "pointer", marginTop: 8, textAlign: "right" }}>
-          ✦ Generate the last 7 days
+          ✦ Brief me
         </div>
       );
     }
@@ -820,11 +820,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                         <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>+ {hubEvent._prepTasks.length - 1} more</div>
                       )}
                     </div>
-                  ) : (
+                  ) : (!hubEvent.client_id ? (
                     <div style={{ fontSize: 12.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", lineHeight: 1.4 }}>
                       Nothing to prep — you're set.
                     </div>
-                  )}
+                  ) : null)}
                   {renderPrepMemo(hubEvent)}
                 </div>
               )}
@@ -913,11 +913,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       <div style={{ fontSize: 10.5, color: C.textMuted, marginTop: 2 }}>+ {hubEvent._prepTasks.length - 1} more</div>
                     )}
                   </div>
-                ) : (
+                ) : (!hubEvent.client_id ? (
                   <div style={{ fontSize: 12.5, color: C.textMuted, fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", lineHeight: 1.4 }}>
                     Nothing to prep — you're set.
                   </div>
-                )}
+                ) : null)}
                 {renderPrepMemo(hubEvent)}
               </div>
 
