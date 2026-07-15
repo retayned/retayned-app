@@ -207,6 +207,7 @@ export default function TodayPage({ app }) {
   // making. Clipboard + open (the claude.ai ?q= URL was removed for
   // security, so paste is the reliable web path).
   const [claudeCopiedId, setClaudeCopiedId] = useState(null);
+  const [claudeToast, setClaudeToast] = useState(false);
   const handOffToClaude = async (t, client) => {
     const ctx = buildTaskDiscussionContext({ task: t, client, tasks, touchpoints: allTouchpoints, recentPick: null, suggestion: null });
     const prompt = [
@@ -216,10 +217,14 @@ export default function TodayPage({ app }) {
       "",
       `Please create the deliverable described in the task. Ask me anything you need before starting.`,
     ].join("\n");
-    try { await navigator.clipboard.writeText(prompt); } catch (_) { /* clipboard can fail in odd contexts; still open */ }
-    window.open("https://claude.ai/new", "_blank", "noopener");
+    // Copy FIRST, before window.open — some browsers void clipboard
+    // writes once focus moves to the new tab.
+    try { await navigator.clipboard.writeText(prompt); } catch (_) { /* still open */ }
     setClaudeCopiedId(t.id);
-    setTimeout(() => setClaudeCopiedId(id => (id === t.id ? null : id)), 5000);
+    setClaudeToast(true);
+    setTimeout(() => setClaudeToast(false), 6000);
+    setTimeout(() => setClaudeCopiedId(id => (id === t.id ? null : id)), 6000);
+    window.open("https://claude.ai/new", "_blank", "noopener");
   };
   const [editingNoteId, setEditingNoteId] = useState(null);
   // Tasks whose title is ACTUALLY clipped in the DOM right now. The title now
@@ -3224,8 +3229,13 @@ export default function TodayPage({ app }) {
                                     title={"Rai packs this client's context and opens Claude — paste and go."}
                                     style={{ flexShrink: 0, marginLeft: 8, border: "1px solid " + C.border, background: C.card, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, color: C.textSec, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
                                   >
-                                    {claudeCopiedId === t.id ? "Copied — paste in Claude ✓" : (<>Do in Claude <span style={{ color: C.btn }}>× Rai</span></>)}
+                                    {claudeCopiedId === t.id ? "Copied ✓" : (<>Do in Claude <span style={{ color: C.btn }}>× Rai</span></>)}
                                   </button>
+                                )}
+                                {claudeToast && claudeCopiedId === t.id && (
+                                  <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 90, background: "#1C3224", color: "#fff", borderRadius: 10, padding: "12px 18px", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(20,30,22,0.3)" }}>
+                                    Context copied — paste it into Claude (Cmd+V)
+                                  </div>
                                 )}
                               </div>
                               <div className="rt-row-meta" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.ink500, marginTop: 2, minWidth: 0 }}>
