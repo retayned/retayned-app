@@ -134,6 +134,26 @@ function detectThinkingVerb(text) {
 //
 // Returns a multi-paragraph string sized for direct insertion as
 // the first assistant turn in the chat history.
+// Detect artifact-shaped work — tasks whose deliverable is a heavy
+// creative artifact (ads, decks, reports, pages) better made in Claude
+// than discussed with Rai. Distinct from THINKING_VERBS on purpose: a
+// task can be BOTH discussable (purple underline → Rai) and artifact
+// (Do in Claude × Rai chip) — two routes, user picks. Word-boundary
+// matched; verb OR noun qualifies ("Create new statics", "Spring
+// launch statics" both fire).
+const ARTIFACT_VERBS = ["create", "build", "design", "make", "produce", "mock up", "mockup"];
+const ARTIFACT_NOUNS = ["report", "deck", "presentation", "slides", "ads", "ad set", "statics", "creative", "creatives", "landing page", "one-pager", "one pager", "mockup", "banner", "banners", "carousel", "graphics", "video script", "case study", "whitepaper", "proposal doc"];
+function detectArtifactWork(text) {
+  if (!text || typeof text !== "string") return false;
+  const s = text.toLowerCase();
+  const hit = (w) => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z]|$)`).test(s);
+  // Verb REQUIRED (an email mentioning "the report" isn't artifact work);
+  // then either a known artifact noun or a newness signal ("create new
+  // assets") qualifies. Conservative on purpose — a missing chip is a
+  // shrug, a wrong chip is noise.
+  return ARTIFACT_VERBS.some(hit) && (ARTIFACT_NOUNS.some(hit) || /\bnew\b|\bassets?\b/.test(s));
+}
+
 function buildTaskDiscussionContext({ task, client, tasks, touchpoints, recentPick, suggestion }) {
   if (!client) return null;
   const now = Date.now();
@@ -379,7 +399,7 @@ function ymdInTz(tz, atDate = new Date()) {
 // doesn't shift.
 // ============================================================
 
-export { getUserInitial, getWorkerInitials, retColor, retGradient, THINKING_VERBS, detectThinkingVerb, buildTaskDiscussionContext, escapeRegexChars, addDays, todayAnchored, localYmd, tzOffsetMinutes, tzMidnightInstant, ymdInTz };
+export { getUserInitial, getWorkerInitials, retColor, retGradient, THINKING_VERBS, detectThinkingVerb, detectArtifactWork, buildTaskDiscussionContext, escapeRegexChars, addDays, todayAnchored, localYmd, tzOffsetMinutes, tzMidnightInstant, ymdInTz };
 
 // Long-task compiler: composer text beyond the title cap becomes a short
 // scannable title + the FULL original preserved as a note — the same
