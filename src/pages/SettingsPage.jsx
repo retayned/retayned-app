@@ -1,9 +1,11 @@
 // AUTO-EXTRACTED from App.jsx (page === "settings" block) — body is
 // verbatim; only the surrounding component shell + imports are generated.
+import { useState } from "react";
 import { Icon } from "../components/Icon";
 import { C } from "../theme";
 import AgencyTeam from "../components/AgencyTeam";
-import { auth } from "../lib/db";
+import { auth, profile as profileDb } from "../lib/db";
+import { supabase } from "../lib/supabase";
 
 export default function SettingsPage({ app }) {
   const {
@@ -27,6 +29,63 @@ export default function SettingsPage({ app }) {
     syncGoogleCalendar,
     userTimezone,
   } = app;
+
+  // ── Account panel (P4, Jul 2026) ──────────────────────────────
+  // Inline expandable editor for the previously-dead "Account" row.
+  // Name/company write to BOTH auth user_metadata (sidebar reads it)
+  // and profiles (server surfaces read it). Email is read-only — an
+  // email CHANGE needs a confirmation flow (post-launch). Password
+  // uses supabase.auth.updateUser directly.
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [acctName, setAcctName] = useState("");
+  const [acctCompany, setAcctCompany] = useState("");
+  const [acctEmail, setAcctEmail] = useState("");
+  const [acctPw, setAcctPw] = useState("");
+  const [acctMsg, setAcctMsg] = useState("");
+  const [acctSaving, setAcctSaving] = useState(false);
+
+  const openAccount = async () => {
+    if (accountOpen) { setAccountOpen(false); return; }
+    setAcctMsg("");
+    const { data } = await supabase.auth.getUser();
+    const u = data?.user;
+    setAcctName(u?.user_metadata?.full_name || "");
+    setAcctCompany(u?.user_metadata?.company || "");
+    setAcctEmail(u?.email || "");
+    setAccountOpen(true);
+  };
+
+  const saveAccount = async () => {
+    setAcctSaving(true);
+    setAcctMsg("");
+    try {
+      const { data } = await supabase.auth.getUser();
+      const u = data?.user;
+      if (!u) throw new Error("Not signed in");
+      const { error: metaErr } = await supabase.auth.updateUser({
+        data: { full_name: acctName.trim(), company: acctCompany.trim() },
+      });
+      if (metaErr) throw metaErr;
+      // Mirror to profiles — server-side surfaces (sweep, org views)
+      // read here. supabase-js returns { error }, never throws.
+      const { error: profErr } = await profileDb.update(u.id, {
+        full_name: acctName.trim() || null,
+        company: acctCompany.trim() || null,
+      });
+      if (profErr) throw profErr;
+      if (acctPw) {
+        if (acctPw.length < 8) throw new Error("Password must be at least 8 characters");
+        const { error: pwErr } = await supabase.auth.updateUser({ password: acctPw });
+        if (pwErr) throw pwErr;
+        setAcctPw("");
+      }
+      setAcctMsg("Saved.");
+    } catch (err) {
+      setAcctMsg(String(err?.message || err));
+    }
+    setAcctSaving(false);
+  };
+
   return (<div>
             <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>Settings</h1>
 
@@ -242,12 +301,61 @@ export default function SettingsPage({ app }) {
                 for solo/trial accounts. */}
             <AgencyTeam app={app} />
 
-            {[{ title: "Account", desc: "Name, email, password" }, { title: "Notifications", desc: "Email alerts, daily digest" }, { title: "Billing", desc: "Plan, payment method, invoices" }].map((s, i) => (
-              <div key={i} className="row-hover" style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div><div style={{ fontSize: 14, fontWeight: 600 }}>{s.title}</div><div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div></div>
+            {/* Account — expandable inline editor (was a dead chevron row).
+                Notifications row REMOVED (Jul 2026, owner decision): no
+                digest/email-prefs infrastructure exists yet, and a toggle
+                nothing reads is a lie in UI form. Re-add when digests ship. */}
+            <div style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, marginBottom: 8 }}>
+              <div className="row-hover" onClick={openAccount} style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
+                <div><div style={{ fontSize: 14, fontWeight: 600 }}>Account</div><div style={{ fontSize: 12, color: C.textMuted }}>Name, email, password</div></div>
                 <Icon name="chevron" size={16} color={C.border} />
               </div>
-            ))}
+              {accountOpen && (
+                <div style={{ padding: "0 16px 16px", borderTop: "1px solid " + C.borderLight }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Full name</label>
+                      <input value={acctName} onChange={e => setAcctName(e.target.value)} style={{ width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid " + C.border, fontSize: 13, fontFamily: "inherit", background: C.bg }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Company</label>
+                      <input value={acctCompany} onChange={e => setAcctCompany(e.target.value)} style={{ width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid " + C.border, fontSize: 13, fontFamily: "inherit", background: C.bg }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>Email</label>
+                      <input value={acctEmail} disabled style={{ width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid " + C.borderLight, fontSize: 13, fontFamily: "inherit", background: C.surfaceWarm, color: C.textMuted }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 600, color: C.textSec, display: "block", marginBottom: 6 }}>New password <span style={{ fontWeight: 400, color: C.textMuted }}>(blank = unchanged)</span></label>
+                      <input type="password" value={acctPw} onChange={e => setAcctPw(e.target.value)} placeholder="••••••••" style={{ width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid " + C.border, fontSize: 13, fontFamily: "inherit", background: C.bg }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
+                    <button onClick={saveAccount} disabled={acctSaving} className="r-btn" style={{ border: "none", background: C.primary, color: "#fff", borderRadius: 999, padding: "8px 18px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: acctSaving ? "default" : "pointer", opacity: acctSaving ? 0.6 : 1 }}>{acctSaving ? "Saving…" : "Save changes"}</button>
+                    {acctMsg && <span style={{ fontSize: 12, fontWeight: 600, color: acctMsg === "Saved." ? C.success : C.danger }}>{acctMsg}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Billing — routes to the Stripe portal (was a dead chevron
+                row). Trial users have no Stripe customer, so the portal
+                would fail for them — scroll them to the plan section
+                above instead, where checkout lives. */}
+            <div
+              className="row-hover"
+              onClick={() => {
+                if (billing?.plan === "trial" || !billing?.stripe_customer_id) {
+                  try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (_) { window.scrollTo(0, 0); }
+                } else {
+                  openBillingPortal();
+                }
+              }}
+              style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+            >
+              <div><div style={{ fontSize: 14, fontWeight: 600 }}>Billing</div><div style={{ fontSize: 12, color: C.textMuted }}>Plan, payment method, invoices</div></div>
+              <Icon name="chevron" size={16} color={C.border} />
+            </div>
 
             {/* Sign out — the auth helper (auth.signOut in lib/db) existed
                 since launch but nothing in the UI ever called it; a comment
