@@ -3,6 +3,7 @@
 import { Icon } from "../components/Icon";
 import { C } from "../theme";
 import AgencyTeam from "../components/AgencyTeam";
+import { auth } from "../lib/db";
 
 export default function SettingsPage({ app }) {
   const {
@@ -247,5 +248,22 @@ export default function SettingsPage({ app }) {
                 <Icon name="chevron" size={16} color={C.border} />
               </div>
             ))}
+
+            {/* Sign out — the auth helper (auth.signOut in lib/db) existed
+                since launch but nothing in the UI ever called it; a comment
+                in App.jsx claimed this row lived here. Now it does. On
+                success, main.jsx's onAuthStateChange sees the session end
+                and swaps App for AuthPage — no manual navigation needed. */}
+            <div
+              className="row-hover"
+              onClick={async () => { await auth.signOut(); }}
+              style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 10, padding: "14px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+            >
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.danger }}>Sign out</div>
+                <div style={{ fontSize: 12, color: C.textMuted }}>Sign out of Retayned on this device</div>
+              </div>
+              <Icon name="chevron" size={16} color={C.border} />
+            </div>
           </div>);
 }
