@@ -3798,9 +3798,6 @@ export default function App({ user }) {
                     {billing?.plan === "trial" ? "Trial" : billing?.plan === "agency" ? "Agency" : "Solo"}
                   </div>
                 </div>
-                <div onClick={() => { setProfileMenuOpen(false); setPage("settings"); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.text }} className="row-hover">
-                  <Icon name="settings" size={15} color={C.textSec} /> Settings
-                </div>
                 <div onClick={async () => { setProfileMenuOpen(false); try { if (user?.id) clearHydrateSnapshot(user.id); } catch (_) { /* best effort */ } await supabase.auth.signOut(); }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, color: C.danger }} className="row-hover">
                   <Icon name="x" size={15} color={C.danger} /> Sign out
                 </div>
