@@ -16,7 +16,7 @@ import { parseCalendarEntry, parseComposer, detectPastTense } from "../parser";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { dateToYmd, formatRecurrenceLabel, nextOccurrenceDate } from "../recurrence";
 import { C } from "../theme";
-import { detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, splitLongTask, ymdInTz } from "../utils";
+import { buildTaskDiscussionContext, detectArtifactWork, detectThinkingVerb, getUserInitial, getWorkerInitials, retColor, retGradient, splitLongTask, ymdInTz } from "../utils";
 
 export default function TodayPage({ app }) {
   const {
@@ -201,6 +201,26 @@ export default function TodayPage({ app }) {
   // ── Brain Dump + task-notes local UI state (page-local, not app state) ──
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
+  // "Do in Claude × Rai" (Jul 2026) — artifact-shaped tasks get a chip
+  // that packs the client context and opens Claude. Rai does the
+  // packing (same context builder as her chat preload), Claude does the
+  // making. Clipboard + open (the claude.ai ?q= URL was removed for
+  // security, so paste is the reliable web path).
+  const [claudeCopiedId, setClaudeCopiedId] = useState(null);
+  const handOffToClaude = async (t, client) => {
+    const ctx = buildTaskDiscussionContext({ task: t, client, tasks, touchpoints: allTouchpoints, recentPick: null, suggestion: null });
+    const prompt = [
+      "I'm working on a deliverable for one of my clients. Context below comes from Retayned, my client retention CRM — Rai (its AI) packed it for you.",
+      "",
+      ctx || `Task: "${t.text}"\nClient: ${client?.name || t.client_name || "(unlinked)"}`,
+      "",
+      `Please create the deliverable described in the task. Ask me anything you need before starting.`,
+    ].join("\n");
+    try { await navigator.clipboard.writeText(prompt); } catch (_) { /* clipboard can fail in odd contexts; still open */ }
+    window.open("https://claude.ai/new", "_blank", "noopener");
+    setClaudeCopiedId(t.id);
+    setTimeout(() => setClaudeCopiedId(id => (id === t.id ? null : id)), 5000);
+  };
   const [editingNoteId, setEditingNoteId] = useState(null);
   // Tasks whose title is ACTUALLY clipped in the DOM right now. The title now
   // uses a 2-line clamp (-webkit-line-clamp: 2), so truncation is VERTICAL
@@ -3196,6 +3216,15 @@ export default function TodayPage({ app }) {
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: openNoteId === t.id ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>
                                       <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                     </svg>
+                                  </button>
+                                )}
+                                {!isDone && client && detectArtifactWork(t.text) && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handOffToClaude(t, client); }}
+                                    title={"Rai packs this client's context and opens Claude — paste and go."}
+                                    style={{ flexShrink: 0, marginLeft: 8, border: "1px solid " + C.border, background: C.card, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, color: C.textSec, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                                  >
+                                    {claudeCopiedId === t.id ? "Copied — paste in Claude ✓" : (<>Do in Claude <span style={{ color: C.btn }}>× Rai</span></>)}
                                   </button>
                                 )}
                               </div>
