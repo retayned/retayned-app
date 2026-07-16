@@ -64,7 +64,7 @@ function BriefTakeover({ C, state, onClose, onRetry }) {
             Couldn't read the week.
           </div>
           <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
-            <span onClick={onRetry} style={{ fontSize: 12.5, fontWeight: 600, color: "#7C5CF3", cursor: "pointer" }}>Try again</span>
+            <span onClick={onRetry} style={{ fontSize: 12.5, fontWeight: 600, color: C.btn, cursor: "pointer" }}>Try again</span>
             <span onClick={onClose} style={{ fontSize: 12.5, fontWeight: 600, color: C.textMuted, cursor: "pointer" }}>Close</span>
           </div>
         </div>
@@ -142,11 +142,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
     return (
       <div
         onClick={() => generatePrepMemo(ev)}
-        onMouseEnter={(e) => { e.currentTarget.style.color = "#7C5CF3"; }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = C.btn; }}
         onMouseLeave={(e) => { e.currentTarget.style.color = C.text; }}
         style={{ fontSize: 12, fontWeight: 600, color: C.text, cursor: "pointer", marginTop: 8, textAlign: "right", transition: "color 140ms ease" }}
       >
-        <span style={{ color: "#7C5CF3" }}>✦</span> Before the call
+        <span style={{ color: C.btn }}>✦</span> Before the call
       </div>
     );
   };
