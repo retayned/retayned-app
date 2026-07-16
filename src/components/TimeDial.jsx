@@ -46,7 +46,7 @@ function BriefTakeover({ C, state, onClose, onRetry }) {
         position: "absolute", inset: 0, zIndex: 40, background: C.bg || "#FAFAF7",
         borderRadius: "inherit", cursor: state.status === "done" ? "pointer" : "default",
         display: "flex", flexDirection: "column", justifyContent: "center",
-        padding: "28px 30px", opacity: entered ? 1 : 0,
+        padding: "40px 28px 40px 44px", opacity: entered ? 1 : 0,
         transform: entered ? "none" : "translateY(6px)", transition: trans,
       }}
     >
@@ -71,14 +71,31 @@ function BriefTakeover({ C, state, onClose, onRetry }) {
       )}
       {state.status === "done" && (
         <>
-          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 16, lineHeight: 1.65, color: C.text, maxWidth: "36ch" }}>
+          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 16, lineHeight: 1.65, color: C.text, maxWidth: "40ch" }}>
             {state.memo}
           </div>
-          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13, color: "#7C5CF3", marginTop: 14 }}>— Rai</div>
-          <div style={{ position: "absolute", bottom: 14, right: 20, fontSize: 11, color: C.textMuted }}>tap anywhere to return</div>
+          <div style={{ fontSize: 11, color: C.textMuted, marginTop: 14 }}>Click anywhere to exit.</div>
         </>
       )}
     </div>
+  );
+}
+
+// Quiet-until-intent action link (earned-color rule, Jul 2026):
+// muted gray at rest; reveals its identity color only on hover —
+// danger red for destructive, text color for neutral. Candidate
+// pattern for the post-launch resting-red sweep.
+function QuietAction({ label, danger = false, C, onClick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: hov ? (danger ? "#A03422" : C.text) : C.textMuted, cursor: "pointer", fontFamily: "inherit", transition: "color 140ms ease" }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -123,8 +140,13 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   const renderPrepMemo = (ev) => {
     if (!ev || !ev.client_id) return null;
     return (
-      <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, fontWeight: 600, color: "#7C5CF3", cursor: "pointer", marginTop: 8, textAlign: "right" }}>
-        ✦ Brief me
+      <div
+        onClick={() => generatePrepMemo(ev)}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "#7C5CF3"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = C.text; }}
+        style={{ fontSize: 12, fontWeight: 600, color: C.text, cursor: "pointer", marginTop: 8, textAlign: "right", transition: "color 140ms ease" }}
+      >
+        <span style={{ color: "#7C5CF3" }}>✦</span> Before the call
       </div>
     );
   };
@@ -909,16 +931,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                       setRescheduleTime(`${hh}:${mi}`);
                       setRescheduleEditing(true);
                     }}
-                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
+                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: C.textMuted, cursor: "pointer", fontFamily: "inherit", transition: "color 140ms ease" }} onMouseEnter={(e) => { e.currentTarget.style.color = C.text; }} onMouseLeave={(e) => { e.currentTarget.style.color = C.textMuted; }}
                   >
                     Reschedule
                   </button>
-                  <button
-                    onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }}
-                    style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: "#A03422", cursor: "pointer", fontFamily: "inherit" }}
-                  >
-                    Delete
-                  </button>
+                  <QuietAction label="Delete" danger C={C} onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); setSelectedId(null); }} />
                 </div>
               )}
             </>
@@ -1006,16 +1023,11 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                     setRescheduleTime(`${hh}:${mi}`);
                     setRescheduleEditing(true);
                   }}
-                  style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
+                  style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: C.textMuted, cursor: "pointer", fontFamily: "inherit", transition: "color 140ms ease" }} onMouseEnter={(e) => { e.currentTarget.style.color = C.text; }} onMouseLeave={(e) => { e.currentTarget.style.color = C.textMuted; }}
                 >
                   Reschedule
                 </button>
-                <button
-                  onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); }}
-                  style={{ background: "transparent", border: "none", padding: 0, fontSize: 11.5, fontWeight: 500, color: "#A03422", cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  Delete
-                </button>
+                <QuietAction label="Delete" danger C={C} onClick={() => { if (typeof onDeleteEvent === "function") onDeleteEvent(hubEvent.id); }} />
               </div>
             </>
           )
