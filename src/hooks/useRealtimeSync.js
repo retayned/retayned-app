@@ -9,6 +9,7 @@ import { raiPicks as raiPicksDb, realtime as realtimeDb, workers as workersDb } 
 
 export function useRealtimeSync(app) {
   const {
+    inFlightDateMoves,
     inFlightToggles,
     profileScores,
     setClients,
@@ -91,6 +92,20 @@ export function useRealtimeSync(app) {
         // toggle write completes (inFlightToggles.delete fires), any
         // subsequent realtime echo will reflect the post-write state
         // and is safe to apply.
+        // Date-move guard (Jul 2026): same race, due_date edition. A stale
+        // UPDATE echo from before the move must not drag the task back to
+        // its old day. Confirmed-or-expired clears; otherwise ignore echo.
+        const _dEntry = inFlightDateMoves.current.get(mapped.id);
+        if (_dEntry) {
+          const _dExpired = Date.now() > (_dEntry.ts + 15000);
+          const _srvYmd = String(mapped.due_date || "").slice(0, 10);
+          const _movYmd = String(_dEntry.due_date || "").slice(0, 10);
+          if (_dExpired || _srvYmd === _movYmd) {
+            inFlightDateMoves.current.delete(mapped.id);
+          } else {
+            return; // stale echo from before the date move: ignore
+          }
+        }
         const _entry = inFlightToggles.current.get(mapped.id);
         if (_entry) {
           // A completion animation in flight owns this row: ignore the echo
