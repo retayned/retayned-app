@@ -208,6 +208,7 @@ export default function TodayPage({ app }) {
   // security, so paste is the reliable web path).
   const [claudeCopiedId, setClaudeCopiedId] = useState(null);
   const [claudeToast, setClaudeToast] = useState(false);
+  const [claudeHoverId, setClaudeHoverId] = useState(null);
   const handOffToClaude = async (t, client) => {
     const ctx = buildTaskDiscussionContext({ task: t, client, tasks, touchpoints: allTouchpoints, recentPick: null, suggestion: null });
     const prompt = [
@@ -3223,15 +3224,29 @@ export default function TodayPage({ app }) {
                                     </svg>
                                   </button>
                                 )}
-                                {!isDone && client && detectArtifactWork(t.text) && (
+                                {!isDone && client && detectArtifactWork(t.text) && (() => {
+                                  const hov = claudeHoverId === t.id;
+                                  return (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handOffToClaude(t, client); }}
+                                    onMouseEnter={() => setClaudeHoverId(t.id)}
+                                    onMouseLeave={() => setClaudeHoverId(id => (id === t.id ? null : id))}
                                     title={"Rai packs this client's context and opens Claude — paste and go."}
-                                    style={{ flexShrink: 0, marginLeft: 8, border: "1px solid " + C.border, background: C.card, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, color: C.textSec, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+                                    style={{
+                                      flexShrink: 0, marginLeft: 8, borderRadius: 999, padding: "4px 11px",
+                                      fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", fontFamily: "inherit",
+                                      whiteSpace: "nowrap", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5,
+                                      border: "1px solid " + (hov ? C.primaryDeep : C.border),
+                                      background: hov ? C.primaryDeep : C.card,
+                                      color: hov ? "#FFFFFF" : C.textSec,
+                                      boxShadow: hov ? "0 2px 8px rgba(28,50,36,0.28)" : "none",
+                                      transition: "background 140ms ease-out, color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out",
+                                    }}
                                   >
-                                    {claudeCopiedId === t.id ? "Copied ✓" : (<>Do in Claude <span style={{ color: C.btn }}>× Rai</span></>)}
+                                    {claudeCopiedId === t.id ? "Copied ✓" : (<>Do in Claude <span style={{ color: hov ? "#C9B8FF" : C.btn, transition: "color 140ms ease-out" }}>× Rai</span> <span style={{ display: "inline-block", transform: hov ? "translate(1px,-1px)" : "none", transition: "transform 140ms ease-out" }}>↗</span></>)}
                                   </button>
-                                )}
+                                  );
+                                })()}
                                 {claudeToast && claudeCopiedId === t.id && (
                                   <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 90, background: "#1C3224", color: "#fff", borderRadius: 10, padding: "12px 18px", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(20,30,22,0.3)" }}>
                                     Context copied — paste it into Claude (Cmd+V)
