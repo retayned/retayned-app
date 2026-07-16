@@ -16,6 +16,7 @@ export function useDataLoad(app) {
     getAdjustedLTV,
     googleConnected,
     googleEmail,
+    inFlightDateMoves,
     inFlightToggles,
     isCurrentlyPaused,
     monthsTogether,
@@ -470,7 +471,7 @@ export function useDataLoad(app) {
       // writing to the DB — otherwise this hydration clobbers it with a stale
       // row and the user's check silently disappears.
       setTasks(prev => {
-        if (inFlightToggles.current.size === 0) return loadedTasks;
+        if (inFlightToggles.current.size === 0 && inFlightDateMoves.current.size === 0) return loadedTasks;
         // Recent-toggles ledger: a hydration whose SELECT predates a
         // toggle must not stomp it. For recently toggled ids, local truth
         // wins. Clearing rules:
@@ -484,7 +485,23 @@ export function useDataLoad(app) {
         //     or after the entry's `until` window (legitimate later server
         //     flips, e.g. midnight rollover, then apply).
         const _now = Date.now();
-        return loadedTasks.map(t => {
+        // Date-move ledger (Jul 2026): a hydration whose SELECT predates a
+        // due_date move must not stomp it — same contract as toggles.
+        // Confirmed (server row shows the moved date) or expired → clear.
+        const applyDateGuard = (t) => {
+          const dEntry = inFlightDateMoves.current.get(t.id);
+          if (!dEntry) return t;
+          const _dExpired = _now > (dEntry.ts + 15000);
+          const serverYmd = String(t.due_date || "").slice(0, 10);
+          const movedYmd = String(dEntry.due_date || "").slice(0, 10);
+          if (_dExpired || serverYmd === movedYmd) {
+            inFlightDateMoves.current.delete(t.id);
+            return t;
+          }
+          return { ...t, due_date: dEntry.due_date };
+        };
+        return loadedTasks.map(raw => {
+          const t = applyDateGuard(raw);
           const entry = inFlightToggles.current.get(t.id);
           if (!entry) return t;
           const _expired = _now > (entry.until || (entry.ts + 15000));
