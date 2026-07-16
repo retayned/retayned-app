@@ -46,7 +46,7 @@ function BriefTakeover({ C, state, onClose, onRetry }) {
         position: "absolute", inset: 0, zIndex: 40, background: C.bg || "#FAFAF7",
         borderRadius: "inherit", cursor: state.status === "done" ? "pointer" : "default",
         display: "flex", flexDirection: "column", justifyContent: "center",
-        padding: "40px 28px 40px 44px", opacity: entered ? 1 : 0,
+        padding: "40px 32px", paddingLeft: "clamp(64px, 22%, 240px)", opacity: entered ? 1 : 0,
         transform: entered ? "none" : "translateY(6px)", transition: trans,
       }}
     >
