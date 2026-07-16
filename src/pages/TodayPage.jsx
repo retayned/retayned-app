@@ -156,6 +156,7 @@ export default function TodayPage({ app }) {
     todayModeMenuOpen,
     todayStripOpen,
     toggleTask,
+    inFlightDateMoves,
     tomorrowCalOpen,
     topTaskIdRef,
     triggerChipPulse,
@@ -737,9 +738,22 @@ export default function TodayPage({ app }) {
               setTasks(prev => prev.map(t => t.id === taskId ? { ...t, raiPriority: false } : t));
             }
 
-            // Update local first for snappy UI; DB write is async
+            // Update local first for snappy UI; DB write is async.
+            // Register in the date-move ledger BEFORE the optimistic set so
+            // any hydration/realtime echo racing this write cannot drag the
+            // task back to its old day (the double-move bug, Jul 15 2026).
+            if (inFlightDateMoves) inFlightDateMoves.current.set(taskId, { due_date: newDateStr, ts: Date.now() });
             setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: newDateStr } : t));
-            try { await tasksDb.setDueDate(taskId, newDateStr); } catch (e) { console.warn("setDueDate failed:", e); }
+            // supabase-js returns { error }, never throws — the old try/catch
+            // here could not fire, so a failed write was fully silent.
+            const { error: moveErr } = await tasksDb.setDueDate(taskId, newDateStr);
+            if (moveErr) {
+              console.error("setDueDate failed:", moveErr);
+              if (inFlightDateMoves) inFlightDateMoves.current.delete(taskId);
+              setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: oldDateStr } : t));
+              setQuickLogToast({ id: Date.now(), error: true, message: "Couldn\u2019t move the task \u2014 try again" });
+              return;
+            }
 
             // Re-notify worker if assigned + date actually changed.
             // Edge Function applies a 12-hour cooldown per task to prevent spam.
