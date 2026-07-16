@@ -2988,11 +2988,37 @@ export default function App({ user }) {
   }, [user?.id]);
   useEffect(() => { refreshBilling(); }, [refreshBilling]);
 
+  // ── Meta pixel (P3, Jul 2026) ─────────────────────────────────
+  // Loads ONLY when VITE_META_PIXEL_ID is set in Vercel env — until
+  // then this is a no-op and ships safely. The browser StartTrial
+  // below shares its eventID with the webhook's CAPI event (the
+  // checkout session id); Meta dedupes the pair.
+  useEffect(() => {
+    const pid = import.meta.env.VITE_META_PIXEL_ID;
+    if (!pid || window.fbq) return;
+    /* eslint-disable */
+    !(function (f, b, e, v, n, t, s) {
+      if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
+      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = true; n.version = "2.0"; n.queue = [];
+      t = b.createElement(e); t.async = true; t.src = v;
+      s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s);
+    })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+    /* eslint-enable */
+    window.fbq("init", pid);
+    window.fbq("track", "PageView");
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const flag = params.get("billing");
     if (!flag) return;
     if (flag === "success") {
+      // Meta P3: browser-side StartTrial, deduped against the webhook's
+      // CAPI event via the checkout session id the return_url carries.
+      try {
+        const sid = params.get("session_id");
+        if (window.fbq && sid) window.fbq("track", "StartTrial", {}, { eventID: sid });
+      } catch (_) { /* pixel absence must never break the success path */ }
       // Stripe redirected back post-checkout. The webhook races this
       // redirect, so refetch now and again shortly after.
       refreshBilling();
