@@ -1108,6 +1108,15 @@ export default function App({ user }) {
   // stomp the check with a pre-toggle snapshot (the vanishing-check bug).
   const inFlightToggles = useRef(new Map());
 
+  // In-flight DATE MOVES ledger — third member of the family (toggles,
+  // creates, now dates). A task moved today→tomorrow was getting stomped
+  // by a loadData/realtime snapshot whose SELECT predated the due_date
+  // write: task blipped back into Today, completion % flickered, user
+  // had to move it twice (observed live Jul 15 2026). Entry:
+  // id → { due_date, ts }. Local truth wins for 15s or until a server
+  // row confirms the new date.
+  const inFlightDateMoves = useRef(new Map());
+
   // In-flight CREATES ledger — the create-side analog of inFlightToggles.
   // A newly created task (from any composer) is added optimistically, but a
   // loadData refetch triggered in the gap before the INSERT is visible to a
@@ -1514,7 +1523,7 @@ export default function App({ user }) {
       } catch (e) { console.warn("org-accept error:", e); }
     })();
   }, [orgLoading, user?.id]);
-  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
@@ -2961,7 +2970,7 @@ export default function App({ user }) {
   // Realtime subscriptions (worker completions, multi-device edits,
   // Rai pick/state changes). Hook lives in src/hooks/useRealtimeSync.
   // Called here — after every referenced declaration — to avoid TDZ.
-  useRealtimeSync({ inFlightToggles, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user,
+  useRealtimeSync({ inFlightDateMoves, inFlightToggles, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user,
     bookOwnerId, raiBurstTrackerRef });
   // ── BILLING (Jul 2026) ─────────────────────────────────────────────
   // One row from billing_subscriptions (webhook-written, read-only
@@ -3051,6 +3060,7 @@ export default function App({ user }) {
 
   const pageCtx = {
     billing,
+    inFlightDateMoves,
     switchTrialPlan,
     orgLoading,
     refetchOrg,
