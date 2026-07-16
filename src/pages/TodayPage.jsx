@@ -3247,9 +3247,10 @@ export default function TodayPage({ app }) {
                                     onMouseLeave={() => setClaudeHoverId(id => (id === t.id ? null : id))}
                                     title={"Rai packs this client's context and opens Claude — paste and go."}
                                     style={{
-                                      flexShrink: 0, marginLeft: 8, borderRadius: 999, padding: "4px 11px",
-                                      fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", fontFamily: "inherit",
+                                      flexShrink: 0, marginLeft: 8, borderRadius: 999, height: 20, padding: "0 10px",
+                                      fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", fontFamily: "inherit", lineHeight: 1,
                                       whiteSpace: "nowrap", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5,
+                                      alignSelf: "center", marginTop: 0, marginBottom: 0, boxSizing: "border-box",
                                       border: "1px solid " + (hov ? C.primaryDeep : C.border),
                                       background: hov ? C.primaryDeep : C.card,
                                       color: hov ? "#FFFFFF" : C.textSec,
