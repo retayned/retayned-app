@@ -26,6 +26,62 @@ import { supabase } from "../lib/supabase";
 // UI. Events outside the ±6h window are pocketed as "earlier/later" counts.
 //   events — [{ id, title, starts_at, ends_at?, source }]
 //   onSelectEvent — optional (event) => void
+// ✦ Brief me takeover — the whole dial becomes Rai's note. Mounts at
+// opacity 0 and rises on the next frame; reduced-motion users get a
+// plain cut. Loading and error live in the same room so the transition
+// happens once, not per state.
+function BriefTakeover({ C, state, onClose, onRetry }) {
+  const [entered, setEntered] = useState(false);
+  const reduced = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const ev = state.ev || {};
+  const trans = reduced ? "none" : "opacity 260ms ease, transform 260ms ease";
+  return (
+    <div
+      onClick={state.status === "error" ? undefined : onClose}
+      style={{
+        position: "absolute", inset: 0, zIndex: 40, background: C.bg || "#FAFAF7",
+        borderRadius: "inherit", cursor: state.status === "done" ? "pointer" : "default",
+        display: "flex", flexDirection: "column", justifyContent: "center",
+        padding: "28px 30px", opacity: entered ? 1 : 0,
+        transform: entered ? "none" : "translateY(6px)", transition: trans,
+      }}
+    >
+      <div style={{ fontSize: 10.5, letterSpacing: "0.1em", textTransform: "uppercase", color: C.textMuted, marginBottom: 12 }}>
+        {ev.client_name || "This client"} · <span style={{ color: C.textSec, fontWeight: 600 }}>the last 7 days</span>
+      </div>
+      {state.status === "loading" && (
+        <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 15, color: C.textMuted }}>
+          Rai is reading the week…
+        </div>
+      )}
+      {state.status === "error" && (
+        <div>
+          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 15, color: C.textMuted }}>
+            Couldn't read the week.
+          </div>
+          <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+            <span onClick={onRetry} style={{ fontSize: 12.5, fontWeight: 600, color: "#7C5CF3", cursor: "pointer" }}>Try again</span>
+            <span onClick={onClose} style={{ fontSize: 12.5, fontWeight: 600, color: C.textMuted, cursor: "pointer" }}>Close</span>
+          </div>
+        </div>
+      )}
+      {state.status === "done" && (
+        <>
+          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 16, lineHeight: 1.65, color: C.text, maxWidth: "36ch" }}>
+            {state.memo}
+          </div>
+          <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13, color: "#7C5CF3", marginTop: 14 }}>— Rai</div>
+          <div style={{ position: "absolute", bottom: 14, right: 20, fontSize: 11, color: C.textMuted }}>tap anywhere to return</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, onRescheduleEvent = null, onTogglePrepTask = null, scrubMs = 0, setScrubMs = () => {}, dayView = "today", setDayView = () => {}, onRequestLink = null, gcalNudge = null }) {
   // ── Rai prep memo (Jul 2026) — on-demand 7-day dossier for the
   // meeting's linked client. Nothing generates until the user clicks
@@ -33,9 +89,16 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
   // Keyed by event id; the edge function day-caches per client, so a
   // second click on the same client's other meeting is a cache hit.
   const [prepMemos, setPrepMemos] = useState({});
+  // Takeover state (Jul 2026 redesign): the memo no longer stacks inside
+  // the event card — the note borrows the whole dial. briefOpen holds the
+  // event whose note owns the room; null = normal dial.
+  const [briefOpen, setBriefOpen] = useState(null);
   const generatePrepMemo = async (ev) => {
     if (!ev || !ev.client_id) return;
     const key = ev.id;
+    const cached = prepMemos[key];
+    if (cached && cached.status === "done") { setBriefOpen({ ev, status: "done", memo: cached.memo }); return; }
+    setBriefOpen({ ev, status: "loading" });
     setPrepMemos(m => ({ ...m, [key]: { status: "loading" } }));
     try {
       const { data, error } = await supabase.functions.invoke("rai-prep", {
@@ -43,35 +106,25 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
       });
       if (error || !data?.memo) throw (error || new Error("No memo returned"));
       setPrepMemos(m => ({ ...m, [key]: { status: "done", memo: data.memo } }));
+      setBriefOpen(cur => (cur && cur.ev.id === key ? { ev, status: "done", memo: data.memo } : cur));
     } catch (err) {
       console.error("rai-prep failed:", err);
-      setPrepMemos(m => ({ ...m, [key]: { status: "error" } }));
+      setPrepMemos(m => ({ ...m, [key]: undefined }));
+      setBriefOpen(cur => (cur && cur.ev.id === key ? { ev, status: "error" } : cur));
     }
   };
+  // Escape returns the room.
+  useEffect(() => {
+    if (!briefOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setBriefOpen(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [briefOpen]);
   const renderPrepMemo = (ev) => {
     if (!ev || !ev.client_id) return null;
-    const st = prepMemos[ev.id];
-    if (!st) {
-      return (
-        <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, fontWeight: 600, color: "#7C5CF3", cursor: "pointer", marginTop: 8, textAlign: "right" }}>
-          ✦ Brief me
-        </div>
-      );
-    }
-    if (st.status === "loading") {
-      return <div style={{ fontSize: 12, color: C.textMuted, fontStyle: "italic", marginTop: 8, textAlign: "right" }}>Rai is reading the week…</div>;
-    }
-    if (st.status === "error") {
-      return (
-        <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, color: C.textMuted, cursor: "pointer", marginTop: 8, textAlign: "right" }}>
-          Couldn't generate — tap to retry
-        </div>
-      );
-    }
     return (
-      <div style={{ marginTop: 10, background: "rgba(124,92,243,0.07)", borderRadius: 8, padding: "10px 12px", textAlign: "left" }}>
-        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "#7C5CF3", marginBottom: 5 }}>Rai · last 7 days</div>
-        <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>{st.memo}</div>
+      <div onClick={() => generatePrepMemo(ev)} style={{ fontSize: 12, fontWeight: 600, color: "#7C5CF3", cursor: "pointer", marginTop: 8, textAlign: "right" }}>
+        ✦ Brief me
       </div>
     );
   };
@@ -300,6 +353,17 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, overflow: "visible" }}>
+      {/* ✦ Brief me takeover — Rai's note borrows the whole dial while
+          open. Solid bg covers the dial; note rises in the serif-italic
+          voice; tap anywhere or Escape gives the room back. */}
+      {briefOpen && (
+        <BriefTakeover
+          C={C}
+          state={briefOpen}
+          onClose={() => setBriefOpen(null)}
+          onRetry={() => generatePrepMemo(briefOpen.ev)}
+        />
+      )}
       {/* B2 scrub indicator — appears only when the dial is scrubbed off
           live time. Sits in the upper-right area near the 6pm side of the
           dial, with right-aligned text echoing the hub's visual rhythm.
