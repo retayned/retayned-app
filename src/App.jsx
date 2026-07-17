@@ -468,15 +468,30 @@ export default function App({ user }) {
     setEditingTaskId(t.id);
     setEditingTaskText(t.text || "");
   };
-  const commitTaskEdit = () => {
+  const commitTaskEdit = async () => {
     const id = editingTaskId;
     const next = (editingTaskText || "").trim();
     if (!id) return;
     const orig = tasks.find(t => t.id === id);
     setEditingTaskId(null);
     if (!orig || !next || next === orig.text) return; // no-op on empty/unchanged
+    // Stamp the local-writes ledger BEFORE the optimistic set so a racing
+    // hydration/echo cannot revert the title — same contract as toggles and
+    // date moves.
+    const _lwSeq = noteLocalWrite(id, { text: next });
     setTasks(prev => prev.map(t => t.id === id ? { ...t, text: next } : t));
-    try { tasksDb.setText(id, next); } catch (e) { console.warn("Task title save failed:", e); }
+    // supabase-js returns { error }, never throws — the old try/catch here
+    // was dead code and a failed save was fully silent until the next
+    // hydration reverted the title.
+    const { error: editErr } = await tasksDb.setText(id, next);
+    if (editErr) {
+      console.error("Task title save failed:", editErr);
+      clearLocalWrite(id, _lwSeq);
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, text: orig.text } : t));
+      setQuickLogToast({ id: Date.now(), error: true, message: "Couldn\u2019t save the title \u2014 try again" });
+      return;
+    }
+    markLocalWriteCommitted(id, _lwSeq);
   };
   const cancelTaskEdit = () => { setEditingTaskId(null); setEditingTaskText(""); };
   // Mobile swipe state — tracks touch translation per task ID.
@@ -1158,6 +1173,36 @@ export default function App({ user }) {
   };
   const clearInFlightCreate = (id) => { inFlightCreates.current.delete(id); };
 
+  // LOCAL TASK WRITES ledger — the family-wide guard. Every optimistic task
+  // write (toggle, date move, title edit) stamps this map:
+  //   id → { ts, seq, committedAt, patch }.
+  // Merge rule everywhere: a snapshot whose SELECT started BEFORE the write
+  // committed can never overwrite the written fields. Unlike the per-type
+  // ledgers above (which stay in place as first-line guards), this layer has
+  // no fixed protection window on the hydration path — protection ends only
+  // when a snapshot provably newer than the committed write arrives, on
+  // write failure (the write path clears + reverts), or at a 30s disaster
+  // net for a write that never resolves. Closes the post-animation gap where
+  // a slow hydrate (visibilitychange fires loadData; the 22-query batch can
+  // outlive the 4.2s animation guard) resurrected a completed task.
+  // seq prevents an older overlapping write's completion from marking a
+  // newer in-flight write as committed.
+  const localTaskWrites = useRef(new Map());
+  const noteLocalWrite = (id, patch) => {
+    const e = localTaskWrites.current.get(id);
+    const seq = (e?.seq || 0) + 1;
+    localTaskWrites.current.set(id, { ts: Date.now(), seq, committedAt: null, patch: { ...(e?.patch || {}), ...patch } });
+    return seq;
+  };
+  const markLocalWriteCommitted = (id, seq) => {
+    const e = localTaskWrites.current.get(id);
+    if (e && e.seq === seq) e.committedAt = Date.now();
+  };
+  const clearLocalWrite = (id, seq) => {
+    const e = localTaskWrites.current.get(id);
+    if (e && (seq === undefined || e.seq === seq)) localTaskWrites.current.delete(id);
+  };
+
   // 30s priority hold tick: when a new task is added in Rai mode, it floats
   // to top for 30 seconds (see raiCompare). Once that window expires we need
   // a re-render so it sorts naturally. This effect schedules a tick at the
@@ -1541,7 +1586,7 @@ export default function App({ user }) {
       } catch (e) { console.warn("org-accept error:", e); }
     })();
   }, [orgLoading, user?.id]);
-  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, localTaskWrites, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
@@ -1934,6 +1979,9 @@ export default function App({ user }) {
       animating: newDone,            // true only while a completion animation is in flight
       until: Date.now() + (newDone ? 4200 : 15000), // covers glow(720) + hold(3500) + shrink margin
     });
+    // Family-wide ledger stamp — outlives the animation-scoped entry above.
+    // Protection ends on server-confirmed-newer snapshot, not on a timer.
+    const _lwSeq = noteLocalWrite(id, { done: newDone, completed_at: newDone ? nowIso : null });
     // Optimistic update
     const updated = tasks.map(t => t.id === id ? { ...t, done: newDone, completed_at: newDone ? nowIso : null } : t);
     setTasks(updated);
@@ -2072,6 +2120,9 @@ export default function App({ user }) {
       }
       setJustCompletedIds(prev => { const n = { ...prev }; delete n[id]; return n; });
       setQuickLogToast({ id: Date.now(), error: true });
+      clearLocalWrite(id, _lwSeq);
+    } else {
+      markLocalWriteCommitted(id, _lwSeq);
     }
   };
 
@@ -2988,7 +3039,7 @@ export default function App({ user }) {
   // Realtime subscriptions (worker completions, multi-device edits,
   // Rai pick/state changes). Hook lives in src/hooks/useRealtimeSync.
   // Called here — after every referenced declaration — to avoid TDZ.
-  useRealtimeSync({ inFlightDateMoves, inFlightToggles, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user,
+  useRealtimeSync({ inFlightDateMoves, inFlightToggles, localTaskWrites, profileScores, setClients, setRaiPicks, setRaiState, setTasks, setWorkerCompletions, userTimezone, user,
     bookOwnerId, raiBurstTrackerRef });
   // ── BILLING (Jul 2026) ─────────────────────────────────────────────
   // One row from billing_subscriptions (webhook-written, read-only
@@ -3105,6 +3156,9 @@ export default function App({ user }) {
   const pageCtx = {
     billing,
     inFlightDateMoves,
+    noteLocalWrite,
+    markLocalWriteCommitted,
+    clearLocalWrite,
     switchTrialPlan,
     orgLoading,
     refetchOrg,
