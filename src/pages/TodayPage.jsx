@@ -1484,7 +1484,7 @@ export default function TodayPage({ app }) {
                       ))}
                       {_youngAcct && _briefDays >= 1 && _briefDays <= 7 && (
                         <div style={{ fontSize: 10, color: C.textMuted, marginTop: 7, fontFamily: "'Manrope', system-ui, sans-serif", fontStyle: "normal", letterSpacing: 0.3 }}>
-                          {["", "There'll be one of these every morning. It reads everything; it says one thing.", "Morning two.", "Morning three.", "Morning four.", "Morning five.", "Morning six.", "One week of mornings."][_briefDays]}
+                          {["", "", "Morning two.", "Morning three.", "Morning four.", "Morning five.", "Morning six.", "One week of mornings."][_briefDays]}
                         </div>
                       )}
                     </div>
