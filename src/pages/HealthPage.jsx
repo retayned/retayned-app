@@ -71,7 +71,7 @@ export default function HealthPage({ app }) {
           // no current observation or one is being dismissed.
           const obsCaption = (
             <div style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, margin: "6px 2px 12px" }}>
-              Re-reads your week every Friday night.
+              Re-reads your week every Friday morning.
             </div>
           );
           // Friday-regeneration framing (Jul 2026): the observer card is
@@ -85,7 +85,7 @@ export default function HealthPage({ app }) {
               return (
                 <div style={{ padding: "18px 16px", border: "1px dashed " + C.borderLight, borderRadius: 12, marginBottom: 12, textAlign: "center" }}>
                   <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontWeight: 500, fontVariationSettings: "'opsz' 96, 'SOFT' 50, 'WONK' 0", fontSize: 13.5, color: C.textMuted, lineHeight: 1.5 }}>
-                    First weekly read lands Friday night.
+                    First weekly read lands Friday morning.
                   </div>
                 </div>
               );
@@ -732,6 +732,48 @@ export default function HealthPage({ app }) {
                 <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
               )}
               {isMobile && (<>{renderObserver()}{observation && !obsDismissing && obsCaption}</>)}
+                  {totalPlotted > 0 && (
+                    <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
+                        <div>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall</div>
+                          <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client, read by their own rhythm — who's cooling, who's holding, who you're ahead on.</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Slipping</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.primaryMuted }} />On rhythm</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Ahead</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                        {cadenceBuckets.filter(b => b.clients.length > 0).map(b => (
+                          <div key={b.key}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                              <span style={{ width: 9, height: 9, borderRadius: 5, background: b.color, flexShrink: 0 }} />
+                              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{b.label}</span>
+                              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>{b.clients.length}</span>
+                              <span style={{ fontSize: 12, color: C.textMuted }}>· {b.sub}</span>
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                              {b.clients.map(({ c }) => {
+                                const initials = (c.name || "?").split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
+                                return (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => setSelectedClient(c)}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: 999, border: "1px solid " + C.borderLight, background: C.bg, cursor: "pointer", fontFamily: "inherit" }}
+                                  >
+                                    <span style={{ width: 24, height: 24, borderRadius: 12, background: b.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{c.name}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
               {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
               <div className="rt-mob-strip" style={{ marginBottom: 16 }}>
@@ -1109,48 +1151,6 @@ export default function HealthPage({ app }) {
                     );
                     })()}
                   </div>
-                  {totalPlotted > 0 && (
-                    <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-                        <div>
-                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall</div>
-                          <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client, read by their own rhythm — who's cooling, who's holding, who you're ahead on.</div>
-                        </div>
-                        <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Slipping</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.primaryMuted }} />On rhythm</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Ahead</span>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                        {cadenceBuckets.filter(b => b.clients.length > 0).map(b => (
-                          <div key={b.key}>
-                            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-                              <span style={{ width: 9, height: 9, borderRadius: 5, background: b.color, flexShrink: 0 }} />
-                              <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{b.label}</span>
-                              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 600 }}>{b.clients.length}</span>
-                              <span style={{ fontSize: 12, color: C.textMuted }}>· {b.sub}</span>
-                            </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                              {b.clients.map(({ c }) => {
-                                const initials = (c.name || "?").split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
-                                return (
-                                  <button
-                                    key={c.id}
-                                    onClick={() => setSelectedClient(c)}
-                                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: 999, border: "1px solid " + C.borderLight, background: C.bg, cursor: "pointer", fontFamily: "inherit" }}
-                                  >
-                                    <span style={{ width: 24, height: 24, borderRadius: 12, background: b.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
-                                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{c.name}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {/* Done this month */}
                   {justCompleted.length > 0 && (
