@@ -1924,7 +1924,7 @@ export const APP_CSS = `
         .rt-tasks-col,
         .rt-today-v4 > .rt-band,
         .rt-today-v4 > .rt-composer {
-          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - 120px);
+          max-width: calc(100vw - 14px - var(--content-sidebar-w, 240px) - var(--sidebar-content-gap, 16px) - (720px * var(--dial-scale, 1)) - var(--dial-gap, 120px));
         }
         .rt-dial-help:hover .rt-dial-help-tip,
         .rt-dial-help:focus .rt-dial-help-tip { opacity: 1 !important; transform: translateY(0) !important; }
@@ -1968,11 +1968,18 @@ export const APP_CSS = `
            rejected. The event-proportion fix lives entirely in --dial-cs:
            events compensate only ~35% toward constant size (was 100%),
            so they shrink with the dial instead of towering over it. */
-        .rt-today-v4 { --dial-scale: 0.90; --dial-cs: 1.04; }
-        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.82; --dial-cs: 1.08; } }
-        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.74; --dial-cs: 1.12; } }
-        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.64; --dial-cs: 1.20; } }
-        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.56; --dial-cs: 1.28; } }
+        /* --dial-gap: the reserve between the task column's right edge and
+           the dial composition. Shrinks at laptop widths IN STEP with
+           --dial-label-w (shorter stems = safely smaller reserve): the
+           label truncation is what FUNDS the wider task column (Jul 17
+           2026 — first attempt truncated labels without touching this
+           formula and just manufactured dead air). Label widths are
+           pre-transform; on-screen ≈ value × scale × cs. */
+        .rt-today-v4 { --dial-scale: 0.90; --dial-cs: 1.04; --dial-gap: 120px; --dial-label-w: 150px; --dial-stem-w: 220px; }
+        @media (max-width: 1600px) { .rt-today-v4 { --dial-scale: 0.82; --dial-cs: 1.08; --dial-gap: 104px; --dial-label-w: 138px; --dial-stem-w: 205px; } }
+        @media (max-width: 1440px) { .rt-today-v4 { --dial-scale: 0.74; --dial-cs: 1.12; --dial-gap: 88px; --dial-label-w: 118px; --dial-stem-w: 180px; } }
+        @media (max-width: 1300px) { .rt-today-v4 { --dial-scale: 0.64; --dial-cs: 1.20; --dial-gap: 70px; --dial-label-w: 98px; --dial-stem-w: 155px; } }
+        @media (max-width: 1200px) { .rt-today-v4 { --dial-scale: 0.56; --dial-cs: 1.28; --dial-gap: 58px; --dial-label-w: 84px; --dial-stem-w: 135px; } }
         @media (max-height: 860px) { .rt-today-v4 { --dial-scale: 0.72; --dial-cs: 1.14; } }
         @media (max-height: 760px) { .rt-today-v4 { --dial-scale: 0.62; --dial-cs: 1.22; } }
         @media (max-height: 680px) { .rt-today-v4 { --dial-scale: 0.52; --dial-cs: 1.32; } }
