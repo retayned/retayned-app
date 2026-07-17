@@ -41,9 +41,25 @@ const PAST_ED_STOP = new Set([
   "interested","excited","tired","scared","bored","based","mixed",
 ]);
 
+// Base-form action verbs that open an IMPERATIVE — "send lemon updated
+// creative brief" is a TASK even though "updated" is a regular -ed word
+// (it's an adjective there). Position beats morphology: if the sentence
+// LEADS with one of these, past-tense detection is overridden entirely.
+// ("Updated the brief" still routes touchpoint — "updated" isn't base
+// form, so it never matches this set.) Jul 17 2026.
+const IMPERATIVE_LEADS = new Set([
+  "send","email","call","text","message","write","draft","create","make","build",
+  "design","update","review","prepare","prep","schedule","book","add","fix","finish",
+  "complete","check","follow","reach","get","put","pull","push","post","share","ship",
+  "launch","run","set","plan","invoice","bill","remind","ask","confirm","cancel",
+  "order","research","audit","optimize","upload","record","edit","test","clean","do",
+]);
+
 function detectPastTense(text) {
   if (!text) return false;
   const lower = " " + String(text).toLowerCase().trim() + " ";
+  const firstWord = (lower.trim().match(/^[a-z']+/) || [""])[0];
+  if (IMPERATIVE_LEADS.has(firstWord)) return false;
   // 1. multiword past phrases
   for (const p of PAST_PHRASES) {
     if (lower.includes(" " + p + " ") || lower.endsWith(" " + p + " ")) return true;
