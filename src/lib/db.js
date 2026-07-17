@@ -892,6 +892,25 @@ export const healthChecks = {
     return { data: data || [], error };
   },
 
+  // Completed checks for the current calendar month. listPending excludes
+  // completed rows, so before this fetch existed every completed-check
+  // display on the Health page (done-today count, calendar "logged" days,
+  // "Done this month" log) was session-only state that a refresh wiped.
+  // No is_active filter — history stays visible for deactivated clients.
+  listCompletedMonth: async (userId) => {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const { data, error } = await supabase
+      .from('health_checks')
+      .select('id, client_id, completed_at, drift_status, client:clients!inner(name)')
+      .eq('user_id', userId)
+      .not('completed_at', 'is', null)
+      .gte('completed_at', monthStart.toISOString())
+      .order('completed_at', { ascending: false });
+    return { data: data || [], error };
+  },
+
   // Return a map of { client_id: count_of_completed_hcs } for this user.
   // Used by the Health page to know if a pending HC is a client's first —
   // first HCs get a "Start Early" affordance; HC #2+ are locked until due.
