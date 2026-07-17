@@ -403,21 +403,22 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
         disabled={!isScrubbed}
         style={{
           position: "absolute",
-          // Position (Jul 17 2026 rework): COMPOSITION coordinates, not
-          // screen-pinned. The old form (180px / --dial-scale) held a
-          // constant on-screen corner offset while the disc scaled
-          // toward right-CENTER — so the arc's top edge slid down at
-          // laptop scales and the indicator landed ON the curve. In
-          // composition coords the indicator scales WITH the disc and
-          // keeps the desktop relationship to the arc at every
-          // breakpoint. 200/44 = the previous desktop-scale (0.90)
-          // on-screen position, converted — desktop looks identical.
-          // Text readability at small scales comes from the same
-          // counter-scale the event labels use (--dial-cs).
-          right: "var(--dial-time-right, 200px)",
-          top: "var(--dial-time-top, 44px)",
-          transform: "scale(var(--dial-cs, 1))",
-          transformOrigin: "top right",
+          // Position: upper-inner dial area, well clear of both the
+          // arc curve AND the left-side rail of event labels. Previous
+          // position (right: 290 / top: 60) landed ON the noon-area
+          // rail events at smaller dial scales — labels and indicator
+          // visually collided. Pushing further right + slightly down
+          // keeps the indicator inside the arc curve but above all
+          // event rows. Scale-compensated so on-screen offset stays
+          // consistent across dial-scale breakpoints.
+          // (Jul 17 2026: two composition-coordinate reworks attempted
+          // and reverted — at laptop heights there is no room above the
+          // arc, so any fixed relationship to the disc fails somewhere.
+          // Proper laptop placement needs the disc geometry constants +
+          // real viewport dims — ledgered. This screen-pinned form is
+          // the best-known state: ideal on desktop, tolerable on laptop.)
+          right: "calc(180px / var(--dial-scale, 1))",
+          top: "calc(40px / var(--dial-scale, 1))",
           zIndex: 8,
           background: "transparent",
           border: "none",
