@@ -148,10 +148,10 @@ function EmptyState({ icon, headline, body, cta, secondaryCta }) {
         <div style={{ display: "flex", gap: 10, marginTop: 22, flexWrap: "wrap", justifyContent: "center" }}>
           {cta && (
             <button
-              className="r-btn" data-tone="purple"
+              className="r-btn" data-tone="green"
               onClick={cta.onClick}
               style={{
-                padding: "9px 16px", background: "#7c5cf3", color: "#fff",
+                padding: "9px 16px", color: "#fff",
                 border: "none", borderRadius: 8,
                 fontSize: 13, fontWeight: 600,
                 cursor: "pointer", fontFamily: "inherit",
