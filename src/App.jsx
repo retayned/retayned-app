@@ -194,6 +194,9 @@ export default function App({ user }) {
   // ═══ DATA LOADING ═══
   const [dataLoaded, setDataLoaded] = useState(false);
   const [hcQueue, setHcQueue] = useState([]);
+  // Completed health checks (current month) — server truth for the Health
+  // page's completed displays. Hydrated in useDataLoad.
+  const [hcCompleted, setHcCompleted] = useState([]);
   const [todayStripOpen, setTodayStripOpen] = useState(false);
   const [tomorrowCalOpen, setTomorrowCalOpen] = useState(false);
   const [laterCalOpen, setLaterCalOpen] = useState(false);
@@ -1586,7 +1589,7 @@ export default function App({ user }) {
       } catch (e) { console.warn("org-accept error:", e); }
     })();
   }, [orgLoading, user?.id]);
-  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, localTaskWrites, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, localTaskWrites, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setHcCompleted, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
@@ -3240,6 +3243,7 @@ export default function App({ user }) {
     hcDone,
     hcOpen,
     hcQueue,
+    hcCompleted,
     setHcQueue,
     healthStripOpen,
     isMobile,
