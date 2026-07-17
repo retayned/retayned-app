@@ -1048,9 +1048,27 @@ export default function App({ user }) {
   useEffect(() => {
     if (onbCheckedRef.current || !dataLoaded) return;
     onbCheckedRef.current = true;
-    if (!welcomed && clients.length === 0 && tasks.length === 0) {
+    if (welcomed || clients.length > 0 || tasks.length > 0) return;
+    // Local state says empty book — but on a fresh device (no hydrate
+    // snapshot) a failed/racing clients fetch leaves state [] for a
+    // REAL account, and this gate onboarded a 13-client user (observed
+    // Jul 16 2026, new laptop). Verify emptiness against the server
+    // before ever showing onboarding. Fails CLOSED: any doubt → normal
+    // app, never the welcome. Runs at most once per device.
+    (async () => {
+      try {
+        const { count, error } = await supabase
+          .from("clients")
+          .select("id", { count: "exact", head: true });
+        if (error) return; // can't verify → do not onboard
+        if ((count ?? 0) > 0) {
+          // Real account, hydration raced — mark device so this never re-runs.
+          try { window.localStorage.setItem("rt:welcomedAt", String(Date.now())); } catch (_) { /* unavailable */ }
+          return;
+        }
+      } catch (_) { return; }
       setOnboardingStep("welcome");
-    }
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded]);
   // Advance task → book on the FIRST task created via ANY path
