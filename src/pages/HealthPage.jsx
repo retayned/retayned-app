@@ -987,10 +987,24 @@ export default function HealthPage({ app }) {
                       const finishReview = async () => {
                         setHcDone(prev => ({ ...prev, [h.client]: true }));
                         setHcOpen(null);
+                        // supabase-js helpers return { error }, never throw —
+                        // the old try/catch could not fire, so a failed
+                        // completion write was fully silent (suspected in the
+                        // Jul 17 2026 "check un-completed itself on refresh"
+                        // report). Check both writes; on failure revert the
+                        // optimistic state and say so out loud.
                         try {
-                          if (h.id && hcDb.complete) await hcDb.complete(h.id, {}, null, null);
-                          await hcDb.scheduleNext(user.id, h.client_id || client?.id);
-                        } catch (e) { console.warn("Review reschedule failed:", e); }
+                          if (h.id && hcDb.complete) {
+                            const { error: cErr } = await hcDb.complete(h.id, {}, null, null);
+                            if (cErr) throw cErr;
+                          }
+                          const schedRes = await hcDb.scheduleNext(user.id, h.client_id || client?.id);
+                          if (schedRes && schedRes.error) throw schedRes.error;
+                        } catch (e) {
+                          console.error("Health check completion failed:", e);
+                          setHcDone(prev => ({ ...prev, [h.client]: false }));
+                          try { window.alert("Couldn't save this check — it's still due. Try again."); } catch (_) { /* headless */ }
+                        }
                       };
                       return (
                         <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
