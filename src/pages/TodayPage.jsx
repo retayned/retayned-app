@@ -157,6 +157,9 @@ export default function TodayPage({ app }) {
     todayStripOpen,
     toggleTask,
     inFlightDateMoves,
+    noteLocalWrite,
+    markLocalWriteCommitted,
+    clearLocalWrite,
     tomorrowCalOpen,
     topTaskIdRef,
     triggerChipPulse,
@@ -743,6 +746,9 @@ export default function TodayPage({ app }) {
             // any hydration/realtime echo racing this write cannot drag the
             // task back to its old day (the double-move bug, Jul 15 2026).
             if (inFlightDateMoves) inFlightDateMoves.current.set(taskId, { due_date: newDateStr, ts: Date.now() });
+            // Family-wide local-writes ledger — outlives the 15s entry above;
+            // protection ends on server-confirmed-newer snapshot, not a timer.
+            const _lwSeq = noteLocalWrite ? noteLocalWrite(taskId, { due_date: newDateStr }) : null;
             setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: newDateStr } : t));
             // supabase-js returns { error }, never throws — the old try/catch
             // here could not fire, so a failed write was fully silent.
@@ -750,10 +756,12 @@ export default function TodayPage({ app }) {
             if (moveErr) {
               console.error("setDueDate failed:", moveErr);
               if (inFlightDateMoves) inFlightDateMoves.current.delete(taskId);
+              if (clearLocalWrite && _lwSeq != null) clearLocalWrite(taskId, _lwSeq);
               setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: oldDateStr } : t));
               setQuickLogToast({ id: Date.now(), error: true, message: "Couldn\u2019t move the task \u2014 try again" });
               return;
             }
+            if (markLocalWriteCommitted && _lwSeq != null) markLocalWriteCommitted(taskId, _lwSeq);
 
             // Re-notify worker if assigned + date actually changed.
             // Edge Function applies a 12-hour cooldown per task to prevent spam.
