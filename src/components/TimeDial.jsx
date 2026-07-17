@@ -648,7 +648,7 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           for the dial. Clicking loads the event into the hub. */}
       <div style={{ position: "absolute", right: VB_W + 8, top: "50%", transform: "translateY(-50%)", height: VB_H, width: 210, zIndex: 5 }}>
         {placements.length === 0 && earlierCount === 0 && laterCount === 0 && (
-          <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: 220, textAlign: "right" }}>
+          <div className="rt-dial-cs" style={{ transformOrigin: "right center", position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 5, maxWidth: "clamp(120px, 10vw, 220px)", textAlign: "right" }}>
             <span style={{ fontFamily: "'Caveat', 'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 22, color: "#2E6B4F", lineHeight: 1.15 }}>
               No calls today.
             </span>
@@ -695,9 +695,9 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
                   collapse next-up to a single Fraunces italic line caused
                   the visual disturbance you flagged; reverted. */}
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", color: p.isNext ? "#2E6B4F" : "#B7B7AE" }}>{formatTimeLabel(p.e._start)}</span>
-              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.title}</span>
+              <span style={{ fontSize: 14, fontWeight: p.isNext ? 700 : 600, color: p.isNext ? "#1C3224" : "#3A3A35", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "clamp(64px, 6.5vw, 150px)", textAlign: "right" }}>{p.e.title}</span>
               {p.e.client_name ? (
-                <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150, textAlign: "right" }}>{p.e.client_name}</span>
+                <span style={{ fontSize: 10, color: p.isNext ? "#4A4F4A" : "#6B6B66", marginTop: 1, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "clamp(64px, 6.5vw, 150px)", textAlign: "right" }}>{p.e.client_name}</span>
               ) : null}
               {/* "+ client" attribution affordance — RESTORED (June 2026,
                   Adam: mission-critical). EVERY event with no client or
