@@ -41,6 +41,7 @@ export function useDataLoad(app) {
     setGoogleEmail,
     setGoogleLastSyncedAt,
     setHcQueue,
+    setHcCompleted,
     setObsMobileExpanded,
     setObservation,
     setOccurrenceFlags,
@@ -194,6 +195,14 @@ export function useDataLoad(app) {
         .eq('id', uid)
         .single()
         .then(r => r, () => ({ data: { occurrence_flags: {} }, error: null })),
+      // Completed health checks (current month) — feeds every completed-
+      // check display on the Health page. Appended LAST on purpose: the
+      // batch is positionally destructured, so append-only keeps every
+      // prior index stable. hydrateCache VERSION was bumped alongside
+      // this change so stale 22-element cached snapshots are invalidated.
+      (typeof hcDb.listCompletedMonth === "function")
+        ? hcDb.listCompletedMonth(bookId).then(r => r, (e) => { console.warn("Completed HC fetch failed:", e); return { data: [], error: e }; })
+        : Promise.resolve({ data: [], error: null }),
     ]).catch((err) => {
       console.error("[hydrate] batch failed at network level:", err);
       return null;
@@ -206,7 +215,7 @@ export function useDataLoad(app) {
       return;
     }
     hydrateRetryRef.current = 0;
-    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes] = _hydrateBatch;
+    const [clientRes, taskRes, refRes, rolodexRes, hcRes, tpRes, hcCountsRes, convoListRes, raiStateRes, raiPicksRes, revHistoryRes, pausesRes, cadenceRes, completionHistRes, observerRes, _daybookRes, workersRes, workersComplRes, personalCalRes, taskCompletionsRes, occurrencesRes, profileFlagsRes, hcCompletedRes] = _hydrateBatch;
     if (raiStateRes?.data) setRaiState(raiStateRes.data);
     setRaiPicks(raiPicksRes?.data || null);
 
@@ -260,6 +269,7 @@ export function useDataLoad(app) {
       if (taskRes?.data) taskRes.data = taskRes.data.filter(t =>
         inSlice(t.client_id) || t.user_id === uid || (!t.client_id && t.created_by === uid));
       if (hcRes?.data) hcRes.data = hcRes.data.filter(h => inSlice(h.client_id));
+      if (hcCompletedRes?.data) hcCompletedRes.data = hcCompletedRes.data.filter(h => inSlice(h.client_id));
       if (tpRes?.data) tpRes.data = tpRes.data.filter(tp => inSlice(tp.client_id));
       if (cadenceRes?.data) cadenceRes.data = cadenceRes.data.filter(tp => inSlice(tp.client_id));
       if (completionHistRes?.data) completionHistRes.data = completionHistRes.data.filter(r => inSlice(r.client_id));
@@ -685,6 +695,19 @@ export function useDataLoad(app) {
 
     if (convoListRes?.data) {
       setRaiConvoList(convoListRes.data);
+    }
+
+    // Completed health checks (this month) → hcCompleted state. Server
+    // truth for the Health page's done-today count, calendar logged
+    // days, and "Done this month" log — all previously session-only.
+    if (setHcCompleted && hcCompletedRes?.data) {
+      setHcCompleted(hcCompletedRes.data.map(h => ({
+        id: h.id,
+        client_id: h.client_id,
+        client: h.client?.name || "Unknown",
+        completed_at: h.completed_at,
+        drift_status: h.drift_status || null,
+      })));
     }
 
     // Workers + completion counts arrived in the main parallel batch above.
