@@ -533,7 +533,7 @@ export default function TodayPage({ app }) {
             // Cadence = days between contact events. Compare days-since-last
             // against average interval from the last 10 touchpoints. Verdict:
             //   <2 pts  →  "Building rhythm"   (not enough history yet)
-            //   ≤1.15× →  "On rhythm"
+            //   ≤1.15× →  "Steady"
             //   ≤1.5×  →  "Slipping"
             //   >1.5×  →  "Overdue"
             const points = allTouchpoints
@@ -549,7 +549,7 @@ export default function TodayPage({ app }) {
             const daysSinceLast = (Date.now() - new Date(points[0].occurred_at).getTime()) / 86400000;
             if (daysSinceLast > avgInterval * 1.5)  return "Overdue";
             if (daysSinceLast > avgInterval * 1.15) return "Slipping";
-            return "On rhythm";
+            return "Steady";
           };
 
           // ─── HANDLERS ────────────────────────────────────────────────────
