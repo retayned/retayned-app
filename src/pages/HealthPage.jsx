@@ -1074,24 +1074,20 @@ export default function HealthPage({ app }) {
                           {isOpen && (
                             <div style={{ padding: "4px 18px 18px", borderTop: "1px solid " + C.borderLight }}>
                               <p style={{ fontSize: 13.5, lineHeight: 1.5, color: C.textSec, margin: "14px 0 16px" }}>
-                                Time for a quarterly check on <b style={{ color: C.text }}>{h.client}</b>. Has anything changed — scope, contacts, pace, your read on the relationship? Update their profile so Rai's scoring stays sharp, talk it through with Rai, or dismiss if all's well.
+                                Time for a quarterly check on <b style={{ color: C.text }}>{h.client}</b>. Has anything changed — scope, contacts, pace, your read on the relationship? Update their profile so Rai's scoring stays sharp, or dismiss if all's well.
                               </p>
                               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                                <div style={{ flex: 1 }} />
                                 <button
-                                  onClick={() => { if (client) { setSelectedClient(client); } setHcOpen(null); }}
+                                  onClick={() => { if (client) { setSelectedClient(client); } }}
                                   style={{ padding: "9px 18px", background: C.primary, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                 >Update profile</button>
-                                <button
-                                  onClick={() => { if (client) { setAiMessages([]); setObservationContext(`The user opened a quarterly portfolio review for ${h.client} and wants to talk through whether anything has changed with this relationship — scope, contacts, communication pace, results, their gut read. Help them reflect and decide what (if anything) to update in the client's profile.`); } setHcOpen(null); setPage("coach"); }}
-                                  style={{ padding: "9px 18px", background: "transparent", color: C.primary, border: "1px solid rgba(51,84,62,0.35)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
-                                >Chat with Rai</button>
-                                <div style={{ flex: 1 }} />
                                 <button
                                   onClick={finishReview}
                                   style={{ padding: "9px 14px", background: "transparent", color: C.textMuted, border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
                                   onMouseEnter={e => e.currentTarget.style.color = C.text}
                                   onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
-                                >All good — dismiss</button>
+                                >All set — dismiss</button>
                               </div>
                             </div>
                           )}
