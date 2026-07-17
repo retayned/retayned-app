@@ -418,7 +418,7 @@ export function splitLongTask(text, cap = 75) {
 
 // ============================================================
 // Cadence — the ONE cadence model, shared by the Clients table and the
-// Health Drift Wall. Both surfaces MUST call this; keeping two copies is
+// Health Canopy. Both surfaces MUST call this; keeping two copies is
 // how they silently diverged before. Judges each client against their OWN
 // history: this week's activity vs a typical prior week.
 //
