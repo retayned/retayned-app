@@ -141,7 +141,7 @@ export default function ClientsPage({ app }) {
           };
 
           // Single shared cadence model (utils.computeCadence). Both this
-          // table and the Health Drift Wall call it, so their verdicts can
+          // table and the Health Canopy call it, so their verdicts can
           // never diverge again.
           const clientCadence = (c) => computeCadence(c, { allTouchpoints, allCompletions, personalEvents });
 
@@ -289,7 +289,7 @@ export default function ClientsPage({ app }) {
             if (clientsDriftFilter !== "all") {
               xs = xs.filter(c => (c.drift_status || "Stable") === clientsDriftFilter);
             }
-            // Score-bucket filter — bands match the Drift Wall thresholds.
+            // Score-bucket filter — bands match the Canopy thresholds.
             if (clientsScoreFilter !== "all") {
               xs = xs.filter(c => {
                 const s = c.ret || 0;
