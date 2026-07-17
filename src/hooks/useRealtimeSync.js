@@ -11,6 +11,7 @@ export function useRealtimeSync(app) {
   const {
     inFlightDateMoves,
     inFlightToggles,
+    localTaskWrites,
     profileScores,
     setClients,
     setRaiPicks,
@@ -123,10 +124,35 @@ export function useRealtimeSync(app) {
             return; // stale echo from before the toggle: ignore
           }
         }
+        // Local-writes ledger (family-wide, Jul 2026): an echo that predates
+        // a local write must not revert the written fields (title edits are
+        // the canonical case — they had NO guard before this). Echoes carry
+        // no SELECT-start time, so confirmation is field-level: if the echo
+        // matches every written field the write is confirmed → clear and
+        // apply normally. Otherwise apply the echo but overlay the written
+        // fields. 30s disaster net only; echoes normally confirm in <1s.
+        let _lwPatch = null;
+        const _lw = localTaskWrites ? localTaskWrites.current.get(mapped.id) : null;
+        if (_lw) {
+          const _lwExpired = Date.now() - _lw.ts > 30000;
+          const _fieldEq = (k) => {
+            if (k === "due_date") return String(mapped.due_date || "").slice(0, 10) === String(_lw.patch.due_date || "").slice(0, 10);
+            if (k === "done") return !!mapped.done === !!_lw.patch.done;
+            if (k === "completed_at") return true; // rides with done
+            return String(mapped[k] ?? "") === String(_lw.patch[k] ?? "");
+          };
+          const _confirmed = Object.keys(_lw.patch).every(_fieldEq);
+          if (_lwExpired || _confirmed) {
+            localTaskWrites.current.delete(mapped.id);
+          } else {
+            _lwPatch = _lw.patch;
+          }
+        }
         setTasks(prev => prev.map(t => {
           if (t.id !== mapped.id) return t;
-          // Preserve any local-only fields by spreading mapped over t
-          return { ...t, ...mapped };
+          // Preserve any local-only fields by spreading mapped over t;
+          // held local writes win over the echo's stale fields.
+          return _lwPatch ? { ...t, ...mapped, ..._lwPatch } : { ...t, ...mapped };
         }));
         // Refresh completion history if a worker assignment changed
         // and the task just flipped to done — a new task_completions
