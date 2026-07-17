@@ -432,7 +432,7 @@ export function splitLongTask(text, cap = 75) {
 //     >=2 above baseline) — guards against 1→2-event false spikes.
 //   • Slipping: momentum < 0.75 AND baseline >= 2 — one quiet week off a
 //     baseline of 1 isn't a signal.
-//   • On rhythm otherwise — the neutral default, painted sage (primaryMuted),
+//   • Steady otherwise — the neutral default, painted sage (primaryMuted),
 //     NOT amber, so "fine" doesn't read as a warning.
 //
 // Returns { state, label, color, momentum } where state is one of
@@ -503,5 +503,5 @@ export function computeCadence(c, { allTouchpoints, allCompletions, personalEven
   if (momentum < 0.75 && baseline >= 2) {
     return { state: "cooling", label: "Slipping", color: C.retWarn, momentum };
   }
-  return { state: "steady", label: "On rhythm", color: C.primaryMuted, momentum };
+  return { state: "steady", label: "Steady", color: C.primaryMuted, momentum };
 }
