@@ -605,20 +605,11 @@ export default function HealthPage({ app }) {
                     );
           };
 
-          // Drift wall uses a 4-tier label set (Thriving / Stable / Shifted / Declining).
-          // calcDrift() returns 5 states; merge "At risk" into "Declining" and "Improving"
-          // into "Thriving" for plot + pill purposes.
-          const toDriftTier = (d) => {
-            if (!d) return "Stable";
-            if (d === "Improving") return "Thriving";
-            if (d === "Stable") return "Stable";
-            if (d === "Something shifted") return "Shifted";
-            if (d === "Declining" || d === "At risk") return "Declining";
-            return "Stable";
-          };
-          const driftTierColor = (t) => t === "Thriving" ? C.retElite : t === "Stable" ? C.retGood : t === "Shifted" ? C.retWarn : C.retCrit;
-          // Stubbed one-liner per drift tier (wired to real note field post-launch)
-          const driftStub = (t) => t === "Thriving" ? "Relationship trending up." : t === "Stable" ? "Steady. Nothing to flag." : t === "Shifted" ? "Something worth watching." : "Signals are declining.";
+          // (Legacy toDriftTier / driftTierColor / driftStub helpers removed
+          // Jul 2026 — "Done this month" now renders from the cadence verdict
+          // stamped on each check row at dismissal, in the drift wall's own
+          // vocabulary. The old helpers mapped clients.drift_status, which
+          // nothing on this page reads anymore.)
 
           // Active = runnable NOW: overdue, due today, OR a first HC (Start Early-eligible)
           const activeQueue = hcQueue.filter(h => h.runnable && !hcDone[h.client] && !h.completedLocal).sort((a, b) => {
@@ -642,7 +633,7 @@ export default function HealthPage({ app }) {
             ..._hcServerDone,
             ...justCompleted.filter(h => !_hcServerIds.has(h.id)).map(h => ({
               id: h.id, client_id: h.client_id, client: h.client,
-              completed_at: new Date().toISOString(), drift_status: null,
+              completed_at: new Date().toISOString(), drift_status: h.completedDrift || null,
             })),
           ].sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
           const _hcIsToday = (iso) => {
@@ -671,10 +662,10 @@ export default function HealthPage({ app }) {
           const healthCadence = (c) => computeCadence(c, { allTouchpoints, allCompletions, personalEvents });
 
           // Group every client by cadence state for the wall. Order = most-
-          // urgent first (Slipping), then On rhythm, Ahead, Calibrating last.
+          // urgent first (Slipping), then Steady, Ahead, Calibrating last.
           const cadenceBuckets = [
             { key: "cooling",     label: "Slipping",    sub: "getting less attention than their normal", color: C.retWarn },
-            { key: "steady",      label: "On rhythm",   sub: "holding their usual pace",                  color: C.primaryMuted },
+            { key: "steady",      label: "Steady",      sub: "holding their usual pace",                  color: C.primaryMuted },
             { key: "warming",     label: "Ahead",       sub: "getting more attention than their normal",  color: C.retGood },
             { key: "calibrating", label: "Calibrating", sub: "still building a baseline",                 color: C.textMuted },
           ].map(b => ({
@@ -1023,6 +1014,14 @@ export default function HealthPage({ app }) {
                       // Dismiss / mark-reviewed: reschedules the next review ~a
                       // quarter out (no penalty) and clears it from the queue.
                       const finishReview = async () => {
+                        // Option 2 (Jul 2026): stamp the client's LIVE cadence
+                        // verdict — the same computeCadence the drift wall
+                        // renders — onto the check row, so "Done this month"
+                        // records what you saw when you looked. Check row ONLY:
+                        // clients.drift_status keeps the legacy vocabulary the
+                        // observer's detectors filter on; writing cadence words
+                        // there would silently corrupt those filters.
+                        const _cadLabel = client ? healthCadence(client).label : null;
                         setHcDone(prev => ({ ...prev, [h.client]: true }));
                         // Mark completion on the hcQueue ROW as well. hcDone is
                         // wiped on page navigation (goTo in App.jsx) while
@@ -1031,13 +1030,13 @@ export default function HealthPage({ app }) {
                         // (tile + red dot) on leave-and-return to this page.
                         // The row flag survives nav; the next hydration drops
                         // the row entirely (server truth: completed_at set).
-                        if (setHcQueue) setHcQueue(prev => prev.map(x => x.id === h.id ? { ...x, completedLocal: true } : x));
+                        if (setHcQueue) setHcQueue(prev => prev.map(x => x.id === h.id ? { ...x, completedLocal: true, completedDrift: _cadLabel } : x));
                         setHcOpen(null);
                         // supabase-js returns { error }, never throws — the old
                         // try/catch here was dead code and a failed write was
                         // fully silent (the check resurrected on next hydrate).
                         if (h.id && hcDb.complete) {
-                          const { error: hcErr } = await hcDb.complete(h.id, {}, null, null);
+                          const { error: hcErr } = await hcDb.complete(h.id, {}, null, _cadLabel);
                           if (hcErr) {
                             console.error("Health-check complete failed:", hcErr);
                             setHcDone(prev => { const n = { ...prev }; delete n[h.client]; return n; });
@@ -1077,11 +1076,12 @@ export default function HealthPage({ app }) {
                                 Time for a quarterly check on <b style={{ color: C.text }}>{h.client}</b>. Has anything changed — scope, contacts, pace, your read on the relationship? Update their profile so Rai's scoring stays sharp, or dismiss if all's well.
                               </p>
                               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                                <div style={{ flex: 1 }} />
                                 <button
+                                  className="r-btn" data-tone="green"
                                   onClick={() => { if (client) { setSelectedClient(client); } }}
-                                  style={{ padding: "9px 18px", background: C.primary, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                                  style={{ padding: "9px 18px", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
                                 >Update profile</button>
+                                <div style={{ flex: 1 }} />
                                 <button
                                   onClick={finishReview}
                                   style={{ padding: "9px 14px", background: "transparent", color: C.textMuted, border: "none", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}
@@ -1171,7 +1171,7 @@ export default function HealthPage({ app }) {
                         </div>
                         <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Slipping</span>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.primaryMuted }} />On rhythm</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.primaryMuted }} />Steady</span>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retGood }} />Ahead</span>
                         </div>
                       </div>
@@ -1202,41 +1202,133 @@ export default function HealthPage({ app }) {
                           </div>
                         ))}
                       </div>
+                      {/* ─── CANOPY (Jul 2026, Adam-approved mock) ───────────
+                          The garden body under the chips. Same data, second
+                          reading: stem height = retention score (the composite
+                          health number on every chip/avatar), the bed = the
+                          cadence verdict, slipping stems lean. Desktop only —
+                          chips carry mobile. Click a stem = open the client. */}
+                      {!isMobile && (() => {
+                        const beds = cadenceBuckets.filter(b => b.clients.length > 0);
+                        if (beds.length === 0) return null;
+                        const SOIL = 168, GAP = 52, PAD = 26, SLOT = 46;
+                        let _cx = PAD;
+                        const layout = beds.map(b => {
+                          const w = Math.max(60, b.clients.length * SLOT + 28);
+                          const bed = { b, x0: _cx, w };
+                          _cx += w + GAP;
+                          return bed;
+                        });
+                        const totalW = _cx - GAP + PAD;
+                        return (
+                          <div style={{ borderTop: "1px solid " + C.borderLight, marginTop: 18, paddingTop: 6 }}>
+                            <svg viewBox={`0 0 ${totalW} 226`} style={{ width: "100%", height: "auto", display: "block" }} aria-label="Canopy — every client planted by their own rhythm">
+                              {layout.map(({ b, x0, w }) => (
+                                <g key={"bed-" + b.key}>
+                                  {b.clients.map(({ c }, i) => {
+                                    const score = Math.max(0, Math.min(100, Number(c.retention_score) || 0));
+                                    const len = 28 + score;            // 28–128px: the height IS the score
+                                    const bx = x0 + 14 + SLOT / 2 + i * SLOT;
+                                    const tipY = SOIL - len;
+                                    // Slipping stems lean out of the bed; the rest get a tiny
+                                    // alternating organic sway so the garden doesn't read as a comb.
+                                    const leaning = b.key === "cooling";
+                                    const tipX = leaning ? bx + Math.min(26, len * 0.28) : bx + ((i % 2) ? 2 : -2);
+                                    const cpX = leaning ? bx + Math.min(14, len * 0.16) : bx + ((i % 2) ? -2 : 2);
+                                    const cpY = SOIL - len * 0.55;
+                                    // Leaves sit along the stalk — one from score 60, two from 80.
+                                    const leaf = (t, side) => {
+                                      const lx = bx + (tipX - bx) * t + (side ? 4 : -4);
+                                      const ly = SOIL + (tipY - SOIL) * t;
+                                      const rot = (leaning ? -32 : side ? 24 : -24);
+                                      return <ellipse cx={lx} cy={ly} rx={6.5} ry={3.1} fill={b.color} opacity={0.82} transform={`rotate(${rot} ${lx} ${ly})`} />;
+                                    };
+                                    return (
+                                      <g key={c.id} onClick={() => setSelectedClient(c)} style={{ cursor: "pointer" }}>
+                                        <title>{`${c.name} · ${score}`}</title>
+                                        <path d={`M${bx} ${SOIL} Q ${cpX} ${cpY} ${tipX} ${tipY}`} fill="none" stroke={b.color} strokeWidth="2.3" strokeLinecap="round" />
+                                        {score >= 60 && leaf(0.55, i % 2 === 0)}
+                                        {score >= 80 && leaf(0.78, i % 2 !== 0)}
+                                        <circle cx={tipX} cy={tipY - 3} r={score >= 75 ? 4.6 : 3.4} fill={b.color} />
+                                      </g>
+                                    );
+                                  })}
+                                  <line x1={x0} y1={SOIL} x2={x0 + w} y2={SOIL} stroke={b.color} strokeWidth="2" strokeLinecap="round" opacity="0.55" />
+                                  <text x={x0 + w / 2} y={SOIL + 22} textAnchor="middle" fontSize="10" fontWeight="700" letterSpacing="0.5" fill={b.color} fontFamily="inherit">{b.label.toUpperCase()}</text>
+                                  <text x={x0 + w / 2} y={SOIL + 36} textAnchor="middle" fontSize="10" fill="#B8B8B1" fontFamily="inherit">{b.clients.length} {b.clients.length === 1 ? "client" : "clients"}</text>
+                                </g>
+                              ))}
+                            </svg>
+                            <div style={{ borderTop: "1px solid " + C.borderLight, marginTop: 14, padding: "11px 4px 2px", fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic", fontSize: 13, color: C.textMuted }}>
+                              The bed says who's slipping (or getting ahead). The height says how much it might matter.
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
-                  {/* Done this month — server-fetched completed checks +
-                      this session's, real timestamps, stored drift status
-                      (clientDrift fallback for dismissals which store null). */}
-                  {completedMonth.length > 0 && (
+                  {/* Done this month — Proposal A (Jul 2026). Exceptions speak,
+                      steady stays quiet. The pill is a RECORDED FACT: the
+                      client's cadence bucket stamped at dismissal (Option 2).
+                      Rows with no stamp (pre-Option-2 history, or Steady /
+                      Calibrating) render as quiet check-lines. No clientDrift
+                      fallback — showing today's drift on last week's review
+                      would be a lie about what you saw then. */}
+                  {completedMonth.length > 0 && (() => {
+                    const HC_TIERS = {
+                      "Slipping": { color: C.retWarn, stub: "Getting less attention than their normal at review." },
+                      "Ahead":    { color: C.retGood, stub: "Getting more than their usual at review." },
+                    };
+                    const exceptions = completedMonth.filter(h => HC_TIERS[h.drift_status]);
+                    const quiet = completedMonth.filter(h => !HC_TIERS[h.drift_status]);
+                    const slipN = exceptions.filter(h => h.drift_status === "Slipping").length;
+                    const aheadN = exceptions.filter(h => h.drift_status === "Ahead").length;
+                    const steadyN = completedMonth.filter(h => h.drift_status === "Steady").length;
+                    const Sep = () => <span style={{ width: 4, height: 4, borderRadius: 2, background: C.border, display: "inline-block", flexShrink: 0 }} />;
+                    return (
                     <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 20px 12px", borderBottom: "1px solid " + C.borderLight }}>
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Done this month</span>
                         <span style={{ fontSize: 11, color: C.textMuted }}>Most recent first</span>
                       </div>
-                      {completedMonth.map((h, i) => {
-                        const tier = toDriftTier(h.drift_status || clientDrift[h.client]);
-                        const tc = driftTierColor(tier);
+                      {/* Summary strip — only claims what was recorded */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 11.5, color: C.textSec, padding: "12px 20px", borderBottom: "1px solid " + C.borderLight }}>
+                        <span><b style={{ color: C.text }}>{completedMonth.length}</b> {completedMonth.length === 1 ? "check" : "checks"}</span>
+                        {steadyN > 0 && <><Sep /><span><b style={{ color: C.retGood }}>{steadyN}</b> steady</span></>}
+                        {slipN > 0 && <><Sep /><span><b style={{ color: C.retWarn }}>{slipN}</b> slipping</span></>}
+                        {aheadN > 0 && <><Sep /><span><b style={{ color: C.retGood }}>{aheadN}</b> ahead</span></>}
+                      </div>
+                      {/* Exceptions — full treatment, surfaced first */}
+                      {exceptions.map((h, i) => {
+                        const t = HC_TIERS[h.drift_status];
                         const initials = (h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase();
                         return (
-                          <div key={"done-" + (h.id || i)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px 12px 16px", borderBottom: i < completedMonth.length - 1 ? "1px solid " + C.borderLight : "none" }}>
-                            {/* Left priority bar */}
-                            <div style={{ width: 3, alignSelf: "stretch", background: tc, borderRadius: 2, flexShrink: 0 }} />
-                            {/* Avatar */}
-                            <div style={{ width: 28, height: 28, borderRadius: 14, background: tc, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{initials}</div>
-                            {/* Name */}
+                          <div key={"done-x-" + (h.id || i)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px 12px 16px", borderBottom: "1px solid " + C.borderLight }}>
+                            <div style={{ width: 3, alignSelf: "stretch", background: t.color, borderRadius: 2, flexShrink: 0 }} />
+                            <div style={{ width: 28, height: 28, borderRadius: 14, background: t.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{initials}</div>
                             <span style={{ fontSize: 13.5, fontWeight: 600, color: C.text, flexShrink: 0 }}>{h.client}</span>
-                            {/* Drift pill */}
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999, border: "1px solid " + tc, color: tc, letterSpacing: 0.4, textTransform: "uppercase", flexShrink: 0 }}>{tier}</span>
-                            {/* One-liner stub */}
-                            <span style={{ fontSize: 12.5, color: C.textSec, fontStyle: "italic", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{driftStub(tier)}</span>
-                            {/* Timestamp — real completed_at, relative day */}
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999, border: "1px solid " + t.color, color: t.color, letterSpacing: 0.4, textTransform: "uppercase", flexShrink: 0 }}>{h.drift_status}</span>
+                            <span style={{ fontSize: 12.5, color: C.textSec, fontStyle: "italic", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.stub}</span>
                             <span style={{ fontSize: 11.5, color: C.textMuted, flexShrink: 0 }}>{_hcRelDay(h.completed_at)}</span>
                           </div>
                         );
                       })}
+                      {/* Everything else — quiet check-lines */}
+                      {quiet.map((h, i) => {
+                        const initials = (h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase();
+                        return (
+                          <div key={"done-q-" + (h.id || i)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", borderBottom: i < quiet.length - 1 ? "1px solid " + C.borderLight : "none" }}>
+                            <span style={{ color: C.retGood, fontSize: 11, flexShrink: 0 }}>✓</span>
+                            <div style={{ width: 20, height: 20, borderRadius: 10, background: "#EDF0ED", color: C.textSec, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, flexShrink: 0 }}>{initials}</div>
+                            <span style={{ fontSize: 12.5, fontWeight: 500, color: C.textSec, flexShrink: 0 }}>{h.client}</span>
+                            <span style={{ fontSize: 11, color: C.textMuted, flexShrink: 0, marginLeft: "auto" }}>{_hcRelDay(h.completed_at)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
               </div>
