@@ -21,6 +21,7 @@ export default function HealthPage({ app }) {
     hcDone,
     hcOpen,
     hcQueue,
+    hcCompleted,
     healthStripOpen,
     isMobile,
     obsDismissing,
@@ -629,6 +630,34 @@ export default function HealthPage({ app }) {
           });
           const justCompleted = hcQueue.filter(h => h.runnable && (hcDone[h.client] || h.completedLocal));
 
+          // ── Completed checks: server truth + session union ──────────
+          // hcCompleted = this month's completed rows fetched at hydration.
+          // Session-completed rows (justCompleted) cover the gap between
+          // clicking dismiss and the next hydration returning the row from
+          // the server. Dedupe by id; server wins (it has real timestamps
+          // and stored drift_status).
+          const _hcServerDone = hcCompleted || [];
+          const _hcServerIds = new Set(_hcServerDone.map(h => h.id));
+          const completedMonth = [
+            ..._hcServerDone,
+            ...justCompleted.filter(h => !_hcServerIds.has(h.id)).map(h => ({
+              id: h.id, client_id: h.client_id, client: h.client,
+              completed_at: new Date().toISOString(), drift_status: null,
+            })),
+          ].sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at));
+          const _hcIsToday = (iso) => {
+            if (!iso) return false;
+            const d = new Date(iso); const n = new Date();
+            return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+          };
+          const doneToday = completedMonth.filter(h => _hcIsToday(h.completed_at));
+          const _hcRelDay = (iso) => {
+            if (_hcIsToday(iso)) return "Today";
+            const d = new Date(iso); const y = new Date(); y.setDate(y.getDate() - 1);
+            if (d.toDateString() === y.toDateString()) return "Yesterday";
+            return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          };
+
           const totalClients = clients.length;
           const checkedThisMonth = hcQueue.filter(h => hcDone[h.client]).length;
           const pctChecked = totalClients > 0 ? Math.round((checkedThisMonth / totalClients) * 100) : 0;
@@ -682,10 +711,10 @@ export default function HealthPage({ app }) {
                     </span>
                     <span className="rt-sep" />
                     <span><b style={{ color: C.text, fontWeight: 700 }}>{activeQueue.filter(h => h.due === "Today").length}</b> due today</span>
-                    {justCompleted.length > 0 && <>
+                    {doneToday.length > 0 && <>
                       <span className="rt-sep" />
                       <span style={{ color: C.retGood, fontWeight: 600 }}>
-                        <b>{justCompleted.length}</b> done today
+                        <b>{doneToday.length}</b> done today
                       </span>
                     </>}
                   </div>
@@ -845,11 +874,18 @@ export default function HealthPage({ app }) {
                         }
                       }
                     });
-                    // Mark just-completed sessions so the user gets immediate visual feedback
-                    Object.keys(hcDone).forEach(clientName => {
-                      if (hcDone[clientName]) byDay[todayDay] = "logged";
+                    // Logged days now come from the real completed-HC fetch
+                    // (completedMonth = server rows + this session's), so the
+                    // calendar survives refresh. "Today" styling wins in the
+                    // cell renderer.
+                    completedMonth.forEach(h => {
+                      if (!h.completed_at) return;
+                      const d = new Date(h.completed_at);
+                      if (d.getFullYear() === year && d.getMonth() === monthIdx) {
+                        byDay[d.getDate()] = "logged";
+                      }
                     });
-                    const loggedCount = Object.values(byDay).filter(s => s === "logged").length;
+                    const loggedCount = completedMonth.length;
                     const monthName = today.toLocaleString("en-US", { month: "long" });
                     // Build the grid: 6 rows × 7 cols, fill with null where out-of-month
                     const cells = [];
@@ -1173,19 +1209,21 @@ export default function HealthPage({ app }) {
                     </div>
                   )}
 
-                  {/* Done this month */}
-                  {justCompleted.length > 0 && (
+                  {/* Done this month — server-fetched completed checks +
+                      this session's, real timestamps, stored drift status
+                      (clientDrift fallback for dismissals which store null). */}
+                  {completedMonth.length > 0 && (
                     <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", overflow: "hidden" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "16px 20px 12px", borderBottom: "1px solid " + C.borderLight }}>
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Done this month</span>
                         <span style={{ fontSize: 11, color: C.textMuted }}>Most recent first</span>
                       </div>
-                      {justCompleted.map((h, i) => {
-                        const tier = toDriftTier(clientDrift[h.client]);
+                      {completedMonth.map((h, i) => {
+                        const tier = toDriftTier(h.drift_status || clientDrift[h.client]);
                         const tc = driftTierColor(tier);
                         const initials = (h.client || "?").split(/\s|&/).filter(Boolean).slice(0,2).map(s=>s[0]).join("").toUpperCase();
                         return (
-                          <div key={"done-" + i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px 12px 16px", borderBottom: i < justCompleted.length - 1 ? "1px solid " + C.borderLight : "none" }}>
+                          <div key={"done-" + (h.id || i)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 20px 12px 16px", borderBottom: i < completedMonth.length - 1 ? "1px solid " + C.borderLight : "none" }}>
                             {/* Left priority bar */}
                             <div style={{ width: 3, alignSelf: "stretch", background: tc, borderRadius: 2, flexShrink: 0 }} />
                             {/* Avatar */}
@@ -1196,8 +1234,8 @@ export default function HealthPage({ app }) {
                             <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 999, border: "1px solid " + tc, color: tc, letterSpacing: 0.4, textTransform: "uppercase", flexShrink: 0 }}>{tier}</span>
                             {/* One-liner stub */}
                             <span style={{ fontSize: 12.5, color: C.textSec, fontStyle: "italic", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{driftStub(tier)}</span>
-                            {/* Timestamp — stubbed as "Today" for just-completed checks */}
-                            <span style={{ fontSize: 11.5, color: C.textMuted, flexShrink: 0 }}>Today</span>
+                            {/* Timestamp — real completed_at, relative day */}
+                            <span style={{ fontSize: 11.5, color: C.textMuted, flexShrink: 0 }}>{_hcRelDay(h.completed_at)}</span>
                           </div>
                         );
                       })}
