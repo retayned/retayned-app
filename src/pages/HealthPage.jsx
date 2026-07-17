@@ -31,6 +31,8 @@ export default function HealthPage({ app }) {
     setAiMessages,
     setHcDone,
     setHcOpen,
+    setHcQueue,
+    setQuickLogToast,
     setHealthStripOpen,
     setObsDismissing,
     setObsMobileExpanded,
@@ -52,7 +54,7 @@ export default function HealthPage({ app }) {
     if (_autoOpenedRef.current) return;
     if (hcOpen) { _autoOpenedRef.current = true; return; }
     const top = (hcQueue || [])
-      .filter(h => h.runnable && !hcDone[h.client])
+      .filter(h => h.runnable && !hcDone[h.client] && !h.completedLocal)
       .sort((a, b) => {
         if (a.overdue !== b.overdue) return b.overdue - a.overdue;
         if (a.due === "Today" && b.due !== "Today") return -1;
@@ -618,14 +620,14 @@ export default function HealthPage({ app }) {
           const driftStub = (t) => t === "Thriving" ? "Relationship trending up." : t === "Stable" ? "Steady. Nothing to flag." : t === "Shifted" ? "Something worth watching." : "Signals are declining.";
 
           // Active = runnable NOW: overdue, due today, OR a first HC (Start Early-eligible)
-          const activeQueue = hcQueue.filter(h => h.runnable && !hcDone[h.client]).sort((a, b) => {
+          const activeQueue = hcQueue.filter(h => h.runnable && !hcDone[h.client] && !h.completedLocal).sort((a, b) => {
             // Overdue first, then due today, then first-HCs (Start Early) sorted by soonest due
             if (a.overdue !== b.overdue) return b.overdue - a.overdue;
             if (a.due === "Today" && b.due !== "Today") return -1;
             if (b.due === "Today" && a.due !== "Today") return 1;
             return a.daysUntil - b.daysUntil;
           });
-          const justCompleted = hcQueue.filter(h => h.runnable && hcDone[h.client]);
+          const justCompleted = hcQueue.filter(h => h.runnable && (hcDone[h.client] || h.completedLocal));
 
           const totalClients = clients.length;
           const checkedThisMonth = hcQueue.filter(h => hcDone[h.client]).length;
@@ -986,25 +988,30 @@ export default function HealthPage({ app }) {
                       // quarter out (no penalty) and clears it from the queue.
                       const finishReview = async () => {
                         setHcDone(prev => ({ ...prev, [h.client]: true }));
+                        // Mark completion on the hcQueue ROW as well. hcDone is
+                        // wiped on page navigation (goTo in App.jsx) while
+                        // hcQueue persists until the next hydration — masking
+                        // only via hcDone made every completed check resurrect
+                        // (tile + red dot) on leave-and-return to this page.
+                        // The row flag survives nav; the next hydration drops
+                        // the row entirely (server truth: completed_at set).
+                        if (setHcQueue) setHcQueue(prev => prev.map(x => x.id === h.id ? { ...x, completedLocal: true } : x));
                         setHcOpen(null);
-                        // supabase-js helpers return { error }, never throw —
-                        // the old try/catch could not fire, so a failed
-                        // completion write was fully silent (suspected in the
-                        // Jul 17 2026 "check un-completed itself on refresh"
-                        // report). Check both writes; on failure revert the
-                        // optimistic state and say so out loud.
-                        try {
-                          if (h.id && hcDb.complete) {
-                            const { error: cErr } = await hcDb.complete(h.id, {}, null, null);
-                            if (cErr) throw cErr;
+                        // supabase-js returns { error }, never throws — the old
+                        // try/catch here was dead code and a failed write was
+                        // fully silent (the check resurrected on next hydrate).
+                        if (h.id && hcDb.complete) {
+                          const { error: hcErr } = await hcDb.complete(h.id, {}, null, null);
+                          if (hcErr) {
+                            console.error("Health-check complete failed:", hcErr);
+                            setHcDone(prev => { const n = { ...prev }; delete n[h.client]; return n; });
+                            if (setHcQueue) setHcQueue(prev => prev.map(x => x.id === h.id ? { ...x, completedLocal: false } : x));
+                            if (setQuickLogToast) setQuickLogToast({ id: Date.now(), error: true, message: "Couldn\u2019t save the review \u2014 try again" });
+                            return;
                           }
-                          const schedRes = await hcDb.scheduleNext(user.id, h.client_id || client?.id);
-                          if (schedRes && schedRes.error) throw schedRes.error;
-                        } catch (e) {
-                          console.error("Health check completion failed:", e);
-                          setHcDone(prev => ({ ...prev, [h.client]: false }));
-                          try { window.alert("Couldn't save this check — it's still due. Try again."); } catch (_) { /* headless */ }
                         }
+                        const { error: schedErr } = await hcDb.scheduleNext(user.id, h.client_id || client?.id);
+                        if (schedErr) console.error("Review reschedule failed:", schedErr);
                       };
                       return (
                         <div key={i} style={{ background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
