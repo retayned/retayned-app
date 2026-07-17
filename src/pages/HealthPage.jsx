@@ -607,7 +607,7 @@ export default function HealthPage({ app }) {
 
           // (Legacy toDriftTier / driftTierColor / driftStub helpers removed
           // Jul 2026 — "Done this month" now renders from the cadence verdict
-          // stamped on each check row at dismissal, in the drift wall's own
+          // stamped on each check row at dismissal, in the Canopy's own
           // vocabulary. The old helpers mapped clients.drift_status, which
           // nothing on this page reads anymore.)
 
@@ -655,7 +655,7 @@ export default function HealthPage({ app }) {
           const now = new Date();
           const monthLabel = now.toLocaleString("en-US", { month: "long", year: "numeric" });
 
-          // ─── Drift Wall — real cadence ───────────────────────────────────
+          // ─── Canopy (née Drift Wall) — real cadence ──────────────────────
           // Single shared cadence model (utils.computeCadence). Identical to
           // the Clients table — one source of truth so the wall and the table
           // always agree. (Previously an inline copy that drifted out of sync.)
@@ -1015,7 +1015,7 @@ export default function HealthPage({ app }) {
                       // quarter out (no penalty) and clears it from the queue.
                       const finishReview = async () => {
                         // Option 2 (Jul 2026): stamp the client's LIVE cadence
-                        // verdict — the same computeCadence the drift wall
+                        // verdict — the same computeCadence the Canopy
                         // renders — onto the check row, so "Done this month"
                         // records what you saw when you looked. Check row ONLY:
                         // clients.drift_status keeps the legacy vocabulary the
@@ -1166,8 +1166,8 @@ export default function HealthPage({ app }) {
                     <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
                         <div>
-                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Drift wall</div>
-                          <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client, read by their own rhythm — who's cooling, who's holding, who you're ahead on.</div>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Canopy</div>
+                          <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client planted by their own rhythm — who's cooling, who's holding, who you're ahead on.</div>
                         </div>
                         <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: C.retWarn }} />Slipping</span>
@@ -1202,7 +1202,7 @@ export default function HealthPage({ app }) {
                           </div>
                         ))}
                       </div>
-                      {/* ─── CANOPY (Jul 2026, Adam-approved mock) ───────────
+                      {/* ─── CANOPY GARDEN (Jul 2026, Adam-approved mock) ────
                           The garden body under the chips. Same data, second
                           reading: stem height = retention score (the composite
                           health number on every chip/avatar), the bed = the
@@ -1222,7 +1222,11 @@ export default function HealthPage({ app }) {
                         const totalW = _cx - GAP + PAD;
                         return (
                           <div style={{ borderTop: "1px solid " + C.borderLight, marginTop: 18, paddingTop: 6 }}>
-                            <svg viewBox={`0 0 ${totalW} 226`} style={{ width: "100%", height: "auto", display: "block" }} aria-label="Canopy — every client planted by their own rhythm">
+                            {/* Natural-scale render: width capped at the drawing's own
+                                pixel width so a wide card can never UPSCALE the garden
+                                (2 beds ≈ 666 units → 3.6× blowup on a wide monitor was
+                                the launch-day beanstalk bug). Narrow screens scale down. */}
+                            <svg viewBox={`0 0 ${totalW} 226`} style={{ width: "100%", maxWidth: totalW, height: "auto", display: "block", margin: "0 auto" }} aria-label="Canopy — every client planted by their own rhythm">
                               {layout.map(({ b, x0, w }) => (
                                 <g key={"bed-" + b.key}>
                                   {b.clients.map(({ c }, i) => {
