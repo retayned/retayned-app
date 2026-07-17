@@ -414,8 +414,8 @@ function TimeDial({ events = [], C, onDeleteEvent = null, onOpenClient = null, o
           // on-screen position, converted — desktop looks identical.
           // Text readability at small scales comes from the same
           // counter-scale the event labels use (--dial-cs).
-          right: 200,
-          top: 44,
+          right: "var(--dial-time-right, 200px)",
+          top: "var(--dial-time-top, 44px)",
           transform: "scale(var(--dial-cs, 1))",
           transformOrigin: "top right",
           zIndex: 8,
