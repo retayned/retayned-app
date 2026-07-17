@@ -72,11 +72,10 @@ export default function HealthPage({ app }) {
           // The two callsites are mutually exclusive via the isMobile flag, so
           // only one instance ever renders at a time. Returns null when there's
           // no current observation or one is being dismissed.
-          const obsCaption = (
-            <div style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, margin: "6px 2px 12px" }}>
-              Re-reads your week every Friday morning.
-            </div>
-          );
+          // (obsCaption removed Jul 2026 — it rendered OUTSIDE the observer
+          // card and read as an orphaned label for whatever sat below it.
+          // The card's own masthead (No. / WK / date) already communicates
+          // the weekly regeneration.)
           // Friday-regeneration framing (Jul 2026): the observer card is
           // the weekly ritual - say so. Young accounts with no card yet get
           // a ghost promise line, same forward-promise mechanic as Rai's
@@ -753,7 +752,12 @@ export default function HealthPage({ app }) {
               {isMobile && dataLoaded && clients.length > 0 && clients.every(c => !c.profileScores || Object.keys(c.profileScores || {}).length === 0) && (
                 <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
               )}
-              {isMobile && (<>{renderObserver()}{observation && !obsDismissing && obsCaption}</>)}
+              {isMobile && renderObserver()}
+              {isMobile && activeQueue.length > 0 && (
+                <div style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, margin: "6px 2px 12px" }}>
+                  Clients change — stakeholders rotate, attitudes shift, scope moves. Here’s your space to note it.
+                </div>
+              )}
 
               {/* MOBILE UPCOMING STRIP — between band and main grid (mobile only) */}
               <div className="rt-mob-strip" style={{ marginBottom: 16 }}>
@@ -996,7 +1000,16 @@ export default function HealthPage({ app }) {
                   {!isMobile && dataLoaded && clients.length > 0 && clients.every(c => !c.profileScores || Object.keys(c.profileScores || {}).length === 0) && (
                     <ScoreFirstCard clientName={clients[0].name} onScore={() => setSelectedClient(clients[0])} />
                   )}
-                  {!isMobile && (<>{renderObserver()}{observation && !obsDismissing && obsCaption}</>)}
+                  {!isMobile && renderObserver()}
+                  {/* Queue caption — instructions for the review tiles below.
+                      Gated on the QUEUE (not the observation — the old caption
+                      was tied to the observer and orphan-floated whenever the
+                      two got out of sync). */}
+                  {!isMobile && activeQueue.length > 0 && (
+                    <div style={{ fontSize: 10.5, color: C.textMuted, letterSpacing: 0.3, margin: "6px 2px 12px" }}>
+                      Clients change — stakeholders rotate, attitudes shift, scope moves. Here’s your space to note it.
+                    </div>
+                  )}
                   {activeQueue.length === 0 && justCompleted.length === 0 && (
                     <div style={{ textAlign: "center", padding: "60px 20px", background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)" }}>
                       <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, color: C.text }}>All caught up</div>
@@ -1166,7 +1179,7 @@ export default function HealthPage({ app }) {
                     <div style={{ marginTop: 24, background: C.card, border: "1px solid " + C.border, borderRadius: 12, boxShadow: "var(--rt-sh-card)", padding: "20px 22px 18px" }}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
                         <div>
-                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>Canopy</div>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.4 }}>The Canopy</div>
                           <div style={{ fontSize: 13, color: C.textSec, marginTop: 3 }}>Every client planted by their own rhythm — who's cooling, who's holding, who you're ahead on.</div>
                         </div>
                         <div style={{ display: "flex", gap: 14, fontSize: 11, color: C.textSec, flexWrap: "wrap" }}>
@@ -1186,14 +1199,13 @@ export default function HealthPage({ app }) {
                             </div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                               {b.clients.map(({ c }) => {
-                                const initials = (c.name || "?").split(/\s|&/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
                                 return (
                                   <button
                                     key={c.id}
                                     onClick={() => setSelectedClient(c)}
-                                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px 6px 6px", borderRadius: 999, border: "1px solid " + C.borderLight, background: C.bg, cursor: "pointer", fontFamily: "inherit" }}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 14px 8px 11px", borderRadius: 999, border: "1px solid " + C.borderLight, background: C.bg, cursor: "pointer", fontFamily: "inherit" }}
                                   >
-                                    <span style={{ width: 24, height: 24, borderRadius: 12, background: b.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, fontWeight: 700, flexShrink: 0 }}>{initials}</span>
+                                    <span style={{ width: 9, height: 9, borderRadius: 5, background: b.color, flexShrink: 0 }} />
                                     <span style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap" }}>{c.name}</span>
                                   </button>
                                 );
@@ -1231,7 +1243,11 @@ export default function HealthPage({ app }) {
                                 <g key={"bed-" + b.key}>
                                   {b.clients.map(({ c }, i) => {
                                     const score = Math.max(0, Math.min(100, Number(c.retention_score) || 0));
-                                    const len = 28 + score;            // 28–128px: the height IS the score
+                                    // Straight 0–100 scale: a 97 stands nearly twice a 52.
+                                    // The old +28px floor compressed differences; now height
+                                    // is directly proportional (1.28px per point, 10px
+                                    // visibility minimum so a near-zero client still plants).
+                                    const len = Math.max(10, score * 1.28);
                                     const bx = x0 + 14 + SLOT / 2 + i * SLOT;
                                     const tipY = SOIL - len;
                                     // Slipping stems lean out of the bed; the rest get a tiny
