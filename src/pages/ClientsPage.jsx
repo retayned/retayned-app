@@ -307,7 +307,7 @@ export default function ClientsPage({ app }) {
             else if (sortId === "attention") copy.sort((a, b) => (a.ret || 0) - (b.ret || 0));
             else if (sortId === "revenue") copy.sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
             else if (sortId === "cadence") {
-              // Good → bad: Ahead first, then On rhythm, then Slipping.
+              // Good → bad: Ahead first, then Steady, then Slipping.
               // Calibrating last (no rhythm yet to judge).
               const rank = { warming: 0, steady: 1, cooling: 2, calibrating: 3 };
               copy.sort((a, b) => (rank[clientCadence(a).state] ?? 3) - (rank[clientCadence(b).state] ?? 3));
