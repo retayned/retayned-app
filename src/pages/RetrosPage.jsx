@@ -740,43 +740,45 @@ export default function RetrosPage({ app }) {
                       setPage("coach");
                     };
                     const isOverdue = overdueDays > 0;
-                    const single = dueReminders.length === 1;
+                    const queueN = dueReminders.length;
+                    const nextUp = queueN > 1 ? (dueReminders[1].contact_name || dueReminders[1].contact || dueReminders[1].client_name || dueReminders[1].client) : null;
+                    // Queue processor, not a summary (Jul 2026 redesign): the
+                    // banner ALWAYS shows the first due contact with full
+                    // single-contact powers. A counter pill + "up next" whisper
+                    // signal the line behind them. Mark Check-In records the
+                    // touch → dueReminders (derived state) drops r0 → the next
+                    // contact promotes automatically. The old multi state
+                    // ("N check-ins due" + a Review button that secretly
+                    // drafted for r0 only, with Mark Check-In hidden) is gone.
                     return (
-                      <div onClick={single ? () => setSelectedRolodex(r0) : undefined} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 11, background: C.dangerSoft, border: "1px solid #F3CFC3", borderRadius: 12, padding: "13px 15px", cursor: single ? "pointer" : "default" }}>
+                      <div onClick={() => setSelectedRolodex(r0)} style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 10, gap: 11, background: C.dangerSoft, border: "1px solid #F3CFC3", borderRadius: 12, padding: "13px 15px", cursor: "pointer" }}>
                         <Avatar id={r0.id} name={r0Name} size={36} />
                         <div style={{ flex: 1, minWidth: 180 }}>
-                          {single ? (
-                            <>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <span style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{r0Name}</span>
-                                <span style={{ fontSize: 9.5, fontWeight: 700, color: "#fff", background: C.danger, borderRadius: 999, padding: "2px 8px" }}>{isOverdue ? `${overdueDays}d overdue` : "due today"}</span>
-                              </div>
-                              <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 2 }}>{r0Co ? r0Co + " · " : ""}time for a check-in</div>
-                            </>
-                          ) : (
-                            <>
-                              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{dueReminders.length} check-ins due</div>
-                              <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 2 }}>
-                                {dueReminders.slice(0, 2).map(r => r.contact_name || r.contact || r.client_name || r.client).join(", ")}{dueReminders.length > 2 ? ", and " + (dueReminders.length - 2) + " more" : ""}
-                              </div>
-                            </>
-                          )}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{r0Name}</span>
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "#fff", background: C.danger, borderRadius: 999, padding: "2px 8px" }}>{isOverdue ? `${overdueDays}d overdue` : "due today"}</span>
+                            {queueN > 1 && (
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: C.danger, border: "1px solid #E7C0B6", borderRadius: 999, padding: "2px 8px" }}>1 of {queueN}</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 11.5, color: C.textSec, marginTop: 2 }}>
+                            {r0Co ? r0Co + " · " : ""}time for a check-in{nextUp ? <span style={{ color: C.textMuted }}> · up next: {nextUp}</span> : null}
+                          </div>
                         </div>
                         <button
                           onClick={ev => { ev.stopPropagation(); draftWithRai(); }}
                           style={{ background: "#fff", color: C.text, border: "none", borderRadius: 8, padding: "9px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, boxShadow: "0 1px 2px rgba(20,30,22,0.08)" }}
-                        >{single ? "Draft Note" : "Review"}</button>
-                        {single && (
-                          <button
-                            onClick={ev => { ev.stopPropagation(); markCheckIn(r0); }}
-                            title="Records the touch and clears this check-in"
-                            style={{ background: "transparent", color: C.text, border: "1px solid #E7C0B6", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
-                          >Mark Check-In</button>
-                        )}
+                        >Draft Note</button>
+                        <button
+                          onClick={ev => { ev.stopPropagation(); markCheckIn(r0); }}
+                          title="Records the touch and clears this check-in"
+                          style={{ background: "transparent", color: C.text, border: "1px solid #E7C0B6", borderRadius: 8, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+                        >Mark Check-In</button>
                         <button
                           type="button"
                           onClick={ev => { ev.stopPropagation(); dismissRolodexCheckin(); }}
-                          aria-label="Dismiss check-in reminder"
+                          aria-label="Dismiss all check-ins for today"
+                          title="Dismiss all check-ins for today"
                           style={{ background: "transparent", border: "none", color: "#B58575", fontSize: 18, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", padding: "4px 2px", flexShrink: 0 }}
                         >×</button>
                       </div>
