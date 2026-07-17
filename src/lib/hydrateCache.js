@@ -17,7 +17,7 @@
 //  - ?nocache in the URL skips reads and purges the current user's key.
 //  - Corrupt JSON purges itself.
 
-const VERSION = 1;
+const VERSION = 2; // v2: hydrate batch grew to 23 elements (completed health checks appended)
 const MAX_AGE_MS = 72 * 3600000;
 const MAX_BYTES = 2_500_000;
 
