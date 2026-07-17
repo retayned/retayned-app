@@ -3002,7 +3002,7 @@ export default function App({ user }) {
     setPage(id);
   };
   const totalRev = clients.reduce((a, c) => a + c.revenue, 0);
-  const overdueChecks = hcQueue.filter(h => (h.overdue > 0 || h.due === "Today") && !hcDone[h.client]).length;
+  const overdueChecks = hcQueue.filter(h => (h.overdue > 0 || h.due === "Today") && !hcDone[h.client] && !h.completedLocal).length;
   const totalRefRev = refs.filter(r => r.status === "converted" || r.converted).reduce((a, r) => a + (r.revenue || 0), 0);
 
   const todayDot = tasksDone < tasksTotal;
@@ -3240,6 +3240,7 @@ export default function App({ user }) {
     hcDone,
     hcOpen,
     hcQueue,
+    setHcQueue,
     healthStripOpen,
     isMobile,
     justCompletedIds,
