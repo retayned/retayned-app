@@ -17,7 +17,7 @@ export function useAuth() {
       // signups fire in AuthPage at signUp success; Google arrivals land
       // here via SIGNED_IN with no signup callback, so detect brand-new
       // accounts by created_at (< 5 min old). Same localStorage guard and
-      // eventID scheme as the email path â€” if both somehow fire for one
+      // eventID scheme as the email path — if both somehow fire for one
       // user, Meta dedups on the shared eventID. Pixel absence is a no-op.
       try {
         const u = session?.user;
@@ -26,6 +26,21 @@ export function useAuth() {
           if (window.fbq && !localStorage.getItem(trialKey)) {
             window.fbq("track", "StartTrial", {}, { eventID: "trial-" + u.id });
             localStorage.setItem(trialKey, "1");
+          }
+          // Ad attribution stamp for OAuth signups — same cookie, same
+          // profile column as the email path; guarded so it writes once.
+          const attrKey = "__ret_attr_written_" + u.id;
+          if (!localStorage.getItem(attrKey)) {
+            const raw = document.cookie.split("; ").find(r => r.startsWith("ret_attr="));
+            if (raw) {
+              try {
+                const attr = JSON.parse(decodeURIComponent(raw.split("=").slice(1).join("=")));
+                if (attr && typeof attr === "object") {
+                  supabase.from('profiles').update({ attribution: attr }).eq('id', u.id)
+                    .then(() => localStorage.setItem(attrKey, "1"), () => {});
+                }
+              } catch (_) { /* no-op */ }
+            }
           }
         }
       } catch (_) { /* no-op */ }
