@@ -65,6 +65,19 @@ export default function AuthPage() {
       if (signUpError) {
         setError(signUpError.message);
       } else if (data.user) {
+        // Meta StartTrial (Jul 2026): the trial is no-card, so the trial
+        // STARTS here — at account creation — not at Stripe checkout
+        // (that moment is Purchase, fired server-side by the webhook).
+        // eventID = user id: refires from double-submits or an OAuth
+        // duplicate path dedupe on Meta's side; guard flag stops local
+        // repeats. Pixel absence must never break signup.
+        try {
+          const trialKey = "__ret_trial_fired_" + data.user.id;
+          if (window.fbq && !localStorage.getItem(trialKey)) {
+            window.fbq("track", "StartTrial", {}, { eventID: "trial-" + data.user.id });
+            localStorage.setItem(trialKey, "1");
+          }
+        } catch (_) { /* no-op */ }
         // Update profile with company
         if (company) {
           await supabase.from('profiles').update({ company, full_name: fullName }).eq('id', data.user.id);
