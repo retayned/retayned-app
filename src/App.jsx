@@ -3085,12 +3085,10 @@ export default function App({ user }) {
     const flag = params.get("billing");
     if (!flag) return;
     if (flag === "success") {
-      // Meta P3: browser-side StartTrial, deduped against the webhook's
-      // CAPI event via the checkout session id the return_url carries.
-      try {
-        const sid = params.get("session_id");
-        if (window.fbq && sid) window.fbq("track", "StartTrial", {}, { eventID: sid });
-      } catch (_) { /* pixel absence must never break the success path */ }
+      // (StartTrial removed from this spot, Jul 17 — the trial is
+      // no-card, so checkout success is the PURCHASE moment, fired
+      // server-side by stripe-webhook via CAPI. StartTrial now fires at
+      // account creation: AuthPage signUp + useAuth OAuth detection.)
       // Stripe redirected back post-checkout. The webhook races this
       // redirect, so refetch now and again shortly after.
       refreshBilling();
