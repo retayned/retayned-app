@@ -1032,15 +1032,23 @@ export default function TodayPage({ app }) {
                 else if (/\btext|\bmessage|\bdm\b|pinged/i.test(lowerC)) ch = "text";
                 else if (/\bmet\b|\bmeeting|\blunch|\bcoffee|caught up|\bsync\b|\bdemo\b/i.test(lowerC)) ch = "meeting";
                 try {
-                  const { data: createdTp } = await touchpointsDb.create(user.id, {
+                  // supabase-js returns { error }, never throws — the { data }-only
+                  // destructure + fake "tp"+Date.now() id meant a DB rejection
+                  // still showed a success toast. Silent-failure pattern
+                  // instance #8; error is now first-class, no fake ids.
+                  const { data: createdTp, error: tpErr } = await touchpointsDb.create(user.id, {
                     client_id: matchedClientC.id,
                     client_name: matchedClientC.name,
                     channel: ch,
                     notes: rawComposer,
                   });
-                  const tpId = createdTp?.id || "tp" + Date.now();
-                  if (createdTp) setTpLogged(prev => [createdTp, ...(prev || [])]);
-                  setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: tpId, label: matchedClientC.name });
+                  if (tpErr || !createdTp?.id) {
+                    console.error("Composer touchpoint create rejected:", tpErr?.message || "(no row returned)");
+                    setQuickLogToast({ id: Date.now(), error: true });
+                  } else {
+                    setTpLogged(prev => [createdTp, ...(prev || [])]);
+                    setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: createdTp.id, label: matchedClientC.name });
+                  }
                 } catch (e) { console.warn("Composer touchpoint create failed:", e); setQuickLogToast({ id: Date.now(), error: true }); }
                 setNewTask(""); setComposerClient(""); setNewTaskRecurring(false);
                 setNewTaskRecurrencePattern({ kind: "daily" }); setNewTaskDueDate(null);
@@ -1072,7 +1080,11 @@ export default function TodayPage({ app }) {
             // instead of chopping at TITLE_CAP and losing the tail.
             const _split = splitLongTask(text, TITLE_CAP);
             const cappedText = _split.text;
-            const { data: created } = await tasksDb.create(user.id, {
+            // { error } captured — supabase-js never throws (pattern #8 fix,
+            // task lane). A rejected insert previously minted a fake local
+            // "u"+Date.now() task and showed success; now it errors visibly
+            // and keeps the composer text so nothing the user typed is lost.
+            const { data: created, error: taskCreateErr } = await tasksDb.create(user.id, {
               text: cappedText,
               notes: _split.notes,
               client_name: clientName,
@@ -1082,8 +1094,13 @@ export default function TodayPage({ app }) {
               due_date: dueDateForCreate,
               assigned_worker_id: newTaskWorkerId || null,
             });
+            if (taskCreateErr || !created?.id) {
+              console.error("Composer task create rejected:", taskCreateErr?.message || "(no row returned)");
+              setQuickLogToast({ id: Date.now(), error: true });
+              return;
+            }
             const task = {
-              id: created?.id || "u" + Date.now(),
+              id: created.id,
               text: cappedText,
               notes: _split.notes,
               client: clientName || null,
