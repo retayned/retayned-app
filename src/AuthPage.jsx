@@ -78,6 +78,18 @@ export default function AuthPage() {
             localStorage.setItem(trialKey, "1");
           }
         } catch (_) { /* no-op */ }
+        // Ad attribution (Jul 2026): the site stashed utm_*/fbclid from the
+        // ad click in a .retayned.com cookie; stamp it onto the profile at
+        // the trial-start moment. Powers the per-ad trial→paid report.
+        try {
+          const raw = document.cookie.split("; ").find(r => r.startsWith("ret_attr="));
+          if (raw) {
+            const attr = JSON.parse(decodeURIComponent(raw.split("=").slice(1).join("=")));
+            if (attr && typeof attr === "object") {
+              await supabase.from('profiles').update({ attribution: attr }).eq('id', data.user.id);
+            }
+          }
+        } catch (_) { /* attribution must never break signup */ }
         // Update profile with company
         if (company) {
           await supabase.from('profiles').update({ company, full_name: fullName }).eq('id', data.user.id);
