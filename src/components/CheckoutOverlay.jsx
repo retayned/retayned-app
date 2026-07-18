@@ -90,6 +90,14 @@ export default function CheckoutOverlay({ plan, onClose, trialing = false }) {
         setLoading(true); setError(null);
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Not signed in");
+        // Meta attribution (Jul 2026): _fbc (ad click id) and _fbp
+        // (browser id) are set by the pixel on .retayned.com, shared
+        // across site+app subdomains. Passed through stripe-checkout →
+        // subscription metadata → webhook's CAPI Purchase, so Meta can
+        // connect the ad click to the payment. Absence is fine.
+        const _readCookie = (k) => {
+          try { return document.cookie.split("; ").find(r => r.startsWith(k + "="))?.split("=").slice(1).join("=") || null; } catch (_) { return null; }
+        };
         const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
           method: "POST",
           headers: {
@@ -97,7 +105,7 @@ export default function CheckoutOverlay({ plan, onClose, trialing = false }) {
             "Authorization": `Bearer ${session.access_token}`,
             "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ plan }),
+          body: JSON.stringify({ plan, fbc: _readCookie("_fbc"), fbp: _readCookie("_fbp") }),
         });
         const body = await resp.json().catch(() => ({}));
         if (!resp.ok || !body.client_secret || !body.publishable_key) {
