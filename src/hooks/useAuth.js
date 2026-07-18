@@ -13,6 +13,22 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      // Meta StartTrial for OAuth signups (Jul 2026). Email/password
+      // signups fire in AuthPage at signUp success; Google arrivals land
+      // here via SIGNED_IN with no signup callback, so detect brand-new
+      // accounts by created_at (< 5 min old). Same localStorage guard and
+      // eventID scheme as the email path â€” if both somehow fire for one
+      // user, Meta dedups on the shared eventID. Pixel absence is a no-op.
+      try {
+        const u = session?.user;
+        if (u && Date.now() - new Date(u.created_at).getTime() < 5 * 60 * 1000) {
+          const trialKey = "__ret_trial_fired_" + u.id;
+          if (window.fbq && !localStorage.getItem(trialKey)) {
+            window.fbq("track", "StartTrial", {}, { eventID: "trial-" + u.id });
+            localStorage.setItem(trialKey, "1");
+          }
+        }
+      } catch (_) { /* no-op */ }
     });
 
     return () => subscription.unsubscribe();
