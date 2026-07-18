@@ -35,6 +35,7 @@ import ReactDOM from 'react-dom/client';
 import { useAuth } from './hooks/useAuth';
 import AuthPage from './AuthPage';
 import App from './App';
+import McpConsent from './pages/McpConsent';
 
 // White-screen self-heal (Jun 2026). After a deploy, a restored or
 // cached tab can hold an index.html that references hashed chunks
@@ -86,6 +87,19 @@ function Root() {
           <p style={{ fontSize: 14, color: "#92A596", marginTop: 8 }}>Loading...</p>
         </div>
       </div>
+    );
+  }
+  // MCP OAuth consent route — intercepted before the app shell. If the
+  // visitor isn't signed in they see AuthPage first; the hash survives
+  // login, so consent renders immediately after. Read once at render:
+  // the hash is set by the /authorize redirect before this code runs.
+  const isMcpConsent = typeof window !== "undefined" && (window.location.hash || "").startsWith("#/mcp-consent");
+  if (isMcpConsent) {
+    return (
+      <>
+        {user ? <McpConsent user={user} /> : <AuthPage />}
+        <BootTimeOverlay />
+      </>
     );
   }
   return (
