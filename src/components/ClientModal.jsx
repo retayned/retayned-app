@@ -988,7 +988,7 @@ export default function ClientModal({ app }) {
                 <div style={{ marginTop: 18 }}>
                   {!rolodexConfirm && !removeConfirm && !pauseConfirm && !resumeConfirm ? null : pauseConfirm ? (
                     <div style={{ background: C.surfaceWarm, borderRadius: 12, padding: "16px" }}>
-                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>Pausing will not remove a client from billing — tasks stay visible but Rai stops surfacing them, and the tenure clock freezes until you resume. To stop billing, move them to your Rolodex instead.</p>
+                      <p style={{ fontSize: 14, color: C.text, lineHeight: 1.55, marginBottom: 14 }}>Pausing takes this client fully out of Rai's daily sweep — no brief mentions, no surfaced tasks, no scoring — until you resume. Their tasks stay visible in the app, the tenure clock freezes, and retention takes a one-time −4. Billing is unaffected; to stop billing, move them to your Rolodex instead.</p>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button onClick={async () => {
                           // Optimistic: flip is_paused, drop ret -4
