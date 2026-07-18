@@ -205,7 +205,7 @@ export default function TodayPage({ app }) {
   // ── Brain Dump + task-notes local UI state (page-local, not app state) ──
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
-  // "Do in Claude × Rai" (Jul 2026) — artifact-shaped tasks get a chip
+  // "Do in Claude" chip (Jul 2026, briefed-dot redesign) — artifact-shaped tasks get a chip
   // that packs the client context and opens Claude. Rai does the
   // packing (same context builder as her chat preload), Claude does the
   // making. Clipboard + open (the claude.ai ?q= URL was removed for
@@ -3270,11 +3270,11 @@ export default function TodayPage({ app }) {
                                     onClick={(e) => { e.stopPropagation(); handOffToClaude(t, client); }}
                                     onMouseEnter={() => setClaudeHoverId(t.id)}
                                     onMouseLeave={() => setClaudeHoverId(id => (id === t.id ? null : id))}
-                                    title={"Rai packs this client's context and opens Claude — paste and go."}
+                                    title={"Rai briefs Claude on this client first — context travels with the task."}
                                     style={{
                                       flexShrink: 0, marginLeft: 8, borderRadius: 999, height: 20, padding: "0 10px",
                                       fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", fontFamily: "inherit", lineHeight: 1,
-                                      whiteSpace: "nowrap", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5,
+                                      whiteSpace: "nowrap", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
                                       alignSelf: "center", marginTop: 0, marginBottom: 0, boxSizing: "border-box",
                                       border: "1px solid " + (hov ? C.primaryDeep : C.border),
                                       background: hov ? C.primaryDeep : C.card,
@@ -3283,7 +3283,13 @@ export default function TodayPage({ app }) {
                                       transition: "background 140ms ease-out, color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out",
                                     }}
                                   >
-                                    {claudeCopiedId === t.id ? "Copied ✓" : (<>Do in Claude <span style={{ color: hov ? "#C9B8FF" : C.btn, transition: "color 140ms ease-out" }}>× Rai</span> <span style={{ display: "inline-block", transform: hov ? "translate(1px,-1px)" : "none", transition: "transform 140ms ease-out" }}>↗</span></>)}
+                                    {claudeCopiedId === t.id ? "Copied ✓" : (<>
+                                      {/* The briefed-dot: 6px, Rai purple — same signal language as the
+                                          purple underline (purple = Rai touched this). Lavender on the
+                                          deep-green hover fill so it stays visible. "× Rai" wordmark is
+                                          DELETED — Rai's role lives in the dot + tooltip, not co-billing. */}
+                                      <span style={{ width: 6, height: 6, borderRadius: 999, background: hov ? "#C9B8FF" : C.btn, flexShrink: 0, transition: "background 140ms ease-out" }} />
+                                      Do in Claude <span style={{ display: "inline-block", transform: hov ? "translate(1px,-1px)" : "none", transition: "transform 140ms ease-out" }}>↗</span></>)}
                                   </button>
                                   );
                                 })()}
