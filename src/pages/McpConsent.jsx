@@ -11,11 +11,14 @@ import { C } from "../theme";
 
 function decodeReq() {
   try {
+    // The /authorize redirect builds the URL with URL.searchParams,
+    // which places ?req= BEFORE the #fragment — so the payload lives in
+    // location.search, not inside the hash. Check both pockets.
+    let raw = null;
     const hash = window.location.hash || "";
     const qIdx = hash.indexOf("?");
-    if (qIdx === -1) return null;
-    const params = new URLSearchParams(hash.slice(qIdx + 1));
-    const raw = params.get("req");
+    if (qIdx !== -1) raw = new URLSearchParams(hash.slice(qIdx + 1)).get("req");
+    if (!raw) raw = new URLSearchParams(window.location.search || "").get("req");
     if (!raw) return null;
     const b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
     const json = atob(b64 + "===".slice((b64.length + 3) % 4));
