@@ -369,7 +369,13 @@ export default function ShellOverlays({ app }) {
                       ...prev,
                     ]);
                     try {
-                      const { data: created } = await touchpointsDb.create(user.id, {
+                      // supabase-js returns { error }, never throws — the old
+                      // { data }-only destructure meant a DB rejection (e.g. a
+                      // channel constraint) fell into the else branch and showed
+                      // a SUCCESS toast on a row that never persisted. That mask
+                      // hid the email-touchpoint bounce for months. Silent-failure
+                      // pattern instance #7 — error is now first-class.
+                      const { data: created, error: createErr } = await touchpointsDb.create(user.id, {
                         client_id: matchedClient.id,
                         client_name: matchedClient.name,
                         channel: detectedChannel,
@@ -380,11 +386,13 @@ export default function ShellOverlays({ app }) {
                         // span and leaves mangled fragments like "Call .".
                         notes: rawText,
                       });
-                      if (created?.id) {
+                      if (createErr || !created?.id) {
+                        console.error("Quick-log touchpoint create rejected:", createErr?.message || "(no row returned)");
+                        setTpLogged(prev => prev.filter(t => t.id !== optimisticId));
+                        setQuickLogToast({ id: Date.now(), error: true });
+                      } else {
                         setTpLogged(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
                         setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: created.id, label: matchedClient.name, relog: { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel } });
-                      } else {
-                        setQuickLogToast({ id: Date.now(), kind: "touchpoint", recordId: optimisticId, label: matchedClient.name, relog: { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel } });
                       }
                     } catch (err) {
                       setTpLogged(prev => prev.filter(t => t.id !== optimisticId));
@@ -423,7 +431,10 @@ export default function ShellOverlays({ app }) {
                   };
                   setTasks(prev => [optimisticTask, ...prev]);
                   try {
-                    const { data: created } = await tasksDb.create(user.id, {
+                    // { error } captured — supabase-js never throws (pattern #7 fix,
+                    // task lane). A rejected insert previously kept the optimistic
+                    // row and showed success.
+                    const { data: created, error: createErr } = await tasksDb.create(user.id, {
                       text: longSplit.text,
                       notes: longSplit.notes,
                       client_name: matchedClient?.name || null,
@@ -433,6 +444,12 @@ export default function ShellOverlays({ app }) {
                       due_date: dueDateForCreate,
                       assigned_worker_id: null,
                     });
+                    if (createErr || !created?.id) {
+                      console.error("Quick-log task create rejected:", createErr?.message || "(no row returned)");
+                      setTasks(prev => prev.filter(t => t.id !== optimisticId));
+                      setQuickLogToast({ id: Date.now(), error: true });
+                      return;
+                    }
                     // Build a short due-date hint for the toast so the user
                     // sees where the task landed (today / tomorrow / specific
                     // date). Without this, a "tomorrow" task vanishes from
@@ -450,12 +467,10 @@ export default function ShellOverlays({ app }) {
                     }
                     const toastLabel = (matchedClient?.name || "personal task") + (dueHint ? " · " + dueHint : "");
                     const relog = matchedClient ? { text: rawText, cleanedText, clientId: matchedClient.id, clientName: matchedClient.name, channel: detectedChannel, dueDate: dueDateForCreate } : null;
-                    if (created?.id) {
-                      setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
-                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: toastLabel, relog });
-                    } else {
-                      setQuickLogToast({ id: Date.now(), kind: "task", recordId: optimisticId, label: toastLabel, relog });
-                    }
+                    // Early return above guarantees created.id here — the old
+                    // else branch (success toast on optimistic id) is deleted.
+                    setTasks(prev => prev.map(t => t.id === optimisticId ? { ...t, id: created.id } : t));
+                    setQuickLogToast({ id: Date.now(), kind: "task", recordId: created.id, label: toastLabel, relog });
                   } catch (err) {
                     setTasks(prev => prev.filter(t => t.id !== optimisticId));
                     setQuickLogToast({ id: Date.now(), error: true });
