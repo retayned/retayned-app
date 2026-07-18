@@ -706,10 +706,18 @@ export const tasks = {
   listCompletionsForCadence: async (userId, days = 90) => {
     const since = new Date();
     since.setDate(since.getDate() - days);
+    // Repointed task_completions → task_occurrences (the durable
+    // occurrence-model record). This releases the Phase-4 hold: the
+    // dual-write task_completions table can now be deleted without
+    // silently blinding the cadence/last-touch math. No consumer of
+    // this list reads is_recurring (verified against utils.computeCadence
+    // and ClientsPage.lastTouch), so the column is dropped from the select.
     const { data, error } = await supabase
-      .from('task_completions')
-      .select('client_id, client_name, completed_at, is_recurring')
+      .from('task_occurrences')
+      .select('client_id, client_name, completed_at')
       .eq('user_id', userId)
+      .eq('is_done', true)
+      .not('completed_at', 'is', null)
       .gte('completed_at', since.toISOString());
     return { data: data || [], error };
   },
