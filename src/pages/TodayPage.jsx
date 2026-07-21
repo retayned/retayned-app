@@ -206,22 +206,21 @@ export default function TodayPage({ app }) {
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
   // "Do in Claude" (Jul 2026 ruling: NO chip — the clay dotted underline
-  // on the task title IS the button) — artifact-shaped tasks get a title
-  // that packs the client context and opens Claude. Rai does the
-  // packing (same context builder as her chat preload), Claude does the
-  // making. Clipboard + open (the claude.ai ?q= URL was removed for
-  // security, so paste is the reliable web path).
+  // on the task title IS the button). v2 handoff (post-MCP): we ship a
+  // POINTER, not a payload. The old design packed the whole client
+  // context into the clipboard for manual paste — pre-connector
+  // thinking. Now the prompt is one short sentence carrying the task_id;
+  // Claude pulls the live brief itself via the Retayned MCP
+  // (get_task_context), which is fresher and richer than any client-side
+  // pack. The server's own not-found error coaches the client_name
+  // fallback if the id misses (occurrence rows). We try the ?q= prefill
+  // (harmless if claude.ai ignores it) AND copy the same line to the
+  // clipboard as the reliable fallback — Enter is the only step left.
   const [claudeCopiedId, setClaudeCopiedId] = useState(null);
   const [claudeToast, setClaudeToast] = useState(false);
   const handOffToClaude = async (t, client) => {
-    const ctx = buildTaskDiscussionContext({ task: t, client, tasks, touchpoints: allTouchpoints, recentPick: null, suggestion: null });
-    const prompt = [
-      "I'm working on a deliverable for one of my clients. Context below comes from Retayned, my client retention CRM — Rai (its AI) packed it for you.",
-      "",
-      ctx || `Task: "${t.text}"\nClient: ${client?.name || t.client_name || "(unlinked)"}`,
-      "",
-      `Please create the deliverable described in the task. Ask me anything you need before starting.`,
-    ].join("\n");
+    const cliName = client?.name || t.client_name || "";
+    const prompt = `Pull my Retayned context for this task (get_task_context with task_id "${t.id}"${cliName ? `; if that id isn't found, use client_name "${cliName}"` : ""}), then help me create the deliverable: "${t.text}"`;
     // Copy FIRST, before window.open — some browsers void clipboard
     // writes once focus moves to the new tab.
     try { await navigator.clipboard.writeText(prompt); } catch (_) { /* still open */ }
@@ -229,7 +228,7 @@ export default function TodayPage({ app }) {
     setClaudeToast(true);
     setTimeout(() => setClaudeToast(false), 6000);
     setTimeout(() => setClaudeCopiedId(id => (id === t.id ? null : id)), 6000);
-    window.open("https://claude.ai/new", "_blank", "noopener");
+    window.open("https://claude.ai/new?q=" + encodeURIComponent(prompt), "_blank", "noopener");
   };
   const [editingNoteId, setEditingNoteId] = useState(null);
   // Tasks whose title is ACTUALLY clipped in the DOM right now. The title now
@@ -3287,7 +3286,7 @@ export default function TodayPage({ app }) {
                                 )}
                                 {claudeToast && claudeCopiedId === t.id && (
                                   <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 90, background: "#1C3224", color: "#fff", borderRadius: 10, padding: "12px 18px", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(20,30,22,0.3)" }}>
-                                    Context copied — paste it into Claude (Cmd+V)
+                                    Claude opened — hit Enter there. (If the box is empty: Cmd+V, then Enter.)
                                   </div>
                                 )}
                               </div>
