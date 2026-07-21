@@ -1779,6 +1779,7 @@ export const APP_CSS = `
           text-decoration-color: #C15F3C;
           text-decoration-thickness: 2px;
           text-underline-offset: 2px;
+          cursor: pointer;
           transition: text-decoration-color 160ms ease, text-decoration-style 160ms ease;
         }
         .rt-task-title.is-claude:hover {
@@ -1787,6 +1788,7 @@ export const APP_CSS = `
         }
         .rt-row.is-done .rt-task-title.is-claude {
           text-decoration: none;
+          cursor: default;
         }
         .rt-row.is-done .rt-row-tag { opacity: 0.45; transition: opacity 320ms ease; }
         .rt-row.is-done .rt-dismiss { opacity: 0.4 !important; }
