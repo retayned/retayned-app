@@ -3108,6 +3108,9 @@ export default function TodayPage({ app }) {
                                   // verb AND has a client tag AND task isn't done. Click
                                   // opens the Rai chat page with task + client preloaded.
                                   const isDiscussable = !isDone && client && detectThinkingVerb(t.text);
+                                  // Do-in-Claude tasks (Jul 2026): same test as the chip below.
+                                  // Clay underline = Claude handoff, mirroring purple = Rai.
+                                  const isClaudeTask = !isDone && client && detectArtifactWork(t.text);
                                   // #3 — inline edit: when this task is being edited,
                                   // swap the title for a text input.
                                   if (editingTaskId === t.id) {
@@ -3135,7 +3138,7 @@ export default function TodayPage({ app }) {
                                   if (isDiscussable) {
                                     return (
                                       <span
-                                        className="rt-task-title is-discussable"
+                                        className={"rt-task-title is-discussable" + (isClaudeTask ? " is-claude" : "")}
                                         title={`${t.text}\n\nClick to talk this through with Rai · double-click to edit`}
                                         onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
                                         onPointerDown={lpStart}
@@ -3239,7 +3242,7 @@ export default function TodayPage({ app }) {
                                     );
                                   }
                                   return <span
-                                    className="rt-task-title"
+                                    className={"rt-task-title" + (isClaudeTask ? " is-claude" : "")}
                                     title={isDone ? t.text : `${t.text}\n\nDouble-click to edit`}
                                     onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
                                     onPointerDown={lpStart}
@@ -3276,19 +3279,19 @@ export default function TodayPage({ app }) {
                                       fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", fontFamily: "inherit", lineHeight: 1,
                                       whiteSpace: "nowrap", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
                                       alignSelf: "center", marginTop: 0, marginBottom: 0, boxSizing: "border-box",
-                                      border: "1px solid " + (hov ? C.primaryDeep : C.border),
-                                      background: hov ? C.primaryDeep : C.card,
+                                      border: "1px solid " + (hov ? "#C15F3C" : C.border),
+                                      background: hov ? "#C15F3C" : C.card,
                                       color: hov ? "#FFFFFF" : C.textSec,
-                                      boxShadow: hov ? "0 2px 8px rgba(28,50,36,0.28)" : "none",
+                                      boxShadow: hov ? "0 2px 8px rgba(193,95,60,0.32)" : "none",
                                       transition: "background 140ms ease-out, color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out",
                                     }}
                                   >
                                     {claudeCopiedId === t.id ? "Copied ✓" : (<>
-                                      {/* The briefed-dot: 6px, Rai purple — same signal language as the
-                                          purple underline (purple = Rai touched this). Lavender on the
-                                          deep-green hover fill so it stays visible. "× Rai" wordmark is
-                                          DELETED — Rai's role lives in the dot + tooltip, not co-billing. */}
-                                      <span style={{ width: 6, height: 6, borderRadius: 999, background: hov ? "#C9B8FF" : C.btn, flexShrink: 0, transition: "background 140ms ease-out" }} />
+                                      {/* The briefed-dot: 6px, CLAY (Jul 2026) — clay is the Claude
+                                          signal, matching the .is-claude task underline the same way
+                                          purple matches Rai. Light clay on the clay hover fill so the
+                                          dot stays visible. Rai's briefing role lives in the tooltip. */}
+                                      <span style={{ width: 6, height: 6, borderRadius: 999, background: hov ? "#F5D3C4" : "#C15F3C", flexShrink: 0, transition: "background 140ms ease-out" }} />
                                       Do in Claude <span style={{ display: "inline-block", transform: hov ? "translate(1px,-1px)" : "none", transition: "transform 140ms ease-out" }}>↗</span></>)}
                                   </button>
                                   );
