@@ -205,14 +205,14 @@ export default function TodayPage({ app }) {
   // ── Brain Dump + task-notes local UI state (page-local, not app state) ──
   // brainDumpOpen/setBrainDumpOpen now come from pageCtx (App-level).
   const [openNoteId, setOpenNoteId] = useState(null);
-  // "Do in Claude" chip (Jul 2026, briefed-dot redesign) — artifact-shaped tasks get a chip
+  // "Do in Claude" (Jul 2026 ruling: NO chip — the clay dotted underline
+  // on the task title IS the button) — artifact-shaped tasks get a title
   // that packs the client context and opens Claude. Rai does the
   // packing (same context builder as her chat preload), Claude does the
   // making. Clipboard + open (the claude.ai ?q= URL was removed for
   // security, so paste is the reliable web path).
   const [claudeCopiedId, setClaudeCopiedId] = useState(null);
   const [claudeToast, setClaudeToast] = useState(false);
-  const [claudeHoverId, setClaudeHoverId] = useState(null);
   const handOffToClaude = async (t, client) => {
     const ctx = buildTaskDiscussionContext({ task: t, client, tasks, touchpoints: allTouchpoints, recentPick: null, suggestion: null });
     const prompt = [
@@ -3108,8 +3108,11 @@ export default function TodayPage({ app }) {
                                   // verb AND has a client tag AND task isn't done. Click
                                   // opens the Rai chat page with task + client preloaded.
                                   const isDiscussable = !isDone && client && detectThinkingVerb(t.text);
-                                  // Do-in-Claude tasks (Jul 2026): same test as the chip below.
-                                  // Clay underline = Claude handoff, mirroring purple = Rai.
+                                  // Do-in-Claude tasks (Jul 2026 ruling): the clay dotted
+                                  // underline IS the button — clicking the title hands off to
+                                  // Claude. No chip. Clay = Claude, mirroring purple = Rai;
+                                  // when a task is both artifact-shaped and discussable, the
+                                  // Claude branch below wins click AND color.
                                   const isClaudeTask = !isDone && client && detectArtifactWork(t.text);
                                   // #3 — inline edit: when this task is being edited,
                                   // swap the title for a text input.
@@ -3135,10 +3138,26 @@ export default function TodayPage({ app }) {
                                   // threshold. Double-click handles desktop.
                                   const lpStart = () => { longPressTimerRef.current = setTimeout(() => beginTaskEdit(t), 500); };
                                   const lpCancel = () => { if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; } };
+                                  if (isClaudeTask) {
+                                    return (
+                                      <span
+                                        className="rt-task-title is-claude"
+                                        title={`${t.text}\n\nClick to hand off to Claude — Rai packs the client context first · double-click to edit`}
+                                        onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
+                                        onPointerDown={lpStart}
+                                        onPointerUp={lpCancel}
+                                        onPointerMove={lpCancel}
+                                        onPointerLeave={lpCancel}
+                                        onClick={(e) => { e.stopPropagation(); handOffToClaude(t, client); }}
+                                        ref={(el) => markTruncated(t.id, el, openNoteId === t.id)}
+                                        style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: openNoteId === t.id ? "unset" : 1, maxWidth: "100%", overflow: "hidden", lineHeight: 1.4 }}
+                                      >{t.text}</span>
+                                    );
+                                  }
                                   if (isDiscussable) {
                                     return (
                                       <span
-                                        className={"rt-task-title is-discussable" + (isClaudeTask ? " is-claude" : "")}
+                                        className="rt-task-title is-discussable"
                                         title={`${t.text}\n\nClick to talk this through with Rai · double-click to edit`}
                                         onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
                                         onPointerDown={lpStart}
@@ -3242,7 +3261,7 @@ export default function TodayPage({ app }) {
                                     );
                                   }
                                   return <span
-                                    className={"rt-task-title" + (isClaudeTask ? " is-claude" : "")}
+                                    className="rt-task-title"
                                     title={isDone ? t.text : `${t.text}\n\nDouble-click to edit`}
                                     onDoubleClick={(e) => { e.stopPropagation(); beginTaskEdit(t); }}
                                     onPointerDown={lpStart}
@@ -3266,36 +3285,6 @@ export default function TodayPage({ app }) {
                                     </svg>
                                   </button>
                                 )}
-                                {!isDone && client && detectArtifactWork(t.text) && (() => {
-                                  const hov = claudeHoverId === t.id;
-                                  return (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handOffToClaude(t, client); }}
-                                    onMouseEnter={() => setClaudeHoverId(t.id)}
-                                    onMouseLeave={() => setClaudeHoverId(id => (id === t.id ? null : id))}
-                                    title={"Rai briefs Claude on this client first — context travels with the task."}
-                                    style={{
-                                      flexShrink: 0, marginLeft: 8, borderRadius: 999, height: 20, padding: "0 10px",
-                                      fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", fontFamily: "inherit", lineHeight: 1,
-                                      whiteSpace: "nowrap", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
-                                      alignSelf: "center", marginTop: 0, marginBottom: 0, boxSizing: "border-box",
-                                      border: "1px solid " + (hov ? "#C15F3C" : C.border),
-                                      background: hov ? "#C15F3C" : C.card,
-                                      color: hov ? "#FFFFFF" : C.textSec,
-                                      boxShadow: hov ? "0 2px 8px rgba(193,95,60,0.32)" : "none",
-                                      transition: "background 140ms ease-out, color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out",
-                                    }}
-                                  >
-                                    {claudeCopiedId === t.id ? "Copied ✓" : (<>
-                                      {/* The briefed-dot: 6px, CLAY (Jul 2026) — clay is the Claude
-                                          signal, matching the .is-claude task underline the same way
-                                          purple matches Rai. Light clay on the clay hover fill so the
-                                          dot stays visible. Rai's briefing role lives in the tooltip. */}
-                                      <span style={{ width: 6, height: 6, borderRadius: 999, background: hov ? "#F5D3C4" : "#C15F3C", flexShrink: 0, transition: "background 140ms ease-out" }} />
-                                      Do in Claude <span style={{ display: "inline-block", transform: hov ? "translate(1px,-1px)" : "none", transition: "transform 140ms ease-out" }}>↗</span></>)}
-                                  </button>
-                                  );
-                                })()}
                                 {claudeToast && claudeCopiedId === t.id && (
                                   <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 90, background: "#1C3224", color: "#fff", borderRadius: 10, padding: "12px 18px", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(20,30,22,0.3)" }}>
                                     Context copied — paste it into Claude (Cmd+V)
