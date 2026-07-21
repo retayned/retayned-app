@@ -1768,6 +1768,26 @@ export const APP_CSS = `
           text-decoration: none;
           cursor: default;
         }
+        /* "Do in Claude" tasks (Jul 2026): identical dotted-underline
+           grammar as .is-discussable, in CLAY #C15F3C — clay is reserved
+           for Claude handoffs the way purple is reserved for Rai. These
+           rules sit AFTER .is-discussable on purpose: when a task is both
+           discussable and artifact-shaped, clay wins the cascade. */
+        .rt-task-title.is-claude {
+          text-decoration: underline;
+          text-decoration-style: dotted;
+          text-decoration-color: #C15F3C;
+          text-decoration-thickness: 2px;
+          text-underline-offset: 2px;
+          transition: text-decoration-color 160ms ease, text-decoration-style 160ms ease;
+        }
+        .rt-task-title.is-claude:hover {
+          text-decoration-style: solid;
+          text-decoration-color: #A94F31;
+        }
+        .rt-row.is-done .rt-task-title.is-claude {
+          text-decoration: none;
+        }
         .rt-row.is-done .rt-row-tag { opacity: 0.45; transition: opacity 320ms ease; }
         .rt-row.is-done .rt-dismiss { opacity: 0.4 !important; }
         @keyframes rt-glow-pulse {
