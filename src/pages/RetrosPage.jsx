@@ -212,7 +212,20 @@ export default function RetrosPage({ app }) {
             // reverted on reload. Now we inspect the returned error, surface it,
             // and roll the optimistic change back so the UI tells the truth.
             const prevRow = rolodex.find(r => r.id === id) || null;
-            setRolodex(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+            // THE TWO-SHAPES FIX (Jul 2026): local rolodex rows are the
+            // loader's camel-mapped shape (reminder, reminderRecurrence)
+            // while patches use DB column names (reminder_date,
+            // reminder_recurrence). Spreading the raw patch updated the DB
+            // names on the local row and left the mapped names stale — so
+            // Mark Check-In persisted correctly, the tile's last_touch
+            // flipped, but dueReminders (which reads r.reminder) never
+            // dropped r0 and the banner froze until a full reload
+            // re-mapped. Alias the mapped names alongside every patch so
+            // the optimistic row stays coherent for ALL callers.
+            const localPatch = { ...patch };
+            if ("reminder_date" in patch) localPatch.reminder = patch.reminder_date;
+            if ("reminder_recurrence" in patch) localPatch.reminderRecurrence = patch.reminder_recurrence || "none";
+            setRolodex(prev => prev.map(r => r.id === id ? { ...r, ...localPatch } : r));
             try {
               const { error } = await rolodexDb.update(id, patch);
               if (error) {
