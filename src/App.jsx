@@ -23,6 +23,7 @@ import { billingDb, clients as clientsDb, raiConversations as convoDb, healthChe
 import { createPortal } from "react-dom";
 import { Icon } from "./components/Icon";
 const BrainDump = lazy(() => import("./components/BrainDump"));
+const IntakeSurface = lazy(() => import("./components/IntakeSurface"));
 const CheckoutOverlay = lazy(() => import("./components/CheckoutOverlay"));
 const ClientModal = lazy(() => import("./components/ClientModal"));
 const RolodexModal = lazy(() => import("./components/RolodexModal"));
@@ -117,6 +118,10 @@ export default function App({ user }) {
   // everything else derives from clients/tasks length, so Lane B
   // (skipped) users get ambient empty states and can merge in anytime.
   const [onboardingStep, setOnboardingStep] = useState(null); // null | "client" | "task" | "book"
+  // Day-zero intake (Jul 2026): replaces v1 onboarding as the door. V1 is
+  // HIDDEN, not deleted: set localStorage rt:use-v1-onboarding = "1" to run
+  // the old flow (owner test-drive ruling; cut or restore after).
+  const [intakeOpen, setIntakeOpen] = useState(false);
   const [welcomed, setWelcomed] = useState(() => {
     try { return !!window.localStorage.getItem("rt:welcomedAt"); } catch (_) { return true; }
   });
@@ -1085,7 +1090,10 @@ export default function App({ user }) {
           return;
         }
       } catch (_) { return; }
-      setOnboardingStep("welcome");
+      let useV1 = false;
+      try { useV1 = window.localStorage.getItem("rt:use-v1-onboarding") === "1"; } catch (_) { /* unavailable */ }
+      if (useV1) setOnboardingStep("welcome");
+      else setIntakeOpen(true);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataLoaded]);
@@ -3504,6 +3512,17 @@ export default function App({ user }) {
         />
       )}
       <style>{APP_CSS}</style>
+      {intakeOpen && (
+        <Suspense fallback={null}>
+          <IntakeSurface
+            user={user}
+            calcRetentionScore={calcRetentionScore}
+            connectGoogleCalendar={connectGoogleCalendar}
+            googleConnected={googleConnected}
+            onComplete={() => { setIntakeOpen(false); window.location.reload(); }}
+          />
+        </Suspense>
+      )}
 
       {/* Lightning flash — fires when focus mode toggles on */}
       {/* (Lightning flash removed — too loud for the polish-layer aesthetic) */}
