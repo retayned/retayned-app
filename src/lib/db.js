@@ -433,8 +433,12 @@ export const tasks = {
 
     // ─── DUAL-WRITE: also update task_occurrences for today ────────────
     // Phase 2 of the occurrence-model migration, unchanged in purpose.
-    // Best-effort — failures log but don't fail the toggle (old fields
-    // stay authoritative until Phase 4). Client name and was_on_time are
+    // Best-effort — failures log but don't fail the toggle. NOTE
+    // (Jul 2026 correction): since the occurrence-flag default flip,
+    // task_occurrences is the LOAD-BEARING completion record and
+    // task_completions is the doomed dual-write leg. This write is NOT
+    // optional; a failure here means the completion is invisible to the
+    // sweep's counts, chat's week, prep, and contact credit. Client name and was_on_time are
     // reused from above instead of re-fetched.
     try {
       // "Today" in the user's STORED timezone — same date the SQL
@@ -712,13 +716,26 @@ export const tasks = {
     // silently blinding the cadence/last-touch math. No consumer of
     // this list reads is_recurring (verified against utils.computeCadence
     // and ClientsPage.lastTouch), so the column is dropped from the select.
+    // Jul 2026 fix: the repoint to task_occurrences pushed this query's
+    // 90-day row count past PostgREST's silent 1,000-row cap (occurrences
+    // include every recurring-routine completion, so the pile is much
+    // bigger than task_completions ever was). With no ORDER BY, the rows
+    // the cap dropped were the RECENT ones — thisWeek starved to ~0 for
+    // every active client and the whole Canopy flagged Slipping, while
+    // sparse clients (few rows, none dropped) computed fine. ORDER BY
+    // completed_at DESC guarantees the newest rows survive ANY cap;
+    // the explicit limit raises the ceiling where the server honors it.
+    // Consumers (computeCadence, lastTouch) are order-agnostic: verified.
     const { data, error } = await supabase
       .from('task_occurrences')
       .select('client_id, client_name, completed_at')
       .eq('user_id', userId)
       .eq('is_done', true)
       .not('completed_at', 'is', null)
-      .gte('completed_at', since.toISOString());
+      .gte('completed_at', since.toISOString())
+      .order('completed_at', { ascending: false })
+      .limit(3000);
+    if ((data || []).length >= 1000) console.warn(`listCompletionsForCadence: ${data.length} rows — near/at a server row cap; oldest weeks may be truncated (recency is safe: DESC order).`);
     return { data: data || [], error };
   },
 
