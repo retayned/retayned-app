@@ -2,12 +2,19 @@
 // Extracted VERBATIM from App.jsx — only this shell + imports are new.
 // Receives the same ctx-object pattern the pages use; the contract is
 // enforced by the extraction scanner + ctx checker.
+import { useState } from "react";
 import { rolodex as rolodexDb } from "../lib/db";
 import { C } from "../theme";
 import { localYmd } from "../utils";
 import { Icon } from "./Icon";
 
 export default function RolodexModal({ app }) {
+  // Check-in feedback (Jul 2026): the mark-checked-in write always landed,
+  // but nothing SAID so — the button vanished silently and with several
+  // entries due, the Today dot stayed lit for the others, reading as a
+  // no-op. Errors used alert(), which browsers can suppress after repeat
+  // dialogs, making failures invisible too. Both paths now speak inline.
+  const [checkinToast, setCheckinToast] = useState(null);
   const {
     user,
     clients,
@@ -219,18 +226,27 @@ export default function RolodexModal({ app }) {
                           setRolodex(p => p.map(x => x.id === sr.id ? { ...x, reminder: nextDate, reminderRecurrence: nextRecur } : x));
                           setSelectedRolodex({ ...sr, reminder: nextDate, reminderRecurrence: nextRecur });
                           try {
-                            const { error } = await rolodexDb.update(sr.id, { reminder_date: nextDate, reminder_recurrence: nextRecur });
+                            const { data: saved, error } = await rolodexDb.update(sr.id, { reminder_date: nextDate, reminder_recurrence: nextRecur });
                             if (error) throw error;
+                            console.log(`rolodex check-in saved id=${sr.id} next=${saved?.reminder_date ?? "cleared"}`);
+                            setCheckinToast({ msg: nextDate ? `Checked in. Next: ${nextDate}` : "Checked in. Reminder cleared.", error: false });
+                            setTimeout(() => setCheckinToast(null), 4000);
                           } catch (e) {
                             console.error("Check-in advance failed:", e);
                             setRolodex(prev); setSelectedRolodex(sr);
-                            alert("Could not update reminder. Please try again.");
+                            setCheckinToast({ msg: "Could not save the check-in. Tap the button again.", error: true });
+                            setTimeout(() => setCheckinToast(null), 6000);
                           }
                         }} style={{ width: "100%", padding: "10px 14px", marginTop: 8, background: C.primary, color: "#fff", border: "none", borderRadius: 10, fontSize: 13.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                           Mark checked in{recurring ? " · schedule next" : ""}
                         </button>
                       );
                     })()}
+                    {checkinToast && (
+                      <div style={{ marginTop: 8, padding: "9px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600, background: checkinToast.error ? "#FBEAEA" : "#E9F4EC", color: checkinToast.error ? "#A32D2D" : "#2D6A45", border: "1px solid " + (checkinToast.error ? "#F0C4C4" : "#CBE4D3") }}>
+                        {checkinToast.msg}
+                      </div>
+                    )}
                     {showReminderPicker && (
                       <div style={{ marginTop: 16 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>When should Rai remind you?</div>
