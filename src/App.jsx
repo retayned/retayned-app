@@ -2,7 +2,7 @@ import TodayPage from "./pages/TodayPage";
 // Non-landing pages are lazy-loaded so they (and their heavy deps — notably
 // d3, used only by the referral graph inside ReferralsPage) stay OUT of the
 // initial bundle. Each only downloads when the user first navigates to it.
-// TodayPage stays eager because it's the default landing page.
+// TodayPage stays eager because it's the default landing page. 
 import { lazy, Suspense } from "react";
 const ClientsPage = lazy(() => import("./pages/ClientsPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
