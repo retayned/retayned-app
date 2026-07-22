@@ -8,6 +8,7 @@ import { localYmd } from "../utils";
 import { useEffect, useState } from "react";
 import RaiMessageActions from "./RaiMessageActions";
 import { Icon } from "./Icon";
+import PeopleSection from "./PeopleSection";
 
 import { clientAddons as clientAddonsDb, clientDocuments as clientDocsDb, clientHours as clientHoursDb, raiConversations as convoDb, rolodex as rolodexDb, tasks as tasksDb } from "../lib/db";
 import { retColor } from "../utils";
@@ -637,6 +638,18 @@ export default function ClientModal({ app }) {
                                   <span style={{ fontSize: 14, fontWeight: 600, color: C.text }}>{d.v}</span>
                                 </div>
                               ))}
+                              {/* People (Jul 2026): stakeholders beyond the primary.
+                                  clients.contact stays the one profiled person; the
+                                  section's make-primary rewrites that mirror so every
+                                  downstream reader keeps working untouched. */}
+                              <PeopleSection
+                                user={user}
+                                client={sc}
+                                onPrimaryChange={(updates) => {
+                                  setSelectedClient(p => (p ? { ...p, ...updates } : p));
+                                  setClients(p => p.map(c => c.id === sc.id ? { ...c, ...updates } : c));
+                                }}
+                              />
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: "1px solid " + C.borderLight, gap: 10 }}>
                                 <span style={{ fontSize: 14, color: C.textSec }}>Health Check</span>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
