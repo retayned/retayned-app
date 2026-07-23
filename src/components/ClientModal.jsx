@@ -644,6 +644,7 @@ export default function ClientModal({ app }) {
                                   downstream reader keeps working untouched. */}
                               <PeopleSection
                                 user={user}
+                                editing={false}
                                 client={sc}
                                 onPrimaryChange={(updates) => {
                                   setSelectedClient(p => (p ? { ...p, ...updates } : p));
@@ -929,6 +930,15 @@ export default function ClientModal({ app }) {
                             )}
                           </div>
                         </div>
+                        <PeopleSection
+                          user={user}
+                          editing
+                          client={sc}
+                          onPrimaryChange={(updates) => {
+                            setSelectedClient(p => (p ? { ...p, ...updates } : p));
+                            setClients(p => p.map(c => c.id === sc.id ? { ...c, ...updates } : c));
+                          }}
+                        />
                         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                           <button onClick={() => setEditingOverview(false)} style={{ padding: "10px 16px", background: C.surface, color: C.textSec, border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                           <button onClick={async () => {
