@@ -286,7 +286,7 @@ function isFuzzyMatch(input, target) {
   return levenshtein(input, target) <= budget;
 }
 
-function parseComposer(rawText, clients, workers) {
+function parseComposer(rawText, clients, workers, stakeholders = []) {
   // ─── Phase 1: Lexicon normalization ──────────────────────────────────
   // Apply typo and casing dictionaries to the raw input BEFORE matching.
   // This means "teh" becomes "the", "google" becomes "Google", and so on,
@@ -323,6 +323,20 @@ function parseComposer(rawText, clients, workers) {
       const first = (c.contact || "").trim().split(/\s+/)[0].toLowerCase();
       if (first && first.length >= 2) {
         firstNameCounts[first] = (firstNameCounts[first] || 0) + 1;
+      }
+    }
+    // Stakeholders (Jul 2026) join the same uniqueness census: a bare
+    // first name only ever matches when exactly ONE human in the whole
+    // book carries it — a stakeholder "Henry" correctly vetoes a contact
+    // "Henry" (and vice versa). Strictly fewer wrong guesses, never more.
+    const stByClient = {};
+    for (const s of (stakeholders || [])) {
+      const nm = (s && s.name ? String(s.name) : "").trim();
+      if (!nm || !s.client_id) continue;
+      (stByClient[s.client_id] = stByClient[s.client_id] || []).push(nm);
+      const sf = nm.split(/\s+/)[0].toLowerCase();
+      if (sf && sf.length >= 2) {
+        firstNameCounts[sf] = (firstNameCounts[sf] || 0) + 1;
       }
     }
 
@@ -375,6 +389,46 @@ function parseComposer(rawText, clients, workers) {
           continue;
         }
       }
+
+      // 92 — stakeholder FULL name ("Cody Fox"): a named human at this
+      // client (client_stakeholders, Jul 2026). More specific than a
+      // company token (90), below the PRIMARY contact (95) — the
+      // profiled person outranks the room. Multi-word names only; bare
+      // first names ride the 65 tier under the everyone-counted guard.
+      const stNames = stByClient[c.id] || [];
+      let stHit = null;
+      for (const sn of stNames) {
+        if (!sn.includes(" ")) continue;
+        const stRe = new RegExp(
+          `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(sn.toLowerCase())}(?:'s)?(?=[^\\p{L}\\p{N}]|$)`,
+          "iu"
+        );
+        const sm = lower.match(stRe);
+        if (sm && sm.index !== undefined) {
+          stHit = { client: c, score: 92, matchType: "stakeholder", start: sm.index, end: sm.index + sm[0].length };
+          break;
+        }
+      }
+      if (stHit) { allCandidates.push(stHit); continue; }
+
+      // 65 — stakeholder FIRST name alone ("Cody"): same philosophy and
+      // guard as the contact-70 tier, one rung lower. Two Codys anywhere
+      // in the book (contacts or stakeholders) and nobody matches.
+      for (const sn of stNames) {
+        const sf = sn.split(/\s+/)[0].toLowerCase();
+        if (sf && sf.length >= 2 && firstNameCounts[sf] === 1) {
+          const sfRe = new RegExp(
+            `(?<=^|[^\\p{L}\\p{N}])${escapeRegexChars(sf)}(?:'s)?(?=[^\\p{L}\\p{N}]|$)`,
+            "iu"
+          );
+          const fm2 = lower.match(sfRe);
+          if (fm2 && fm2.index !== undefined) {
+            stHit = { client: c, score: 65, matchType: "stakeholder", start: fm2.index, end: fm2.index + fm2[0].length };
+            break;
+          }
+        }
+      }
+      if (stHit) { allCandidates.push(stHit); continue; }
 
       // 90 — meaningful single-token match ("Motley", "Fool", "Matte")
       const tokens = c.name.split(/\s+/);
