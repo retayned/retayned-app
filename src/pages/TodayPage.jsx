@@ -168,6 +168,7 @@ export default function TodayPage({ app }) {
     userTimezone,
     workerPickerOpen,
     workersList,
+    stakeholders,
     brainDumpOpen,
     setBrainDumpOpen,
     setOnboardingStep,
@@ -827,7 +828,7 @@ export default function TodayPage({ app }) {
             if (!last || last.length < 2) return "";
             // Skip if a client has already been parsed from this input —
             // the user has already specified one; don't suggest a second.
-            const parsed = parseComposer(input, clients, workersList);
+            const parsed = parseComposer(input, clients, workersList, stakeholders);
             if (parsed.matchedClient) return "";
             const lastLower = last.toLowerCase();
             // Find clients whose name starts with the last token (case-
@@ -855,7 +856,7 @@ export default function TodayPage({ app }) {
             if (!ignoreOverride && composerTypeOverride) return composerTypeOverride;
             if (!input || !input.trim()) return null;
             const lowerC = input.toLowerCase();
-            const parsed = parseComposer(input, clients, workersList);
+            const parsed = parseComposer(input, clients, workersList, stakeholders);
             const client = parsed.matchedClient || (composerClient ? clients.find(c => c.name === composerClient) : null);
             // Event: time present after stripping the matched client name.
             let calText = input;
@@ -888,7 +889,7 @@ export default function TodayPage({ app }) {
           // via computeEffectiveType.
           const computeComposerReadout = (input) => {
             if (!input || !input.trim()) return null;
-            const parsed = parseComposer(input, clients, workersList);
+            const parsed = parseComposer(input, clients, workersList, stakeholders);
             const client = parsed.matchedClient || (composerClient ? clients.find(c => c.name === composerClient) : null);
             // Date resolution: prefer the parser's matchedDate (typed word
             // like "tomorrow"), but fall back to the Date chip state. Both
@@ -936,7 +937,7 @@ export default function TodayPage({ app }) {
             if (!newTask.trim()) return;
             // Parse one final time to get the cleaned title (matched names stripped,
             // sentence-cased, ending punctuation auto-applied).
-            const finalParse = parseComposer(newTask, clients, workersList);
+            const finalParse = parseComposer(newTask, clients, workersList, stakeholders);
             const text = finalParse.title || newTask.trim();
             const clientName = composerClient || "";
             const clientObj = clients.find(c => c.name === clientName);
@@ -1632,7 +1633,7 @@ export default function TodayPage({ app }) {
                         composerPauseTimerRef.current = setTimeout(() => {
                           setComposerInPause(true);
                         }, 400);
-                        const parsed = parseComposer(v, clients, workersList);
+                        const parsed = parseComposer(v, clients, workersList, stakeholders);
                         if (parsed.matchedClient && composerClient !== parsed.matchedClient.name) {
                           setComposerClient(parsed.matchedClient.name);
                           triggerChipPulse("client");
@@ -2540,7 +2541,7 @@ export default function TodayPage({ app }) {
                   // saved title is empty. Cap is 75; counter turns muted
                   // amber over 60 and red at the cap.
                   const TITLE_CAP = 75;
-                  const parsedForCount = parseComposer(newTask, clients, workersList);
+                  const parsedForCount = parseComposer(newTask, clients, workersList, stakeholders);
                   const savedTitle = (parsedForCount.title || newTask).trim();
                   const charsLeft = TITLE_CAP - savedTitle.length;
                   const counterColor = charsLeft < 0
