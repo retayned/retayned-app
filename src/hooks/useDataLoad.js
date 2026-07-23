@@ -52,6 +52,7 @@ export function useDataLoad(app) {
     setRefs,
     setRetroAnswers,
     setRolodex,
+    setStakeholders,
     setTaskCompletedCounts,
     setTaskOccurrences,
     setTasks,
@@ -795,6 +796,19 @@ export function useDataLoad(app) {
       setTaskCompletedCounts({ today, week, month, year, weekHistory, monthHistory, dayStreak });
     } else if (taskCompletionsRes?.data) {
       setTaskCompletedCounts(taskCompletionsRes.data);
+    }
+
+    // Stakeholders (Jul 2026): the other humans at each client, feeding
+    // the composer parser's people tiers. Small table, separate fetch so
+    // the positional hydrate batch stays untouched. Guarded: until App
+    // passes the setter, this is a no-op and nothing else changes.
+    if (typeof setStakeholders === "function") {
+      const { data: stData, error: stErr } = await supabase
+        .from("client_stakeholders")
+        .select("id, client_id, name")
+        .eq("user_id", bookId);
+      if (stErr) console.warn("stakeholders load failed:", stErr);
+      setStakeholders(stData || []);
     }
 
     setDataLoaded(true);
