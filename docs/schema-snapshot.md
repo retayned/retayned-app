@@ -19,6 +19,7 @@
 - **Recitation law (extended to MCP, owner ruling Jul 20):** computed scores and drift verdicts are Rai's internal instruments — never chat material, on any surface. The MCP brief carries neither.
 - **Money laws + Ruling C (owner rulings, in v3.21):** the brief talks about the work, not the money — money appears only when money itself is the story; money never frames a task; **rate-review is dead as a task source, permanently.** A completed communicative task IS the event it names (contact credit AND event-truth — the record believes the checkbox; TMF case law Jul 22).
 - **Intake stamp (Jul 22):** `rai_user_state.intake_completed_at` is written by rai-intake finalize ONLY when 3+ clients carry evidence-backed dimensions — its presence means grounding exists. Read by the sweep's calibration gate v2 (account < 7d AND stamp NULL → suggestions ledger-only) and shipped to the ranker as `intake_age_days`.
+- **Multi-stakeholder v1 (Jul 22, Launch Ops):** `clients.contact` remains the single profiled person and the ONLY person-field any AI surface reads. `client_stakeholders` holds additional people; its `is_primary` is a declared-subordinate display mirror maintained best-effort by the swap — NEVER an authority for any reader, present or future. "Make primary" rewrites `clients.contact`/`role` through db.js LAST (authority-last ordering, error-checked), so from every AI surface a primary change is indistinguishable from the user editing the contact field. Dimensions stay contact-only; no per-person scoring exists or is planned.
 
 ## 2. Domain & infrastructure ruling (Jul 20 — the two-day bug)
 
@@ -55,6 +56,9 @@ Flags live in `qualifying_flags` jsonb (`latePayments` / `prevTerminated` / `oth
 
 ### `rai_user_state`
 Verified via deployed sweep + intake writes (upserts would error on phantom columns): `user_id` (conflict key) · `ranking_enabled` (read; false = sweep skips) · `last_sweep_at` (r/w; the already-swept-today + race-guard key) · `next_sweep_eligible_at` (written, read by nothing — doomed, ledger §B) · `todays_pick_dismissed_at` (cleared at sweep end so the new brief shows) · `ai_tasks_enabled` (read by writeSuggestedTasks; default ON) · `intake_completed_at` (written by rai-intake finalize; see §1 intake-stamp doctrine) · `updated_at`.
+
+### `client_stakeholders` (Jul 22, Launch Ops-owned)
+Write/read-verified from PeopleSection.jsx: `id` · `user_id` · `client_id` · `name` · `role` · `note` · `is_primary` · `created_at` (inserts L48/L74; delete/update by id; created_at order clause). Asserted by Launch Ops, not yet wired in code: `email` (no writer or reader in v1). RLS owner-only and FK cascade-on-client-delete are DB-side assertions, not repo-visible. Access is raw client-side `supabase.from()` in the component — NOT through db.js. See §1 doctrine: `is_primary` is a subordinate display mirror; the swap's flag flips are declared best-effort with unchecked writes (flagged to Launch Ops Jul 22); `clients.contact` is the only authority.
 
 ### `profiles`
 `id` · `timezone` (drives all user-local date computation server-side) · `occurrence_flags` jsonb (`edge_fn_recent_tasks`: absent/true = occurrence path; false = emergency opt-out to the doomed leg).
