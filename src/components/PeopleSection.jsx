@@ -37,7 +37,11 @@ export default function PeopleSection({ user, client, editing, onPrimaryChange }
     return () => { live = false; };
   }, [client.id]);
 
-  const others = people.filter(p => !p.is_primary && p.name !== client.contact);
+  // Authority derivation (specialist watch, Jul 2026): primaryhood's one
+  // home is clients.contact. The is_primary flag is write-only
+  // bookkeeping here — deriving the list from the NAME alone means a
+  // drifted flag can never mislead this surface.
+  const others = people.filter(p => p.name !== client.contact);
 
   async function addPerson() {
     const name = draft.name.trim();
@@ -73,13 +77,25 @@ export default function PeopleSection({ user, client, editing, onPrimaryChange }
           .from("client_stakeholders")
           .insert({ user_id: user.id, client_id: client.id, name: oldName, role: client.role || null, is_primary: false })
           .select().single();
-        if (keepErr) console.warn("old primary preserve failed (continuing):", keepErr);
-        else if (kept) setPeople(p => [...p, kept]);
+        if (keepErr || !kept) {
+          // Specialist finding (Jul 2026): continuing past this failure
+          // silently loses the outgoing contact from the people list the
+          // moment the mirror overwrites them. Ruling taken: ABORT loud —
+          // a failed swap that changed nothing beats a quiet data loss.
+          console.error("old primary preserve failed — swap aborted:", keepErr);
+          setErr(`Couldn't keep ${oldName} on the list, so nothing was changed. Try again.`);
+          setBusy(false);
+          setConfirmFor(null);
+          return;
+        }
+        setPeople(p => [...p, kept]);
       }
       // 2. Flag flip on stakeholder rows (best-effort bookkeeping; the
       //    mirror below is the load-bearing write).
-      await supabase.from("client_stakeholders").update({ is_primary: false }).eq("client_id", client.id);
-      await supabase.from("client_stakeholders").update({ is_primary: true }).eq("id", person.id);
+      const { error: demoteErr } = await supabase.from("client_stakeholders").update({ is_primary: false }).eq("client_id", client.id);
+      if (demoteErr) console.warn("is_primary demote flip failed (bookkeeping only; display derives from clients.contact):", demoteErr);
+      const { error: promoteErr } = await supabase.from("client_stakeholders").update({ is_primary: true }).eq("id", person.id);
+      if (promoteErr) console.warn("is_primary promote flip failed (bookkeeping only; display derives from clients.contact):", promoteErr);
       // 3. THE MIRROR — the write every surface actually reads.
       const { data: updated, error } = await clientsDb.update(client.id, { contact: person.name, role: person.role || null });
       if (error || !updated) throw error || new Error("no row");
