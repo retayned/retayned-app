@@ -11,7 +11,7 @@ import { supabase } from "../lib/supabase";
 import { clients as clientsDb } from "../lib/db";
 import { C } from "../theme";
 
-export default function PeopleSection({ user, client, onPrimaryChange }) {
+export default function PeopleSection({ user, client, editing, onPrimaryChange }) {
   const [people, setPeople] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -98,11 +98,17 @@ export default function PeopleSection({ user, client, onPrimaryChange }) {
 
   return (
     <div style={{ padding: "12px 0", borderBottom: "1px solid " + C.borderLight }}>
+      {/* Mutations live inside the client's Edit Details mode (owner UI
+          ruling, Jul 2026): view mode is read-only — the standalone
+          always-on "+ Add person" link was off-style and bypassed the
+          modal's single editing entry point. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 14, color: C.textSec }}>People</span>
-        <button onClick={() => { setAdding(a => !a); setErr(null); }} style={{ fontSize: 12.5, fontWeight: 700, color: C.primary, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-          {adding ? "Cancel" : "+ Add person"}
-        </button>
+        {editing && (
+          <button onClick={() => { setAdding(a => !a); setErr(null); }} style={{ fontSize: 12, fontWeight: 700, color: adding ? C.textSec : C.primary, background: "none", border: "1px solid " + (adding ? C.border : C.btnLight), borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>
+            {adding ? "Cancel" : "Add person"}
+          </button>
+        )}
       </div>
 
       {/* The primary — mirrors clients.contact; the one profiled person. */}
@@ -123,11 +129,11 @@ export default function PeopleSection({ user, client, onPrimaryChange }) {
             <div style={{ fontSize: 12, color: C.textSec }}>{[p.role, p.note].filter(Boolean).join(" · ") || "—"}</div>
           </div>
           <button onClick={() => setConfirmFor(p)} style={{ fontSize: 11.5, fontWeight: 700, color: C.textSec, background: "none", border: "1px solid " + C.border, borderRadius: 8, padding: "4px 9px", cursor: "pointer", fontFamily: "inherit" }}>Make primary</button>
-          <button onClick={() => removePerson(p)} aria-label={"Remove " + p.name} style={{ fontSize: 12, color: C.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+          {editing && <button onClick={() => removePerson(p)} aria-label={"Remove " + p.name} style={{ fontSize: 12, color: C.textMuted, background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>✕</button>}
         </div>
       ))}
 
-      {adding && (
+      {editing && adding && (
         <div style={{ border: "1px dashed " + C.border, borderRadius: 10, padding: 10, marginBottom: 6 }}>
           <input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="Name" style={{ width: "100%", padding: "8px 10px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 13.5, fontFamily: "inherit", outline: "none", marginBottom: 6, boxSizing: "border-box" }} />
           <input value={draft.role} onChange={e => setDraft({ ...draft, role: e.target.value })} placeholder="Role (optional)" style={{ width: "100%", padding: "8px 10px", border: "1px solid " + C.border, borderRadius: 8, fontSize: 13.5, fontFamily: "inherit", outline: "none", marginBottom: 6, boxSizing: "border-box" }} />
