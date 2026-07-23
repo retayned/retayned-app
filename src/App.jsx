@@ -2,7 +2,7 @@ import TodayPage from "./pages/TodayPage";
 // Non-landing pages are lazy-loaded so they (and their heavy deps — notably
 // d3, used only by the referral graph inside ReferralsPage) stay OUT of the
 // initial bundle. Each only downloads when the user first navigates to it.
-// TodayPage stays eager because it's the default landing page. 
+// TodayPage stays eager because it's the default landing page.
 import { lazy, Suspense } from "react";
 const ClientsPage = lazy(() => import("./pages/ClientsPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
@@ -519,6 +519,7 @@ export default function App({ user }) {
   const [healthStripOpen, setHealthStripOpen] = useState(false);
   const [retroAnswers, setRetroAnswers] = useState({});
   const [rolodex, setRolodex] = useState([]);
+  const [stakeholders, setStakeholders] = useState([]); // client_stakeholders — feeds the composer parser (Jul 2026)
   const [rolodexFlowOpen, setRolodexFlowOpen] = useState(null);
   const [showAddRolodex, setShowAddRolodex] = useState(false);
   const [newRolodexEntry, setNewRolodexEntry] = useState({ client: "", contact: "", work: "", type: "former" });
@@ -1597,7 +1598,7 @@ export default function App({ user }) {
       } catch (e) { console.warn("org-accept error:", e); }
     })();
   }, [orgLoading, user?.id]);
-  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, localTaskWrites, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setHcCompleted, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
+  const loadData = useDataLoad({ bookOwnerId, orgRole, clients, getAdjustedLTV, googleConnected, googleEmail, inFlightCreates, inFlightDateMoves, inFlightToggles, localTaskWrites, isCurrentlyPaused, monthsTogether, observation, page, profileScores, raiPicks, rolodex, setAllCompletions, setAllTouchpoints, setBillingMonthStatus, setBillingTerms, setClientAddons, setClientBilling, setClientDrift, setClients, setCollapsedDoneIds, setDataLoaded, setEngagementPausesByClient, setGoogleConnected, setGoogleEmail, setGoogleLastSyncedAt, setHcQueue, setHcCompleted, setObsMobileExpanded, setObservation, setOccurrenceFlags, setPersonalEvents, setRaiConvoList, setRaiPicks, setRaiState, setRefs, setRetroAnswers, setRolodex, setStakeholders, setTaskCompletedCounts, setTaskOccurrences, setTasks, setTpLogged, setWorkerCompletions, setWorkersList, taskOccurrences, tasks, user, userTimezone });
 
 
   useEffect(() => { if (orgLoading) return; loadData(); }, [loadData, orgLoading]);
@@ -3304,6 +3305,7 @@ export default function App({ user }) {
     unassignClient,
     refreshOrgData,
     rolodex,
+    stakeholders,
     rolodexCheckinDismissed,
     dismissRolodexCheckin,
     rolodexFiledFilter,
