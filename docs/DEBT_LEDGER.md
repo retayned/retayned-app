@@ -12,7 +12,8 @@ One page. Everything known-owed, where it lives, what unblocks it. Update in the
 2. **Calibration gate v2** in writeSuggestedTasks: account < 7 days AND `intake_completed_at` NULL → ledger-only (rows written pending, nothing lands); the stamp unlocks days 1–6; fail-open if signup date unreadable.
 3. **rai-intake shipped end-to-end**: edge fn deployed (JWT **ON** — the fleet's one exception; it auths real user JWTs), intake-prompt v1.4, secrets set (ANTHROPIC_API_KEY, SWEEP_FUNCTION_URL, SWEEP_FUNCTION_AUTH). Frontend IntakeSurface deployed with the cadence→recurrence_pattern fix, ratified against `src/recurrence.jsx` (`cadenceToPattern`, IntakeSurface L45/L268).
 4. **The TMF rate saga — conviction OVERTURNED, data restored.** The brief's "rate conversation was opened recently" traced to Rai's own completed Jul-10 suggested task (pre-Ruling-C fossil) — under contact doctrine a completed communicative task IS the event. No bug; the fix is the money laws + Ruling C. `last_revenue_change` fully restored with a reversal comment in code. *Case law: full-drawer protocol before any fabrication verdict; when a conviction is overturned, reverse the cut.*
-5. **db.js dual-write comment corrected** (was "old fields authoritative until Phase 4" — false since the flag flip). Verified in repo Jul 22: the comment at the occurrence dual-write now states task_occurrences is the load-bearing record and the write is NOT optional. Closes the old §C.2.
+5. **v3.21 audit (Jul 22) → v3.23 deployed:** four owner-ratified fixes + one specialist call. (F1) the app stamps `dismiss_reason='user_deleted'` on every bare delete (App.jsx `dismissRaiTaskFeedback`) — the reasoned-only filter kept those rows, so drought fix #1 was inert; `user_deleted` now excluded by name at the source filter, and the prompt's contradicting rule-5 sentence is cut. Retroactive at read: all historical bare-delete rows stop suppressing immediately. (F4) Layer-2 dedup net now excludes cleared tasks (`cleared_at IS NULL` — a cleared task is the same bare gesture as a bare delete). (F2) prompt's intake-window "referrals map" phrase cut — the payload never shipped referrals. (F3, owner ruling) confidant tail ships only messages ≤30 days old by per-message timestamp, or no entry at all; untimestamped legacy messages never ship. (F5) complementary clear in writeClientNudges — advisory/paused clients outside tonight's roster drop stale `rai_nudge`/`rai_signal`/`rai_rationale`. **Tail fixes rode the same touch (owner word, F6–F10 + the ledgered unify):** prompt nudge example aligned to schema order; 45d dismissed fetch newest-first; off-enum suggested-task `signal` sanitized to `no_signal`; `created_at` compared in user-local date and the 7-day window end computed locally; orphaned picked_at-desc comment deleted; `last_revenue_change` loop unified onto `revHistList`.
+6. **db.js dual-write comment corrected** (was "old fields authoritative until Phase 4" — false since the flag flip). Verified in repo Jul 22: the comment at the occurrence dual-write now states task_occurrences is the load-bearing record and the write is NOT optional. Closes the old §C.2.
 
 ## A′. Closed Jul 17–21 (prior cycle)
 
@@ -39,8 +40,7 @@ One page. Everything known-owed, where it lives, what unblocks it. Update in the
 ## C. Approved, not yet built
 
 1. **Extractor fix** (stamp conversations extracted-at, whatever the outcome; kills ~26x reinforcement inflation + NO_LESSON hourly retries). Needs: one column migration + fresh extractor zip.
-2. **Cosmetic, next index touch:** the restored `last_revenue_change` loop re-parses `revHistR.data` where `revHistList` already holds the same cast — harmless duplicate; unify when passing.
-3. **Intake improvements, ledgered (Launch Ops builds, specialist grades):** prompt caching on the intake system block; structured outputs on the intake calls. Non-blocking: the weekday substring advisory ("Monitor"→Mon).
+2. **Intake improvements, ledgered (Launch Ops builds, specialist grades):** prompt caching on the intake system block; structured outputs on the intake calls. Non-blocking: the weekday substring advisory ("Monitor"→Mon).
 
 ## D. Owed audits & checks
 
@@ -49,7 +49,7 @@ One page. Everything known-owed, where it lives, what unblocks it. Update in the
 3. **Observer output contract** — still SDK + instruction-only JSON; the structured-outputs claim in the v2 handoff never matched source. `select max(fired_at) from observations;` (never run) tells whether it's ever mattered; then decide the raw-fetch + json_schema port.
 4. **MCP v3.6 last acceptance leg** — first natural communicative completion through Claude → confirm contact credit in `client_last_contact` (standing instruction with Launch Ops).
 5. **rolodex-sweep** — zip never received; audit owed.
-6. **Parity manifest** — the data-domain × AI-surface grid replacing update-all-N-surfaces memory tests. Watches, among others, the deliberately two-homed comm-task regex (view SQL + MCP display).
+6. **Parity manifest** — the data-domain × AI-surface grid replacing update-all-N-surfaces memory tests. Watches, among others, the deliberately two-homed comm-task regex (view SQL + MCP display), and (added Jul 22) the contact-person domain: `clients.contact` (authority) vs `client_stakeholders.is_primary` (subordinate mirror, best-effort writes, no reconciliation) — the watch is that no surface ever reads the flag as authority.
 
 ## E. Decisions parked on the owner
 
@@ -61,6 +61,7 @@ One page. Everything known-owed, where it lives, what unblocks it. Update in the
 6. **Positive instrumentation / quiet-day theory** — parked; owner skeptical of sanctioned-filler designs; nothing moves without a demonstrated need.
 7. **v1 onboarding** — hidden behind `localStorage rt:use-v1-onboarding="1"` (App.jsx L122/L1094); owner test-drives intake, then cut-or-restore.
 8. **Intake $330k canon cross-surface alignment** — the LTV clause is cut ranker-side; the interview's own closing speech still carries it. Owner call.
+9. **rolodex_summary payload trim (audit F11):** the builder ships `contact_name` / `priority` / `reminder_date` / `reminder_recurrence` / `notes_excerpt` beyond the four prompt-documented fields (`client_name`, `months_tenure`, `tags`, `why_left`) — added with a chat-style rationale ("lets Rai answer who should I check in with from rolodex") that isn't the ranker's job. Trim to the documented four vs document all nine.
 
 ## F. Accepted-for-now & standing quirks (mirrored on purpose)
 
@@ -68,10 +69,11 @@ One page. Everything known-owed, where it lives, what unblocks it. Update in the
 2. Server-side writers use profile-tz for both `completed_on` and `occurrence_date` (deliberate divergence from the app's device/profile split).
 3. `other` channel: legal in the DB, unwritten and uncounted — **no integration may ever write it.**
 4. root_owner Owner's-Brief failure degrades silently to the ranker pick (console only). Ledgered; matters when a real org exists.
-5. Sweep/chat still carry pre-Co-Pilot AM-fencing lanes vs MCP's collapsed seat model — **seat semantics unify at the Co-Pilot build.**
+5. Sweep/chat still carry pre-Co-Pilot AM-fencing lanes vs MCP's collapsed seat model — **seat semantics unify at the Co-Pilot build.** (Jul 22 addition: `client_stakeholders` joins this list — per-uid `user_id` inserts + owner RLS will split the people list across Co-Pilot's second login unless it rides the same book-resolution as clients.)
 6. COMM_TASK_RE breadth (send/share count as contact) — owner: fine.
 7. Cross-surface repetition (four mouths, no shared told-the-user memory) — architecture question, parked; the observer/prep/nudge chorus is the symptom.
 8. Extractor/observer/chat prompts remain outside the one-law-one-home census (sweep prompt only, so far).
+9. **Payload hygiene, noted (audit Jul 22):** `recent_suggestions` ships twice (top-level + the cross_ai copy the prompt documents); `last_revenue_change` ships undocumented (usage governed by the money laws per the restore ruling). Token cost only; census-scale tidy, parked. (Rolodex field trim moved to §E — owner ruling pending.)
 
 ## G. Live watch
 
@@ -79,3 +81,8 @@ One page. Everything known-owed, where it lives, what unblocks it. Update in the
 2. **Monday Jul 27** — spent-story verdict #2. Verdict #1 PASSED (first post-fix Monday, the Rose Babe brief). Her nightly `repeat_check` reasoning is in the sweep function logs; a rewritten Lemon Law brief = the fix failed, and the logs show why.
 3. First post-deploy weeks of prep memos — absence-narration should be extinct.
 4. **Docs debt:** intake spec v1.5 did not ride the docs commit — commit beside these when next touched.
+
+## H. Optional (recorded Jul 22, zero urgency — multi-stakeholder v1)
+
+1. **Sweep names the room** ("also at client: Kyle, CFO") — the table is readable if ever wanted; names/roles as facts only, consistent with the no-psychology-about-non-contacts rule. **Specialist ruling: parked.** Context budget is earned by demonstrated need; the brief/intake calibration is tuned to the current payload. Revisit if briefs demonstrably starve for people-context.
+2. **Contact-history reconstruction** — demoted ex-primaries persist as stakeholder rows, so a client's primary-contact history is partially reconstructable; of possible interest to handoff-detection heuristics if those are ever built. Recorded, nothing owed.
